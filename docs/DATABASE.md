@@ -63,3 +63,18 @@ Phase 4.1 adds no migration. AIJob retains the configured provider/model; AIUsag
 can record sanitized routed identifiers and measured total tokens. Available usage
 is committed per attempted batch even if content validation or final persistence
 fails. Concepts and successful job completion share the final transaction.
+
+
+Revision 0005 adds nullable `embedding vector(1024)`, `embedding_content_hash`,
+`embedding_signature` and `embedded_at` to `material_chunks`. A completeness check
+requires all four fields together (or all null), 64-character hashes and a nonzero
+vector. pgvector enforces dimension and finite values. Existing FK indexes support
+course/material filtering; exact cosine search intentionally has no ANN index.
+Vectors are deferred in ORM loads so unrelated material/concept reads do not fetch them.
+
+A refresh commits all stale chunk vectors atomically. Content hashes and model
+signatures are checked on rerun and in search; stale vectors remain stored but are
+excluded from retrieval. No completed-job flag can misrepresent a partial refresh.
+Migration 0005 idempotently enables vector; its downgrade removes only its columns
+and constraint. The extension remains owned by 0001 until downgrade to base.
+See [retrieval](RETRIEVAL.md) for locking and fingerprint details.

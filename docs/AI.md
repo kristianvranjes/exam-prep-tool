@@ -141,8 +141,9 @@ with a bounded HTTP timeout; many batches can take minutes. No queue or cancella
 API exists. Process termination can leave RUNNING jobs blocking their course:
 an operator must confirm the worker stopped before marking that job FAILED, then
 retry explicitly. Lists/source inspection are unpaginated. Large materials may
-need adjusted documented limits. No embeddings, direct cloud-provider integrations, questions,
-quizzes or grading are implemented.
+need adjusted documented limits. Dense embeddings and semantic retrieval now live behind a separate EmbeddingProvider
+(see [retrieval](RETRIEVAL.md)). Direct cloud-generation integrations, questions,
+quizzes and grading are not implemented.
 
 ## FreeLLMAPI adapter
 
