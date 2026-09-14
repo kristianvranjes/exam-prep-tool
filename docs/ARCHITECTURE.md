@@ -1,6 +1,6 @@
 # Architecture
 
-Phase 3 consists of one Next.js frontend, one FastAPI backend and one PostgreSQL
+Phase 4 consists of one Next.js frontend, one FastAPI backend and one PostgreSQL
 instance. The browser calls FastAPI directly; CORS allows only FRONTEND_URL and
 credentials are enabled for the session cookie. Tailwind 4 and components.json
 prepare the frontend for shadcn/ui; no component library UI is generated yet.
@@ -14,7 +14,14 @@ Material routes reuse course membership authorization for both OWNER and MEMBER.
 The material service orchestrates local storage, MarkItDown PDF extraction and pure
 deterministic section/chunk functions. Processing is synchronous; original sources
 live in private storage and derived content lives in PostgreSQL. No queue or AI
-service is introduced. See [materials](MATERIALS.md) for boundaries and limitations.
+service is introduced by the material pipeline. See [materials](MATERIALS.md) for boundaries.
+
+Concept extraction reads persisted chunks through a provider-neutral AIProvider and
+Pydantic validation service. Provider HTTP protocols stay in the Ollama and FreeLLMAPI adapters; only the AI
+router selects an adapter from configuration.
+Versioned prompts, bounded batches, atomic draft persistence and per-batch usage
+support review without changing ingestion. Ollama is optional for base app startup;
+there is no cloud fallback. See [AI](AI.md) for failure/rerun/concurrency semantics.
 
 Authentication uses Argon2id password hashes and a signed, timed, HttpOnly cookie.
 The cookie is SameSite=Lax and becomes Secure when SESSION_COOKIE_SECURE is enabled.
@@ -30,3 +37,8 @@ SESSION_SECRET through NEXT_PUBLIC variables. Future provider placeholders are u
 
 Development is local-first and requires no cloud accounts. Docker sources are copied
 at build time; native development supports reload. No extra microservices are needed.
+
+Laptop development may explicitly select FreeLLMAPI; home PC development uses
+Ollama/Qwen. FreeLLMAPI is separate development/prototyping infrastructure and may
+route chunk text to external services. Future production/demo deployments must
+explicitly choose a supported provider; FreeLLMAPI is not a production guarantee.

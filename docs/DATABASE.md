@@ -6,6 +6,18 @@ revision 0001 also enables it idempotently for existing databases. Revision 0002
 the identity and course tables. Revision 0003 adds materials, material_sections and
 material_chunks, without embeddings or vector columns.
 
+Revision 0004 adds `concepts` (unique course/normalized_name; DRAFT, APPROVED or
+REJECTED; AI/USER creator; aliases and importance), `concept_chunks` (composite
+primary key and indexed cascading concept/chunk references), `ai_jobs`, and
+`ai_usage`. Jobs retain input chunk IDs and prompt version, status/error codes,
+counts and timestamps. Usage is unique per job/batch, with nullable token counts
+and zero local estimated cost. An active-job partial unique index permits only one
+PENDING/RUNNING extraction per course. Material deletion nulls the job reference;
+course deletion cascades jobs/concepts and job deletion cascades usage.
+
+On a disposable database, `python -m alembic downgrade 0003` rolls back only Phase 4;
+`python -m alembic upgrade head` reapplies it. No vector/embedding columns are added.
+
 `users` stores normalized unique email addresses, Argon2 password hashes, display
 names, active state and timestamps. `courses` stores course metadata and creator.
 `course_memberships` is an explicit user/course join table with OWNER or MEMBER
@@ -46,3 +58,8 @@ Changing POSTGRES_* does not modify credentials in an existing volume. Update th
 existing database explicitly or create a separate development volume. Never remove
 a volume containing data you need. GET /health/db executes SELECT 1; the integration
 test additionally checks the extension and migration revision.
+
+Phase 4.1 adds no migration. AIJob retains the configured provider/model; AIUsage
+can record sanitized routed identifiers and measured total tokens. Available usage
+is committed per attempted batch even if content validation or final persistence
+fails. Concepts and successful job completion share the final transaction.

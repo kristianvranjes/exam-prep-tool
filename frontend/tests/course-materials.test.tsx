@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { CourseMaterials } from "../src/components/course-materials";
+vi.mock("../src/components/concept-review", () => ({ ConceptReview: () => null }));
 
 const mock = vi.hoisted(() => ({ materials: vi.fn(), material: vi.fn(), uploadMaterial: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));

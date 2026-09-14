@@ -17,11 +17,23 @@ services:
       retries: 15
   backend:
     build: ./backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - material_data:/app/data/materials
     environment:
       APP_ENV: ${APP_ENV:-development}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      FREELLMAPI_URL: ${FREELLMAPI_DOCKER_URL:-http://host.docker.internal:3001/v1}
+      FREELLMAPI_API_KEY: ${FREELLMAPI_API_KEY:-}
+      FREELLMAPI_MODEL: ${FREELLMAPI_MODEL:-auto}
+      OLLAMA_URL: ${OLLAMA_DOCKER_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
+      AI_REQUEST_TIMEOUT_SECONDS: ${AI_REQUEST_TIMEOUT_SECONDS:-120}
+      AI_MAX_INPUT_CHARS: ${AI_MAX_INPUT_CHARS:-12000}
+      AI_CONCEPT_CHUNKS_PER_REQUEST: ${AI_CONCEPT_CHUNKS_PER_REQUEST:-3}
+      AI_MAX_BATCHES: ${AI_MAX_BATCHES:-32}
       MATERIAL_STORAGE_DIR: /app/data/materials
       MATERIAL_MAX_UPLOAD_BYTES: ${MATERIAL_MAX_UPLOAD_BYTES:-20971520}
       MATERIAL_CHUNK_TARGET_CHARS: ${MATERIAL_CHUNK_TARGET_CHARS:-2500}
