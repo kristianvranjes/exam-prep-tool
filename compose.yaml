@@ -17,9 +17,15 @@ services:
       retries: 15
   backend:
     build: ./backend
+    volumes:
+      - material_data:/app/data/materials
     environment:
       APP_ENV: ${APP_ENV:-development}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      MATERIAL_STORAGE_DIR: /app/data/materials
+      MATERIAL_MAX_UPLOAD_BYTES: ${MATERIAL_MAX_UPLOAD_BYTES:-20971520}
+      MATERIAL_CHUNK_TARGET_CHARS: ${MATERIAL_CHUNK_TARGET_CHARS:-2500}
+      MATERIAL_CHUNK_OVERLAP_CHARS: ${MATERIAL_CHUNK_OVERLAP_CHARS:-250}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-examprep}:${POSTGRES_PASSWORD:-examprep}@db:5432/${POSTGRES_DB:-examprep}
     ports:
       - "127.0.0.1:8000:8000"
@@ -49,3 +55,4 @@ services:
         condition: service_healthy
 volumes:
   postgres_data:
+  material_data:

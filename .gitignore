@@ -12,3 +12,4 @@ node_modules/
 coverage/
 *.tsbuildinfo
 pytest-cache-files-*/
+data/
