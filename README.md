@@ -1,8 +1,7 @@
 # ExamPrep
 
-A local-first university exam preparation platform. **Implemented scope: issue #3,
-Phase 3 — PDF material upload, extraction and deterministic chunking.** Quizzes
-and all AI integrations are future work.
+A local-first university exam preparation platform. **Implemented scope: issue #6,
+Phase 4 — local concept proposals with provenance and human review.**
 
 Stack: Next.js / TypeScript / Tailwind CSS (shadcn/ui-ready), FastAPI / Pydantic /
 SQLAlchemy 2 / Alembic, PostgreSQL 17 with pgvector, Docker Compose and GitHub Actions.
@@ -22,6 +21,11 @@ PowerShell uses `Copy-Item .env.example .env` instead of `cp` (either works in P
 Open http://localhost:3000 — register or log in, then create a course.
 Select a course, choose a PDF under Study materials, and click Upload PDF. Open
 the material row to inspect its status, extracted text and section/chunk counts.
+For optional concept extraction, install Ollama and run `ollama pull qwen3:4b`.
+Set `OLLAMA_MODEL=qwen3:4b` in `.env` (replace an older empty value), keep Ollama
+running, then rebuild Compose. Open a READY material and click Extract concepts.
+Only an OWNER can approve/reject DRAFT proposals. The base app works without Ollama.
+See [AI setup and tests](docs/AI.md) for host/container networking and limits.
 API docs: http://localhost:8000/docs.
 
 ```sh
@@ -145,7 +149,7 @@ security limits and exact test instructions.
 - `docs/ARCHITECTURE.md`: service boundaries and configuration.
 - `docs/DATABASE.md`: infrastructure and migrations.
 - `docs/API.md`: health, authentication and course endpoint contracts.
-- `docs/AI.md`: future-only AI constraints.
+- `docs/AI.md`: local provider architecture, concept review and optional smoke test.
 - `docs/PRODUCT_VISION.md`: original Croatian product vision, preserved as historical
   planning; its roadmap numbering and tentative stack do not define issue #1 scope.
 

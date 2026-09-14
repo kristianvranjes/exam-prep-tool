@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { api, Material, MaterialDetail } from "../lib/api";
+import { ConceptReview } from "./concept-review";
 
 export function CourseMaterials({ courseId }: { courseId: string }) {
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -87,6 +88,7 @@ export function CourseMaterials({ courseId }: { courseId: string }) {
           <summary>Extracted text</summary>
           <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-sm">{detail.extracted_markdown || "No extracted text."}</pre>
         </details>
+        {detail.status === "READY" && <ConceptReview key={detail.id} courseId={courseId} materialId={detail.id} />}
       </article>}
     </section>
   );

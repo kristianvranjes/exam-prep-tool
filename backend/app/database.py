@@ -9,6 +9,8 @@ class Base(DeclarativeBase):
 
 
 from app.models import (  # noqa: E402,F401
+    ai_job,
+    concept,
     course,
     course_membership,
     material,

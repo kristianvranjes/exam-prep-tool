@@ -62,3 +62,25 @@ paths are not returned. Sections contain id, ordinal, title, level and content.
 initial metadata persistence. Failed extraction has a fixed safe message and no
 partial sections/chunks. No raw exceptions or executable HTML are rendered.
 See [materials](MATERIALS.md) for defaults and exact processing semantics.
+
+## Concept proposals and AI audit
+
+- `POST /materials/{material_id}/concept-extraction`: MEMBER/OWNER may extract from
+  a READY material. Synchronous HTTP 200 returns the completed job with SUCCEEDED
+  or FAILED status, safe error_message/error_code and per-batch usage. Provider
+  unavailability or invalid output returns a persisted FAILED job, not a fallback.
+  409 indicates non-READY material or an active extraction in that course; 422
+  indicates exceeded chunk/batch bounds. No concepts are partially written.
+- `GET /courses/{course_id}/concepts?material_id={optional_uuid}`: list course or
+  material-linked concepts with description, aliases, importance and review status.
+- `GET /concepts/{concept_id}`: concept metadata and source_chunks containing
+  chunk IDs, material IDs, ordinals and text for inspection.
+- `PATCH /concepts/{concept_id}/status`: OWNER-only body
+  `{"status":"APPROVED"}` or `{"status":"REJECTED"}`. Only DRAFTs can transition;
+  other states return 409 and MEMBER review attempts return 403.
+- `GET /ai/jobs/{job_id}`: job metadata, input chunk IDs and per-batch usage.
+
+Every operation requires the auth cookie (401 otherwise). Non-members receive 404
+for inaccessible concepts/materials/courses/jobs. AI output starts DRAFT. Reruns
+merge normalized-name AI DRAFTs and union provenance; APPROVED/REJECTED/USER concepts
+are untouched. See [AI](AI.md) for configuration, audit fields and review semantics.
