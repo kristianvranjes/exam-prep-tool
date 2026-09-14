@@ -65,4 +65,3 @@ it("shows a pending request and blocks duplicate clicks", async () => {
   finish({ id: "j1", model: "fake", status: "SUCCEEDED" });
   await screen.findByText(/Extraction SUCCEEDED/);
 });
-

@@ -82,4 +82,3 @@ export function ConceptReview({ courseId, materialId }: { courseId: string; mate
     </aside>}
   </section>;
 }
-
