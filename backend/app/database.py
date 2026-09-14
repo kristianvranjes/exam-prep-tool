@@ -8,7 +8,14 @@ class Base(DeclarativeBase):
     pass
 
 
-from app.models import course, course_membership, user  # noqa: E402,F401
+from app.models import (  # noqa: E402,F401
+    course,
+    course_membership,
+    material,
+    material_chunk,
+    material_section,
+    user,
+)
 
 
 def make_engine(settings: Settings) -> Engine:

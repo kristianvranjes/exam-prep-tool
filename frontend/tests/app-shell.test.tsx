@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMock = vi.hoisted(() => ({
+  materials: vi.fn().mockResolvedValue([]),
   me: vi.fn(),
   register: vi.fn(),
   login: vi.fn(),

@@ -38,3 +38,27 @@ and are never returned.
   `403`.
 
 All course endpoints require the session cookie. Validation errors return `422`.
+
+## Materials
+
+All endpoints require the same session cookie (401 when absent/invalid). OWNER and
+MEMBER may upload/list/view; inaccessible courses return 404, including material
+detail/chunk access by non-members. Missing material IDs return 404.
+
+- `POST /courses/{course_id}/materials`: multipart form with one `file` field.
+  Accepts PDF only. Returns 201 and material metadata after synchronous processing,
+  with READY or FAILED status. FAILED is a retained material, not a rejected upload.
+- `GET /courses/{course_id}/materials`: ordered metadata list with status/errors.
+- `GET /materials/{material_id}`: metadata, extracted_markdown, ordered sections,
+  and chunk_count.
+- `GET /materials/{material_id}/chunks`: ordered chunks with id, material_id,
+  section_id, ordinal, content and char_count, for inspection.
+
+Metadata includes id, course_id, uploaded_by_user_id, original_filename, media_type,
+file_size_bytes, status, processing_error and timestamps; private storage keys and
+paths are not returned. Sections contain id, ordinal, title, level and content.
+400 means empty file/invalid filename length, 415 unsupported extension/MIME/signature,
+413 size exceeded, 422 malformed multipart fields, and 503 unavailable storage or
+initial metadata persistence. Failed extraction has a fixed safe message and no
+partial sections/chunks. No raw exceptions or executable HTML are rendered.
+See [materials](MATERIALS.md) for defaults and exact processing semantics.

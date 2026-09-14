@@ -1,7 +1,7 @@
 # ExamPrep
 
-A local-first university exam preparation platform. **Implemented scope: issue #2,
-Phase 2 — identity, sessions and course management.** Document processing, quizzes
+A local-first university exam preparation platform. **Implemented scope: issue #3,
+Phase 3 — PDF material upload, extraction and deterministic chunking.** Quizzes
 and all AI integrations are future work.
 
 Stack: Next.js / TypeScript / Tailwind CSS (shadcn/ui-ready), FastAPI / Pydantic /
@@ -20,6 +20,8 @@ docker compose up --build -d --wait
 
 PowerShell uses `Copy-Item .env.example .env` instead of `cp` (either works in PowerShell).
 Open http://localhost:3000 — register or log in, then create a course.
+Select a course, choose a PDF under Study materials, and click Upload PDF. Open
+the material row to inspect its status, extracted text and section/chunk counts.
 API docs: http://localhost:8000/docs.
 
 ```sh
@@ -98,7 +100,9 @@ python -m pytest
 python -m alembic upgrade head
 ```
 
-Run the real PostgreSQL integration test after migrating:
+Run the real PostgreSQL integration tests after migrating a disposable test database.
+Set DATABASE_URL to that database before migrations/tests: fixtures truncate
+application tables. Do not use a database containing data you need.
 
 ```sh
 # Linux/macOS
@@ -108,8 +112,8 @@ $env:RUN_DB_TESTS="1"
 python -m pytest
 ```
 
-Without `RUN_DB_TESTS=1`, only the database integration test is explicitly skipped;
-unit tests cover health responses, failure sanitization and CORS. CI always runs
+Without `RUN_DB_TESTS=1`, PostgreSQL integration tests are explicitly skipped;
+unit tests cover health, extraction, section parsing, chunking and upload limits. CI runs
 integration tests against PostgreSQL/pgvector and exercises migration rollback.
 
 From `frontend/`:
@@ -128,6 +132,12 @@ From the root: `docker compose config --quiet`. If GNU Make is installed,
 CI runs backend, frontend and Compose smoke checks on pushes and pull requests.
 
 ## Repository
+
+Material storage defaults to `backend/data/materials` for host development and a
+named Docker volume for Compose. Configure upload/chunk limits in `.env`; defaults
+are 20 MiB, 2500 characters per chunk and 250 characters overlap. See
+[material processing](docs/MATERIALS.md) for storage paths, failure behavior,
+security limits and exact test instructions.
 
 - `frontend/`: Next.js authentication and course-management UI.
 - `backend/`: API routes, services, database configuration, migrations and tests.
