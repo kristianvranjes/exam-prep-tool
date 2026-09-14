@@ -1,11 +1,13 @@
 import os
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.database import engine
+from app.database import SessionLocal, engine
 from app.main import app
+from app.models import CourseMembership, MembershipRole
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_DB_TESTS") != "1", reason="Set RUN_DB_TESTS=1 with PostgreSQL"
@@ -71,7 +73,7 @@ def test_auth_and_course_authorization() -> None:
 
 
 def test_bad_login_and_non_owner_cannot_manage_course() -> None:
-    with TestClient(app) as owner, TestClient(app) as member:
+    with TestClient(app) as owner, TestClient(app) as member, TestClient(app) as unrelated:
         owner.post(
             "/auth/register",
             json={
@@ -81,11 +83,13 @@ def test_bad_login_and_non_owner_cannot_manage_course() -> None:
             },
         )
         course = owner.post("/courses", json={"name": "Private"}).json()
+        path = f"/courses/{course['id']}"
+        assert owner.get(f"{path}/membership").json()["role"] == "OWNER"
         bad_login = member.post(
             "/auth/login", json={"email": "owner@example.com", "password": "wrong password"}
         )
         assert bad_login.status_code == 401
-        member.post(
+        registration = member.post(
             "/auth/register",
             json={
                 "email": "member@example.com",
@@ -93,4 +97,42 @@ def test_bad_login_and_non_owner_cannot_manage_course() -> None:
                 "display_name": "Member",
             },
         )
-        assert member.get(f"/courses/{course['id']}").status_code == 404
+        assert registration.status_code == 201
+        with SessionLocal() as db:
+            membership = CourseMembership(
+                course_id=UUID(course["id"]),
+                user_id=UUID(registration.json()["id"]),
+                role=MembershipRole.MEMBER.value,
+            )
+            db.add(membership)
+            db.commit()
+            membership_id = membership.id
+
+        assert member.get(path).status_code == 200
+        assert member.patch(path, json={"name": "Forbidden"}).status_code == 403
+        assert member.delete(path).status_code == 403
+        assert owner.get(path).json()["name"] == "Private"
+
+        assert (
+            unrelated.post(
+                "/auth/register",
+                json={
+                    "email": "unrelated@example.com",
+                    "password": "correct horse",
+                    "display_name": "Unrelated",
+                },
+            ).status_code
+            == 201
+        )
+        assert unrelated.get(path).status_code == 404
+        assert unrelated.patch(path, json={"name": "Forbidden"}).status_code == 404
+        assert unrelated.delete(path).status_code == 404
+
+        # Ownership is determined by membership, independently of who created the course.
+        with SessionLocal() as db:
+            membership = db.get(CourseMembership, membership_id)
+            assert membership is not None
+            membership.role = MembershipRole.OWNER.value
+            db.commit()
+        assert member.patch(path, json={"name": "Allowed"}).status_code == 200
+        assert member.delete(path).status_code == 204

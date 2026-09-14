@@ -43,7 +43,7 @@ def list_member_courses(db: Session, user: User) -> list[Course]:
     )
 
 
-def update_course(db: Session, user: User, course_id: UUID, data: CourseUpdate) -> Course:
+def get_owner_course(db: Session, user: User, course_id: UUID) -> Course:
     course = get_member_course(db, user, course_id)
     membership = db.scalar(
         select(CourseMembership).where(
@@ -52,6 +52,11 @@ def update_course(db: Session, user: User, course_id: UUID, data: CourseUpdate) 
     )
     if membership is None or membership.role != MembershipRole.OWNER.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner access required")
+    return course
+
+
+def update_course(db: Session, user: User, course_id: UUID, data: CourseUpdate) -> Course:
+    course = get_owner_course(db, user, course_id)
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(course, field, value.strip() if isinstance(value, str) else value)
     db.commit()
@@ -60,8 +65,6 @@ def update_course(db: Session, user: User, course_id: UUID, data: CourseUpdate) 
 
 
 def delete_course(db: Session, user: User, course_id: UUID) -> None:
-    course = get_member_course(db, user, course_id)
-    if course.created_by_user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner access required")
+    course = get_owner_course(db, user, course_id)
     db.delete(course)
     db.commit()

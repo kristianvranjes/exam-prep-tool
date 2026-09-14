@@ -34,7 +34,7 @@ and are never returned.
 - `GET /courses/{course_id}/membership` returns the caller's membership role.
 - `PATCH /courses/{course_id}` updates name, code or description for an OWNER;
   non-owners receive `403`.
-- `DELETE /courses/{course_id}` deletes a course for its creator; other users receive
+- `DELETE /courses/{course_id}` deletes a course for an OWNER; other members receive
   `403`.
 
 All course endpoints require the session cookie. Validation errors return `422`.
