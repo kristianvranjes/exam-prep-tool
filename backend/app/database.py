@@ -16,6 +16,7 @@ from app.models import (  # noqa: E402,F401
     material,
     material_chunk,
     material_section,
+    question,
     user,
 )
 

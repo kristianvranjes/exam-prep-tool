@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     embedding_max_chunks: int = Field(default=128, ge=1, le=1024)
     embedding_max_text_chars: int = Field(default=6000, ge=1, le=16000)
     ai_provider: Literal["ollama", "freellmapi"] = "ollama"
+    question_generation_max_count: int = Field(default=10, ge=1, le=10)
+    question_generation_max_concepts: int = Field(default=5, ge=1, le=5)
+    question_generation_retrieval_top_k_max: int = Field(default=10, ge=1, le=10)
+    question_generation_max_context_chunks: int = Field(default=12, ge=1, le=12)
+    question_generation_max_context_chars: int = Field(default=16000, ge=1000, le=16000)
     freellmapi_url: str = "http://localhost:3001/v1"
     freellmapi_api_key: SecretStr = SecretStr("")
     freellmapi_model: str = "auto"

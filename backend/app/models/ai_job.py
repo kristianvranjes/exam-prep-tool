@@ -50,6 +50,9 @@ class AIJob(Base):
     input_chunk_count: Mapped[int]
     input_char_count: Mapped[int]
     input_chunk_ids: Mapped[list[str]] = mapped_column(JSONB)
+    input_concept_ids: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
     batch_count: Mapped[int]
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

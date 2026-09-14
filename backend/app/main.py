@@ -9,6 +9,7 @@ from app.api.concepts import router as concepts_router
 from app.api.courses import router as courses_router
 from app.api.health import router as health_router
 from app.api.materials import router as materials_router
+from app.api.questions import router as questions_router
 from app.api.retrieval import router as retrieval_router
 from app.config import Settings
 from app.database import engine
@@ -37,3 +38,4 @@ app.include_router(courses_router)
 app.include_router(materials_router)
 app.include_router(concepts_router)
 app.include_router(retrieval_router)
+app.include_router(questions_router)
