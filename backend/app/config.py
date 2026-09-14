@@ -4,6 +4,8 @@ from typing import Literal
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+EMBEDDING_DIMENSION = 1024
+
 
 class Settings(BaseSettings):
     app_env: str = "development"
@@ -17,6 +19,15 @@ class Settings(BaseSettings):
     material_max_upload_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     material_chunk_target_chars: int = Field(default=2500, ge=2)
     material_chunk_overlap_chars: int = Field(default=250, ge=0)
+    embedding_model: str = "BAAI/bge-m3"
+    embedding_revision: str = Field(
+        default="5617a9f61b028005a4858fdac845db406aefb181", pattern=r"^[0-9a-f]{40}$"
+    )
+    embedding_max_tokens: int = Field(default=8192, ge=16, le=8192)
+    embedding_batch_size: int = Field(default=4, ge=1, le=16)
+    embedding_batch_chars: int = Field(default=12000, ge=1000, le=64000)
+    embedding_max_chunks: int = Field(default=128, ge=1, le=1024)
+    embedding_max_text_chars: int = Field(default=6000, ge=1, le=16000)
     ai_provider: Literal["ollama", "freellmapi"] = "ollama"
     freellmapi_url: str = "http://localhost:3001/v1"
     freellmapi_api_key: SecretStr = SecretStr("")

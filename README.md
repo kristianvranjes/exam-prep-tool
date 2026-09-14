@@ -1,7 +1,7 @@
 # ExamPrep
 
-A local-first university exam preparation platform. **Implemented scope: issue #7,
-Phase 4.1 — optional FreeLLMAPI development provider for concept proposals.**
+A local-first university exam preparation platform. **Implemented scope: issue #9,
+Phase 5 — local BGE-M3 embeddings and course-scoped semantic retrieval.**
 
 Stack: Next.js / TypeScript / Tailwind CSS (shadcn/ui-ready), FastAPI / Pydantic /
 SQLAlchemy 2 / Alembic, PostgreSQL 17 with pgvector, Docker Compose and GitHub Actions.
@@ -182,3 +182,16 @@ Laptop development can use FreeLLMAPI; a home PC can use Ollama/Qwen by explicit
 setting `AI_PROVIDER=ollama`. Future production/demo deployments must explicitly
 choose a supported provider. There is no application-level fallback between them.
 See [AI details and optional smoke test](docs/AI.md).
+
+## Local embeddings and semantic retrieval
+
+Phase 5 adds a separate `EmbeddingProvider` for BGE-M3 dense vectors. `AIProvider`
+continues to handle Ollama/FreeLLMAPI text generation independently. No question
+or RAG generation is implemented. The base Docker image and CI exclude the optional
+ML stack and model weights; all existing application features start without them.
+Embedding/search requests return a safe 503 until a local embedding model is available.
+
+For real CPU embedding, run the backend natively with the optional `embeddings`
+extra and a predownloaded pinned model. See [exact setup, authenticated requests,
+limits and migration commands](docs/RETRIEVAL.md). No paid API or GPU is required.
+The model download and inference are optional manual steps, never part of CI.

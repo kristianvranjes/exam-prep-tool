@@ -1,6 +1,6 @@
 # Architecture
 
-Phase 4 consists of one Next.js frontend, one FastAPI backend and one PostgreSQL
+Phase 5 consists of one Next.js frontend, one FastAPI backend and one PostgreSQL
 instance. The browser calls FastAPI directly; CORS allows only FRONTEND_URL and
 credentials are enabled for the session cookie. Tailwind 4 and components.json
 prepare the frontend for shadcn/ui; no component library UI is generated yet.
@@ -42,3 +42,11 @@ Laptop development may explicitly select FreeLLMAPI; home PC development uses
 Ollama/Qwen. FreeLLMAPI is separate development/prototyping infrastructure and may
 route chunk text to external services. Future production/demo deployments must
 explicitly choose a supported provider; FreeLLMAPI is not a production guarantee.
+
+
+Phase 5 uses EmbeddingProvider -> BGEM3Provider for dense embeddings, separately
+from AIProvider -> Ollama/FreeLLMAPI for text generation. Embedding services read
+persisted chunks and validate vectors; RetrievalService uses bound pgvector cosine
+expressions within a course. Only the embedding adapter imports/loads its optional
+model library, lazily and offline. No shared AI framework, vector server, ANN index
+or background worker is introduced. See [retrieval](RETRIEVAL.md).

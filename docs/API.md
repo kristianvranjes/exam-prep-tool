@@ -89,3 +89,23 @@ Provider selection is deployment configuration, not an API request parameter.
 The same concept endpoints support explicit Ollama or development-only FreeLLMAPI
 selection. FAILED jobs retain available measured usage without rejected output text;
 clients should inspect job status even when extraction returns HTTP 200.
+
+
+## Embeddings and semantic retrieval (Phase 5)
+
+Both endpoints require authentication (401) and OWNER or MEMBER course access;
+outsiders and missing resources return 404. MEMBER has the same permissions as
+OWNER here, so there is no separate owner-only 403 operation in this phase.
+
+- `POST /materials/{material_id}/embeddings`: refresh persisted READY chunks.
+  Returns `{material_id, embedded, skipped, signature}`. Non-READY or busy refresh:
+  409. Empty/oversized material or tokenizer/input limit: 422. Model/output/storage
+  failure: safe 503, with the entire refresh rolled back.
+- `POST /courses/{course_id}/retrieval/search`: accepts `{query, top_k: 5}`.
+  Query must be a nonblank string of at most 1000 characters; top_k is an integer
+  from 1 to 20. Returns a list of `{material_id, chunk_id, ordinal, content, distance,
+  similarity}`. Only current vectors for READY materials in that course qualify.
+  No current vectors produces an empty list (with a working embedding provider).
+  Invalid requests return 422; unavailable/invalid model output returns safe 503.
+
+These endpoints do not invoke text generation, reparse PDFs, or construct RAG prompts.
