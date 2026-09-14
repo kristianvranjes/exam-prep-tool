@@ -58,3 +58,8 @@ Changing POSTGRES_* does not modify credentials in an existing volume. Update th
 existing database explicitly or create a separate development volume. Never remove
 a volume containing data you need. GET /health/db executes SELECT 1; the integration
 test additionally checks the extension and migration revision.
+
+Phase 4.1 adds no migration. AIJob retains the configured provider/model; AIUsage
+can record sanitized routed identifiers and measured total tokens. Available usage
+is committed per attempted batch even if content validation or final persistence
+fails. Concepts and successful job completion share the final transaction.

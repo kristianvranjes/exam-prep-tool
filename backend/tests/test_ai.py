@@ -147,3 +147,36 @@ def test_missing_token_counts_are_none(monkeypatch):
     )
     assert usage.prompt_tokens is None
     assert usage.completion_tokens is None
+
+
+def test_ollama_invalid_content_preserves_measured_usage(monkeypatch):
+    original = httpx.Client
+    monkeypatch.setattr(
+        httpx,
+        "Client",
+        lambda **kwargs: original(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200,
+                    json={
+                        "done": True,
+                        "message": {"content": "private invalid output"},
+                        "prompt_eval_count": 15,
+                        "eval_count": 7,
+                    },
+                )
+            ),
+            **kwargs,
+        ),
+    )
+    with pytest.raises(AIError) as caught:
+        generate_validated(
+            OllamaProvider("http://localhost:11434", "qwen3:4b", 1),
+            "system",
+            "chunks",
+            ConceptExtractionResult,
+        )
+    assert caught.value.code == "INVALID_OUTPUT"
+    assert caught.value.generation.content == ""
+    assert caught.value.generation.prompt_tokens == 15
+    assert caught.value.generation.completion_tokens == 7

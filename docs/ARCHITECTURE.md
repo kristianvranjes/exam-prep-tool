@@ -17,7 +17,8 @@ live in private storage and derived content lives in PostgreSQL. No queue or AI
 service is introduced by the material pipeline. See [materials](MATERIALS.md) for boundaries.
 
 Concept extraction reads persisted chunks through a provider-neutral AIProvider and
-Pydantic validation service. Only the Ollama adapter knows its local HTTP protocol.
+Pydantic validation service. Provider HTTP protocols stay in the Ollama and FreeLLMAPI adapters; only the AI
+router selects an adapter from configuration.
 Versioned prompts, bounded batches, atomic draft persistence and per-batch usage
 support review without changing ingestion. Ollama is optional for base app startup;
 there is no cloud fallback. See [AI](AI.md) for failure/rerun/concurrency semantics.
@@ -36,3 +37,8 @@ SESSION_SECRET through NEXT_PUBLIC variables. Future provider placeholders are u
 
 Development is local-first and requires no cloud accounts. Docker sources are copied
 at build time; native development supports reload. No extra microservices are needed.
+
+Laptop development may explicitly select FreeLLMAPI; home PC development uses
+Ollama/Qwen. FreeLLMAPI is separate development/prototyping infrastructure and may
+route chunk text to external services. Future production/demo deployments must
+explicitly choose a supported provider; FreeLLMAPI is not a production guarantee.

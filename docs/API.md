@@ -84,3 +84,8 @@ Every operation requires the auth cookie (401 otherwise). Non-members receive 40
 for inaccessible concepts/materials/courses/jobs. AI output starts DRAFT. Reruns
 merge normalized-name AI DRAFTs and union provenance; APPROVED/REJECTED/USER concepts
 are untouched. See [AI](AI.md) for configuration, audit fields and review semantics.
+
+Provider selection is deployment configuration, not an API request parameter.
+The same concept endpoints support explicit Ollama or development-only FreeLLMAPI
+selection. FAILED jobs retain available measured usage without rejected output text;
+clients should inspect job status even when extraction returns HTTP 200.

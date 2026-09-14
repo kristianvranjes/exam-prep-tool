@@ -190,3 +190,62 @@ def test_missing_key_never_requests(monkeypatch):
         FreeLLMAPIProvider(
             "http://localhost:3001/v1", "auto", SecretStr(""), 2
         ).generate_structured("system", "chunks", ConceptExtractionResult)
+
+
+@pytest.mark.parametrize(
+    "mode", ["invalid_json", "invalid_schema", "truncated", "key_echo", "escaped_key_echo"]
+)
+def test_rejected_content_keeps_usage_without_content(monkeypatch, provider, mode, caplog):
+    import logging
+
+    caplog.set_level(logging.INFO)
+    content = {
+        "invalid_json": "private rejected output",
+        "invalid_schema": '{"wrong":true}',
+        "truncated": '{"concepts":[]}',
+        "key_echo": json.dumps(
+            {
+                "concepts": [
+                    {
+                        "name": "Algebra",
+                        "description": KEY,
+                        "aliases": [],
+                        "importance": "HIGH",
+                        "source_chunk_ordinals": [0],
+                    }
+                ]
+            }
+        ),
+    }["key_echo" if mode == "escaped_key_echo" else mode]
+    if mode == "escaped_key_echo":
+        content = content.replace(KEY, "".join(f"\\u{ord(char):04x}" for char in KEY))
+    mock_http(
+        monkeypatch,
+        lambda request: httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {"content": content},
+                        "finish_reason": "length" if mode == "truncated" else "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
+            },
+        ),
+    )
+    with pytest.raises(AIError) as caught:
+        generate_validated(
+            provider, "private system prompt", "private source chunk", ConceptExtractionResult
+        )
+    assert caught.value.code == "INVALID_OUTPUT"
+    assert caught.value.generation.content == ""
+    assert caught.value.generation.total_tokens == 30
+    output = repr(vars(caught.value)) + str(caught.value) + caplog.text
+    for private in (
+        KEY,
+        "private rejected output",
+        "private system prompt",
+        "private source chunk",
+    ):
+        assert private not in output

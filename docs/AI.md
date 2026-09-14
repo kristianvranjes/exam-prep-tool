@@ -112,8 +112,9 @@ safe message/code. Usage for attempted batches remains even when a later batch f
 AIJob records requester/course/material, operation, provider/model, prompt version,
 input chunk IDs/count/raw character count, planned batch count and timestamps.
 AIUsage records batch ordinal, measured latency, optional token counts and zero
-estimated monetary cost (not a billing guarantee for gateway upstreams). Missing counts are null, not fabricated estimates; malformed
-output can leave counts null even after inference. Raw provider errors, full source
+estimated monetary cost (not a billing guarantee for gateway upstreams). Missing counts are null, not fabricated estimates. Valid usage envelopes survive
+content/schema validation failures; rejected content is removed before the safe
+error reaches the concept service. Malformed transport envelopes may leave counts null. Raw provider errors, full source
 text, prompts and auth secrets are not logged. Audit endpoints require membership.
 
 ## Automated checks
@@ -180,3 +181,8 @@ provider. It sends synthetic text and is never run by CI. Normal tests mock HTTP
 or inject a fake provider and require no live gateway/Ollama. Gateway availability,
 upstream rate limits, JSON-mode support and model quality vary; `auto` and zero
 temperature do not promise reproducibility. This integration is for development.
+
+Gateway responses reflecting the configured API key in generated content are rejected,
+including otherwise valid concept JSON. Development configuration is trusted operator
+input, never request-controlled; local/private endpoint restrictions are not a sandbox
+for an untrusted gateway. Upstream terms, quotas and routing can change independently.

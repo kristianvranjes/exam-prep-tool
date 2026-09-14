@@ -182,6 +182,9 @@ def extract_concepts(
                 if any(not set(c.source_chunk_ordinals) <= allowed for c in result.concepts):
                     raise AIError("INVALID_PROVENANCE")
                 results.extend(result.concepts)
+            except AIError as exc:
+                generation = generation or exc.generation
+                raise
             finally:
                 prompt_tokens = generation.prompt_tokens if generation else None
                 completion_tokens = generation.completion_tokens if generation else None

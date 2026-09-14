@@ -1,4 +1,5 @@
 import ipaddress
+import json
 import re
 from urllib.parse import urlsplit
 
@@ -113,13 +114,11 @@ class FreeLLMAPIProvider:
                 response.raise_for_status()
                 result = Completion.model_validate(response.json())
                 choice = result.choices[0]
-                if choice.finish_reason not in (None, "stop"):
-                    raise AIError("INVALID_OUTPUT")
                 usage = result.usage or Usage()
                 routed_provider, routed_model = routed_metadata(
                     response.headers.get("X-Routed-Via"), key
                 )
-                return Generation(
+                generation = Generation(
                     content=choice.message.content,
                     prompt_tokens=usage.prompt_tokens,
                     completion_tokens=usage.completion_tokens,
@@ -127,6 +126,11 @@ class FreeLLMAPIProvider:
                     routed_provider=routed_provider,
                     routed_model=routed_model,
                 )
+                if choice.finish_reason not in (None, "stop") or contains_key(
+                    choice.message.content, key
+                ):
+                    raise AIError("INVALID_OUTPUT", generation)
+                return generation
         except AIError:
             raise
         except httpx.TimeoutException:
@@ -137,3 +141,22 @@ class FreeLLMAPIProvider:
             raise AIError("INVALID_OUTPUT") from None
         except Exception:
             raise AIError("PROVIDER_FAILURE") from None
+
+
+def contains_key(content: str, key: str) -> bool:
+    if key in content:
+        return True
+    try:
+        pending = [json.loads(content)]
+    except ValueError:
+        return False  # The shared Pydantic layer will reject invalid JSON.
+    while pending:
+        value = pending.pop()
+        if isinstance(value, str) and key in value:
+            return True
+        if isinstance(value, dict):
+            pending.extend(value.keys())
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
+    return False

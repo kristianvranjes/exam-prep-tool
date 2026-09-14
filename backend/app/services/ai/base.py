@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol, TypeVar
 
 from pydantic import BaseModel
@@ -30,6 +30,8 @@ class AIProvider(Protocol):
 class AIError(Exception):
     """Safe categorized error; raw provider errors never leave the adapter."""
 
-    def __init__(self, code: str):
+    def __init__(self, code: str, generation: Generation | None = None):
         super().__init__(code)
         self.code = code
+        # Failed validation must retain measured usage, never rejected source/output text.
+        self.generation = replace(generation, content="") if generation is not None else None
