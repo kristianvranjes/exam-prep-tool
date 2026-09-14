@@ -1,11 +1,11 @@
 # ExamPrep
 
-A local-first university exam preparation platform. **Implemented scope: issue #6,
-Phase 4 — local concept proposals with provenance and human review.**
+A local-first university exam preparation platform. **Implemented scope: issue #7,
+Phase 4.1 — optional FreeLLMAPI development provider for concept proposals.**
 
 Stack: Next.js / TypeScript / Tailwind CSS (shadcn/ui-ready), FastAPI / Pydantic /
 SQLAlchemy 2 / Alembic, PostgreSQL 17 with pgvector, Docker Compose and GitHub Actions.
-No paid services or API keys are needed.
+The default Ollama setup requires no API key. Optional FreeLLMAPI uses a unified gateway key.
 
 ## Start with Docker
 
@@ -25,6 +25,8 @@ For optional concept extraction, install Ollama and run `ollama pull qwen3:4b`.
 Set `OLLAMA_MODEL=qwen3:4b` in `.env` (replace an older empty value), keep Ollama
 running, then rebuild Compose. Open a READY material and click Extract concepts.
 Only an OWNER can approve/reject DRAFT proposals. The base app works without Ollama.
+For a laptop without local inference, explicitly select `AI_PROVIDER=freellmapi`
+and configure its separately installed gateway and key; see the instructions below.
 See [AI setup and tests](docs/AI.md) for host/container networking and limits.
 API docs: http://localhost:8000/docs.
 
@@ -154,3 +156,29 @@ security limits and exact test instructions.
   planning; its roadmap numbering and tentative stack do not define issue #1 scope.
 
 Licensed under the MIT License; see [LICENSE](LICENSE).
+
+## Optional FreeLLMAPI development setup
+
+Install and configure [FreeLLMAPI separately](https://github.com/tashfeenahmed/freellmapi/blob/main/docs/install.md).
+Start its OpenAI-compatible gateway on port 3001 and obtain its unified API key.
+Set these values in the untracked root `.env`:
+
+```dotenv
+AI_PROVIDER=freellmapi
+FREELLMAPI_URL=http://localhost:3001/v1
+FREELLMAPI_API_KEY=your-unified-key
+FREELLMAPI_MODEL=auto
+FREELLMAPI_DOCKER_URL=http://host.docker.internal:3001/v1
+```
+
+Restart the native backend, or run `docker compose up --build -d --wait`.
+Compose uses `FREELLMAPI_DOCKER_URL`; the gateway must accept connections from
+Docker's host network. Restrict access to the local machine/container network.
+Open a READY material and select Extract concepts as usual. Do not commit the key.
+The gateway can send chunk text to upstream services; use appropriate development
+materials and review its configured routing and data policies.
+
+Laptop development can use FreeLLMAPI; a home PC can use Ollama/Qwen by explicitly
+setting `AI_PROVIDER=ollama`. Future production/demo deployments must explicitly
+choose a supported provider. There is no application-level fallback between them.
+See [AI details and optional smoke test](docs/AI.md).

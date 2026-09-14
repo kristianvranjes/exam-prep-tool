@@ -1,6 +1,8 @@
+import json
 import os
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 from fake_ai import FakeProvider
 from fastapi.testclient import TestClient
@@ -191,3 +193,62 @@ def test_persistence_failure_rolls_back_all_concepts(setup, monkeypatch):
     assert result["status"] == "FAILED"
     with SessionLocal() as db:
         assert db.scalar(select(func.count()).select_from(Concept)) == 0
+
+
+@pytest.mark.parametrize("mode", ["usage", "no_usage", "failure"])
+def test_freellmapi_member_extraction_and_audit(setup, monkeypatch, mode):
+    _, member, _, course, material, _ = setup
+    monkeypatch.setenv("AI_PROVIDER", "freellmapi")
+    monkeypatch.setenv("FREELLMAPI_URL", "http://localhost:3001/v1")
+    monkeypatch.setenv("FREELLMAPI_MODEL", "auto")
+    monkeypatch.setenv("FREELLMAPI_API_KEY", "private-gateway-key")
+    app.dependency_overrides.pop(get_ai_provider)
+    original = httpx.Client
+
+    def handler(request):
+        if mode == "failure":
+            return httpx.Response(500, text="private-gateway-key http://private.internal traceback")
+        body = json.loads(request.content)
+        chunks = json.loads(body["messages"][1]["content"])["chunks"]
+        content = json.dumps(
+            {
+                "concepts": [
+                    {
+                        "name": "Algebra",
+                        "description": "Supported",
+                        "aliases": [],
+                        "importance": "HIGH",
+                        "source_chunk_ordinals": [chunks[0]["ordinal"]],
+                    }
+                ]
+            }
+        )
+        response = {"choices": [{"message": {"content": content}}]}
+        if mode == "usage":
+            response["usage"] = {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 18}
+        return httpx.Response(200, json=response, headers={"X-Routed-Via": "platform/model"})
+
+    monkeypatch.setattr(
+        httpx, "Client", lambda **kwargs: original(transport=httpx.MockTransport(handler), **kwargs)
+    )
+    response = member.post(f"/materials/{material}/concept-extraction")
+    assert response.status_code == 200
+    assert "private-gateway-key" not in response.text
+    assert "private.internal" not in response.text
+    job = response.json()
+    assert (job["provider"], job["model"]) == ("freellmapi", "auto")
+    if mode == "failure":
+        assert job["status"] == "FAILED"
+        assert job["error_code"] == "UNAVAILABLE"
+        assert member.get(f"/courses/{course}/concepts").json() == []
+    else:
+        assert job["status"] == "SUCCEEDED"
+        assert len(job["usage"]) == 2
+        for usage in job["usage"]:
+            assert (usage["provider"], usage["model"]) == ("platform", "model")
+            assert usage["total_tokens"] == (18 if mode == "usage" else None)
+            assert usage["prompt_tokens"] == (10 if mode == "usage" else None)
+            assert usage["completion_tokens"] == (5 if mode == "usage" else None)
+        concepts = member.get(f"/courses/{course}/concepts").json()
+        assert len(concepts) == 1
+        assert concepts[0]["status"] == "DRAFT"

@@ -189,14 +189,19 @@ def extract_concepts(
                     AIUsage(
                         ai_job_id=job_id,
                         batch_ordinal=index,
-                        provider=provider.name,
-                        model=provider.model,
+                        provider=(generation.routed_provider if generation else None)
+                        or provider.name,
+                        model=(generation.routed_model if generation else None) or provider.model,
                         prompt_tokens=prompt_tokens,
                         completion_tokens=completion_tokens,
                         total_tokens=(
-                            prompt_tokens + completion_tokens
-                            if prompt_tokens is not None and completion_tokens is not None
-                            else None
+                            generation.total_tokens
+                            if generation is not None and generation.total_tokens is not None
+                            else (
+                                prompt_tokens + completion_tokens
+                                if prompt_tokens is not None and completion_tokens is not None
+                                else None
+                            )
                         ),
                         latency_ms=int((perf_counter() - started) * 1000),
                         estimated_cost=0,

@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,7 +17,10 @@ class Settings(BaseSettings):
     material_max_upload_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     material_chunk_target_chars: int = Field(default=2500, ge=2)
     material_chunk_overlap_chars: int = Field(default=250, ge=0)
-    ai_provider: Literal["ollama"] = "ollama"
+    ai_provider: Literal["ollama", "freellmapi"] = "ollama"
+    freellmapi_url: str = "http://localhost:3001/v1"
+    freellmapi_api_key: SecretStr = SecretStr("")
+    freellmapi_model: str = "auto"
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:4b"
     ai_request_timeout_seconds: float = Field(default=120, gt=0, le=600)

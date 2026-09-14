@@ -24,7 +24,10 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      AI_PROVIDER: ollama
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      FREELLMAPI_URL: ${FREELLMAPI_DOCKER_URL:-http://host.docker.internal:3001/v1}
+      FREELLMAPI_API_KEY: ${FREELLMAPI_API_KEY:-}
+      FREELLMAPI_MODEL: ${FREELLMAPI_MODEL:-auto}
       OLLAMA_URL: ${OLLAMA_DOCKER_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
       AI_REQUEST_TIMEOUT_SECONDS: ${AI_REQUEST_TIMEOUT_SECONDS:-120}

@@ -1,6 +1,6 @@
-# Phase 4: local concept proposals
+# Phase 4.1: optional development providers
 
-Business logic depends on AIProvider, not Ollama. AI output is a proposal requiring
+Business logic depends on AIProvider, independent of the selected adapter. AI output is a proposal requiring
 human review. Ingestion stays deterministic; extraction reads MaterialChunk rows,
 never PDFs or the complete extracted_markdown field.
 
@@ -8,15 +8,15 @@ never PDFs or the complete extracted_markdown field.
 
 services/ai/base.py defines a synchronous protocol returning a Generation envelope
 (JSON plus optional measured token counts). services/ai/service.py validates it
-with Pydantic. router.py selects the sole active Ollama provider. All local HTTP
-details live in providers/ollama.py. Concept services import only the interface.
+with Pydantic. router.py explicitly selects Ollama (default) or FreeLLMAPI using AI_PROVIDER.
+HTTP details live in their respective providers/ adapters. Concept services import only the interface.
 
 Ollama /api/chat receives a Pydantic JSON schema as format, stream=false,
 think=false, temperature=0, seed=0 and num_predict=2048. Environment proxies and
 redirects are disabled. URLs are restricted to HTTP loopback, private IPv4,
 host.docker.internal or the local service name ollama. Credentials, URL paths and
 queries are rejected, as are cloud model tags. Use a trusted local installation.
-No cloud integrations/fallbacks exist.
+Ollama behavior is unchanged; no automatic application fallback exists.
 
 ## Setup and optional smoke
 
@@ -112,7 +112,7 @@ safe message/code. Usage for attempted batches remains even when a later batch f
 AIJob records requester/course/material, operation, provider/model, prompt version,
 input chunk IDs/count/raw character count, planned batch count and timestamps.
 AIUsage records batch ordinal, measured latency, optional token counts and zero
-local monetary cost. Missing counts are null, not fabricated estimates; malformed
+estimated monetary cost (not a billing guarantee for gateway upstreams). Missing counts are null, not fabricated estimates; malformed
 output can leave counts null even after inference. Raw provider errors, full source
 text, prompts and auth secrets are not logged. Audit endpoints require membership.
 
@@ -140,5 +140,43 @@ with a bounded HTTP timeout; many batches can take minutes. No queue or cancella
 API exists. Process termination can leave RUNNING jobs blocking their course:
 an operator must confirm the worker stopped before marking that job FAILED, then
 retry explicitly. Lists/source inspection are unpaginated. Large materials may
-need adjusted documented limits. No embeddings, cloud providers, questions,
+need adjusted documented limits. No embeddings, direct cloud-provider integrations, questions,
 quizzes or grading are implemented.
+
+## FreeLLMAPI adapter
+
+Use FreeLLMAPI for laptop development without local inference; use Ollama/Qwen
+on a home PC. Future production/demo deployments must explicitly choose a
+supported provider. Unknown AI_PROVIDER values fail configuration validation.
+See [README setup](../README.md#optional-freellmapi-development-setup) for exact
+settings. FreeLLMAPI is installed separately and is not vendored or started by
+this project's Compose file. Its gateway may route to external services; choosing
+it explicitly permits sending the bounded chunk prompts to those configured
+upstreams. There is no silent Ollama-to-FreeLLMAPI fallback. The gateway's own
+`auto` routing is controlled by its separate configuration.
+
+The adapter posts to `/v1/chat/completions` with the unified API key in
+Authorization Bearer, stream=false, temperature=0 and max_tokens=2048. JSON object
+mode is requested; the existing shared prompt already contains the schema once,
+so it is not repeated in response_format. Input bounds, chunk batching and prompt
+version remain unchanged. All returned content goes through the existing Pydantic
+and provenance validators. Truncated/refused responses fail safely; no repair or
+retry increases context. The endpoint is restricted to local/private HTTP with
+path /v1; redirects and environment proxies are disabled. Store the key only in
+untracked environment configuration; Settings masks it using SecretStr.
+
+The [gateway API](https://github.com/tashfeenahmed/freellmapi/blob/main/docs/api.md)
+may return X-Routed-Via as platform/model. Only length-bounded identifier metadata
+is accepted, with URLs, whitespace and reflected keys rejected. The generic
+Generation envelope carries it: AIJob retains the requested provider/model,
+while AIUsage records routed identifiers when available. Otherwise usage retains
+the requested identifiers. No schema migration is necessary. Measured prompt,
+completion and total token counts are retained when supplied; absent counts stay
+null (total may be computed when both components exist). Raw provider failures,
+keys and response bodies never appear in API error messages.
+
+The same optional `python -m app.scripts.ai_smoke` command uses the selected
+provider. It sends synthetic text and is never run by CI. Normal tests mock HTTP
+or inject a fake provider and require no live gateway/Ollama. Gateway availability,
+upstream rate limits, JSON-mode support and model quality vary; `auto` and zero
+temperature do not promise reproducibility. This integration is for development.

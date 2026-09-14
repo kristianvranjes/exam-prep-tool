@@ -13,6 +13,9 @@ class Generation:
     content: str
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    total_tokens: int | None = None
+    routed_provider: str | None = None
+    routed_model: str | None = None
 
 
 class AIProvider(Protocol):
