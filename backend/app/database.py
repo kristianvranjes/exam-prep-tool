@@ -8,6 +8,9 @@ class Base(DeclarativeBase):
     pass
 
 
+from app.models import course, course_membership, user  # noqa: E402,F401
+
+
 def make_engine(settings: Settings) -> Engine:
     return create_engine(
         settings.database_url, pool_pre_ping=True, connect_args={"connect_timeout": 3}

@@ -1,8 +1,8 @@
 # ExamPrep
 
-A local-first university exam preparation platform. **Implemented scope: issue #1,
-Phase 1 — monorepo and development infrastructure.** Authentication, document
-processing, quizzes and all AI integrations are future work.
+A local-first university exam preparation platform. **Implemented scope: issue #2,
+Phase 2 — identity, sessions and course management.** Document processing, quizzes
+and all AI integrations are future work.
 
 Stack: Next.js / TypeScript / Tailwind CSS (shadcn/ui-ready), FastAPI / Pydantic /
 SQLAlchemy 2 / Alembic, PostgreSQL 17 with pgvector, Docker Compose and GitHub Actions.
@@ -19,7 +19,7 @@ docker compose up --build -d --wait
 ```
 
 PowerShell uses `Copy-Item .env.example .env` instead of `cp` (either works in PowerShell).
-Open http://localhost:3000 — the page should display **Backend connected**.
+Open http://localhost:3000 — register or log in, then create a course.
 API docs: http://localhost:8000/docs.
 
 ```sh
@@ -129,12 +129,12 @@ CI runs backend, frontend and Compose smoke checks on pushes and pull requests.
 
 ## Repository
 
-- `frontend/`: minimal development page and browser health check.
+- `frontend/`: Next.js authentication and course-management UI.
 - `backend/`: API routes, services, database configuration, migrations and tests.
 - `infra/`: PostgreSQL initialization.
 - `docs/ARCHITECTURE.md`: service boundaries and configuration.
 - `docs/DATABASE.md`: infrastructure and migrations.
-- `docs/API.md`: health endpoint contract.
+- `docs/API.md`: health, authentication and course endpoint contracts.
 - `docs/AI.md`: future-only AI constraints.
 - `docs/PRODUCT_VISION.md`: original Croatian product vision, preserved as historical
   planning; its roadmap numbering and tentative stack do not define issue #1 scope.
