@@ -3,6 +3,13 @@
 A local-first university exam preparation platform. **Implemented scope: issue #11,
 Phase 6 — a retrieval-grounded question bank with OWNER review.**
 
+Phase 6.5 prepares **Vercel + Railway + managed PostgreSQL/pgvector staging** without
+deploying resources. Follow [the exact staging guide](docs/STAGING.md) for required
+environment variables, HTTPS AI configuration, Secure/SameSite cookies, explicit
+origin/CSRF protection, storage, migrations, smoke tests and recovery. Local defaults
+remain unchanged. A complete generation demo needs the optional backend embedding
+runtime; no models run on Vercel.
+
 Stack: Next.js / TypeScript / Tailwind CSS (shadcn/ui-ready), FastAPI / Pydantic /
 SQLAlchemy 2 / Alembic, PostgreSQL 17 with pgvector, Docker Compose and GitHub Actions.
 The default Ollama setup requires no API key. Optional FreeLLMAPI uses a unified gateway key.

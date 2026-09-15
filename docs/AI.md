@@ -1,5 +1,11 @@
 # AI providers, concept extraction and question drafts
 
+Phase 6.5 adds explicit `AI_PROVIDER=openai_compatible` for a trusted external HTTPS
+`/v1` endpoint. Configure OPENAI_COMPATIBLE_URL/MODEL/API_KEY; it reuses the tested
+OpenAI-compatible transport, bounded output, usage and Pydantic validation with no
+fallback. Ollama and development FreeLLMAPI behavior is unchanged. Hosted settings
+require this explicit provider. See [staging](STAGING.md) for setup and capability limits.
+
 Business logic depends on AIProvider, independent of the selected adapter. AI output is a proposal requiring
 human review. Ingestion stays deterministic; extraction reads MaterialChunk rows,
 never PDFs or the complete extracted_markdown field.
