@@ -16,7 +16,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   membership: (courseId: string) => request<{ role: "OWNER" | "MEMBER" }>(`/courses/${courseId}/membership`),
-  concepts: (courseId: string, materialId: string) => request<Concept[]>(`/courses/${courseId}/concepts?material_id=${encodeURIComponent(materialId)}`),
+  concepts: (courseId: string, materialId?: string) => request<Concept[]>(`/courses/${courseId}/concepts${materialId ? `?material_id=${encodeURIComponent(materialId)}` : ""}`),
+  questions: (courseId: string, filters: { status?: QuestionStatus; type?: QuestionType; limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => { if (value !== undefined) params.set(key, String(value)); });
+    return request<Question[]>(`/courses/${courseId}/questions?${params}`);
+  },
+  generateQuestions: (courseId: string, body: QuestionGeneration) => request<AIJob>(`/courses/${courseId}/questions/generate`, { method: "POST", body: JSON.stringify(body) }),
+  question: (id: string) => request<Question>(`/questions/${id}`),
+  editQuestion: (id: string, body: QuestionEdit) => request<OwnerQuestion>(`/questions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  transitionQuestion: (id: string, action: QuestionAction, reason?: string) => request<OwnerQuestion>(`/questions/${id}/${action}`, { method: "POST", ...(action === "reject" ? { body: JSON.stringify({ reason }) } : {}) }),
+  questionVersions: (id: string, offset = 0) => request<QuestionVersion[]>(`/questions/${id}/versions?limit=50&offset=${offset}`),
   concept: (id: string) => request<ConceptDetail>(`/concepts/${id}`),
   extractConcepts: (materialId: string) => request<AIJob>(`/materials/${materialId}/concept-extraction`, { method: "POST" }),
   reviewConcept: (id: string, status: "APPROVED" | "REJECTED") => request<Concept>(`/concepts/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
@@ -44,3 +54,21 @@ export type MaterialChunk = { id: string; material_id: string; section_id: strin
 export type Concept = { id: string; course_id: string; name: string; normalized_name: string; description: string | null; aliases: string[]; importance: 'LOW' | 'MEDIUM' | 'HIGH'; status: 'DRAFT' | 'APPROVED' | 'REJECTED'; created_by: string; created_at: string; updated_at: string };
 export type ConceptDetail = Concept & { source_chunks: { id: string; material_id: string; ordinal: number; content: string }[] };
 export type AIJob = { id: string; status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'; model: string; error_message: string | null; error_code: string | null };
+
+export type QuestionType = "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
+export type QuestionStatus = "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED";
+export type QuestionAction = "submit" | "approve" | "reject" | "archive";
+type QuestionBase = { id: string; course_id: string; type: QuestionType; stem: string; difficulty: number | null };
+export type PublicQuestion = QuestionBase & { visibility: "MEMBER"; status: "APPROVED"; options: { position: number; text: string }[] };
+export type OwnerQuestion = QuestionBase & {
+  visibility: "OWNER"; status: QuestionStatus; source: "AI" | "USER"; ai_job_id: string | null;
+  created_by_user_id: string; created_at: string; updated_at: string;
+  explanation: string | null; correct_boolean: boolean | null; reference_answer: string | null;
+  reviewed_by_user_id: string | null; reviewed_at: string | null; rejection_reason: string | null;
+  options: { position: number; text: string; is_correct: boolean }[];
+  concept_ids: string[]; source_chunks: { chunk_id: string; material_id: string; ordinal: number }[];
+};
+export type Question = PublicQuestion | OwnerQuestion;
+export type QuestionGeneration = { concept_ids: string[]; question_types: QuestionType[]; count: number; retrieval_top_k: number };
+export type QuestionEdit = { stem: string; explanation: string | null; difficulty: number | null; concept_ids: string[]; options?: { text: string; is_correct: boolean }[]; correct_answer?: boolean; reference_answer?: string };
+export type QuestionVersion = { version_number: number; reason: string; snapshot: OwnerQuestion; changed_by_user_id: string; created_at: string };

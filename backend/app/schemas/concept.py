@@ -87,6 +87,7 @@ class JobResponse(BaseModel):
     input_chunk_count: int
     input_char_count: int
     input_chunk_ids: list[str]
+    input_concept_ids: list[str]
     batch_count: int
     started_at: datetime
     completed_at: datetime | None

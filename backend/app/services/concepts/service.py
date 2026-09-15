@@ -113,6 +113,8 @@ def job_detail(db: Session, user: User, job_id: UUID) -> JobDetail:
     if job is None:
         raise HTTPException(404, "AI job not found")
     get_member_course(db, user, job.course_id)
+    if job.operation == "QUESTION_GENERATION":
+        get_owner_course(db, user, job.course_id)
     usage = db.scalars(
         select(AIUsage).where(AIUsage.ai_job_id == job_id).order_by(AIUsage.batch_ordinal)
     )

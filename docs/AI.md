@@ -1,4 +1,4 @@
-# Phase 4.1: optional development providers
+# AI providers, concept extraction and question drafts
 
 Business logic depends on AIProvider, independent of the selected adapter. AI output is a proposal requiring
 human review. Ingestion stays deterministic; extraction reads MaterialChunk rows,
@@ -142,8 +142,8 @@ API exists. Process termination can leave RUNNING jobs blocking their course:
 an operator must confirm the worker stopped before marking that job FAILED, then
 retry explicitly. Lists/source inspection are unpaginated. Large materials may
 need adjusted documented limits. Dense embeddings and semantic retrieval now live behind a separate EmbeddingProvider
-(see [retrieval](RETRIEVAL.md)). Direct cloud-generation integrations, questions,
-quizzes and grading are not implemented.
+(see [retrieval](RETRIEVAL.md)). Direct cloud-generation integrations,
+quizzes and grading are not implemented. Phase 6 question generation is described below.
 
 ## FreeLLMAPI adapter
 
@@ -187,3 +187,46 @@ Gateway responses reflecting the configured API key in generated content are rej
 including otherwise valid concept JSON. Development configuration is trusted operator
 input, never request-controlled; local/private endpoint restrictions are not a sandbox
 for an untrusted gateway. Upstream terms, quotas and routing can change independently.
+
+## Phase 6 question generation
+
+`services/ai/prompts/questions.py` owns **questions-v1**. Question generation reuses
+AIProvider and `generate_validated`; it never imports Ollama/FreeLLMAPI adapters.
+Approved selected concepts supply deterministic name/description retrieval queries.
+The existing Phase 5 service retrieves only current embedded chunks from READY
+materials in the course. Context is deduplicated and ordered by material ID, chunk
+ordinal and chunk ID; prompt-local C1… and S1… map to real provenance server-side.
+No PDF, storage path, user/account metadata or full-material field is sent.
+
+One bounded request asks for an exact question count, supported requested types,
+source-language preservation, evidence-based explanations/answers and citations.
+The prompt labels sources untrusted and forbids following source instructions.
+Strict discriminated Pydantic models reject extra fields (including status), invalid
+answer shapes, option counts/correctness, blank answers and malformed output.
+The service rejects out-of-selection citations and duplicates, rechecks live
+concept/source state, and persists only `source=AI`, `status=DRAFT`. Human approval
+is a separate OWNER action; structured validity does not prove factual accuracy.
+
+`QUESTION_GENERATION_*` bounds apply independently of the unchanged concept batching
+limits. Defaults are 10 questions, 5 concepts, top-k 10 per concept, 12 unique chunks
+and 16000 serialized user-context characters (including JSON escaping and concept
+metadata). The fixed system/schema is separate; it contains the schema once.
+Ollama also receives its native format schema; FreeLLMAPI receives JSON object mode.
+Existing provider output caps remain **2048 tokens**. Start with 1–3 short questions:
+a larger accepted count may still truncate and fail validation with no bank writes.
+There is no repair request, automatic retry, fallback, or context expansion.
+
+AIJob records QUESTION_GENERATION, selected concept IDs, actual source chunk IDs,
+source counts/characters, one batch, configured provider/model and prompt version.
+AIUsage retains available measured tokens/latency and sanitized routed metadata,
+even when content/citation/persistence validation fails. Missing usage stays null;
+total may sum two measured components. Raw rejected output and provider errors are
+never stored. Job creation/usage are separate audit commits; the entire question
+batch, options, links, initial versions and SUCCEEDED state share one final commit.
+Question-generation jobs are OWNER-only through the existing job endpoint;
+MEMBER access to concept-extraction jobs is unchanged.
+
+Tests use fake text/embedding providers and mocked transports. Real generation is
+an optional manual workflow requiring both local embedding availability and the
+explicitly selected text provider. The existing synthetic `ai_smoke` checks concept
+generation, not the full question workflow. See [QUESTIONS.md](QUESTIONS.md).

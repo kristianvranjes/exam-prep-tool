@@ -16,7 +16,8 @@ PENDING/RUNNING extraction per course. Material deletion nulls the job reference
 course deletion cascades jobs/concepts and job deletion cascades usage.
 
 On a disposable database, `python -m alembic downgrade 0003` rolls back only Phase 4;
-`python -m alembic upgrade head` reapplies it. No vector/embedding columns are added.
+`python -m alembic upgrade 0004` reapplies it. Revision 0004 adds no vector columns;
+upgrading to head also applies later revisions.
 
 `users` stores normalized unique email addresses, Argon2 password hashes, display
 names, active state and timestamps. `courses` stores course metadata and creator.
@@ -78,3 +79,30 @@ excluded from retrieval. No completed-job flag can misrepresent a partial refres
 Migration 0005 idempotently enables vector; its downgrade removes only its columns
 and constraint. The extension remains owned by 0001 until downgrade to base.
 See [retrieval](RETRIEVAL.md) for locking and fingerprint details.
+
+Revision **0006**, after 0005, adds `questions`, `question_options`,
+`question_concepts`, `question_chunks` and `question_versions`, and the non-null
+JSONB `ai_jobs.input_concept_ids` (empty-array default for existing jobs).
+
+Questions constrain type/status/source, difficulty 1–5, nonblank stems up to 400
+characters, and type-specific answer fields. MCQ child counts/correctness are
+validated centrally by Pydantic, without triggers. Options have nonnegative unique
+positions per question. Concept/chunk joins use composite primary keys; service
+validation enforces same-course, approved concepts and READY material provenance.
+Course/status and course/type indexes support lists; a partial unique B-tree on
+course/normalized stem excludes ARCHIVED and protects concurrent duplicate writes.
+The 400-character stem bound keeps Unicode normalized index keys bounded.
+
+All question children cascade on question deletion, questions cascade on course
+deletion, and referenced concept/chunk deletion cascades join rows. Job deletion
+sets the question's job ID null. Creator/version actor deletion is restricted;
+reviewer deletion sets its ID null. Historical JSON snapshots retain original IDs
+even if live provenance is removed. Versions constrain reason and positive version
+number, with unique `(question_id, version_number)`; application code only appends
+snapshots in the same transaction as a mutation. No API updates/deletes versions.
+
+On a disposable DB, `alembic downgrade 0005` removes only Phase 6; `alembic upgrade
+head` restores it. `alembic downgrade base` followed by `alembic upgrade head`
+also verifies extension removal/recreation and Phase 5's vector column/check.
+Migration/model parity and real PostgreSQL check/unique/FK/cascade tests are part
+of the suite. See [QUESTIONS.md](QUESTIONS.md) for transaction and lock semantics.

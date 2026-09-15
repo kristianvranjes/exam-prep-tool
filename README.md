@@ -1,7 +1,7 @@
 # ExamPrep
 
-A local-first university exam preparation platform. **Implemented scope: issue #9,
-Phase 5 — local BGE-M3 embeddings and course-scoped semantic retrieval.**
+A local-first university exam preparation platform. **Implemented scope: issue #11,
+Phase 6 — a retrieval-grounded question bank with OWNER review.**
 
 Stack: Next.js / TypeScript / Tailwind CSS (shadcn/ui-ready), FastAPI / Pydantic /
 SQLAlchemy 2 / Alembic, PostgreSQL 17 with pgvector, Docker Compose and GitHub Actions.
@@ -186,8 +186,8 @@ See [AI details and optional smoke test](docs/AI.md).
 ## Local embeddings and semantic retrieval
 
 Phase 5 adds a separate `EmbeddingProvider` for BGE-M3 dense vectors. `AIProvider`
-continues to handle Ollama/FreeLLMAPI text generation independently. No question
-or RAG generation is implemented. The base Docker image and CI exclude the optional
+continues to handle Ollama/FreeLLMAPI text generation independently. Phase 6 reuses
+retrieval to generate question drafts. The base Docker image and CI exclude the optional
 ML stack and model weights; all existing application features start without them.
 Embedding/search requests return a safe 503 until a local embedding model is available.
 
@@ -195,3 +195,44 @@ For real CPU embedding, run the backend natively with the optional `embeddings`
 extra and a predownloaded pinned model. See [exact setup, authenticated requests,
 limits and migration commands](docs/RETRIEVAL.md). No paid API or GPU is required.
 The model download and inference are optional manual steps, never part of CI.
+
+## Question bank and human review (Phase 6)
+
+Select a course and **Open question bank**. OWNER can select 1–5 approved concepts,
+choose multiple-choice, true/false or short-answer questions, and generate 1–10
+drafts. Each selected concept needs current embedded READY sources. First extract
+and approve concepts, then use `POST /materials/{material_id}/embeddings` in the
+authenticated API docs to embed the material (requires the optional local model
+setup above). Start with 1–3 questions and a small source count.
+
+Choose a draft to inspect its answer, concepts, material/chunk references and history.
+Edit as needed, **Submit for review**, then **Approve question** or provide a reason
+to **Reject question**. Editing rejected content returns it to DRAFT. Approved
+content can only be archived; archived content cannot be reopened. AI never approves.
+MEMBER sees only approved questions without answers or review controls. There is
+no quiz-taking, answering or grading in this phase.
+
+Generation uses the configured AIProvider: laptop development → FreeLLMAPI;
+home PC → Ollama/Qwen; future production/demo → an explicitly supported provider.
+FreeLLMAPI is development infrastructure, not a production guarantee. Generation
+also requires the separate Phase 5 embedding provider; the base Compose image
+starts and serves the bank without loading either model but cannot generate with
+its optional embedding dependencies absent. Run the native backend with the
+documented embedding extra/model for real generation.
+
+The five `QUESTION_GENERATION_*` settings in `.env.example` bound count, concepts,
+retrieval top-k, context chunks and serialized context characters. Compose forwards
+them; restart/rebuild after changes. Limits can be lowered. Requests that exceed
+them fail explicitly. See [question lifecycle, API, transactions and limits](docs/QUESTIONS.md).
+
+For migration rollback verification, set `DATABASE_URL` to a **disposable** PostgreSQL
+database and run from `backend/` with the virtual environment activated:
+
+```sh
+python -m alembic upgrade head
+python -m alembic downgrade base
+python -m alembic upgrade head
+```
+
+This removes test data and re-creates all tables and pgvector. Do not run the
+downgrade or truncating integration suite against your normal study database.
