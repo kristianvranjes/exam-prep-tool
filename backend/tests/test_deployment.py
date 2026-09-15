@@ -22,8 +22,7 @@ from app.services.auth import read_session
 
 
 def hosted(**changes):
-    return Settings(
-        _env_file=None,
+    values = dict(
         app_env="staging",
         frontend_url="https://study.example.com",
         session_secret="a-test-only-random-session-secret-123456789",
@@ -35,8 +34,8 @@ def hosted(**changes):
         openai_compatible_url="https://ai.example.com/v1",
         openai_compatible_model="configured-model",
         openai_compatible_api_key="private-test-key",
-        **changes,
     )
+    return Settings(_env_file=None, **(values | changes))
 
 
 def test_hosted_database_url_and_secret_redaction():
@@ -177,3 +176,81 @@ def test_start_uses_port_without_reload(monkeypatch):
     args = execute.call_args.args[1]
     assert args[args.index("--port") + 1] == "9123"
     assert "--reload" not in args and "--no-access-log" in args
+
+
+@pytest.mark.parametrize("port", ["0", "65536", "not-a-port", ""])
+def test_start_rejects_invalid_port(monkeypatch, port):
+    from app.start import main
+
+    monkeypatch.setenv("PORT", port)
+    with patch("os.execv") as execute, pytest.raises(ValueError):
+        main()
+    execute.assert_not_called()
+
+
+def test_start_defaults_to_local_port(monkeypatch):
+    from app.start import main
+
+    monkeypatch.delenv("PORT", raising=False)
+    with patch("os.execv") as execute:
+        main()
+    args = execute.call_args.args[1]
+    assert args[args.index("--port") + 1] == "8000"
+
+
+@pytest.mark.parametrize(
+    "environment,samesite,secure,guarded",
+    [
+        ("staging", "none", True, True),
+        ("staging", "lax", True, True),
+        ("production", "lax", True, True),
+        ("development", "none", True, True),
+        ("development", "lax", False, False),
+    ],
+)
+def test_actual_app_origin_policy(environment, samesite, secure, guarded):
+    import importlib
+
+    import app.main as main_module
+
+    settings = hosted(
+        app_env=environment, session_cookie_samesite=samesite, session_cookie_secure=secure
+    )
+    try:
+        with patch("app.config.Settings", return_value=settings):
+            service = importlib.reload(main_module).app
+        with patch("app.api.auth.Settings", return_value=settings), TestClient(service) as client:
+            assert client.get("/health").status_code == 200
+            for origin in [None, "null", "https://untrusted.example"]:
+                headers = {"Origin": origin} if origin else {}
+                response = client.post("/auth/logout", headers=headers)
+                assert response.status_code == (403 if guarded else 204)
+                assert "access-control-allow-origin" not in response.headers
+            trusted = {"Origin": settings.frontend_url}
+            assert client.post("/auth/logout", headers=trusted).status_code == 204
+            for method in ["POST", "PATCH", "DELETE"]:
+                assert (
+                    client.options(
+                        "/courses",
+                        headers=trusted | {"Access-Control-Request-Method": method},
+                    ).status_code
+                    == 200
+                )
+                if guarded:
+                    assert client.request(method, "/courses").status_code == 403
+    finally:
+        importlib.reload(main_module)
+
+
+@pytest.mark.parametrize("scheme", ["postgres", "postgresql", "postgresql+psycopg"])
+def test_managed_database_url_preserves_credentials_and_tls(scheme):
+    from sqlalchemy.engine import make_url
+
+    settings = hosted(
+        database_url=f"{scheme}://user:p%40ss%25word@db.example.com/app"
+        "?sslmode=verify-full&channel_binding=require"
+    )
+    url = make_url(settings.database_url)
+    assert url.drivername == "postgresql+psycopg"
+    assert url.password == "p@ss%word"
+    assert url.query == {"sslmode": "verify-full", "channel_binding": "require"}
