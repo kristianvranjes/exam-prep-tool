@@ -13,6 +13,7 @@ from app.api.questions import router as questions_router
 from app.api.retrieval import router as retrieval_router
 from app.config import Settings
 from app.database import engine
+from app.origin_guard import OriginGuard
 from app.upload_limit import MaterialUploadLimit
 
 
@@ -25,6 +26,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 settings = Settings()
 app = FastAPI(title="ExamPrep API", lifespan=lifespan)
 app.add_middleware(MaterialUploadLimit)
+app.add_middleware(
+    OriginGuard,
+    origin=settings.frontend_url,
+    enabled=settings.app_env in ("staging", "production")
+    or settings.session_cookie_samesite == "none",
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_url],

@@ -86,7 +86,7 @@ class FreeLLMAPIProvider:
         self, system_prompt: str, user_prompt: str, response_model: type[T]
     ) -> Generation:
         try:
-            base = validate_url(self.url)
+            base = self.validated_url()
             key = self.api_key.get_secret_value()
             if not key.strip() or not self.model.strip():
                 raise AIError("INVALID_CONFIGURATION")
@@ -141,6 +141,9 @@ class FreeLLMAPIProvider:
             raise AIError("INVALID_OUTPUT") from None
         except Exception:
             raise AIError("PROVIDER_FAILURE") from None
+
+    def validated_url(self) -> str:
+        return validate_url(self.url)
 
 
 def contains_key(content: str, key: str) -> bool:
