@@ -109,3 +109,43 @@ OWNER here, so there is no separate owner-only 403 operation in this phase.
   Invalid requests return 422; unavailable/invalid model output returns safe 503.
 
 These endpoints do not invoke text generation, reparse PDFs, or construct RAG prompts.
+
+## Question bank (Phase 6)
+
+All routes require a session (401 otherwise). Outsiders/missing resources return
+404. OWNER can read all statuses and curate. MEMBER sees APPROVED only, receives
+404 for hidden question UUIDs (including versions/mutations), and receives 403 for
+generation or mutation/version access on an otherwise visible approved question.
+
+| Method/path | Contract |
+| --- | --- |
+| POST `/courses/{course_id}/questions/generate` | OWNER, `{concept_ids, question_types, count, retrieval_top_k}`. Unique approved concept IDs (1–5), unique types (1–3), count/top-k (1–10). Returns completed JobDetail, HTTP 200 for SUCCEEDED or FAILED. |
+| GET `/courses/{course_id}/questions` | `status`, `type`, `limit` (default 20, 1–50), `offset` (default 0, 0–10000). Stable created_at descending then ID. OWNER status filter; MEMBER ignores any valid status filter and always gets APPROVED. |
+| GET `/questions/{question_id}` | OWNER/review or MEMBER/public representation. |
+| PATCH `/questions/{question_id}` | OWNER, DRAFT/REJECTED only. Partial stem/explanation/difficulty, options, correct_answer, reference_answer, concept_ids. Full merged content is validated; source chunks/type/status/source are not editable. |
+| POST `/questions/{question_id}/submit` | DRAFT → PENDING_REVIEW. |
+| POST `/questions/{question_id}/approve` | PENDING_REVIEW → APPROVED with reviewer/time. |
+| POST `/questions/{question_id}/reject` | PENDING_REVIEW → REJECTED; `{reason}` must be nonblank, at most 1000 characters. |
+| POST `/questions/{question_id}/archive` | APPROVED → ARCHIVED, terminal. |
+| GET `/questions/{question_id}/versions` | OWNER, version ascending; `limit` default 50/max 100, `offset` max 10000. |
+
+Supported types: MULTIPLE_CHOICE (2–6 options, one correct), TRUE_FALSE (strict
+boolean `correct_answer` in write payloads), SHORT_ANSWER (nonblank reference).
+Stems/option texts max 400 characters; explanation/reference max 2000; optional
+difficulty integer 1–5. Editing rejected content returns DRAFT and clears review.
+
+OWNER responses have `visibility: OWNER`, correctness flags, `correct_boolean`,
+reference/explanation, concepts, source_chunks (chunk_id/material_id/ordinal),
+source/ai_job_id and review metadata. MEMBER has `visibility: MEMBER`, id/course_id,
+type, status APPROVED, stem, difficulty and option position/text **only**. Even
+explanations are omitted to avoid giving away answers. Versions contain the full
+owner snapshot and actor/reason/time. `GET /ai/jobs/{id}` is OWNER-only for question
+jobs; it includes input_concept_ids and existing usage/provenance fields.
+
+Invalid content/bounds return 422; invalid lifecycle, duplicates, no current
+embedded sources or an active course AI job return 409. Unavailable embedding
+provider returns safe 503 before generation. Model/output or final persistence
+failures return a persisted FAILED job, with no partial questions. Clients must
+inspect job.status even on HTTP 200. Failed owner persistence returns safe 503.
+No raw provider response, internal URL, key or exception is returned.
+See [question design and examples](QUESTIONS.md).

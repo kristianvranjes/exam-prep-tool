@@ -1,6 +1,6 @@
 # Architecture
 
-Phase 5 consists of one Next.js frontend, one FastAPI backend and one PostgreSQL
+Phase 6 consists of one Next.js frontend, one FastAPI backend and one PostgreSQL
 instance. The browser calls FastAPI directly; CORS allows only FRONTEND_URL and
 credentials are enabled for the session cookie. Tailwind 4 and components.json
 prepare the frontend for shadcn/ui; no component library UI is generated yet.
@@ -50,3 +50,14 @@ persisted chunks and validate vectors; RetrievalService uses bound pgvector cosi
 expressions within a course. Only the embedding adapter imports/loads its optional
 model library, lazily and offline. No shared AI framework, vector server, ANN index
 or background worker is introduced. See [retrieval](RETRIEVAL.md).
+
+Question routes delegate to `services/questions/service.py` for reads, validated
+edits, lifecycle and versions, and `generation.py` for orchestration. Generation
+uses approved concepts → existing course-scoped retrieval → bounded context →
+AIProvider → strict Pydantic validation → atomic AI DRAFT questions. Neither
+question module imports provider adapters or duplicates vector SQL. The existing
+active AI-job index protects overlapping operations; inference runs outside the
+short final course lock. Review locks/reloads the individual question. Explicit
+OWNER and MEMBER schemas prevent answer-key and audit leakage; only OWNER curates.
+The Next.js bank is mounted on demand inside the current course, with no quiz/session
+engine. See [question bank](QUESTIONS.md) for boundaries and failure semantics.

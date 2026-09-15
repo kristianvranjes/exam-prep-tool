@@ -105,7 +105,7 @@ function BankContents({ courseId }: { courseId: string }) {
       <button className={control} disabled={busy} onClick={() => setSelected(null)}>Close question</button>
       <h4 className="font-semibold">{selected.stem}</h4>
       <p className="text-sm">{label(selected.type)} · {label(selected.status)}{selected.difficulty && ` · Difficulty ${selected.difficulty}/5`}</p>
-      <ul>{selected.options.map((option) => <li key={option.position}>{option.text}{selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (correct)" : ""}</li>)}</ul>
+      <ul>{selected.options.map((option) => <li key={option.position}>{option.text}{owner && selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (correct)" : ""}</li>)}</ul>
       {owner && selected.visibility === "OWNER" && <OwnerReview key={`${selected.id}:${selected.updated_at}`} question={selected} concepts={concepts} busy={busy} mutate={mutate} />}
     </article>}
   </div>;
@@ -140,7 +140,7 @@ function OwnerReview({ question: q, concepts, busy, mutate }: { question: OwnerQ
       {q.status === "DRAFT" && <button className={control} disabled={busy} onClick={() => transition("submit")}>Submit for review</button>}
       {q.status === "PENDING_REVIEW" && <button className={control} disabled={busy} onClick={() => transition("approve")}>Approve question</button>}
       {q.status === "APPROVED" && <button className={control} disabled={busy} onClick={() => transition("archive")}>Archive question</button>}
-      {hasMore && <button className={control} disabled={busy || versionBusy} onClick={loadVersions}>{versions.length ? "Load older versions" : "View versions"}</button>}
+      {hasMore && <button className={control} disabled={busy || versionBusy} onClick={loadVersions}>{versions.length ? "Load more versions" : "View versions"}</button>}
     </div>
     {q.status === "PENDING_REVIEW" && <form onSubmit={(e) => { e.preventDefault(); const reason = String(new FormData(e.currentTarget).get("reason")); void transition("reject", reason); }} className="flex gap-2"><input aria-label="Rejection reason" className={`${control} min-w-0 flex-1`} name="reason" required maxLength={1000} placeholder="Reason for rejection" disabled={busy} /><button className={control} disabled={busy}>Reject question</button></form>}
     {editing && <QuestionEditor question={q} concepts={concepts} busy={busy} save={(body) => mutate(() => api.editQuestion(q.id, body))} />}

@@ -48,6 +48,7 @@ def generate_questions(
     ):
         raise HTTPException(422, "Question generation exceeds configured limits")
     concepts = validate_concepts(db, course_id, request.concept_ids)
+    concept_content = [(c.id, c.name, c.description) for c in concepts]
     sources: dict[UUID, SearchHit] = {}
     for concept in concepts:
         query = f"{concept.name} {(concept.description or '')[:700]}".strip()
@@ -150,7 +151,9 @@ def generate_questions(
         # Share the existing course lock with concept review/final merge; inference is outside it.
         db.scalar(select(Course).where(Course.id == course_id).with_for_update())
         get_owner_course(db, user, course_id)
-        validate_concepts(db, course_id, request.concept_ids)
+        current_concepts = validate_concepts(db, course_id, request.concept_ids)
+        if [(c.id, c.name, c.description) for c in current_concepts] != concept_content:
+            raise AIError("STALE_CONCEPTS")
         validate_sources(db, course_id, list(sources))
         # Lock source rows and reject a source edit during inference rather than mis-citing it.
         current = list(

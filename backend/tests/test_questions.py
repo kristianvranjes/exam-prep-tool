@@ -232,6 +232,9 @@ def test_persistence_and_transition_rollback(questions, monkeypatch):
     monkeypatch.setattr(generation, "add_version", fail)
     assert d.owner.post(d.generate, json=d.body).json()["status"] == "FAILED"
     assert d.owner.get(d.bank).json() == []
+    with SessionLocal() as db:
+        for model in [Question, QuestionOption, QuestionConcept, QuestionChunk, QuestionVersion]:
+            assert db.scalar(select(func.count()).select_from(model)) == 0
     monkeypatch.setattr(generation, "add_version", original)
     row = generated(d)[0]
 
@@ -259,6 +262,13 @@ def test_complete_transition_matrix(questions, status):
         with SessionLocal() as db:
             db.get(Question, UUID(row["id"])).status = status
             db.commit()
+        assert d.member.get(path).status_code == (200 if status == "APPROVED" else 404)
+        assert d.member.get(path + "/versions").status_code == (
+            403 if status == "APPROVED" else 404
+        )
+        assert d.outsider.get(path).status_code == 404
+        assert d.outsider.get(path + "/versions").status_code == 404
+        assert len(d.owner.get(d.bank + f"?status={status}").json()) >= 1
         if action == "edit":
             result = d.owner.patch(path, json={"stem": row["stem"]})
             valid = status in ("DRAFT", "REJECTED")
@@ -331,6 +341,7 @@ def test_active_generation_conflict_and_changed_source(questions, monkeypatch):
             with SessionLocal() as db:
                 for chunk in db.scalars(select(MaterialChunk)):
                     chunk.content = "changed"
+                    chunk.char_count = len(chunk.content)
                 db.commit()
         finally:
             release.set()
@@ -444,3 +455,194 @@ def test_edits_validate_whole_content_and_protect_provenance(questions):
     for item in rows:
         d.owner.post(f"/questions/{item['id']}/archive")
     assert d.owner.post(d.generate, json=d.body).json()["status"] == "SUCCEEDED"
+
+
+@pytest.mark.parametrize("change", ["concept_status", "concept_text", "material_status"])
+def test_generation_rechecks_state_after_inference(questions, monkeypatch, change):
+    from app.models.material import Material
+
+    d = questions
+    original = d.generator.generate_structured
+
+    def changed(*args):
+        result = original(*args)
+        with SessionLocal() as db:
+            if change == "material_status":
+                db.get(Material, UUID(d.material)).status = "FAILED"
+            else:
+                concept = db.get(Concept, UUID(d.concept))
+                if change == "concept_status":
+                    concept.status = "REJECTED"
+                else:
+                    concept.description = "A different meaning"
+            db.commit()
+        return result
+
+    monkeypatch.setattr(d.generator, "generate_structured", changed)
+    job = d.owner.post(d.generate, json=d.body).json()
+    assert job["status"] == "FAILED" and job["usage"][0]["total_tokens"] == 50
+    assert d.owner.get(d.bank).json() == []
+
+
+def test_request_and_character_bounds(questions, monkeypatch):
+    d = questions
+    for patch in [
+        {"concept_ids": [d.concept] * 2},
+        {"question_types": ["TRUE_FALSE"] * 2},
+        {"count": 11},
+        {"count": True},
+        {"retrieval_top_k": 11},
+        {"status": "APPROVED"},
+    ]:
+        assert d.owner.post(d.generate, json=d.body | patch).status_code == 422
+    monkeypatch.setenv("QUESTION_GENERATION_MAX_COUNT", "2")
+    assert d.owner.post(d.generate, json=d.body).status_code == 422
+    monkeypatch.setenv("QUESTION_GENERATION_MAX_COUNT", "10")
+    monkeypatch.setenv("QUESTION_GENERATION_MAX_CONTEXT_CHARS", "1000")
+    with SessionLocal() as db:
+        db.get(Concept, UUID(d.concept)).description = "Long concept " * 150
+        db.commit()
+    assert d.owner.post(d.generate, json=d.body).status_code == 422
+    assert d.generator.calls == []
+
+
+def test_unrequested_valid_type_and_nullable_usage(questions, monkeypatch):
+    from dataclasses import replace
+
+    d = questions
+    original = d.generator.generate_structured
+
+    def wrong_type(*args):
+        result = original(*args)
+        content = json.loads(result.content)
+        content["questions"][0]["type"] = "SHORT_ANSWER"
+        content["questions"][0].pop("correct_answer")
+        content["questions"][0]["reference_answer"] = "Answer"
+        return replace(
+            result, content=json.dumps(content), prompt_tokens=None, completion_tokens=None
+        )
+
+    monkeypatch.setattr(d.generator, "generate_structured", wrong_type)
+    job = d.owner.post(
+        d.generate, json=d.body | {"count": 1, "question_types": ["TRUE_FALSE"]}
+    ).json()
+    assert job["error_code"] == "INVALID_TYPE"
+    assert job["usage"][0]["total_tokens"] is None
+    assert d.owner.get(d.bank).json() == []
+
+
+def test_database_constraints_and_cascades(questions):
+    from sqlalchemy import delete, insert, update
+    from sqlalchemy.exc import IntegrityError
+
+    d = questions
+    rows = generated(d)
+    row = next(r for r in rows if r["type"] == "MULTIPLE_CHOICE")
+    qid, user = UUID(row["id"]), UUID(row["created_by_user_id"])
+    invalid = [
+        update(Question).where(Question.id == qid).values(type="ESSAY"),
+        update(Question).where(Question.id == qid).values(status="INVALID"),
+        update(Question).where(Question.id == qid).values(source="UNKNOWN"),
+        update(Question).where(Question.id == qid).values(difficulty=6),
+        update(Question).where(Question.id == qid).values(correct_boolean=True),
+        update(Question)
+        .where(Question.id == qid)
+        .values(type="SHORT_ANSWER", reference_answer=" "),
+        update(Question).where(Question.id == qid).values(type="TRUE_FALSE"),
+        insert(QuestionOption).values(question_id=qid, position=-1, text="a", is_correct=False),
+        insert(QuestionOption).values(question_id=qid, position=0, text="a", is_correct=False),
+        insert(QuestionConcept).values(question_id=qid, concept_id=UUID(d.concept)),
+        insert(QuestionChunk).values(
+            question_id=qid, chunk_id=UUID(row["source_chunks"][0]["chunk_id"])
+        ),
+        insert(QuestionChunk).values(question_id=qid, chunk_id=uuid4()),
+        insert(QuestionVersion).values(
+            question_id=qid,
+            version_number=1,
+            snapshot={},
+            changed_by_user_id=user,
+            reason="CREATED",
+        ),
+        insert(QuestionVersion).values(
+            question_id=qid,
+            version_number=0,
+            snapshot={},
+            changed_by_user_id=user,
+            reason="CREATED",
+        ),
+        insert(QuestionVersion).values(
+            question_id=qid,
+            version_number=2,
+            snapshot={},
+            changed_by_user_id=user,
+            reason="UNKNOWN",
+        ),
+    ]
+    for statement in invalid:
+        with SessionLocal() as db, pytest.raises(IntegrityError):
+            db.execute(statement)
+            db.commit()
+    with SessionLocal() as db:
+        db.execute(delete(Question).where(Question.id == qid))
+        db.commit()
+        for model in [QuestionOption, QuestionConcept, QuestionChunk, QuestionVersion]:
+            assert (
+                db.scalar(select(func.count()).select_from(model).where(model.question_id == qid))
+                == 0
+            )
+
+
+def test_database_concurrent_duplicate_guard(questions):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from sqlalchemy import event
+    from sqlalchemy.exc import IntegrityError
+
+    from app.database import engine
+
+    d = questions
+    row = generated(d)[0]
+    values = dict(
+        course_id=UUID(d.course),
+        created_by_user_id=UUID(row["created_by_user_id"]),
+        type="TRUE_FALSE",
+        correct_boolean=True,
+        source="AI",
+        status="DRAFT",
+        stem="Concurrent stem",
+        normalized_stem="concurrent stem",
+    )
+    waiting = Event()
+
+    def insert_waiting(conn, cursor, statement, parameters, context, executemany):
+        if statement.startswith("INSERT INTO questions"):
+            waiting.set()
+
+    def insert_duplicate():
+        with SessionLocal() as db:
+            db.add(Question(**values))
+            with pytest.raises(IntegrityError):
+                db.commit()
+
+    with SessionLocal() as first, ThreadPoolExecutor(max_workers=1) as pool:
+        first.add(Question(**values))
+        first.flush()
+        event.listen(engine, "before_cursor_execute", insert_waiting)
+        future = pool.submit(insert_duplicate)
+        try:
+            assert waiting.wait(10)
+            first.commit()
+            future.result(timeout=15)
+        finally:
+            first.rollback()
+            event.remove(engine, "before_cursor_execute", insert_waiting)
+    with SessionLocal() as db:
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(Question)
+                .where(Question.normalized_stem == "concurrent stem")
+            )
+            == 1
+        )
