@@ -8,6 +8,7 @@ from app.services.ai.providers.freellmapi import FreeLLMAPIProvider
 def validate_https_url(url: str) -> str:
     parsed = urlsplit(url)
     host = parsed.hostname or ""
+    path = parsed.path.rstrip("/")
     if (
         parsed.scheme != "https"
         or not host
@@ -17,10 +18,11 @@ def validate_https_url(url: str) -> str:
         or parsed.password
         or parsed.query
         or parsed.fragment
-        or parsed.path.rstrip("/") != "/v1"
+        or not path.startswith("/")
+        or path.split("/")[-1] != "v1"
         or parsed.port not in (None, 443)
     ):
-        raise ValueError("AI endpoint must be an explicit public HTTPS /v1 URL")
+        raise ValueError("AI endpoint must be an explicit public HTTPS URL ending in /v1")
     try:
         address = ipaddress.ip_address(host)
     except ValueError:
