@@ -28,16 +28,13 @@ def test_openrouter_requests_strict_json_schema_and_parameter_support(monkeypatc
         assert response_format["json_schema"]["name"] == "ConceptExtractionResult"
         assert response_format["json_schema"]["strict"] is True
         assert (
-            response_format["json_schema"]["schema"]
-            == ConceptExtractionResult.model_json_schema()
+            response_format["json_schema"]["schema"] == ConceptExtractionResult.model_json_schema()
         )
         assert payload["provider"] == {"require_parameters": True}
         return httpx.Response(
             200,
             json={
-                "choices": [
-                    {"message": {"content": '{"concepts":[]}'}, "finish_reason": "stop"}
-                ]
+                "choices": [{"message": {"content": '{"concepts":[]}'}, "finish_reason": "stop"}]
             },
         )
 
