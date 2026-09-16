@@ -82,6 +82,11 @@ class FreeLLMAPIProvider:
         self.api_key = api_key
         self.timeout = timeout
 
+    def structured_output_options(self, response_model: type[T]) -> dict[str, object]:
+        # The local development gateway only promises JSON mode. Hosted providers may
+        # override this hook to request stronger schema enforcement.
+        return {"response_format": {"type": "json_object"}}
+
     def generate_structured(
         self, system_prompt: str, user_prompt: str, response_model: type[T]
     ) -> Generation:
@@ -107,8 +112,7 @@ class FreeLLMAPIProvider:
                         "stream": False,
                         "temperature": 0,
                         "max_tokens": 2048,
-                        # The shared prompt already contains the schema. Do not repeat it.
-                        "response_format": {"type": "json_object"},
+                        **self.structured_output_options(response_model),
                     },
                 )
                 response.raise_for_status()
