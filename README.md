@@ -1,5 +1,10 @@
 # ExamPrep
 
+Phase 6.6 adds [external AI quiz import](docs/QUIZ_IMPORT.md): import versioned JSON as drafts,
+then use human review. This temporary staging bypass needs no AI provider or embeddings.
+Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
+configuration below applies when explicitly enabling that pipeline.
+
 A local-first university exam preparation platform. **Implemented scope: issue #11,
 Phase 6 — a retrieval-grounded question bank with OWNER review.**
 

@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { QuestionBank } from "../src/components/question-bank";
 import type { OwnerQuestion } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ membership: vi.fn(), concepts: vi.fn(), questions: vi.fn(), generateQuestions: vi.fn(), editQuestion: vi.fn(), transitionQuestion: vi.fn(), questionVersions: vi.fn() }));
+const mock = vi.hoisted(() => ({ importQuestions: vi.fn(), membership: vi.fn(), concepts: vi.fn(), questions: vi.fn(), generateQuestions: vi.fn(), editQuestion: vi.fn(), transitionQuestion: vi.fn(), questionVersions: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 
 const draft: OwnerQuestion = {
@@ -131,4 +131,19 @@ it("sends owner filters to the bounded listing API", async () => {
   fireEvent.change(await screen.findByLabelText("Status"), { target: { value: "PENDING_REVIEW" } });
   fireEvent.change(screen.getByLabelText("Type"), { target: { value: "SHORT_ANSWER" } });
   await waitFor(() => expect(mock.questions).toHaveBeenLastCalledWith("course", { status: "PENDING_REVIEW", type: "SHORT_ANSWER", limit: 20, offset: 0 }));
+});
+
+
+it("imports without concepts and resets filters to drafts for review", async () => {
+  mock.concepts.mockRejectedValue(new Error("unavailable"));
+  mock.importQuestions.mockResolvedValue([draft]);
+  await open();
+  fireEvent.change(await screen.findByLabelText("Status"), { target: { value: "APPROVED" } });
+  fireEvent.change(screen.getByLabelText("Type"), { target: { value: "SHORT_ANSWER" } });
+  const file = new File(["{}"], "quiz.json");
+  Object.defineProperty(file, "text", { value: async () => "{}" });
+  fireEvent.change(screen.getByLabelText("Quiz JSON file"), { target: { files: [file] } });
+  fireEvent.click(screen.getByRole("button", { name: "Import drafts" }));
+  await screen.findByRole("button", { name: "Submit for review" });
+  await waitFor(() => expect(mock.questions).toHaveBeenLastCalledWith("course", { status: "DRAFT", type: undefined, limit: 20, offset: 0 }));
 });

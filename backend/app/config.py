@@ -32,10 +32,12 @@ class Settings(BaseSettings):
     embedding_batch_chars: int = Field(default=12000, ge=1000, le=64000)
     embedding_max_chunks: int = Field(default=128, ge=1, le=1024)
     embedding_max_text_chars: int = Field(default=6000, ge=1, le=16000)
-    ai_provider: Literal["ollama", "freellmapi", "openai_compatible"] = "ollama"
+    ai_provider: Literal["ollama", "freellmapi", "openai_compatible", "disabled"] = "ollama"
     openai_compatible_url: str = ""
     openai_compatible_model: str = ""
     openai_compatible_api_key: SecretStr = SecretStr("")
+    question_import_max_bytes: int = Field(default=262144, ge=1, le=262144)
+    question_import_max_count: int = Field(default=50, ge=1, le=50)
     question_generation_max_count: int = Field(default=10, ge=1, le=10)
     question_generation_max_concepts: int = Field(default=5, ge=1, le=5)
     question_generation_retrieval_top_k_max: int = Field(default=10, ge=1, le=10)
@@ -96,16 +98,19 @@ class Settings(BaseSettings):
                 raise ValueError("Hosted environments require HTTPS frontend and Secure cookies")
             if make_url(self.database_url).query.get("sslmode") not in ("require", "verify-full"):
                 raise ValueError("Hosted DATABASE_URL requires sslmode=require or verify-full")
-            if self.ai_provider != "openai_compatible":
-                raise ValueError("Hosted environments require explicit openai_compatible provider")
-            if (
-                not self.openai_compatible_model.strip()
-                or not self.openai_compatible_api_key.get_secret_value().strip()
-            ):
-                raise ValueError("Configure the staging AI model and API key")
-            from app.services.ai.providers.openai_compatible import validate_https_url
+            if self.ai_provider != "disabled":
+                if self.ai_provider != "openai_compatible":
+                    raise ValueError(
+                        "Hosted environments require explicit openai_compatible provider"
+                    )
+                if (
+                    not self.openai_compatible_model.strip()
+                    or not self.openai_compatible_api_key.get_secret_value().strip()
+                ):
+                    raise ValueError("Configure the staging AI model and API key")
+                from app.services.ai.providers.openai_compatible import validate_https_url
 
-            validate_https_url(self.openai_compatible_url)
+                validate_https_url(self.openai_compatible_url)
             if not self.material_storage_dir.is_absolute():
                 raise ValueError(
                     "Hosted MATERIAL_STORAGE_DIR must be an absolute mounted volume path"

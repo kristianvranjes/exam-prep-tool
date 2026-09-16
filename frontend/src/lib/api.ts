@@ -22,6 +22,7 @@ export const api = {
     Object.entries(filters).forEach(([key, value]) => { if (value !== undefined) params.set(key, String(value)); });
     return request<Question[]>(`/courses/${courseId}/questions?${params}`);
   },
+  importQuestions: (courseId: string, json: string) => request<OwnerQuestion[]>(`/courses/${courseId}/questions/import`, { method: "POST", body: json }),
   generateQuestions: (courseId: string, body: QuestionGeneration) => request<AIJob>(`/courses/${courseId}/questions/generate`, { method: "POST", body: JSON.stringify(body) }),
   question: (id: string) => request<Question>(`/questions/${id}`),
   editQuestion: (id: string, body: QuestionEdit) => request<OwnerQuestion>(`/questions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),

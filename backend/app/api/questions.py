@@ -14,6 +14,7 @@ from app.schemas.question import (
     QuestionResponse,
     QuestionStatus,
     QuestionType,
+    QuizImport,
     RejectRequest,
     VersionResponse,
 )
@@ -23,8 +24,21 @@ from app.services.embeddings.base import EmbeddingProvider
 from app.services.embeddings.router import get_embedding_provider
 from app.services.questions import service
 from app.services.questions.generation import generate_questions
+from app.services.questions.importing import import_questions, read_import
 
 router = APIRouter(tags=["questions"])
+
+
+@router.post(
+    "/courses/{course_id}/questions/import", response_model=list[OwnerQuestion], status_code=201
+)
+def import_quiz(
+    course_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    document: QuizImport = Depends(read_import),
+) -> list[OwnerQuestion]:
+    return import_questions(db, user, course_id, document)
 
 
 @router.post("/courses/{course_id}/questions/generate", response_model=JobDetail)

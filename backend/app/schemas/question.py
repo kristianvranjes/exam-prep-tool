@@ -106,7 +106,7 @@ class QuestionPatch(BaseModel):
     options: list[Option] | None = None
     correct_answer: bool | None = Field(default=None, strict=True)
     reference_answer: Text | None = None
-    concept_ids: list[UUID] | None = Field(default=None, min_length=1, max_length=5)
+    concept_ids: list[UUID] | None = Field(default=None, max_length=5)
 
 
 class RejectRequest(StrictModel):
@@ -174,3 +174,15 @@ class VersionResponse(BaseModel):
     changed_by_user_id: UUID
     reason: str
     created_at: datetime
+
+
+class QuizImport(StrictModel):
+    version: Literal["quiz-import-v1"]
+    questions: list[QuestionContent] = Field(min_length=1, max_length=50)
+
+    @model_validator(mode="after")
+    def unique_stems(self) -> Self:
+        stems = [normalize(q.stem) for q in self.questions]
+        if len(set(stems)) != len(stems):
+            raise ValueError("Duplicate question stems in import")
+        return self
