@@ -1,7 +1,7 @@
 import ipaddress
 from urllib.parse import urlsplit
 
-from app.services.ai.base import AIError
+from app.services.ai.base import AIError, T
 from app.services.ai.providers.freellmapi import FreeLLMAPIProvider
 
 
@@ -34,7 +34,7 @@ def validate_https_url(url: str) -> str:
 
 
 class OpenAICompatibleProvider(FreeLLMAPIProvider):
-    """Reuse the tested wire protocol; staging changes only endpoint policy/name."""
+    """Hosted OpenAI-compatible provider with schema-enforced structured output."""
 
     name = "openai_compatible"
 
@@ -43,3 +43,21 @@ class OpenAICompatibleProvider(FreeLLMAPIProvider):
             return validate_https_url(self.url)
         except ValueError:
             raise AIError("INVALID_CONFIGURATION") from None
+
+    def structured_output_options(self, response_model: type[T]) -> dict[str, object]:
+        options: dict[str, object] = {
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": response_model.__name__,
+                    "strict": True,
+                    "schema": response_model.model_json_schema(),
+                },
+            }
+        }
+        # OpenRouter can otherwise route to a provider that silently ignores an
+        # optional request parameter. Requiring parameter support keeps the free
+        # router on models/providers that honor the requested structured output.
+        if urlsplit(self.url).hostname == "openrouter.ai":
+            options["provider"] = {"require_parameters": True}
+        return options
