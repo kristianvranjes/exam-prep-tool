@@ -15,7 +15,7 @@ from app.models import User
 from app.origin_guard import OriginGuard
 from app.schemas.concept import ConceptExtractionResult
 from app.services.ai.base import AIError
-from app.services.ai.providers.openai_compatible import OpenAICompatibleProvider
+from app.services.ai.providers.openai_compatible import OpenAICompatibleProvider, validate_https_url
 from app.services.ai.router import get_ai_provider
 from app.services.ai.service import generate_validated
 from app.services.auth import read_session
@@ -43,6 +43,27 @@ def test_hosted_database_url_and_secret_redaction():
     assert settings.database_url.startswith("postgresql+psycopg://")
     assert settings.database_url.endswith("?sslmode=require")
     assert "password" not in repr(settings) and "private-test-key" not in repr(settings)
+
+
+def test_openai_compatible_prefixed_v1_base_url_is_accepted():
+    url = "https://openrouter.ai/api/v1/"
+    assert validate_https_url(url) == "https://openrouter.ai/api/v1"
+    assert hosted(openai_compatible_url=url).openai_compatible_url == url
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://ai.example.com/v2",
+        "https://ai.example.com/v1/chat/completions",
+        "https://ai.example.com/api/v1?token=secret",
+        "https://user:password@ai.example.com/api/v1",
+        "https://127.0.0.1/api/v1",
+    ],
+)
+def test_openai_compatible_unsafe_or_non_base_urls_are_rejected(url):
+    with pytest.raises(ValueError):
+        validate_https_url(url)
 
 
 @pytest.mark.parametrize(
@@ -158,7 +179,6 @@ def test_https_provider_mocked_and_validated(monkeypatch, mode):
         httpx, "Client", lambda **kwargs: original(transport=httpx.MockTransport(handler), **kwargs)
     )
     if mode == "valid":
-        # Transport accepts JSON, while the shared layer still enforces the supplied schema.
         envelope = provider.generate_structured("system", "context", ConceptExtractionResult)
         assert envelope.prompt_tokens is None
     else:
