@@ -22,3 +22,11 @@ it("uses question-bank paths, cookies and explicit rejection payloads", async ()
   expect(calls[4][0]).toContain("/questions/q1/versions?limit=50&offset=50");
   for (const [, options] of calls) expect(options.credentials).toBe("include");
 });
+
+
+it("sends raw import JSON with session credentials and surfaces validation errors", async () => {
+  const fetchMock = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ detail: "questions.0: invalid type" }) });
+  vi.stubGlobal("fetch", fetchMock);
+  await expect(api.importQuestions("course", "{}" )).rejects.toThrow("questions.0: invalid type");
+  expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/courses/course/questions/import"), expect.objectContaining({ method: "POST", body: "{}", credentials: "include" }));
+});

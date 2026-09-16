@@ -1,10 +1,15 @@
 # AI providers, concept extraction and question drafts
 
+Phase 6.6 adds [external AI quiz import](QUIZ_IMPORT.md): import versioned JSON as drafts,
+then use human review. This temporary staging bypass needs no AI provider or embeddings.
+Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
+configuration below applies when explicitly enabling that pipeline.
+
 Phase 6.5 adds explicit `AI_PROVIDER=openai_compatible` for a trusted external HTTPS
 `/v1` endpoint. Configure OPENAI_COMPATIBLE_URL/MODEL/API_KEY; it reuses the tested
 OpenAI-compatible transport, bounded output, usage and Pydantic validation with no
-fallback. Ollama and development FreeLLMAPI behavior is unchanged. Hosted settings
-require this explicit provider. See [staging](STAGING.md) for setup and capability limits.
+fallback. Ollama and development FreeLLMAPI behavior is unchanged. Hosted internal generation
+requires this explicit provider; `AI_PROVIDER=disabled` permits external import without credentials. See [staging](STAGING.md) for setup and capability limits.
 
 Business logic depends on AIProvider, independent of the selected adapter. AI output is a proposal requiring
 human review. Ingestion stays deterministic; extraction reads MaterialChunk rows,

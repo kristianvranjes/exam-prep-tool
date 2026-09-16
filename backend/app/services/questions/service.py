@@ -182,6 +182,16 @@ def validate_sources(db: Session, course_id: UUID, ids: list[UUID]) -> None:
         raise HTTPException(409, "Question sources are no longer available")
 
 
+def validate_provenance(db: Session, question: Question, concepts: list[UUID]) -> None:
+    # User-supplied imports have no verified retrieval provenance. Internal AI keeps
+    # its existing requirements, including when a generation job is later deleted.
+    if question.source == "AI" or concepts:
+        validate_concepts(db, question.course_id, concepts)
+    sources = [s.chunk_id for s in owner_view(db, question).source_chunks]
+    if question.source == "AI" or sources:
+        validate_sources(db, question.course_id, sources)
+
+
 def current_content(db: Session, question: Question) -> dict[str, object]:
     result: dict[str, object] = {
         "type": question.type,
@@ -256,10 +266,7 @@ def edit_question(
     concepts = changes.pop("concept_ids", owner_view(db, question).concept_ids)
     if concepts is None:
         raise HTTPException(422, "Concepts are required")
-    validate_concepts(db, question.course_id, concepts)
-    validate_sources(
-        db, question.course_id, [s.chunk_id for s in owner_view(db, question).source_chunks]
-    )
+    validate_provenance(db, question, concepts)
     try:
         content = content_adapter.validate_python(current_content(db, question) | changes)
     except ValidationError:
@@ -301,8 +308,7 @@ def transition(
         raise HTTPException(409, "Invalid question lifecycle transition")
     if action in ("submit", "approve"):
         view = owner_view(db, question)
-        validate_concepts(db, question.course_id, view.concept_ids)
-        validate_sources(db, question.course_id, [s.chunk_id for s in view.source_chunks])
+        validate_provenance(db, question, view.concept_ids)
         try:
             content_adapter.validate_python(current_content(db, question))
         except ValidationError:

@@ -1,5 +1,10 @@
 # Question bank — Phase 6
 
+Phase 6.6 adds [external AI quiz import](QUIZ_IMPORT.md): import versioned JSON as drafts,
+then use human review. This temporary staging bypass needs no AI provider or embeddings.
+Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
+configuration below applies when explicitly enabling that pipeline.
+
 Questions are curated course data. AI produces proposals; it cannot approve them.
 This phase contains a bank and review workflow, with no quiz sessions, student
 answers, grading, semantic duplicate detection, or Phase 7 behavior.

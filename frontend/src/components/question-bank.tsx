@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, Concept, OwnerQuestion, Question, QuestionAction, QuestionEdit, QuestionStatus, QuestionType, QuestionVersion } from "../lib/api";
 
+import { QuizImport } from "./quiz-import";
+
 const types: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
 const statuses: QuestionStatus[] = ["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED", "ARCHIVED"];
 const label = (value: string) => value.toLowerCase().replaceAll("_", " ");
@@ -33,8 +35,11 @@ function BankContents({ courseId }: { courseId: string }) {
   useEffect(() => {
     let active = true;
     api.membership(courseId).then(async (membership) => {
-      const available = membership.role === "OWNER" ? await api.concepts(courseId) : [];
-      if (active) { setOwner(membership.role === "OWNER"); setConcepts(available); }
+      if (active) setOwner(membership.role === "OWNER");
+      if (membership.role === "OWNER") {
+        try { const available = await api.concepts(courseId); if (active) setConcepts(available); }
+        catch { /* Import and review remain available without concept data. */ }
+      }
     }).catch(() => { if (active) setError("Could not load question-bank permissions"); });
     return () => { active = false; };
   }, [courseId]);
@@ -77,10 +82,13 @@ function BankContents({ courseId }: { courseId: string }) {
 
   return <div className="mt-5 space-y-5">
     <h3 className="text-xl font-semibold">Question bank</h3>
-    <p className="text-sm text-neutral-600">{owner ? "Generate drafts from approved concepts and embedded materials, then review each question." : "Browse approved course questions."}</p>
+    <p className="text-sm text-neutral-600">{owner ? "Import external quiz drafts or generate from approved concepts, then review each question." : "Browse approved course questions."}</p>
+    {owner && <QuizImport courseId={courseId} disabled={busy} onImported={(imported) => {
+      setStatus("DRAFT"); setType(""); setOffset(0); setSelected(imported[0] ?? null); refresh();
+    }} />}
     {owner && <form onSubmit={generate} className="space-y-3 rounded border bg-white p-4">
       <fieldset disabled={busy || loading} className="space-y-3">
-        <legend className="font-medium">Generate draft questions</legend>
+        <legend className="font-medium">Generate draft questions (experimental internal AI)</legend>
         <fieldset><legend className="text-sm">Approved concepts (select 1–5)</legend>
           {concepts.filter((c) => c.status === "APPROVED").map((c) => <label key={c.id} className="mr-4 inline-flex gap-2 text-sm"><input type="checkbox" name="concept" value={c.id} />{c.name}</label>)}
           {!concepts.some((c) => c.status === "APPROVED") && <p className="text-sm">Approve concepts before generating questions.</p>}

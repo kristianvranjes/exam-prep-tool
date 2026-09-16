@@ -1,5 +1,10 @@
 # Phase 6.5 staging deployment
 
+Phase 6.6 adds [external AI quiz import](QUIZ_IMPORT.md): import versioned JSON as drafts,
+then use human review. This temporary staging bypass needs no AI provider or embeddings.
+Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
+configuration below applies when explicitly enabling that pipeline.
+
 This is an operator-run guide, not an automated deployment. No cloud resources,
 credentials or paid API calls are required to run repository tests. Check current
 provider terms, limits and costs before creating resources. No Phase 7 features
@@ -91,10 +96,10 @@ Set these **backend-only** variables in the service dashboard:
 | SESSION_COOKIE_NAME | `examprep_session` (default); do not share a name/domain with unrelated applications |
 | SESSION_MAX_AGE_SECONDS | `3600` (default) |
 | MATERIAL_STORAGE_DIR | `/data/materials` on the mounted volume |
-| AI_PROVIDER | `openai_compatible` |
-| OPENAI_COMPATIBLE_URL | Explicit trusted public HTTPS origin + `/v1` |
-| OPENAI_COMPATIBLE_MODEL | Exact model supported by your configured service |
-| OPENAI_COMPATIBLE_API_KEY | Backend-only credential, entered directly into the platform secret store |
+| AI_PROVIDER | `disabled` for external import; `openai_compatible` to enable internal generation |
+| OPENAI_COMPATIBLE_URL | Only for internal generation: explicit trusted public HTTPS origin + `/v1` |
+| OPENAI_COMPATIBLE_MODEL | Only for internal generation: exact model supported by your configured service |
+| OPENAI_COMPATIBLE_API_KEY | Only for internal generation: backend-only credential, entered directly into the platform secret store |
 | AI_REQUEST_TIMEOUT_SECONDS | `120` (default; reduce if upstream/platform limits demand it) |
 
 Generate SESSION_SECRET locally with `python -c "import secrets; print(secrets.token_urlsafe(48))"`
