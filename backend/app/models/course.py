@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -16,6 +16,10 @@ class Course(Base):
     __tablename__ = "courses"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    faculty_id: Mapped[UUID] = mapped_column(
+        ForeignKey("faculties.id", ondelete="RESTRICT"), index=True
+    )
+    is_active: Mapped[bool] = mapped_column(server_default=true())
     name: Mapped[str] = mapped_column(String(150))
     code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

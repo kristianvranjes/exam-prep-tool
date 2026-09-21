@@ -27,7 +27,9 @@ and are never returned.
 ## Courses
 
 - `POST /courses` creates a course for the authenticated user and creates an OWNER
-  membership in the same transaction.
+  membership in the same transaction. The request requires `faculty_id` of an active
+  faculty plus `name` (and optional `code`, `description`). Missing faculty_id is 422;
+  unknown/inactive faculty is 404. Responses include faculty_id and is_active.
 - `GET /courses` lists courses where the authenticated user is a member.
 - `GET /courses/{course_id}` returns a member's course; inaccessible courses return
   `404`.
@@ -149,3 +151,28 @@ failures return a persisted FAILED job, with no partial questions. Clients must
 inspect job.status even on HTTP 200. Failed owner persistence returns safe 503.
 No raw provider response, internal URL, key or exception is returned.
 See [question design and examples](QUESTIONS.md).
+
+
+## Faculty catalog and enrollment (Phase 10A)
+
+All endpoints require authentication (401 otherwise):
+
+- `GET /faculties`: active faculty metadata (`id`, `name`, `slug`, `university_name`),
+  ordered by name then id. No membership required.
+- `GET /faculties/{faculty_id}/courses`: active courses belonging to that faculty,
+  ordered by name then id. Returns normal course metadata, including faculty_id and
+  is_active, but no materials/questions/answers. Unknown/inactive faculty is 404.
+- Both catalogs accept `limit` (1-100, default 100) and `offset` (0-10000, default 0).
+- `POST /courses/{course_id}/join`: no request body required. Authenticated identity
+  determines the user; role is always MEMBER for a new membership. Returns 200 with
+  `{course_id, user_id, role}`. Repeated/concurrent requests return the same existing
+  membership; existing OWNER stays OWNER. Body/query user_id or role cannot elevate
+  privileges. Missing/inactive course or inactive parent faculty is 404.
+
+Join uses PostgreSQL ON CONFLICT DO NOTHING on the existing unique course/user
+membership constraint, then reads the membership. Shared course/faculty locks keep
+availability stable through the transaction. Catalog access is distinct from private
+course access: browsing does not grant membership. Joining enables the existing
+member material/question/practice APIs while preserving OWNER-only editing/review.
+Inactive entries keep existing members' historical access. There is no leave endpoint,
+faculty moderator role, or community question visibility change in this phase.

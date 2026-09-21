@@ -11,6 +11,7 @@ from app.services.courses import (
     create_course,
     delete_course,
     get_member_course,
+    join_course,
     list_member_courses,
     update_course,
 )
@@ -70,3 +71,10 @@ def remove(
 ) -> Response:
     delete_course(db, user, course_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{course_id}/join", response_model=MembershipResponse)
+def join(
+    course_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> CourseMembership:
+    return join_course(db, user, course_id)

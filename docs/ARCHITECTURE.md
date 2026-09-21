@@ -1,6 +1,6 @@
 # Architecture
 
-Phase 6 consists of one Next.js frontend, one FastAPI backend and one PostgreSQL
+The application consists of one Next.js frontend, one FastAPI backend and one PostgreSQL
 instance. The browser calls FastAPI directly; CORS allows only FRONTEND_URL and
 credentials are enabled for the session cookie. Tailwind 4 and components.json
 prepare the frontend for shadcn/ui; no component library UI is generated yet.
@@ -61,3 +61,26 @@ short final course lock. Review locks/reloads the individual question. Explicit
 OWNER and MEMBER schemas prevent answer-key and audit leakage; only OWNER curates.
 The Next.js bank is mounted on demand inside the current course, with no quiz/session
 engine. See [question bank](QUESTIONS.md) for boundaries and failure semantics.
+
+
+## Faculty and course foundation (Phase 10A)
+
+The academic hierarchy is Faculty -> Course -> shared Question Bank / Quiz
+experience. Every course belongs to one faculty. A course is the canonical subject
+and question-pool boundary; materials, questions and memberships keep their existing
+course IDs. Internal quizzes, quiz questions, attempts and answers remain immutable
+practice-session/history infrastructure. A course-level Quiz experience does not
+mean one database quiz row per subject. Review progress and adaptive selection are
+unchanged.
+
+Authenticated catalog browsing does not require course membership and exposes
+metadata only. Joining an active course under an active faculty creates MEMBER;
+it never creates OWNER or changes an existing role. Existing course-private actions
+still require membership, and OWNER-only actions remain OWNER-only. Inactive catalog
+entries retain historical/member access but cannot be discovered normally, joined,
+or used as faculties for new course creation.
+
+Faculty provisioning, deactivation and later legacy-course reassignment are trusted
+maintenance operations for now, not new public/admin endpoints. Faculty moderators,
+community review and question visibility changes come next. The only UI change is
+an explicit faculty selector in the existing course-creation form.

@@ -194,7 +194,10 @@ def test_private_course_scoped_api_and_pagination(bank):
     with TestClient(app) as anonymous:
         assert anonymous.get(path).status_code == 401
     assert member.get(f"/courses/{uuid4()}/review-progress").status_code == 404
-    other = owner.post("/courses", json={"name": "Other course"}).json()["id"]
+    other = owner.post(
+        "/courses",
+        json={"name": "Other course", "faculty_id": owner.get("/faculties").json()[0]["id"]},
+    ).json()["id"]
     assert member.get(f"/courses/{other}/review-progress").status_code == 404
     assert owner.get(f"/courses/{other}/review-progress").json() == []
     rows = progress(member, course)
@@ -253,7 +256,7 @@ def test_migration_no_backfill_preserves_frozen_history_and_metadata(bank):
     try:
         for _ in range(2):
             command.downgrade(config, "0008")
-            command.upgrade(config, "0009")
+            command.upgrade(config, "head")
             assert stored() == []
             assert member.post(path + "/submit").json() == frozen
             assert stored() == []

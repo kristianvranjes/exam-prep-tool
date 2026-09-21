@@ -35,7 +35,10 @@ def clients(tmp_path, monkeypatch):
                 },
             )
             assert response.status_code == 201
-        course_id = owner.post("/courses", json={"name": "Materials"}).json()["id"]
+        course_id = owner.post(
+            "/courses",
+            json={"name": "Materials", "faculty_id": owner.get("/faculties").json()[0]["id"]},
+        ).json()["id"]
         member_id = member.get("/auth/me").json()["id"]
         with SessionLocal() as db:
             db.add(

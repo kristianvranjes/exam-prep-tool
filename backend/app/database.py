@@ -13,6 +13,7 @@ from app.models import (  # noqa: E402,F401
     concept,
     course,
     course_membership,
+    faculty,
     material,
     material_chunk,
     material_section,

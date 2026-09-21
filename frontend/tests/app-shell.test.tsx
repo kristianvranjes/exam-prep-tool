@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMock = vi.hoisted(() => ({
+  faculties: vi.fn(),
   materials: vi.fn().mockResolvedValue([]),
   me: vi.fn(),
   register: vi.fn(),
@@ -24,6 +25,7 @@ describe("authentication and course flow", () => {
     vi.clearAllMocks();
     apiMock.me.mockRejectedValue(new Error("signed out"));
     apiMock.courses.mockResolvedValue([]);
+    apiMock.faculties.mockResolvedValue([{ id: "faculty-1", name: "Engineering", slug: "engineering", university_name: null }]);
     apiMock.register.mockResolvedValue(user);
     apiMock.createCourse.mockResolvedValue(course);
   });
@@ -36,9 +38,11 @@ describe("authentication and course flow", () => {
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "correct horse" } });
     fireEvent.submit(screen.getByRole("button", { name: "Register" }).closest("form")!);
     expect(await screen.findByText("student@example.com")).toBeInTheDocument();
+    await screen.findByRole("option", { name: "Engineering" });
+    fireEvent.change(screen.getByLabelText("Faculty"), { target: { value: "faculty-1" } });
     fireEvent.change(screen.getByPlaceholderText("Course name"), { target: { value: "Algorithms" } });
     fireEvent.click(screen.getByRole("button", { name: "Create course" }));
-    await waitFor(() => expect(apiMock.createCourse).toHaveBeenCalledWith({ name: "Algorithms", code: undefined, description: undefined }));
+    await waitFor(() => expect(apiMock.createCourse).toHaveBeenCalledWith({ faculty_id: "faculty-1", name: "Algorithms", code: undefined, description: undefined }));
     expect((await screen.findAllByText("Core course")).length).toBeGreaterThan(0);
   });
 
@@ -50,4 +54,22 @@ describe("authentication and course flow", () => {
     fireEvent.submit(screen.getByRole("button", { name: "Log in" }).closest("form")!);
     expect(await screen.findByRole("alert")).toHaveTextContent("Invalid email or password");
   });
+});
+
+it("does not silently select a faculty and disables creation when the catalog is empty", async () => {
+  apiMock.me.mockResolvedValue(user);
+  apiMock.courses.mockResolvedValue([]);
+  apiMock.faculties.mockResolvedValue([]);
+  render(<AppShell />);
+  const select = await screen.findByLabelText("Faculty");
+  expect(select).toHaveValue("");
+  expect(select).toBeRequired();
+  expect(screen.getByRole("button", { name: "Create course" })).toBeDisabled();
+});
+
+it("reports faculty loading errors", async () => {
+  apiMock.me.mockResolvedValue(user);
+  apiMock.faculties.mockRejectedValue(new Error("Unavailable"));
+  render(<AppShell />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load faculties");
 });

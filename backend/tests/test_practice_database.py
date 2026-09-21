@@ -112,7 +112,9 @@ def test_authorization(bank):
         assert other.post(path + "/submit").status_code == 404
     assert owner.get(f"/courses/{course}/attempts").json() == []
     assert stranger.get(f"/courses/{course}/attempts").status_code == 404
-    other_course = member.post("/courses", json={"name": "Other"}).json()["id"]
+    other_course = member.post(
+        "/courses", json={"name": "Other", "faculty_id": member.get("/faculties").json()[0]["id"]}
+    ).json()["id"]
     assert member.get(path.replace(course, other_course)).status_code == 404
     assert member.post(path.replace(course, other_course) + "/submit").status_code == 404
     assert (
