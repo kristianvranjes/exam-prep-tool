@@ -120,3 +120,11 @@ See [PRACTICE.md](PRACTICE.md) for lifecycle, answer visibility, and grading rul
 On a disposable database, `alembic downgrade 0006` drops only the four Phase 7
 tables and their attempt data; `alembic upgrade head` recreates them. CI checks
 that roundtrip, reruns practice database tests, and checks the full base/head roundtrip.
+
+Revision **0008** adds nullable `answers.grading_method` and `grading_version`.
+A check requires both null for ungraded answers, or a nonempty version and a method
+consistent with the grade. Submitted legacy results are labeled `legacy-unversioned`
+without changing grades, payloads or timestamps; ACTIVE answers retain null metadata.
+New submissions persist `deterministic-v1`. Downgrade drops only the two columns and
+constraint, preserving answers/results but losing provenance. Re-upgrade marks
+submitted results legacy again. See [PRACTICE.md](PRACTICE.md) for grading and backfill.

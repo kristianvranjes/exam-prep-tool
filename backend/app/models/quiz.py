@@ -57,6 +57,14 @@ class Answer(Base):
         CheckConstraint(
             "grading_status IN ('PENDING','CORRECT','INCORRECT')", name="ck_answer_grade"
         ),
+        CheckConstraint(
+            "(grading_method IS NULL AND grading_version IS NULL AND grading_status = 'PENDING')"
+            " OR (grading_method IS NOT NULL AND grading_version IS NOT NULL"
+            " AND length(grading_version) > 0 AND ("
+            "(grading_method = 'DETERMINISTIC' AND grading_status IN ('CORRECT','INCORRECT'))"
+            " OR (grading_method = 'PENDING_SEMANTIC' AND grading_status = 'PENDING')))",
+            name="ck_answer_grading_provenance",
+        ),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     attempt_id: Mapped[UUID] = mapped_column(ForeignKey("quiz_attempts.id", ondelete="CASCADE"))
@@ -65,6 +73,8 @@ class Answer(Base):
     )
     payload: Mapped[dict[str, object]] = mapped_column(JSONB)
     grading_status: Mapped[str] = mapped_column(String(20), default="PENDING")
+    grading_method: Mapped[str | None] = mapped_column(String(20))
+    grading_version: Mapped[str | None] = mapped_column(String(64))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

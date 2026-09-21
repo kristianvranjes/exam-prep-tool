@@ -41,7 +41,7 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
   fireEvent.click(screen.getByRole("button", { name: "Start practice quiz" }));
   await screen.findByText("Choose a number");
   expect(mock.start).toHaveBeenCalledWith("course", 3, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]);
-  expect(screen.queryByText(/Correct answer:/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Correct answer:|Reference answer:|Pending \/ ungraded/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("One"));
   fireEvent.click(screen.getByRole("button", { name: "Save answer" }));
   await screen.findByText("1 / 3 answered and saved");
@@ -115,11 +115,11 @@ it("reloads the saved selection even when the current draft differs", async () =
   expect(screen.getByText("Answer saved")).toBeInTheDocument();
 });
 
-it("shows the normalized short answer returned by the server after saving", async () => {
+it("preserves the original short answer after saving", async () => {
   current.questions = [current.questions[2]];
   mock.save.mockImplementationOnce(async (_course, _id, _question, answer: PracticeAnswer) => {
     if (answer.type !== "SHORT_ANSWER") throw new Error("Expected short answer");
-    current.questions[0].answer = { ...answer, text: answer.text.trim() };
+    current.questions[0].answer = { ...answer, text: answer.text };
     return structuredClone(current);
   });
   render(<PracticeQuiz courseId="course" />);
@@ -128,5 +128,32 @@ it("shows the normalized short answer returned by the server after saving", asyn
   fireEvent.change(await screen.findByLabelText("Your short answer"), { target: { value: "  Saved text  " } });
   fireEvent.click(screen.getByRole("button", { name: "Save answer" }));
   await screen.findByText("Answer saved");
-  expect(screen.getByLabelText("Your short answer")).toHaveValue("Saved text");
+  expect(screen.getByLabelText("Your short answer")).toHaveValue("  Saved text  ");
+});
+
+it.each(["CORRECT", "PENDING"] as const)("reviews a frozen %s short answer after refresh", async gradingStatus => {
+  const raw = gradingStatus === "CORRECT" ? "  MASS\n attracts  mass  " : "  My different\n explanation  ";
+  current = {
+    ...current, status: "SUBMITTED", submitted_at: "2026-09-21T10:00:00Z",
+    questions: [{ ...current.questions[2], answer: { type: "SHORT_ANSWER", text: raw },
+      options: [], grading_status: gradingStatus, reference_answer: "Mass attracts mass",
+      correct_boolean: null, explanation: null }],
+  };
+  mock.history.mockResolvedValue([current]);
+  const view = render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(screen.getByRole("button", { name: "Open practice quizzes" }));
+  fireEvent.click(await screen.findByRole("button", { name: /Review quiz/ }));
+  await screen.findByText("Quiz results");
+  view.unmount();
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(screen.getByRole("button", { name: "Open practice quizzes" }));
+  fireEvent.click(await screen.findByRole("button", { name: /Review quiz/ }));
+  await screen.findByText("Quiz results");
+  expect(screen.getByText(/^Your answer:/).textContent).toBe(`Your answer: ${raw}`);
+  expect(screen.getByText(/^Your answer:/)).toHaveClass("whitespace-pre-wrap");
+  expect(screen.getByText("Reference answer: Mass attracts mass")).toBeInTheDocument();
+  expect(screen.getByText(gradingStatus === "CORRECT" ? "Correct" : "Pending / ungraded — semantic/manual grading is not yet available.")).toBeInTheDocument();
+  expect(screen.queryByText(/score|%/i)).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Save answer" })).not.toBeInTheDocument();
+  expect(mock.submit).not.toHaveBeenCalled();
 });

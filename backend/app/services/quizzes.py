@@ -17,7 +17,6 @@ from app.schemas.quiz import (
     AnswerPayload,
     AttemptResponse,
     AttemptSummary,
-    BooleanAnswer,
     Grade,
     MCQAnswer,
     ResultQuestion,
@@ -25,6 +24,7 @@ from app.schemas.quiz import (
     SubmittedAttempt,
 )
 from app.services.courses import get_member_course
+from app.services.grading import grade
 from app.services.questions.service import owner_view
 
 answer_adapter: TypeAdapter[AnswerPayload] = TypeAdapter(AnswerPayload)
@@ -220,18 +220,6 @@ def save_answer(
         raise
 
 
-def grade(content: OwnerQuestion, payload: AnswerPayload) -> Grade:
-    if isinstance(payload, MCQAnswer):
-        return (
-            "CORRECT"
-            if any(o.position == payload.option_position and o.is_correct for o in content.options)
-            else "INCORRECT"
-        )
-    if isinstance(payload, BooleanAnswer):
-        return "CORRECT" if payload.value == content.correct_boolean else "INCORRECT"
-    return "PENDING"
-
-
 def submit(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> AttemptResponse:
     attempt = load_attempt(db, user, course_id, attempt_id)
     if attempt.status == "SUBMITTED":
@@ -246,10 +234,13 @@ def submit(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> Attemp
             raise HTTPException(409, "Save an answer to every question before submitting")
         for question in questions:
             answer = answers[question.id]
-            answer.grading_status = grade(
+            grading_result = grade(
                 OwnerQuestion.model_validate(question.snapshot),
                 answer_adapter.validate_python(answer.payload),
             )
+            answer.grading_status = grading_result.status
+            answer.grading_method = grading_result.method
+            answer.grading_version = grading_result.version
         attempt.status = "SUBMITTED"
         attempt.submitted_at = datetime.now(UTC)
         db.flush()

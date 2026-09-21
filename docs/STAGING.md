@@ -7,8 +7,8 @@ configuration below applies when explicitly enabling that pipeline.
 
 This is an operator-run guide, not an automated deployment. No cloud resources,
 credentials or paid API calls are required to run repository tests. Check current
-provider terms, limits and costs before creating resources. No Phase 7 features
-are included.
+provider terms, limits and costs before creating resources. The migration and
+practice checks below include the Phase 7–8 student practice flow.
 
 ## Architecture and deployment order
 
@@ -158,7 +158,11 @@ python -m alembic upgrade head
 python -m alembic current
 ```
 
-Expected head is 0007 (Phase 7 practice attempts). Enable the Railway HTTPS public domain after configuration,
+Expected head is 0008 (Phase 8 grading provenance). Practice grading needs no AI
+provider or embeddings; `AI_PROVIDER=disabled` remains supported. Verify an exact
+normalized short answer shows Correct and a different answer stays Pending after
+submission, including after refresh. See [grading rules](PRACTICE.md).
+Enable the Railway HTTPS public domain after configuration,
 then verify `/health` and `/health/db` before building the frontend. `/health` is
 process liveness, `/health/db` executes a short DB query and returns safe 503 on
 failure. Neither exposes configuration or depends on AI/embeddings. Railway's
