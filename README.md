@@ -1,16 +1,17 @@
 # ExamPrep
 
-Phase 7 adds [practice quizzes and persisted attempts](docs/PRACTICE.md). Open a course,
+Phase 8 adds [conservative deterministic grading](docs/PRACTICE.md) to Phase 7 practice quizzes. Open a course,
 choose **Open practice quizzes**, answer approved questions, save progress, and submit
-for deterministic MCQ/true-false results. Short answers remain pending grading.
+for deterministic MCQ/true-false results. Short answers matching the normalized
+reference are correct; all other short answers remain pending. No AI is required.
 
 Phase 6.6 adds [external AI quiz import](docs/QUIZ_IMPORT.md): import versioned JSON as drafts,
 then use human review. This temporary staging bypass needs no AI provider or embeddings.
 Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
 configuration below applies when explicitly enabling that pipeline.
 
-A local-first university exam preparation platform. **Implemented scope: through issue #20,
-Phase 7 — practice sessions, persisted attempts, and deterministic grading.**
+A local-first university exam preparation platform. **Implemented scope: through issue #22,
+Phase 8 — snapshot-based deterministic grading with persisted provenance.**
 
 Phase 6.5 prepares **Vercel + Railway + managed PostgreSQL/pgvector staging** without
 deploying resources. Follow [the exact staging guide](docs/STAGING.md) for required

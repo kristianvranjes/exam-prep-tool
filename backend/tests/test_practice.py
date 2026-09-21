@@ -3,7 +3,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from app.schemas.question import OwnerQuestion
 from app.schemas.quiz import AnswerPayload, StartQuiz
-from app.services.quizzes import grade
+from app.services.grading import grade
 
 
 @pytest.mark.parametrize(
@@ -33,6 +33,11 @@ def test_invalid_start(data):
         {"type": "MULTIPLE_CHOICE", "option_position": -1},
         {"type": "SHORT_ANSWER", "text": " "},
         {"type": "SHORT_ANSWER", "text": "x" * 2001},
+        {"type": "SHORT_ANSWER", "text": "\t\n\u00a0"},
+        {"type": "SHORT_ANSWER", "text": "a\x00b"},
+        {"type": "SHORT_ANSWER", "text": "a\ud800b"},
+        {"type": "SHORT_ANSWER", "text": "text", "grading_method": "DETERMINISTIC"},
+        {"type": "SHORT_ANSWER", "text": "text", "grading_version": "fake"},
         {"type": "TRUE_FALSE", "value": True, "grading_status": "CORRECT"},
     ],
 )
@@ -48,17 +53,19 @@ def test_invalid_answer(data):
         ({"type": "MULTIPLE_CHOICE", "option_position": 1}, "INCORRECT"),
         ({"type": "TRUE_FALSE", "value": False}, "CORRECT"),
         ({"type": "TRUE_FALSE", "value": True}, "INCORRECT"),
-        ({"type": "SHORT_ANSWER", "text": "Even an exact reference match"}, "PENDING"),
+        ({"type": "SHORT_ANSWER", "text": "A different answer"}, "PENDING"),
     ],
 )
 def test_deterministic_grading(payload, expected):
     from app.schemas.question import OwnerOption
 
     content = OwnerQuestion.model_construct(
+        type=payload["type"],
+        reference_answer="Reference answer",
         correct_boolean=False,
         options=[
             OwnerOption(position=0, text="A", is_correct=True),
             OwnerOption(position=1, text="B", is_correct=False),
         ],
     )
-    assert grade(content, TypeAdapter(AnswerPayload).validate_python(payload)) == expected
+    assert grade(content, TypeAdapter(AnswerPayload).validate_python(payload)).status == expected

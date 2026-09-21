@@ -59,15 +59,15 @@ export function PracticeQuiz({ courseId }: { courseId: string }) {
           <h4 className="font-semibold">Question {index + 1} of {attempt.questions.length}</h4>
           <AnswerForm key={`${attempt.id}-${question.id}-${answerRevision}`} question={question} busy={busy} save={answer => run(async () => { setAttempt(await practiceApi.save(courseId, attempt.id, question.id, answer)); setAnswerRevision(revision => revision + 1); })} />
           <div className="flex gap-2"><button className={button} disabled={busy || index === 0} onClick={() => setIndex(index - 1)}>Previous question</button><button className={button} disabled={busy || index === attempt.questions.length - 1} onClick={() => setIndex(index + 1)}>Next question</button></div>
-          <p>Save each answer before navigating. Submission is final: saved answers will be frozen. Short answers remain pending grading.</p>
+          <p>Save each answer before navigating. Submission is final: saved answers will be frozen. Short answers are marked correct only when they match the reference after text normalization; other answers remain pending.</p>
           <button className={button} disabled={busy || attempt.questions.some(q => q.answer === null)} onClick={() => void run(async () => { setAttempt(await practiceApi.submit(courseId, attempt.id)); })}>Submit quiz — final</button>
           <button className={button} disabled={busy} onClick={() => void run(async () => { setAttempt(await practiceApi.read(courseId, attempt.id)); setAnswerRevision(revision => revision + 1); })}>Reload saved attempt</button>
         </>}
         {attempt.status === "SUBMITTED" && <div className="space-y-4"><h4 className="text-lg font-semibold">Quiz results</h4>
           <p>Submitted. Answers are frozen.</p>
           {attempt.questions.map(q => <article key={q.id} className="space-y-2 rounded border bg-white p-4"><h5 className="font-medium">{q.position + 1}. {q.stem}</h5>
-            <p>Your answer: {q.answer?.type === "SHORT_ANSWER" ? q.answer.text : q.answer?.type === "TRUE_FALSE" ? String(q.answer.value) : q.options.find(o => q.answer?.type === "MULTIPLE_CHOICE" && o.position === q.answer.option_position)?.text}</p>
-            <p>{q.grading_status === "PENDING" ? "Pending / ungraded — short-answer grading comes in Phase 8." : q.grading_status === "CORRECT" ? "Correct" : "Incorrect"}</p>
+            <p className="whitespace-pre-wrap">Your answer: {q.answer?.type === "SHORT_ANSWER" ? q.answer.text : q.answer?.type === "TRUE_FALSE" ? String(q.answer.value) : q.options.find(o => q.answer?.type === "MULTIPLE_CHOICE" && o.position === q.answer.option_position)?.text}</p>
+            <p>{q.grading_status === "PENDING" ? "Pending / ungraded — semantic/manual grading is not yet available." : q.grading_status === "CORRECT" ? "Correct" : "Incorrect"}</p>
             <p>{q.type === "SHORT_ANSWER" ? `Reference answer: ${q.reference_answer}` : `Correct answer: ${q.type === "TRUE_FALSE" ? String(q.correct_boolean) : q.options.find(o => o.is_correct)?.text}`}</p>
             {q.explanation && <p>{q.explanation}</p>}
           </article>)}

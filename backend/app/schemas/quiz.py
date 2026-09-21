@@ -3,9 +3,9 @@ from datetime import datetime
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.schemas.question import OwnerOption, PublicOption, QuestionType, StrictModel, Text
+from app.schemas.question import OwnerOption, PublicOption, QuestionType, StrictModel
 
 
 def default_types() -> list[QuestionType]:
@@ -39,7 +39,16 @@ class BooleanAnswer(StrictModel):
 
 class TextAnswer(StrictModel):
     type: Literal["SHORT_ANSWER"]
-    text: Text
+    text: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("text")
+    @classmethod
+    def nonblank_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Answer must contain non-whitespace text")
+        if "\x00" in value or any(0xD800 <= ord(char) <= 0xDFFF for char in value):
+            raise ValueError("Answer contains unsupported Unicode characters")
+        return value
 
 
 AnswerPayload = Annotated[MCQAnswer | BooleanAnswer | TextAnswer, Field(discriminator="type")]

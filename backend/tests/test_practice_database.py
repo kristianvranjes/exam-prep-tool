@@ -63,6 +63,8 @@ def assert_no_keys(value):
                 "explanation",
                 "snapshot",
                 "grading_status",
+                "grading_method",
+                "grading_version",
                 "correct_answer",
             }
             & value.keys()
@@ -232,6 +234,10 @@ def test_submission_rolls_back_and_serializes(bank, monkeypatch):
     assert member.get(path).json()["status"] == "ACTIVE"
     with SessionLocal() as db:
         assert {a.grading_status for a in db.scalars(select(Answer))} == {"PENDING"}
+        assert all(
+            a.grading_method is None and a.grading_version is None
+            for a in db.scalars(select(Answer))
+        )
     monkeypatch.setattr(quizzes, "grade", original)
 
     # Separate clients/connections exercising actual PostgreSQL row locks.
