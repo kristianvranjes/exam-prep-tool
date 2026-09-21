@@ -25,6 +25,7 @@ from app.schemas.quiz import (
 )
 from app.services.courses import get_member_course
 from app.services.grading import grade
+from app.services.progress import apply_reviews
 from app.services.questions.service import owner_view
 
 answer_adapter: TypeAdapter[AnswerPayload] = TypeAdapter(AnswerPayload)
@@ -232,6 +233,11 @@ def submit(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> Attemp
         questions = question_rows(db, attempt)
         if len(answers) != len(questions):
             raise HTTPException(409, "Save an answer to every question before submitting")
+        # Serialize overlapping attempts, including first inserts for the same question.
+        # NO KEY UPDATE is compatible with FK key-share locks held by other attempts.
+        db.execute(select(User.id).where(User.id == user.id).with_for_update(key_share=True))
+        submitted_at = datetime.now(UTC)
+        review_results: dict[UUID, Grade] = {}
         for question in questions:
             answer = answers[question.id]
             grading_result = grade(
@@ -241,8 +247,10 @@ def submit(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> Attemp
             answer.grading_status = grading_result.status
             answer.grading_method = grading_result.method
             answer.grading_version = grading_result.version
+            review_results[question.source_question_id] = grading_result.status
         attempt.status = "SUBMITTED"
-        attempt.submitted_at = datetime.now(UTC)
+        attempt.submitted_at = submitted_at
+        apply_reviews(db, user.id, review_results, submitted_at)
         db.flush()
         result = representation(db, attempt, course_id)
         db.commit()

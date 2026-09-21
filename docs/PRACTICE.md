@@ -133,6 +133,57 @@ alongside the README backend/frontend gates and Docker Compose HTTP health check
 ## Deliberate boundaries
 
 Phase 8 performs no AI grading and never guesses short-answer correctness.
-Phase 9 may consume attempt
-outcomes for mastery and spaced repetition. No mastery, scheduling, adaptive weights,
-analytics, embeddings, provider fixes, timers or leaderboard changes are included here.
+Phase 9A below adds question-level scheduling. Due/adaptive selection remains
+future Phase 9B work; mastery, analytics and AI grading are still out of scope.
+
+
+## Question review progress (Phase 9A)
+
+New resolved submissions maintain private state per user and canonical
+`source_question_id` from each immutable quiz snapshot. Concepts are optional
+metadata: imported USER questions with zero concepts work identically. AI,
+embeddings and semantic grading remain outside the scheduling path.
+
+The pure `leitner-v1` transition advances CORRECT from stage 0 through stages
+1–5 (capped at 5), with delays of 1, 3, 7, 14 and 30 days respectively.
+INCORRECT resets to stage 0 with a 10-minute delay. All delays use the attempt's
+submission timestamp. PENDING is a strict no-op, including counters and timestamps.
+
+Submission locks the attempt and then the user row (PostgreSQL NO KEY UPDATE)
+before assigning the submission timestamp. This serializes overlapping attempts
+for that user, including first progress inserts, without blocking FK key-share
+locks. Grading, progress mutations and freezing the attempt share one transaction;
+only submission commits. Failure rolls everything back. Repeated submit returns
+the frozen result without scheduling again. Live source correctness is never read.
+
+`GET /courses/{course_id}/review-progress?limit=20&offset=0` returns the signed-in
+member's question_id, review_stage, resolved/correct/incorrect_review_count,
+last_result, last_reviewed_at and due_at, ordered by due_at then question_id.
+Limit is 1–100; offset is 0–10000. Authentication/membership follow existing
+401/404 conventions. The course **Review progress** panel reads this API;
+use Refresh review progress after a new submission. Due labels reflect the
+shown refresh time. No schedule is reconstructed from client attempt history.
+
+Migration 0009 creates `question_review_progress` only: there is **no historical
+backfill**. Old submitted attempts remain frozen and never create progress on
+repeat submission. New resolved submissions after deployment begin progress.
+The table uniquely identifies (user_id, question_id), indexes user/due/question
+and question_id, and enforces stage, result and counter invariants. User deletion
+cascades progress; question deletion cascades progress; course deletion cascades
+through its questions. Archiving retains progress. Missing/deleted sources are
+skipped during scheduling but their immutable attempts still grade normally.
+Historical quiz snapshots retain their existing independence from live questions.
+
+Phase 9B will handle due/adaptive selection and source eligibility. This phase
+does not change oldest-first quiz selection or add mastery, analytics or reminders.
+
+### Staging smoke
+
+Use an approved true/false question (no concepts required). Submit its correct
+answer and open Review progress: stage 1, one resolved/correct review, due one day
+after submission. Repeat in a new attempt to reach stage 2 (+3 days). Submit an
+incorrect answer in a new attempt: stage 0, incorrect counter +1, due +10 minutes.
+For a short-answer question, first submit the exact reference, then a nonmatching
+answer in a new attempt: PENDING must leave its entire progress row unchanged.
+Refresh the page/panel and repeat a submitted attempt's submit request: counts
+and due times stay stable. Another course member must see only their own progress.

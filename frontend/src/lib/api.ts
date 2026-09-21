@@ -15,6 +15,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 }
 
 export const api = {
+  reviewProgress: (courseId: string, offset = 0) => request<ReviewProgress[]>(`/courses/${courseId}/review-progress?limit=20&offset=${offset}`),
   membership: (courseId: string) => request<{ role: "OWNER" | "MEMBER" }>(`/courses/${courseId}/membership`),
   concepts: (courseId: string, materialId?: string) => request<Concept[]>(`/courses/${courseId}/concepts${materialId ? `?material_id=${encodeURIComponent(materialId)}` : ""}`),
   questions: (courseId: string, filters: { status?: QuestionStatus; type?: QuestionType; limit?: number; offset?: number } = {}) => {
@@ -73,3 +74,14 @@ export type Question = PublicQuestion | OwnerQuestion;
 export type QuestionGeneration = { concept_ids: string[]; question_types: QuestionType[]; count: number; retrieval_top_k: number };
 export type QuestionEdit = { stem: string; explanation: string | null; difficulty: number | null; concept_ids: string[]; options?: { text: string; is_correct: boolean }[]; correct_answer?: boolean; reference_answer?: string };
 export type QuestionVersion = { version_number: number; reason: string; snapshot: OwnerQuestion; changed_by_user_id: string; created_at: string };
+
+export type ReviewProgress = {
+  question_id: string;
+  review_stage: number;
+  resolved_review_count: number;
+  correct_review_count: number;
+  incorrect_review_count: number;
+  last_result: "CORRECT" | "INCORRECT";
+  last_reviewed_at: string;
+  due_at: string;
+};

@@ -1,5 +1,10 @@
 # ExamPrep
 
+Phase 9A adds private [question review progress](docs/PRACTICE.md#question-review-progress-phase-9a)
+and deterministic review scheduling. Open **Review progress** in a course after
+submitting practice answers. Pending answers leave progress unchanged; existing
+historical attempts are not backfilled. No AI or concepts are required.
+
 Phase 8 adds [conservative deterministic grading](docs/PRACTICE.md) to Phase 7 practice quizzes. Open a course,
 choose **Open practice quizzes**, answer approved questions, save progress, and submit
 for deterministic MCQ/true-false results. Short answers matching the normalized
@@ -10,8 +15,8 @@ then use human review. This temporary staging bypass needs no AI provider or emb
 Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
 configuration below applies when explicitly enabling that pipeline.
 
-A local-first university exam preparation platform. **Implemented scope: through issue #22,
-Phase 8 — snapshot-based deterministic grading with persisted provenance.**
+A local-first university exam preparation platform. **Implemented scope: through issue #25,
+Phase 9A — question-first progress and deterministic review scheduling.**
 
 Phase 6.5 prepares **Vercel + Railway + managed PostgreSQL/pgvector staging** without
 deploying resources. Follow [the exact staging guide](docs/STAGING.md) for required

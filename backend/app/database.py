@@ -19,6 +19,7 @@ from app.models import (  # noqa: E402,F401
     question,
     quiz,
     user,
+    user_question_progress,
 )
 
 

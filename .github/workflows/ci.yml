@@ -40,16 +40,11 @@ jobs:
       - run: mypy app
       - run: alembic upgrade head
       - run: pytest
-      - name: Phase 8 migration roundtrip and grading regression tests
+      - name: Latest migration roundtrip and review progress regression tests
         run: |
-          alembic downgrade 0007
+          alembic downgrade 0008
           alembic upgrade head
-          pytest tests/test_grading_database.py tests/test_practice_database.py
-      - name: Phase 7 migration roundtrip and practice regression tests
-        run: |
-          alembic downgrade 0006
-          alembic upgrade head
-          pytest tests/test_practice_database.py
+          pytest tests/test_progress_database.py
       - run: alembic downgrade base && alembic upgrade head
   frontend:
     runs-on: ubuntu-latest

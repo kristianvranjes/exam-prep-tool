@@ -1,0 +1,18 @@
+from datetime import datetime
+from typing import Literal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
+
+
+class ProgressResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    question_id: UUID
+    review_stage: int
+    resolved_review_count: int
+    correct_review_count: int
+    incorrect_review_count: int
+    last_result: Literal["CORRECT", "INCORRECT"]
+    last_reviewed_at: datetime
+    due_at: datetime
