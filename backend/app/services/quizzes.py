@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import User
-from app.models.question import Question, QuestionVersion
+from app.models.question import QuestionVersion
 from app.models.quiz import Answer, Quiz, QuizAttempt, QuizQuestion
 from app.schemas.question import OwnerQuestion, PublicOption
 from app.schemas.quiz import (
@@ -27,6 +27,7 @@ from app.services.courses import get_member_course
 from app.services.grading import grade
 from app.services.progress import apply_reviews
 from app.services.questions.service import owner_view
+from app.services.quiz_selection import select_questions
 
 answer_adapter: TypeAdapter[AnswerPayload] = TypeAdapter(AnswerPayload)
 
@@ -105,27 +106,18 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
 
 def start(db: Session, user: User, course_id: UUID, data: StartQuiz) -> AttemptResponse:
     get_member_course(db, user, course_id)
-    # Same source lock used by Question Bank transitions; ordered oldest-first selection.
-    questions = list(
-        db.scalars(
-            select(Question)
-            .where(
-                Question.course_id == course_id,
-                Question.status == "APPROVED",
-                Question.type.in_(data.question_types),
-            )
-            .order_by(Question.created_at, Question.id)
-            .limit(data.count)
-            .with_for_update()
-        )
-    )
-    if len(questions) < data.count:
-        raise HTTPException(
-            409,
-            f"Only {len(questions)} eligible approved questions available; "
-            f"requested {data.count}. Reduce the count or change the type filter.",
-        )
     try:
+        # Serialize all starts for this user so adaptive exclusion sees committed starts.
+        # Compatible with FK locks; shares submission's per-user serialization boundary.
+        db.execute(select(User.id).where(User.id == user.id).with_for_update(key_share=True))
+        selection_time = datetime.now(UTC)
+        questions = select_questions(db, user.id, course_id, data, selection_time)
+        if len(questions) < data.count:
+            raise HTTPException(
+                409,
+                f"Only {len(questions)} eligible approved questions available; "
+                f"requested {data.count}. Reduce the count or change the type filter.",
+            )
         quiz = Quiz(course_id=course_id, user_id=user.id)
         db.add(quiz)
         db.flush()
