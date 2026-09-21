@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMock = vi.hoisted(() => ({
   faculties: vi.fn(),
+  moderatorStatus: vi.fn().mockResolvedValue({ is_moderator: true }),
   materials: vi.fn().mockResolvedValue([]),
   me: vi.fn(),
   register: vi.fn(),
@@ -72,4 +73,14 @@ it("reports faculty loading errors", async () => {
   apiMock.faculties.mockRejectedValue(new Error("Unavailable"));
   render(<AppShell />);
   expect(await screen.findByRole("alert")).toHaveTextContent("Could not load faculties");
+});
+
+it("does not offer course creation to ordinary faculty members", async () => {
+  apiMock.me.mockResolvedValue(user);
+  apiMock.faculties.mockResolvedValue([{ id: "f", name: "Faculty", slug: "faculty" }]);
+  apiMock.moderatorStatus.mockResolvedValue({ is_moderator: false });
+  render(<AppShell />);
+  await screen.findByText("Only faculty moderators can create shared courses.");
+  await waitFor(() => expect(apiMock.moderatorStatus).toHaveBeenCalledWith("f"));
+  expect(screen.getByRole("button", { name: "Create course" })).toBeDisabled();
 });

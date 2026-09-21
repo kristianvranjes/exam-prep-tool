@@ -6,6 +6,7 @@ from uuid import UUID
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
+from community_helpers import create_course, review_question
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 from test_materials import clients as clients
@@ -27,7 +28,7 @@ def bank(clients):
     rows = owner.post(f"/courses/{course}/questions/import", json=document()).json()
     for q in rows:
         assert owner.post(f"/questions/{q['id']}/submit").status_code == 200
-        assert owner.post(f"/questions/{q['id']}/approve").status_code == 200
+        assert review_question(owner, f"/questions/{q['id']}/approve").status_code == 200
     return owner, member, stranger, course, rows
 
 
@@ -86,7 +87,7 @@ def test_only_approved_and_selection(clients):
         owner.post(f"/questions/{row['id']}/submit")
     assert member.post(path, json={"count": 1}).status_code == 409
     for row in rows:
-        owner.post(f"/questions/{row['id']}/approve")
+        review_question(owner, f"/questions/{row['id']}/approve")
     for typ in ("MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"):
         attempt = start(member, course, 1, question_types=[typ])
         assert attempt["questions"][0]["type"] == typ
@@ -94,7 +95,7 @@ def test_only_approved_and_selection(clients):
     first = start(member, course)
     second = start(member, course)
     assert [q["stem"] for q in first["questions"]] == [q["stem"] for q in second["questions"]]
-    owner.post(f"/questions/{rows[0]['id']}/archive")
+    review_question(owner, f"/questions/{rows[0]['id']}/archive")
     assert member.post(path, json={"count": 3}).status_code == 409
 
 
@@ -112,8 +113,8 @@ def test_authorization(bank):
         assert other.post(path + "/submit").status_code == 404
     assert owner.get(f"/courses/{course}/attempts").json() == []
     assert stranger.get(f"/courses/{course}/attempts").status_code == 404
-    other_course = member.post(
-        "/courses", json={"name": "Other", "faculty_id": member.get("/faculties").json()[0]["id"]}
+    other_course = create_course(
+        member, json={"name": "Other", "faculty_id": member.get("/faculties").json()[0]["id"]}
     ).json()["id"]
     assert member.get(path.replace(course, other_course)).status_code == 404
     assert member.post(path.replace(course, other_course) + "/submit").status_code == 404
@@ -173,7 +174,7 @@ def test_save_submit_and_immutable_history(bank):
     assert member.get(path).json()["questions"]
     # Archive and even bypass the lifecycle with a DB source edit: snapshots stay intact.
     for q in rows:
-        owner.post(f"/questions/{q['id']}/archive")
+        review_question(owner, f"/questions/{q['id']}/archive")
     with SessionLocal() as db:
         for q in db.scalars(select(Question)):
             q.stem = "Changed source " + str(q.id)

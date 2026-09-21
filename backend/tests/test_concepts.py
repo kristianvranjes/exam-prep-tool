@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
+from community_helpers import create_course
 from fake_ai import FakeProvider
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select, text
@@ -40,8 +41,8 @@ def setup(monkeypatch):
                 ).status_code
                 == 201
             )
-        course = owner.post(
-            "/courses",
+        course = create_course(
+            owner,
             json={"name": "Concepts", "faculty_id": owner.get("/faculties").json()[0]["id"]},
         ).json()["id"]
         member_id = member.get("/auth/me").json()["id"]

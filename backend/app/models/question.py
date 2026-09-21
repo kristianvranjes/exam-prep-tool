@@ -48,11 +48,19 @@ class Question(Base):
         Index("ix_question_course_status", "course_id", "status"),
         Index("ix_question_course_type", "course_id", "type"),
         Index(
-            "uq_question_active_stem",
+            "uq_question_creator_active_stem",
             "course_id",
+            "created_by_user_id",
             "normalized_stem",
             unique=True,
             postgresql_where=text("status != 'ARCHIVED'"),
+        ),
+        Index(
+            "uq_question_approved_stem",
+            "course_id",
+            "normalized_stem",
+            unique=True,
+            postgresql_where=text("status = 'APPROVED'"),
         ),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)

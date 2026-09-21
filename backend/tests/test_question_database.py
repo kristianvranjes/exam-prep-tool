@@ -29,6 +29,6 @@ def test_question_migration_parity():
             },
         )
         assert compare_metadata(context, Base.metadata) == []
-        assert "uq_question_active_stem" in {
+        assert "uq_question_creator_active_stem" in {
             i["name"] for i in inspect(conn).get_indexes("questions")
         }

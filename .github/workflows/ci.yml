@@ -40,11 +40,11 @@ jobs:
       - run: mypy app
       - run: alembic upgrade head
       - run: pytest
-      - name: Latest migration roundtrip and faculty regression tests
+      - name: Latest migration roundtrip and community moderation regression tests
         run: |
-          alembic downgrade 0009
+          alembic downgrade 0010
           alembic upgrade head
-          pytest tests/test_faculties_database.py
+          pytest tests/test_community_database.py
       - run: alembic downgrade base && alembic upgrade head
   frontend:
     runs-on: ubuntu-latest

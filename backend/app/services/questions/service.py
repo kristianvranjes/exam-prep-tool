@@ -4,11 +4,11 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import CourseMembership, User
+from app.models import User
 from app.models.concept import Concept
 from app.models.material import Material
 from app.models.material_chunk import MaterialChunk
@@ -36,42 +36,36 @@ from app.schemas.question import (
     content_adapter,
     normalize,
 )
-from app.services.courses import get_member_course, get_owner_course
-
-
-def owner_access(db: Session, user: User, course_id: UUID) -> bool:
-    get_member_course(db, user, course_id)
-    return (
-        db.scalar(
-            select(CourseMembership.role).where(
-                CourseMembership.course_id == course_id, CourseMembership.user_id == user.id
-            )
-        )
-        == "OWNER"
-    )
+from app.services.courses import get_member_course
+from app.services.moderation import course_moderator
 
 
 def load_question(
     db: Session, user: User, question_id: UUID, *, mutate: bool = False
 ) -> tuple[Question, bool]:
-    question = db.get(Question, question_id)
+    # Lock before checking visibility: a concurrent moderation transition cannot
+    # pair stale authorization with freshly loaded private content.
+    question = db.scalar(
+        select(Question)
+        .where(Question.id == question_id)
+        .with_for_update(read=not mutate)
+        .execution_options(populate_existing=True)
+    )
     if question is None:
         raise HTTPException(404, "Question not found")
-    owner = owner_access(db, user, question.course_id)
-    if not owner and question.status != "APPROVED":
+    moderator = course_moderator(db, user, question.course_id)
+    if not moderator:
+        get_member_course(db, user, question.course_id)
+    full = moderator or question.created_by_user_id == user.id
+    if not full and question.status != "APPROVED":
         raise HTTPException(404, "Question not found")
-    if mutate:
-        get_owner_course(db, user, question.course_id)
-        locked = db.scalar(
-            select(Question)
-            .where(Question.id == question_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        )
-        if locked is None:
-            raise HTTPException(404, "Question not found")
-        question = locked
-    return question, owner
+    return question, full
+
+
+def require_creator(db: Session, user: User, question: Question) -> None:
+    get_member_course(db, user, question.course_id)
+    if question.created_by_user_id != user.id:
+        raise HTTPException(403, "Only the creator may edit or submit this question")
 
 
 def options(db: Session, question: Question) -> list[QuestionOption]:
@@ -137,18 +131,24 @@ def list_questions(
     limit: int,
     offset: int,
 ) -> list[QuestionResponse]:
-    owner = owner_access(db, user, course_id)
+    get_member_course(db, user, course_id)
+    moderator = course_moderator(db, user, course_id)
     query = select(Question).where(Question.course_id == course_id)
-    if not owner:
-        query = query.where(Question.status == "APPROVED")
-    elif status:
+    if not moderator:
+        query = query.where(
+            or_(Question.status == "APPROVED", Question.created_by_user_id == user.id)
+        )
+    if status:
         query = query.where(Question.status == status)
     if type_:
         query = query.where(Question.type == type_)
     rows = db.scalars(
-        query.order_by(Question.created_at.desc(), Question.id).limit(limit).offset(offset)
+        query.order_by(Question.created_at.desc(), Question.id)
+        .limit(limit)
+        .offset(offset)
+        .with_for_update(read=True)
     )
-    return [representation(db, row, owner) for row in rows]
+    return [representation(db, row, moderator or row.created_by_user_id == user.id) for row in rows]
 
 
 def validate_concepts(db: Session, course_id: UUID, ids: list[UUID]) -> list[Concept]:
@@ -258,6 +258,7 @@ def edit_question(
     db: Session, user: User, question_id: UUID, patch: QuestionPatch
 ) -> OwnerQuestion:
     question, _ = load_question(db, user, question_id, mutate=True)
+    require_creator(db, user, question)
     if question.status not in ("DRAFT", "REJECTED"):
         raise HTTPException(409, "Only DRAFT or REJECTED questions can be edited")
     changes = patch.model_dump(exclude_unset=True)
@@ -303,6 +304,12 @@ def transition(
     db: Session, user: User, question_id: UUID, action: str, reason: str | None = None
 ) -> OwnerQuestion:
     question, _ = load_question(db, user, question_id, mutate=True)
+    if action == "submit":
+        require_creator(db, user, question)
+    elif not course_moderator(db, user, question.course_id):
+        raise HTTPException(403, "Faculty moderator access required")
+    elif action in ("approve", "reject") and question.created_by_user_id == user.id:
+        raise HTTPException(403, "Creators cannot review their own question")
     old, new, version_reason = TRANSITIONS[action]
     if question.status != old:
         raise HTTPException(409, "Invalid question lifecycle transition")
@@ -323,6 +330,11 @@ def transition(
     try:
         add_version(db, question, user, version_reason)
         db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            409, "Question conflicts with existing content; review not saved"
+        ) from None
     except Exception:
         db.rollback()
         raise HTTPException(503, "Could not save question transition") from None
@@ -332,8 +344,9 @@ def transition(
 def versions(
     db: Session, user: User, question_id: UUID, limit: int, offset: int
 ) -> list[QuestionVersion]:
-    question, _ = load_question(db, user, question_id)
-    get_owner_course(db, user, question.course_id)
+    question, full = load_question(db, user, question_id)
+    if not full:
+        raise HTTPException(403, "Creator or faculty moderator access required")
     return list(
         db.scalars(
             select(QuestionVersion)

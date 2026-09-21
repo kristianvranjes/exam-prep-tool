@@ -2,6 +2,7 @@ import os
 from uuid import UUID
 
 import pytest
+from community_helpers import create_course
 from fastapi.testclient import TestClient
 from pdf_fixture import make_pdf
 from sqlalchemy import func, select, text
@@ -35,8 +36,8 @@ def clients(tmp_path, monkeypatch):
                 },
             )
             assert response.status_code == 201
-        course_id = owner.post(
-            "/courses",
+        course_id = create_course(
+            owner,
             json={"name": "Materials", "faculty_id": owner.get("/faculties").json()[0]["id"]},
         ).json()["id"]
         member_id = member.get("/auth/me").json()["id"]

@@ -16,6 +16,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 }
 
 export const api = {
+  moderatorStatus: (facultyId: string) => request<{ is_moderator: boolean }>(`/faculties/${facultyId}/moderator-status`),
   faculties: () => request<Faculty[]>("/faculties"),
   reviewProgress: (courseId: string, offset = 0) => request<ReviewProgress[]>(`/courses/${courseId}/review-progress?limit=20&offset=${offset}`),
   membership: (courseId: string) => request<{ role: "OWNER" | "MEMBER" }>(`/courses/${courseId}/membership`),

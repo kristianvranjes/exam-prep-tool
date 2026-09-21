@@ -2,6 +2,7 @@ import os
 from uuid import UUID
 
 import pytest
+from community_helpers import create_course
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -50,8 +51,8 @@ def test_auth_and_course_authorization() -> None:
         )
         assert duplicate.status_code == 409
 
-        created = client.post(
-            "/courses",
+        created = create_course(
+            client,
             json={
                 "name": "Algorithms",
                 "code": "ALG101",
@@ -88,8 +89,8 @@ def test_bad_login_and_non_owner_cannot_manage_course() -> None:
                 "display_name": "Owner",
             },
         )
-        course = owner.post(
-            "/courses",
+        course = create_course(
+            owner,
             json={"name": "Private", "faculty_id": owner.get("/faculties").json()[0]["id"]},
         ).json()
         path = f"/courses/{course['id']}"

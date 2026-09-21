@@ -9,10 +9,12 @@ from app.models import Course, CourseMembership, MembershipRole, User
 from app.models.faculty import Faculty
 from app.schemas.course import CourseCreate, CourseUpdate
 from app.services.faculties import active_faculty
+from app.services.moderation import require_moderator
 
 
 def create_course(db: Session, user: User, data: CourseCreate) -> Course:
     active_faculty(db, data.faculty_id)
+    require_moderator(db, user, data.faculty_id)
     course = Course(
         faculty_id=data.faculty_id,
         name=data.name.strip(),

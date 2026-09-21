@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
+from community_helpers import create_course
 from fake_embeddings import FakeEmbeddingProvider
 from fastapi.testclient import TestClient
 from sqlalchemy import select, text
@@ -65,8 +66,8 @@ def data(monkeypatch):
                 ).status_code
                 == 201
             )
-        course = owner.post(
-            "/courses",
+        course = create_course(
+            owner,
             json={"name": "Retrieval", "faculty_id": owner.get("/faculties").json()[0]["id"]},
         ).json()["id"]
         member_id = member.get("/auth/me").json()["id"]
@@ -158,8 +159,8 @@ def test_failure_rolls_back_whole_refresh(data, existing):
 
 def test_search_order_cosine_ties_and_course_isolation(data):
     d = data
-    other = d.outsider.post(
-        "/courses",
+    other = create_course(
+        d.outsider,
         json={"name": "Private", "faculty_id": d.outsider.get("/faculties").json()[0]["id"]},
     ).json()["id"]
     other_material = add_material(other, d.outsider.get("/auth/me").json()["id"], ["alpha"])

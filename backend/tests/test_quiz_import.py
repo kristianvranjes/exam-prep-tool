@@ -111,7 +111,7 @@ def test_database_failure_rolls_back_whole_import(monkeypatch):
     from app.services.questions import importing
 
     db = Mock()
-    monkeypatch.setattr(importing, "get_owner_course", Mock())
+    monkeypatch.setattr(importing, "get_member_course", Mock())
     save = Mock(side_effect=[None, IntegrityError("insert", {}, Exception())])
     monkeypatch.setattr(importing, "save_content", save)
     monkeypatch.setattr(importing, "add_version", Mock())

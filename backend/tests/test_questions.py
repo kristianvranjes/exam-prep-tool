@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 import pytest
 import test_retrieval
+from community_helpers import create_course, provision, review_question
 from fake_questions import FakeQuestions
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -160,22 +161,27 @@ def test_full_lifecycle_versions_and_member_redaction(questions):
     rows = generated(d)
     for row in rows:
         path = f"/questions/{row['id']}"
-        assert d.owner.post(path + "/approve").status_code == 409
-        assert d.owner.post(path + "/reject", json={"reason": "not yet"}).status_code == 409
+        assert review_question(d.owner, path + "/approve").status_code == 409
+        assert (
+            review_question(d.owner, path + "/reject", json={"reason": "not yet"}).status_code
+            == 409
+        )
         assert d.owner.post(path + "/submit").json()["status"] == "PENDING_REVIEW"
         assert d.member.get(path).status_code == 404
         assert d.owner.patch(path, json={"stem": "no"}).status_code == 409
-        assert d.owner.post(path + "/reject", json={"reason": " "}).status_code == 422
-        rejected = d.owner.post(path + "/reject", json={"reason": "Needs precision"}).json()
+        assert review_question(d.owner, path + "/reject", json={"reason": " "}).status_code == 422
+        rejected = review_question(
+            d.owner, path + "/reject", json={"reason": "Needs precision"}
+        ).json()
         assert rejected["reviewed_at"] and rejected["rejection_reason"]
         assert d.member.get(path).status_code == 404
-        assert d.owner.post(path + "/approve").status_code == 409
+        assert review_question(d.owner, path + "/approve").status_code == 409
         edited = d.owner.patch(path, json={"stem": row["stem"] + " Revised"}).json()
         assert edited["status"] == "DRAFT" and edited["reviewed_at"] is None
         assert edited["rejection_reason"] is None and edited["reviewed_by_user_id"] is None
         assert edited["source_chunks"] == row["source_chunks"]
         d.owner.post(path + "/submit")
-        approved = d.owner.post(path + "/approve").json()
+        approved = review_question(d.owner, path + "/approve").json()
         assert approved["status"] == "APPROVED" and approved["reviewed_at"]
         public = d.member.get(path)
         assert public.status_code == 200
@@ -195,10 +201,15 @@ def test_full_lifecycle_versions_and_member_redaction(questions):
             assert d.member.post(path + "/" + action).status_code == 403
         assert d.member.post(path + "/reject", json={"reason": "no"}).status_code == 403
         assert d.owner.patch(path, json={"stem": "no"}).status_code == 409
-        assert d.owner.post(path + "/archive").json()["status"] == "ARCHIVED"
+        assert review_question(d.owner, path + "/archive").json()["status"] == "ARCHIVED"
         assert d.member.get(path).status_code == 404
         for action in ["submit", "approve", "archive"]:
-            assert d.owner.post(path + "/" + action).status_code == 409
+            response = (
+                d.owner.post(path + "/submit")
+                if action == "submit"
+                else review_question(d.owner, path + "/" + action)
+            )
+            assert response.status_code == 409
         assert d.owner.patch(path, json={"stem": "no"}).status_code == 409
         versions = d.owner.get(path + "/versions").json()
         assert [v["version_number"] for v in versions] == list(range(1, 8))
@@ -273,7 +284,11 @@ def test_complete_transition_matrix(questions, status):
             result = d.owner.patch(path, json={"stem": row["stem"]})
             valid = status in ("DRAFT", "REJECTED")
         else:
-            result = d.owner.post(path + "/" + action, json={"reason": "Needs rework"})
+            result = (
+                d.owner.post(path + "/submit")
+                if action == "submit"
+                else review_question(d.owner, path + "/" + action, json={"reason": "Needs rework"})
+            )
             valid = (status, action) in allowed
         assert result.status_code == (200 if valid else 409), result.text
 
@@ -292,6 +307,9 @@ def test_concurrent_review_reloads_stale_question(questions):
     row = generated(d)[0]
     path = f"/questions/{row['id']}"
     d.owner.post(path + "/submit")
+    faculty = d.owner.get(f"/courses/{d.course}").json()["faculty_id"]
+    provision(d.outsider, faculty)
+    reviewer_id = UUID(d.outsider.get("/auth/me").json()["id"])
     waiting = Event()
 
     def reached_lock(conn, cursor, statement, parameters, context, executemany):
@@ -300,9 +318,9 @@ def test_concurrent_review_reloads_stale_question(questions):
 
     with ThreadPoolExecutor(max_workers=1) as pool, SessionLocal() as db:
         db.scalar(select(Question).where(Question.id == UUID(row["id"])).with_for_update())
-        user = db.get(User, UUID(row["created_by_user_id"]))
+        user = db.get(User, reviewer_id)
         event.listen(engine, "before_cursor_execute", reached_lock)
-        future = pool.submit(d.owner.post, path + "/reject", json={"reason": "Concurrent"})
+        future = pool.submit(d.outsider.post, path + "/reject", json={"reason": "Concurrent"})
         try:
             assert waiting.wait(10)
             # The other transaction has already loaded PENDING_REVIEW and is blocked.
@@ -357,8 +375,8 @@ def test_foreign_provenance_and_deterministic_dedup(questions, monkeypatch):
     from app.services import retrieval
 
     d = questions
-    foreign = d.outsider.post(
-        "/courses",
+    foreign = create_course(
+        d.outsider,
         json={"name": "Private", "faculty_id": d.outsider.get("/faculties").json()[0]["id"]},
     ).json()["id"]
     with SessionLocal() as db:
@@ -448,15 +466,16 @@ def test_edits_validate_whole_content_and_protect_provenance(questions):
     for item in rows:
         p = f"/questions/{item['id']}"
         d.owner.post(p + "/submit")
-        d.owner.post(p + "/approve")
-    public = d.member.get(d.bank + "?status=DRAFT&limit=2").json()
+        review_question(d.owner, p + "/approve")
+    assert d.member.get(d.bank + "?status=DRAFT&limit=2").json() == []
+    public = d.member.get(d.bank + "?status=APPROVED&limit=2").json()
     assert len(public) == 2 and all(q["status"] == "APPROVED" for q in public)
     assert "is_correct" not in json.dumps(public)
     assert d.member.get(d.bank + "?limit=2&offset=2").json()[0]["id"] not in {
         q["id"] for q in public
     }
     for item in rows:
-        d.owner.post(f"/questions/{item['id']}/archive")
+        review_question(d.owner, f"/questions/{item['id']}/archive")
     assert d.owner.post(d.generate, json=d.body).json()["status"] == "SUCCEEDED"
 
 

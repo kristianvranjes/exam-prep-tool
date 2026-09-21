@@ -38,7 +38,7 @@ export function PracticeQuiz({ courseId }: { courseId: string }) {
   return <section className="mt-6 space-y-4 border-t pt-6" aria-label="Practice quiz">
     <button className={button} disabled={busy} onClick={() => { setOpen(true); void run(() => loadHistory()); }}>Open practice quizzes</button>
     {open && <>
-      <h3 className="text-lg font-semibold">Practice approved questions</h3>
+      <h3 className="text-lg font-semibold">Practice course questions</h3>
       {!attempt && <>
         <form className="space-y-3" onSubmit={event => { event.preventDefault(); void run(async () => {
           if (!selectedTypes.length) throw new Error("Select at least one question type.");
@@ -48,13 +48,13 @@ export function PracticeQuiz({ courseId }: { courseId: string }) {
             <label className="mr-4"><input type="radio" name="selection-mode" checked={selectionMode === "STANDARD"} onChange={() => setSelectionMode("STANDARD")} /> Standard practice</label>
             <label><input type="radio" name="selection-mode" checked={selectionMode === "ADAPTIVE"} onChange={() => setSelectionMode("ADAPTIVE")} /> Adaptive review</label>
           </fieldset>
-          {selectionMode === "ADAPTIVE" && <p>Due questions first, then unseen questions, then other approved questions. Questions in your active attempts are excluded.</p>}
+          {selectionMode === "ADAPTIVE" && <p>Due questions first, then unseen questions, then other eligible questions. Questions in your active attempts are excluded.</p>}
           <label className="block">Practice question count<input className="ml-3 w-20 rounded border p-2" type="number" min={1} max={20} required value={count} onChange={e => setCount(Number(e.target.value))} /></label>
           <fieldset className="space-y-2"><legend>Question types</legend>{types.map(t => <label key={t.type} className="block"><input type="checkbox" checked={selectedTypes.includes(t.type)} onChange={e => setSelectedTypes(current => e.target.checked ? [...current, t.type] : current.filter(type => type !== t.type))} /> {t.label}</label>)}</fieldset>
           <button className={button} disabled={busy}>Start practice quiz</button>
         </form>
         <h4 className="font-semibold">Your saved attempts</h4>
-        {!history.length && <p>No saved attempts yet. Start with approved questions from this course.</p>}
+        {!history.length && <p>No saved attempts yet. Start with shared approved questions or your own drafts from this course.</p>}
         <ul className="space-y-2">{history.map(row => <li key={row.id}><button className={button} disabled={busy} onClick={() => void run(async () => { setAttempt(await practiceApi.read(courseId, row.id)); setIndex(0); })}>{row.status === "ACTIVE" ? "Resume" : "Review"} quiz · {new Date(row.started_at).toLocaleString()}</button></li>)}</ul>
         <div className="flex gap-2"><button className={button} disabled={busy || offset === 0} onClick={() => void run(() => loadHistory(offset - 20))}>Newer attempts</button><button className={button} disabled={busy || history.length < 20} onClick={() => void run(() => loadHistory(offset + 20))}>Older attempts</button></div>
       </>}

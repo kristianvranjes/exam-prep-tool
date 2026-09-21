@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, case, select
+from sqlalchemy import and_, case, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.question import Question
@@ -17,7 +17,13 @@ def select_questions(
 ) -> list[Question]:
     query = select(Question).where(
         Question.course_id == course_id,
-        Question.status == "APPROVED",
+        or_(
+            Question.status == "APPROVED",
+            and_(
+                Question.created_by_user_id == user_id,
+                Question.status.in_(["DRAFT", "PENDING_REVIEW"]),
+            ),
+        ),
         Question.type.in_(data.question_types),
     )
     if data.selection_mode == "ADAPTIVE":

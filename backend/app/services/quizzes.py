@@ -115,7 +115,7 @@ def start(db: Session, user: User, course_id: UUID, data: StartQuiz) -> AttemptR
         if len(questions) < data.count:
             raise HTTPException(
                 409,
-                f"Only {len(questions)} eligible approved questions available; "
+                f"Only {len(questions)} eligible questions available; "
                 f"requested {data.count}. Reduce the count or change the type filter.",
             )
         quiz = Quiz(course_id=course_id, user_id=user.id)

@@ -20,6 +20,8 @@ export function QuestionBank({ courseId }: { courseId: string }) {
 
 function BankContents({ courseId }: { courseId: string }) {
   const [owner, setOwner] = useState(false);
+  const [userId, setUserId] = useState("");
+  const [moderator, setModerator] = useState(false);
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [rows, setRows] = useState<Question[]>([]);
   const [selected, setSelected] = useState<Question | null>(null);
@@ -34,6 +36,11 @@ function BankContents({ courseId }: { courseId: string }) {
 
   useEffect(() => {
     let active = true;
+    Promise.all([api.me(), api.course(courseId)]).then(async ([user, course]) => {
+      if (active) setUserId(user.id);
+      const permission = await api.moderatorStatus(course.faculty_id);
+      if (active) setModerator(permission.is_moderator);
+    }).catch(() => { if (active) setError("Could not load question-bank permissions"); });
     api.membership(courseId).then(async (membership) => {
       if (active) setOwner(membership.role === "OWNER");
       if (membership.role === "OWNER") {
@@ -82,8 +89,8 @@ function BankContents({ courseId }: { courseId: string }) {
 
   return <div className="mt-5 space-y-5">
     <h3 className="text-xl font-semibold">Question bank</h3>
-    <p className="text-sm text-neutral-600">{owner ? "Import external quiz drafts or generate from approved concepts, then review each question." : "Browse approved course questions."}</p>
-    {owner && <QuizImport courseId={courseId} disabled={busy} onImported={(imported) => {
+    <p className="text-sm text-neutral-600">Import your own private drafts, practice them immediately, and submit them for faculty moderator review to share with the course.</p>
+    {<QuizImport courseId={courseId} disabled={busy} onImported={(imported) => {
       setStatus("DRAFT"); setType(""); setOffset(0); setSelected(imported[0] ?? null); refresh();
     }} />}
     {owner && <form onSubmit={generate} className="space-y-3 rounded border bg-white p-4">
@@ -102,7 +109,7 @@ function BankContents({ courseId }: { courseId: string }) {
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     {notice && <p role="status" className="text-sm">{notice}</p>}
     <div className="flex flex-wrap gap-3">
-      {owner && <label className="text-sm">Status <select className={control} value={status} disabled={busy} onChange={(e) => { setStatus(e.target.value as QuestionStatus | ""); setOffset(0); setLoading(true); }}><option value="">All statuses</option>{statuses.map((s) => <option key={s} value={s}>{label(s)}</option>)}</select></label>}
+      {<label className="text-sm">Status <select className={control} value={status} disabled={busy} onChange={(e) => { setStatus(e.target.value as QuestionStatus | ""); setOffset(0); setLoading(true); }}><option value="">All statuses</option>{statuses.map((s) => <option key={s} value={s}>{label(s)}</option>)}</select></label>}
       <label className="text-sm">Type <select className={control} value={type} disabled={busy} onChange={(e) => { setType(e.target.value as QuestionType | ""); setOffset(0); setLoading(true); }}><option value="">All types</option>{types.map((t) => <option key={t} value={t}>{label(t)}</option>)}</select></label>
     </div>
     {loading ? <p role="status">Loading questions…</p> : <ul className="space-y-2">{rows.map((q) => <li key={q.id} className="rounded border bg-white p-3">
@@ -113,13 +120,13 @@ function BankContents({ courseId }: { courseId: string }) {
       <button className={control} disabled={busy} onClick={() => setSelected(null)}>Close question</button>
       <h4 className="font-semibold">{selected.stem}</h4>
       <p className="text-sm">{label(selected.type)} · {label(selected.status)}{selected.difficulty && ` · Difficulty ${selected.difficulty}/5`}</p>
-      <ul>{selected.options.map((option) => <li key={option.position}>{option.text}{owner && selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (correct)" : ""}</li>)}</ul>
-      {owner && selected.visibility === "OWNER" && <OwnerReview key={`${selected.id}:${selected.updated_at}`} question={selected} concepts={concepts} busy={busy} mutate={mutate} />}
+      <ul>{selected.options.map((option) => <li key={option.position}>{option.text}{selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (correct)" : ""}</li>)}</ul>
+      {selected.visibility === "OWNER" && <OwnerReview key={`${selected.id}:${selected.updated_at}`} question={selected} creator={selected.created_by_user_id === userId} moderator={moderator} concepts={concepts} busy={busy} mutate={mutate} />}
     </article>}
   </div>;
 }
 
-function OwnerReview({ question: q, concepts, busy, mutate }: { question: OwnerQuestion; concepts: Concept[]; busy: boolean; mutate: (operation: () => Promise<OwnerQuestion>) => Promise<void> }) {
+function OwnerReview({ question: q, creator, moderator, concepts, busy, mutate }: { creator: boolean; moderator: boolean; question: OwnerQuestion; concepts: Concept[]; busy: boolean; mutate: (operation: () => Promise<OwnerQuestion>) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
   const [versions, setVersions] = useState<QuestionVersion[]>([]);
   const [versionError, setVersionError] = useState("");
@@ -144,13 +151,13 @@ function OwnerReview({ question: q, concepts, busy, mutate }: { question: OwnerQ
       <ul>{q.source_chunks.map((s) => <li key={s.chunk_id} className="break-all">Material {s.material_id} · chunk {s.ordinal + 1} ({s.chunk_id})</li>)}</ul>
       <p className="break-all">Source: {q.source}{q.ai_job_id && ` · Generation job ${q.ai_job_id}`}</p></div>
     <div className="flex flex-wrap gap-2">
-      {["DRAFT", "REJECTED"].includes(q.status) && <button className={control} disabled={busy} onClick={() => setEditing(!editing)}>{editing ? "Cancel edit" : "Edit question"}</button>}
-      {q.status === "DRAFT" && <button className={control} disabled={busy} onClick={() => transition("submit")}>Submit for review</button>}
-      {q.status === "PENDING_REVIEW" && <button className={control} disabled={busy} onClick={() => transition("approve")}>Approve question</button>}
-      {q.status === "APPROVED" && <button className={control} disabled={busy} onClick={() => transition("archive")}>Archive question</button>}
+      {creator && ["DRAFT", "REJECTED"].includes(q.status) && <button className={control} disabled={busy} onClick={() => setEditing(!editing)}>{editing ? "Cancel edit" : "Edit question"}</button>}
+      {creator && q.status === "DRAFT" && <button className={control} disabled={busy} onClick={() => transition("submit")}>Submit for review</button>}
+      {moderator && !creator && q.status === "PENDING_REVIEW" && <button className={control} disabled={busy} onClick={() => transition("approve")}>Approve question</button>}
+      {moderator && q.status === "APPROVED" && <button className={control} disabled={busy} onClick={() => transition("archive")}>Archive question</button>}
       {hasMore && <button className={control} disabled={busy || versionBusy} onClick={loadVersions}>{versions.length ? "Load more versions" : "View versions"}</button>}
     </div>
-    {q.status === "PENDING_REVIEW" && <form onSubmit={(e) => { e.preventDefault(); const reason = String(new FormData(e.currentTarget).get("reason")); void transition("reject", reason); }} className="flex gap-2"><input aria-label="Rejection reason" className={`${control} min-w-0 flex-1`} name="reason" required maxLength={1000} placeholder="Reason for rejection" disabled={busy} /><button className={control} disabled={busy}>Reject question</button></form>}
+    {moderator && !creator && q.status === "PENDING_REVIEW" && <form onSubmit={(e) => { e.preventDefault(); const reason = String(new FormData(e.currentTarget).get("reason")); void transition("reject", reason); }} className="flex gap-2"><input aria-label="Rejection reason" className={`${control} min-w-0 flex-1`} name="reason" required maxLength={1000} placeholder="Reason for rejection" disabled={busy} /><button className={control} disabled={busy}>Reject question</button></form>}
     {editing && <QuestionEditor question={q} concepts={concepts} busy={busy} save={(body) => mutate(() => api.editQuestion(q.id, body))} />}
     {versionError && <p role="alert">{versionError}</p>}
     {versions.length > 0 && <ol className="space-y-2">{versions.map((v) => <li key={v.version_number}><details><summary>Version {v.version_number} · {label(v.reason)} · {new Date(v.created_at).toLocaleString()}</summary><p>{v.snapshot.stem}</p><p>{v.snapshot.explanation}</p>{v.snapshot.options.map((o) => <p key={o.position}>{o.text}{o.is_correct ? " (correct)" : ""}</p>)}{v.snapshot.type === "TRUE_FALSE" && <p>Answer: {String(v.snapshot.correct_boolean)}</p>}{v.snapshot.reference_answer && <p>{v.snapshot.reference_answer}</p>}<p>Concepts: {v.snapshot.concept_ids.join(", ")}</p><p>Sources: {v.snapshot.source_chunks.map((s) => s.chunk_id).join(", ")}</p></details></li>)}</ol>}

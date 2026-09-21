@@ -2,6 +2,7 @@ import os
 from uuid import uuid4
 
 import pytest
+from community_helpers import review_question
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from test_materials import clients as clients
@@ -20,7 +21,6 @@ def test_import_review_without_ai_or_provenance(clients, monkeypatch):
     path = f"/courses/{course}/questions/import"
     with TestClient(app) as anonymous:
         assert anonymous.post(path, json=document()).status_code == 401
-    assert member.post(path, json=document()).status_code == 403
     assert stranger.post(path, json=document()).status_code == 404
     assert owner.post(f"/courses/{uuid4()}/questions/import", json=document()).status_code == 404
     result = owner.post(path, json=document())
@@ -32,20 +32,20 @@ def test_import_review_without_ai_or_provenance(clients, monkeypatch):
         assert row["status"] == "DRAFT" and row["source"] == "USER"
         assert row["ai_job_id"] is None and row["concept_ids"] == [] and row["source_chunks"] == []
         q = f"/questions/{row['id']}"
-        assert owner.post(q + "/approve").status_code == 409
+        assert review_question(owner, q + "/approve").status_code == 409
         assert member.post(q + "/submit").status_code in (403, 404)
         assert (
             owner.patch(q, json={"stem": row["stem"] + " Edited", "concept_ids": []}).status_code
             == 200
         )
         assert owner.post(q + "/submit").status_code == 200
-        assert owner.post(q + "/reject", json={"reason": "Recheck"}).status_code == 200
+        assert review_question(owner, q + "/reject", json={"reason": "Recheck"}).status_code == 200
         assert (
             owner.patch(q, json={"explanation": "Checked original material"}).json()["status"]
             == "DRAFT"
         )
         assert owner.post(q + "/submit").status_code == 200
-        assert owner.post(q + "/approve").json()["status"] == "APPROVED"
+        assert review_question(owner, q + "/approve").json()["status"] == "APPROVED"
         public = member.get(q).json()
         assert "reference_answer" not in public and "explanation" not in public
         assert owner.get(q + "/versions").json()[0]["reason"] == "CREATED"

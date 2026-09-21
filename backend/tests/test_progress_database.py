@@ -8,6 +8,7 @@ import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from community_helpers import create_course, review_question
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select, text
 from sqlalchemy.exc import IntegrityError
@@ -194,8 +195,8 @@ def test_private_course_scoped_api_and_pagination(bank):
     with TestClient(app) as anonymous:
         assert anonymous.get(path).status_code == 401
     assert member.get(f"/courses/{uuid4()}/review-progress").status_code == 404
-    other = owner.post(
-        "/courses",
+    other = create_course(
+        owner,
         json={"name": "Other course", "faculty_id": owner.get("/faculties").json()[0]["id"]},
     ).json()["id"]
     assert member.get(f"/courses/{other}/review-progress").status_code == 404
@@ -215,7 +216,7 @@ def test_snapshot_archive_and_deleted_source(bank):
     source = next(q for q in rows if q["type"] == "TRUE_FALSE")
     path = saved_boolean(member, course, source["correct_boolean"])
     deleted_path = saved_boolean(member, course, source["correct_boolean"])
-    assert owner.post(f"/questions/{source['id']}/archive").status_code == 200
+    assert review_question(owner, f"/questions/{source['id']}/archive").status_code == 200
     with SessionLocal() as db:
         db.get(Question, UUID(source["id"])).correct_boolean = not source["correct_boolean"]
         db.commit()
