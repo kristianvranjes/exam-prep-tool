@@ -51,7 +51,13 @@ def test_auth_and_course_authorization() -> None:
         assert duplicate.status_code == 409
 
         created = client.post(
-            "/courses", json={"name": "Algorithms", "code": "ALG101", "description": "Core course"}
+            "/courses",
+            json={
+                "name": "Algorithms",
+                "code": "ALG101",
+                "description": "Core course",
+                "faculty_id": client.get("/faculties").json()[0]["id"],
+            },
         )
         assert created.status_code == 201
         course_id = created.json()["id"]
@@ -82,7 +88,10 @@ def test_bad_login_and_non_owner_cannot_manage_course() -> None:
                 "display_name": "Owner",
             },
         )
-        course = owner.post("/courses", json={"name": "Private"}).json()
+        course = owner.post(
+            "/courses",
+            json={"name": "Private", "faculty_id": owner.get("/faculties").json()[0]["id"]},
+        ).json()
         path = f"/courses/{course['id']}"
         assert owner.get(f"{path}/membership").json()["role"] == "OWNER"
         bad_login = member.post(

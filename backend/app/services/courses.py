@@ -2,14 +2,19 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.models import Course, CourseMembership, MembershipRole, User
+from app.models.faculty import Faculty
 from app.schemas.course import CourseCreate, CourseUpdate
+from app.services.faculties import active_faculty
 
 
 def create_course(db: Session, user: User, data: CourseCreate) -> Course:
+    active_faculty(db, data.faculty_id)
     course = Course(
+        faculty_id=data.faculty_id,
         name=data.name.strip(),
         code=data.code.strip() if data.code else None,
         description=data.description.strip() if data.description else None,
@@ -68,3 +73,32 @@ def delete_course(db: Session, user: User, course_id: UUID) -> None:
     course = get_owner_course(db, user, course_id)
     db.delete(course)
     db.commit()
+
+
+def join_course(db: Session, user: User, course_id: UUID) -> CourseMembership:
+    try:
+        # Shared locks keep catalog availability stable until enrollment commits.
+        course = db.scalar(
+            select(Course)
+            .join(Faculty)
+            .where(Course.id == course_id, Course.is_active.is_(True), Faculty.is_active.is_(True))
+            .with_for_update(read=True, of=(Faculty, Course))
+        )
+        if course is None:
+            raise HTTPException(404, "Course not found")
+        db.execute(
+            insert(CourseMembership)
+            .values(course_id=course_id, user_id=user.id, role=MembershipRole.MEMBER.value)
+            .on_conflict_do_nothing(constraint="uq_course_membership_course_user")
+        )
+        membership = db.scalar(
+            select(CourseMembership).where(
+                CourseMembership.course_id == course_id, CourseMembership.user_id == user.id
+            )
+        )
+        assert membership is not None
+        db.commit()
+        return membership
+    except Exception:
+        db.rollback()
+        raise

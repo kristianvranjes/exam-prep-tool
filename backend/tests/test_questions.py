@@ -357,7 +357,10 @@ def test_foreign_provenance_and_deterministic_dedup(questions, monkeypatch):
     from app.services import retrieval
 
     d = questions
-    foreign = d.outsider.post("/courses", json={"name": "Private"}).json()["id"]
+    foreign = d.outsider.post(
+        "/courses",
+        json={"name": "Private", "faculty_id": d.outsider.get("/faculties").json()[0]["id"]},
+    ).json()["id"]
     with SessionLocal() as db:
         concept = Concept(
             course_id=UUID(foreign),

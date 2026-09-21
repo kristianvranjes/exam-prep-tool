@@ -153,7 +153,9 @@ def test_user_history_progress_active_and_course_isolation(bank):
         assert (
             anonymous.post(path, json={"count": 1, "selection_mode": "ADAPTIVE"}).status_code == 401
         )
-    other = member.post("/courses", json={"name": "Empty"}).json()["id"]
+    other = member.post(
+        "/courses", json={"name": "Empty", "faculty_id": member.get("/faculties").json()[0]["id"]}
+    ).json()["id"]
     assert (
         member.post(
             f"/courses/{other}/attempts", json={"count": 1, "selection_mode": "ADAPTIVE"}

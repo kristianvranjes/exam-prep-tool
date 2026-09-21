@@ -20,7 +20,7 @@ On a disposable database, `python -m alembic downgrade 0003` rolls back only Pha
 upgrading to head also applies later revisions.
 
 `users` stores normalized unique email addresses, Argon2 password hashes, display
-names, active state and timestamps. `courses` stores course metadata and creator.
+names, active state and timestamps. `courses` stores course metadata, creator, faculty and active state.
 `course_memberships` is an explicit user/course join table with OWNER or MEMBER
 roles and a unique `(course_id, user_id)` constraint. Memberships cascade when a
 course or user is removed; a course creator reference is restricted.
@@ -128,3 +128,33 @@ without changing grades, payloads or timestamps; ACTIVE answers retain null meta
 New submissions persist `deterministic-v1`. Downgrade drops only the two columns and
 constraint, preserving answers/results but losing provenance. Re-upgrade marks
 submitted results legacy again. See [PRACTICE.md](PRACTICE.md) for grading and backfill.
+
+
+## Faculty catalog migration 0010
+
+Revision 0010 follows 0009. `faculties` stores UUID id, name (1-150 characters,
+nonblank), unique stable normalized slug (1-100 lowercase ASCII letters/digits with
+single hyphens between segments), optional university_name (up to 200 characters),
+is_active (default true), and created/updated timestamps. Names are not unique.
+Slugs are explicit identifiers; renaming a faculty does not regenerate its slug.
+No faculty write endpoint is introduced.
+
+Every course has a non-null indexed `faculty_id`, referencing faculties with
+ON DELETE RESTRICT, and `is_active` default true. Deactivate a faculty instead of
+deleting one with courses. No course-child foreign key or identifier is changed.
+
+The migration always seeds UUID `00000000-0000-0000-0000-000000000010`, named
+**Legacy / Unassigned**, slug `legacy-unassigned`. It assigns all existing courses
+to that faculty in place before making the FK non-null. It makes no assumption
+about their actual university/faculty; trusted maintenance can later reassign them.
+New course creation must explicitly select an active faculty, including the legacy
+faculty if desired; there is no implicit database/API default for faculty_id.
+
+`alembic downgrade 0009` removes the new faculty relationship, active flag and
+faculty table, **without deleting courses or any child data**. Faculty assignments,
+faculty metadata and course active flags are lost on downgrade; upgrading again
+places all retained courses under the deterministic legacy faculty as active.
+Use migration roundtrips only on disposable PostgreSQL. The latest CI roundtrip is
+0009 -> 0010 -> 0009 -> 0010 with preservation checks; base -> head remains in CI.
+Membership/material/question/quiz/answer/progress records and course IDs survive
+this latest roundtrip unchanged.

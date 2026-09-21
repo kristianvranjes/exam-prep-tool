@@ -65,7 +65,10 @@ def data(monkeypatch):
                 ).status_code
                 == 201
             )
-        course = owner.post("/courses", json={"name": "Retrieval"}).json()["id"]
+        course = owner.post(
+            "/courses",
+            json={"name": "Retrieval", "faculty_id": owner.get("/faculties").json()[0]["id"]},
+        ).json()["id"]
         member_id = member.get("/auth/me").json()["id"]
         with SessionLocal() as db:
             db.add(CourseMembership(course_id=UUID(course), user_id=UUID(member_id), role="MEMBER"))
@@ -155,7 +158,10 @@ def test_failure_rolls_back_whole_refresh(data, existing):
 
 def test_search_order_cosine_ties_and_course_isolation(data):
     d = data
-    other = d.outsider.post("/courses", json={"name": "Private"}).json()["id"]
+    other = d.outsider.post(
+        "/courses",
+        json={"name": "Private", "faculty_id": d.outsider.get("/faculties").json()[0]["id"]},
+    ).json()["id"]
     other_material = add_material(other, d.outsider.get("/auth/me").json()["id"], ["alpha"])
     assert d.outsider.post(f"/materials/{other_material}/embeddings").status_code == 200
     assert d.member.post(d.embed).status_code == 200

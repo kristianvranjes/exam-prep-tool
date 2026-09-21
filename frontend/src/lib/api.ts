@@ -1,5 +1,6 @@
 export type User = { id: string; email: string; display_name: string; is_active: boolean; created_at: string };
-export type Course = { id: string; name: string; code: string | null; description: string | null; created_by_user_id: string; created_at: string; updated_at: string };
+export type Faculty = { id: string; name: string; slug: string; university_name: string | null };
+export type Course = { id: string; faculty_id: string; is_active: boolean; name: string; code: string | null; description: string | null; created_by_user_id: string; created_at: string; updated_at: string };
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
@@ -15,6 +16,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 }
 
 export const api = {
+  faculties: () => request<Faculty[]>("/faculties"),
   reviewProgress: (courseId: string, offset = 0) => request<ReviewProgress[]>(`/courses/${courseId}/review-progress?limit=20&offset=${offset}`),
   membership: (courseId: string) => request<{ role: "OWNER" | "MEMBER" }>(`/courses/${courseId}/membership`),
   concepts: (courseId: string, materialId?: string) => request<Concept[]>(`/courses/${courseId}/concepts${materialId ? `?material_id=${encodeURIComponent(materialId)}` : ""}`),
@@ -46,7 +48,7 @@ export const api = {
   logout: () => request<void>("/auth/logout", { method: "POST" }),
   courses: () => request<Course[]>("/courses"),
   course: (id: string) => request<Course>(`/courses/${id}`),
-  createCourse: (body: { name: string; code?: string; description?: string }) => request<Course>("/courses", { method: "POST", body: JSON.stringify(body) }),
+  createCourse: (body: { faculty_id: string; name: string; code?: string; description?: string }) => request<Course>("/courses", { method: "POST", body: JSON.stringify(body) }),
 };
 
 export type Material = { id: string; course_id: string; uploaded_by_user_id: string; original_filename: string; media_type: string; file_size_bytes: number; status: 'UPLOADED' | 'PROCESSING' | 'READY' | 'FAILED'; processing_error: string | null; created_at: string; updated_at: string };

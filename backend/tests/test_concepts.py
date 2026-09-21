@@ -40,7 +40,10 @@ def setup(monkeypatch):
                 ).status_code
                 == 201
             )
-        course = owner.post("/courses", json={"name": "Concepts"}).json()["id"]
+        course = owner.post(
+            "/courses",
+            json={"name": "Concepts", "faculty_id": owner.get("/faculties").json()[0]["id"]},
+        ).json()["id"]
         member_id = member.get("/auth/me").json()["id"]
         with SessionLocal() as db:
             db.add(CourseMembership(course_id=UUID(course), user_id=UUID(member_id), role="MEMBER"))
