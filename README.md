@@ -1,12 +1,16 @@
 # ExamPrep
 
+Phase 7 adds [practice quizzes and persisted attempts](docs/PRACTICE.md). Open a course,
+choose **Open practice quizzes**, answer approved questions, save progress, and submit
+for deterministic MCQ/true-false results. Short answers remain pending grading.
+
 Phase 6.6 adds [external AI quiz import](docs/QUIZ_IMPORT.md): import versioned JSON as drafts,
 then use human review. This temporary staging bypass needs no AI provider or embeddings.
 Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
 configuration below applies when explicitly enabling that pipeline.
 
-A local-first university exam preparation platform. **Implemented scope: issue #11,
-Phase 6 — a retrieval-grounded question bank with OWNER review.**
+A local-first university exam preparation platform. **Implemented scope: through issue #20,
+Phase 7 — practice sessions, persisted attempts, and deterministic grading.**
 
 Phase 6.5 prepares **Vercel + Railway + managed PostgreSQL/pgvector staging** without
 deploying resources. Follow [the exact staging guide](docs/STAGING.md) for required
@@ -221,8 +225,8 @@ Choose a draft to inspect its answer, concepts, material/chunk references and hi
 Edit as needed, **Submit for review**, then **Approve question** or provide a reason
 to **Reject question**. Editing rejected content returns it to DRAFT. Approved
 content can only be archived; archived content cannot be reopened. AI never approves.
-MEMBER sees only approved questions without answers or review controls. There is
-no quiz-taking, answering or grading in this phase.
+MEMBER sees only approved questions without answers or review controls. Quiz-taking
+and deterministic grading are available separately through Phase 7 practice quizzes.
 
 Generation uses the configured AIProvider: laptop development → FreeLLMAPI;
 home PC → Ollama/Qwen; future production/demo → an explicitly supported provider.

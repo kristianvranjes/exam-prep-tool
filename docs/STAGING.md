@@ -158,7 +158,7 @@ python -m alembic upgrade head
 python -m alembic current
 ```
 
-Expected head is 0006. Enable the Railway HTTPS public domain after configuration,
+Expected head is 0007 (Phase 7 practice attempts). Enable the Railway HTTPS public domain after configuration,
 then verify `/health` and `/health/db` before building the frontend. `/health` is
 process liveness, `/health/db` executes a short DB query and returns safe 503 on
 failure. Neither exposes configuration or depends on AI/embeddings. Railway's

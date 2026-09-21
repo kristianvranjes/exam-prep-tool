@@ -1,0 +1,85 @@
+from collections.abc import Sequence
+from datetime import datetime
+from typing import Annotated, Literal, Self
+from uuid import UUID
+
+from pydantic import BaseModel, Field, model_validator
+
+from app.schemas.question import OwnerOption, PublicOption, QuestionType, StrictModel, Text
+
+
+def default_types() -> list[QuestionType]:
+    return ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]
+
+
+class StartQuiz(StrictModel):
+    count: int = Field(default=5, ge=1, le=20)
+    question_types: list[QuestionType] = Field(
+        default_factory=default_types,
+        min_length=1,
+        max_length=3,
+    )
+
+    @model_validator(mode="after")
+    def unique_types(self) -> Self:
+        if len(set(self.question_types)) != len(self.question_types):
+            raise ValueError("Question types must be unique")
+        return self
+
+
+class MCQAnswer(StrictModel):
+    type: Literal["MULTIPLE_CHOICE"]
+    option_position: int = Field(ge=0, le=5)
+
+
+class BooleanAnswer(StrictModel):
+    type: Literal["TRUE_FALSE"]
+    value: bool
+
+
+class TextAnswer(StrictModel):
+    type: Literal["SHORT_ANSWER"]
+    text: Text
+
+
+AnswerPayload = Annotated[MCQAnswer | BooleanAnswer | TextAnswer, Field(discriminator="type")]
+Grade = Literal["PENDING", "CORRECT", "INCORRECT"]
+
+
+class AttemptSummary(BaseModel):
+    id: UUID
+    course_id: UUID
+    status: Literal["ACTIVE", "SUBMITTED"]
+    started_at: datetime
+    submitted_at: datetime | None
+
+
+class ActiveQuestion(BaseModel):
+    id: UUID
+    position: int
+    type: QuestionType
+    stem: str
+    difficulty: int | None
+    options: Sequence[PublicOption]
+    answer: AnswerPayload | None
+
+
+class ResultQuestion(ActiveQuestion):
+    options: list[OwnerOption]
+    explanation: str | None
+    correct_boolean: bool | None
+    reference_answer: str | None
+    grading_status: Grade
+
+
+class ActiveAttempt(AttemptSummary):
+    status: Literal["ACTIVE"] = "ACTIVE"
+    questions: list[ActiveQuestion]
+
+
+class SubmittedAttempt(AttemptSummary):
+    status: Literal["SUBMITTED"] = "SUBMITTED"
+    questions: list[ResultQuestion]
+
+
+AttemptResponse = Annotated[ActiveAttempt | SubmittedAttempt, Field(discriminator="status")]

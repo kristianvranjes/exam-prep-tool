@@ -106,3 +106,17 @@ head` restores it. `alembic downgrade base` followed by `alembic upgrade head`
 also verifies extension removal/recreation and Phase 5's vector column/check.
 Migration/model parity and real PostgreSQL check/unique/FK/cascade tests are part
 of the suite. See [QUESTIONS.md](QUESTIONS.md) for transaction and lock semantics.
+
+Revision **0007** adds `quizzes`, `quiz_questions`, `quiz_attempts`, and `answers`.
+Each private course/user quiz has one attempt and ordered JSONB question snapshots.
+Snapshots retain source UUID/version without a live Question Bank foreign key.
+Unique constraints enforce one attempt per quiz, one question per quiz position,
+and one answer per attempt/question. Checks constrain positions, attempt state,
+submission timestamps, and grading status. Services enforce question/attempt
+ownership and serialize saves, reads, and submission using the attempt row lock.
+Course/user deletion cascades quizzes; Question Bank edits/deletion leave them intact.
+See [PRACTICE.md](PRACTICE.md) for lifecycle, answer visibility, and grading rules.
+
+On a disposable database, `alembic downgrade 0006` drops only the four Phase 7
+tables and their attempt data; `alembic upgrade head` recreates them. CI checks
+that roundtrip, reruns practice database tests, and checks the full base/head roundtrip.
