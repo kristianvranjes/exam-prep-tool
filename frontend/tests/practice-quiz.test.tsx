@@ -40,7 +40,7 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
   fireEvent.change(screen.getByLabelText("Practice question count"), { target: { value: "3" } });
   fireEvent.click(screen.getByRole("button", { name: "Start practice quiz" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 3, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]);
+  expect(mock.start).toHaveBeenCalledWith("course", 3, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "STANDARD");
   expect(screen.queryByText(/Correct answer:|Reference answer:|Pending \/ ungraded/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("One"));
   fireEvent.click(screen.getByRole("button", { name: "Save answer" }));
@@ -99,7 +99,7 @@ it("supports type filters and refuses an empty selection", async () => {
   expect(mock.start).not.toHaveBeenCalled();
   fireEvent.click(screen.getByLabelText("True / false"));
   fireEvent.click(screen.getByRole("button", { name: "Start practice quiz" }));
-  await waitFor(() => expect(mock.start).toHaveBeenCalledWith("course", 5, ["TRUE_FALSE"]));
+  await waitFor(() => expect(mock.start).toHaveBeenCalledWith("course", 5, ["TRUE_FALSE"], "STANDARD"));
 });
 
 it("reloads the saved selection even when the current draft differs", async () => {
@@ -156,4 +156,17 @@ it.each(["CORRECT", "PENDING"] as const)("reviews a frozen %s short answer after
   expect(screen.queryByText(/score|%/i)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Save answer" })).not.toBeInTheDocument();
   expect(mock.submit).not.toHaveBeenCalled();
+});
+
+it("launches adaptive review with the existing count and type controls", async () => {
+  render(<PracticeQuiz courseId="course" />);
+  await open();
+  expect(screen.getByLabelText("Standard practice")).toBeChecked();
+  fireEvent.click(screen.getByLabelText("Adaptive review"));
+  expect(screen.getByText(/Due questions first, then unseen/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Practice question count"), { target: { value: "2" } });
+  mock.start.mockRejectedValue(new Error("Only 1 eligible approved questions available"));
+  fireEvent.click(screen.getByRole("button", { name: "Start practice quiz" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Only 1 eligible");
+  expect(mock.start).toHaveBeenCalledWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE");
 });

@@ -1,5 +1,9 @@
 # ExamPrep
 
+Phase 9B adds **Adaptive review** in the practice launcher: due questions first,
+then truly unseen questions, then deterministic fallback. Standard practice remains
+the default. See [selection rules](docs/PRACTICE.md#adaptive-quiz-selection-phase-9b).
+
 Phase 9A adds private [question review progress](docs/PRACTICE.md#question-review-progress-phase-9a)
 and deterministic review scheduling. Open **Review progress** in a course after
 submitting practice answers. Pending answers leave progress unchanged; existing
@@ -15,8 +19,8 @@ then use human review. This temporary staging bypass needs no AI provider or emb
 Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
 configuration below applies when explicitly enabling that pipeline.
 
-A local-first university exam preparation platform. **Implemented scope: through issue #25,
-Phase 9A — question-first progress and deterministic review scheduling.**
+A local-first university exam preparation platform. **Implemented scope: through issue #27,
+Phase 9B — deterministic adaptive quiz selection from review progress.**
 
 Phase 6.5 prepares **Vercel + Railway + managed PostgreSQL/pgvector staging** without
 deploying resources. Follow [the exact staging guide](docs/STAGING.md) for required

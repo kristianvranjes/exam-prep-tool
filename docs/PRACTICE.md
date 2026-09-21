@@ -174,7 +174,7 @@ through its questions. Archiving retains progress. Missing/deleted sources are
 skipped during scheduling but their immutable attempts still grade normally.
 Historical quiz snapshots retain their existing independence from live questions.
 
-Phase 9B will handle due/adaptive selection and source eligibility. This phase
+Phase 9B below adds due/adaptive selection and source eligibility. Phase 9A
 does not change oldest-first quiz selection or add mastery, analytics or reminders.
 
 ### Staging smoke
@@ -187,3 +187,42 @@ For a short-answer question, first submit the exact reference, then a nonmatchin
 answer in a new attempt: PENDING must leave its entire progress row unchanged.
 Refresh the page/panel and repeat a submitted attempt's submit request: counts
 and due times stay stable. Another course member must see only their own progress.
+
+
+## Adaptive quiz selection (Phase 9B)
+
+The existing start endpoint accepts `selection_mode`: `STANDARD` (default when
+omitted) or `ADAPTIVE`. Standard practice keeps oldest-approved creation/id order,
+including questions already in active attempts. Count and type filters are unchanged.
+
+Adaptive review uses one UTC selection timestamp captured after acquiring the
+user lock, and ranks only current APPROVED questions in the requested course/types:
+
+1. Resolved progress due at or before selection time, earliest due_at first.
+2. Truly unseen questions, ordered by question created_at then id.
+3. Remaining scheduled questions, earliest future due_at first, followed by seen
+   questions without progress. Creation time then id break all remaining ties.
+
+Unseen means no source-question occurrence in **any quiz for this user**. A
+PENDING-only short answer has been seen even though it has no progress row.
+Adaptive mode excludes every source in this user's ACTIVE attempts. Other users'
+history, active attempts and progress never influence the ranking. If fewer
+eligible questions remain than requested, start returns the existing clear 409.
+
+All starts serialize on the current user row so concurrent adaptive starts see
+each other's committed active questions. Shared source locks protect snapshot
+creation from edits/archive/delete while permitting readers with different rankings.
+Starting never mutates progress; submission alone retains Phase 9A scheduling,
+atomicity and idempotency. Archived/deleted sources are ineligible for new quizzes,
+while historical snapshots and results remain frozen and readable.
+
+Select **Standard practice** or **Adaptive review** in the existing launcher.
+Adaptive review requires no concepts, embeddings or AI; imported zero-concept
+questions work identically. No migration, selection-mode persistence, randomized
+selection or scheduling-interval changes are introduced.
+
+Staging smoke: prepare one overdue reviewed question, one never-presented question,
+and one future-scheduled question. Adaptive count 3 should return them in that order.
+While that attempt remains active, another adaptive start must exclude all three.
+Check review progress before/after start: every field should be unchanged. Submit
+and verify the normal resolved/PENDING scheduling behavior and repeat-submit stability.

@@ -13,6 +13,7 @@ def default_types() -> list[QuestionType]:
 
 
 class StartQuiz(StrictModel):
+    selection_mode: Literal["STANDARD", "ADAPTIVE"] = "STANDARD"
     count: int = Field(default=5, ge=1, le=20)
     question_types: list[QuestionType] = Field(
         default_factory=default_types,

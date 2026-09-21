@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { QuestionType } from "../lib/api";
-import { practiceApi, type Attempt, type AttemptSummary, type ActiveQuestion, type PracticeAnswer } from "../lib/practice-api";
+import { practiceApi, type Attempt, type AttemptSummary, type ActiveQuestion, type PracticeAnswer, type SelectionMode } from "../lib/practice-api";
 
 const types: { type: QuestionType; label: string }[] = [
   { type: "MULTIPLE_CHOICE", label: "Multiple choice" },
@@ -17,6 +17,7 @@ export function PracticeQuiz({ courseId }: { courseId: string }) {
   const [offset, setOffset] = useState(0);
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [count, setCount] = useState(5);
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>("STANDARD");
   const [selectedTypes, setSelectedTypes] = useState<QuestionType[]>(types.map(t => t.type));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -41,8 +42,13 @@ export function PracticeQuiz({ courseId }: { courseId: string }) {
       {!attempt && <>
         <form className="space-y-3" onSubmit={event => { event.preventDefault(); void run(async () => {
           if (!selectedTypes.length) throw new Error("Select at least one question type.");
-          setAttempt(await practiceApi.start(courseId, count, selectedTypes)); setIndex(0);
+          setAttempt(await practiceApi.start(courseId, count, selectedTypes, selectionMode)); setIndex(0);
         }); }}>
+          <fieldset><legend>Practice mode</legend>
+            <label className="mr-4"><input type="radio" name="selection-mode" checked={selectionMode === "STANDARD"} onChange={() => setSelectionMode("STANDARD")} /> Standard practice</label>
+            <label><input type="radio" name="selection-mode" checked={selectionMode === "ADAPTIVE"} onChange={() => setSelectionMode("ADAPTIVE")} /> Adaptive review</label>
+          </fieldset>
+          {selectionMode === "ADAPTIVE" && <p>Due questions first, then unseen questions, then other approved questions. Questions in your active attempts are excluded.</p>}
           <label className="block">Practice question count<input className="ml-3 w-20 rounded border p-2" type="number" min={1} max={20} required value={count} onChange={e => setCount(Number(e.target.value))} /></label>
           <fieldset className="space-y-2"><legend>Question types</legend>{types.map(t => <label key={t.type} className="block"><input type="checkbox" checked={selectedTypes.includes(t.type)} onChange={e => setSelectedTypes(current => e.target.checked ? [...current, t.type] : current.filter(type => type !== t.type))} /> {t.label}</label>)}</fieldset>
           <button className={button} disabled={busy}>Start practice quiz</button>

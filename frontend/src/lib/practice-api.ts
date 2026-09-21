@@ -1,5 +1,7 @@
 import { request, type QuestionType } from "./api";
 
+export type SelectionMode = "STANDARD" | "ADAPTIVE";
+
 export type PracticeAnswer =
   | { type: "MULTIPLE_CHOICE"; option_position: number }
   | { type: "TRUE_FALSE"; value: boolean }
@@ -24,7 +26,7 @@ export type Attempt = AttemptSummary & (
 const path = (course: string) => `/courses/${course}/attempts`;
 export const practiceApi = {
   history: (course: string, offset = 0) => request<AttemptSummary[]>(`${path(course)}?limit=20&offset=${offset}`),
-  start: (course: string, count: number, question_types: QuestionType[]) => request<Attempt>(path(course), { method: "POST", body: JSON.stringify({ count, question_types }) }),
+  start: (course: string, count: number, question_types: QuestionType[], selection_mode: SelectionMode = "STANDARD") => request<Attempt>(path(course), { method: "POST", body: JSON.stringify({ count, question_types, selection_mode }) }),
   read: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}`),
   save: (course: string, id: string, question: string, answer: PracticeAnswer) => request<Attempt>(`${path(course)}/${id}/answers/${question}`, { method: "PATCH", body: JSON.stringify(answer) }),
   submit: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/submit`, { method: "POST" }),

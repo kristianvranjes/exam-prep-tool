@@ -9,6 +9,8 @@ from app.services.grading import grade
 @pytest.mark.parametrize(
     "data",
     [
+        {"selection_mode": "UNKNOWN"},
+        {"selection_mode": None},
         {"count": 0},
         {"count": 21},
         {"count": True},
@@ -69,3 +71,8 @@ def test_deterministic_grading(payload, expected):
         ],
     )
     assert grade(content, TypeAdapter(AnswerPayload).validate_python(payload)).status == expected
+
+
+def test_selection_mode_defaults_to_standard():
+    assert StartQuiz().selection_mode == "STANDARD"
+    assert StartQuiz(selection_mode="ADAPTIVE").selection_mode == "ADAPTIVE"
