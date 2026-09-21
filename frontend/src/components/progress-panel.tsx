@@ -1,46 +1,44 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { ProgressResponse } from '@/lib/api';
+"use client";
 
-interface ProgressPanelProps {
-  courseId: string;
-  userId: string;
+import { useState } from "react";
+import { api, type ReviewProgress } from "../lib/api";
+
+export function ProgressPanel({ courseId }: { courseId: string }) {
+  const [rows, setRows] = useState<ReviewProgress[] | null>(null);
+  const [offset, setOffset] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [checkedAt, setCheckedAt] = useState(0);
+
+  async function load(nextOffset = 0) {
+    setBusy(true); setError("");
+    try {
+      const result = await api.reviewProgress(courseId, nextOffset);
+      setRows(result); setOffset(nextOffset); setCheckedAt(Date.now());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load review progress.");
+      setRows(null);
+    } finally { setBusy(false); }
+  }
+
+  return <section className="mt-6 space-y-3 border-t pt-6" aria-label="Review progress">
+    <h3 className="text-lg font-semibold">Review progress</h3>
+    <button className="rounded border px-3 py-2 disabled:opacity-50" disabled={busy} onClick={() => void load()}>
+      {busy ? "Loading review progress…" : rows ? "Refresh review progress" : "Open review progress"}
+    </button>
+    {error && <p role="alert" className="text-red-700">{error}</p>}
+    {rows && <>
+      <p className="text-sm text-neutral-600">Resolved reviews only. Pending answers leave your schedule unchanged. Due state as of {new Date(checkedAt).toLocaleString()}.</p>
+      {!rows.length && <p>{offset ? "No more reviewed questions." : "No reviewed questions yet. Submit a practice quiz to begin."}</p>}
+      <ul className="space-y-3">{rows.map(row => <li key={row.question_id} className="rounded border p-3">
+        <p className="break-all text-sm">Question {row.question_id}</p>
+        <p>Stage {row.review_stage} · Last result: {row.last_result === "CORRECT" ? "Correct" : "Incorrect"}</p>
+        <p>{new Date(row.due_at).getTime() <= checkedAt ? "Due now" : "Upcoming"} · Next review: <time dateTime={row.due_at}>{new Date(row.due_at).toLocaleString()}</time></p>
+      </li>)}</ul>
+      <div className="flex gap-2">
+        <button disabled={busy || offset === 0} onClick={() => void load(offset - 20)}>Previous reviews</button>
+        <button disabled={busy || rows.length < 20 || offset >= 10000} onClick={() => void load(offset + 20)}>More reviews</button>
+      </div>
+    </>}
+  </section>;
 }
-
-const ProgressPanel: React.FC<ProgressPanelProps> = ({ courseId, userId }) => {
-  const { data: progressData, isLoading, error } = useQuery({
-    queryKey: ['courseProgress', courseId, userId],
-    queryFn: async () => {
-      const response = await fetch(`/api/courses/${courseId}/progress?user_id=${userId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch progress data');
-      }
-      return response.json() as Promise<ProgressResponse[]>;
-    },
-  });
-
-  if (isLoading) return <div>Loading progress...</div>;
-  if (error) return <div>Error loading progress: {error.message}</div>;
-
-  return (
-    <div className="p-4 border rounded-lg">
-      <h2 className="text-lg font-semibold mb-4">Review Progress</h2>
-      {progressData && progressData.length > 0 ? (
-        <ul className="space-y-2">
-          {progressData.map((progress) => (
-            <li key={progress.source_question_id} className="p-2 border rounded">
-              <div>Question ID: {progress.source_question_id}</div>
-              <div>Stage: {progress.stage}</div>
-              <div>Due At: {progress.due_at ? new Date(progress.due_at).toLocaleString() : 'N/A'}</div>
-              <div>Last Attempted: {progress.last_attempted_at ? new Date(progress.last_attempted_at).toLocaleString() : 'N/A'}</div>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div>No progress data available.</div>
-      )}
-    </div>
-  );
-};
-
-export default ProgressPanel;

@@ -1,76 +1,25 @@
-from datetime import datetime
-from typing import Optional
+"""Pure, versioned transitions based only on resolved results and submission time."""
 
-from sqlalchemy.orm import Session
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 
-from app.models.user_question_progress import UserQuestionProgress, calculate_due_date
-from app.models.quiz import Answer
+from app.schemas.quiz import Grade
+
+SCHEDULING_VERSION = "leitner-v1"
+DELAYS = (timedelta(minutes=10), *(timedelta(days=n) for n in (1, 3, 7, 14, 30)))
 
 
-class SchedulingService:
-    def __init__(self, db: Session):
-        self.db = db
+@dataclass(frozen=True)
+class Schedule:
+    review_stage: int
+    due_at: datetime
+    scheduling_version: str = SCHEDULING_VERSION
 
-    def update_progress(self, user_id: str, source_question_id: str, grading_status: str, submission_timestamp: datetime) -> UserQuestionProgress:
-        """
-        Update the progress for a user-question pair based on the grading status.
 
-        Args:
-            user_id: The ID of the user.
-            source_question_id: The ID of the source question.
-            grading_status: The grading status ("CORRECT", "INCORRECT", "PENDING").
-            submission_timestamp: The timestamp of the submission.
-
-        Returns:
-            The updated UserQuestionProgress record.
-        """
-        progress = self.db.query(UserQuestionProgress).filter(
-            UserQuestionProgress.user_id == user_id,
-            UserQuestionProgress.source_question_id == source_question_id,
-        ).first()
-
-        if progress is None:
-            # Create a new progress record if it doesn't exist
-            progress = UserQuestionProgress(
-                user_id=user_id,
-                source_question_id=source_question_id,
-                stage=0,
-                last_attempted_at=submission_timestamp,
-            )
-            self.db.add(progress)
-        else:
-            # Update the last_attempted_at timestamp
-            progress.last_attempted_at = submission_timestamp
-
-        if grading_status == "PENDING":
-            # PENDING is a strict no-op
-            return progress
-
-        # Update stage and due_at based on grading status
-        if grading_status == "INCORRECT":
-            progress.stage = 0
-        elif grading_status == "CORRECT":
-            progress.stage = min(progress.stage + 1, 5)
-
-        # Calculate the new due date
-        progress.due_at = calculate_due_date(progress.stage, submission_timestamp)
-
-        self.db.commit()
-        self.db.refresh(progress)
-        return progress
-
-    def get_progress(self, user_id: str, source_question_id: str) -> Optional[UserQuestionProgress]:
-        """
-        Retrieve the progress for a user-question pair.
-
-        Args:
-            user_id: The ID of the user.
-            source_question_id: The ID of the source question.
-
-        Returns:
-            The UserQuestionProgress record, or None if not found.
-        """
-        return self.db.query(UserQuestionProgress).filter(
-            UserQuestionProgress.user_id == user_id,
-            UserQuestionProgress.source_question_id == source_question_id,
-        ).first()
+def schedule(previous_stage: int, result: Grade, submitted_at: datetime) -> Schedule | None:
+    if result == "PENDING":
+        return None
+    if not 0 <= previous_stage <= 5:
+        raise ValueError("Review stage must be between 0 and 5")
+    stage = min(previous_stage + 1, 5) if result == "CORRECT" else 0
+    return Schedule(stage, submitted_at + DELAYS[stage])
