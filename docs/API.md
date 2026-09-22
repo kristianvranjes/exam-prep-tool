@@ -59,10 +59,19 @@ detail/chunk access by non-members. Missing material IDs return 404.
   and chunk_count.
 - `GET /materials/{material_id}/chunks`: ordered chunks with id, material_id,
   section_id, ordinal, content and char_count, for inspection.
+- `DELETE /materials/{material_id}`: removes a FAILED material uploaded by the
+  authenticated user. Returns 204 on success, 401 without a valid session, 404 for a
+  non-member/missing material, 403 when another member owns the material, and 409 for
+  non-FAILED statuses. READY deletion remains intentionally out of scope.
 
 Metadata includes id, course_id, uploaded_by_user_id, original_filename, media_type,
 file_size_bytes, status, processing_error and timestamps; private storage keys and
 paths are not returned. Sections contain id, ordinal, title, level and content.
+The delete path is uploader-owned and FAILED-only: it deletes the source from the
+private storage and then deletes the DB row. If storage or DB deletion fails, it
+returns safe 503 without exposing internal details. The DB transaction is rolled back
+on failure so the row remains; the source may already be absent because storage delete
+is missing-safe, and a retry is safe to reattempt.
 400 means empty file/invalid filename length, 415 unsupported extension/MIME/signature,
 413 size exceeded, 422 malformed multipart fields, and 503 unavailable storage or
 initial metadata persistence. Failed extraction has a fixed safe message and no

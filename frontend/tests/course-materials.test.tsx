@@ -5,7 +5,7 @@ import { formatFileSize } from "../src/components/material-format";
 import type { Material, MaterialDetail } from "../src/lib/api";
 vi.mock("../src/components/concept-review", () => ({ ConceptReview: ({ materialId }: { materialId: string }) => <section aria-label="Concept review">Concepts for {materialId}</section> }));
 
-const mock = vi.hoisted(() => ({ materials: vi.fn(), material: vi.fn(), uploadMaterial: vi.fn() }));
+const mock = vi.hoisted(() => ({ materials: vi.fn(), material: vi.fn(), uploadMaterial: vi.fn(), deleteMaterial: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 const material: Material = { id: "m1", course_id: "course-1", uploaded_by_user_id: "user", original_filename: "notes.pdf", media_type: "application/pdf", file_size_bytes: 1400, status: "READY", processing_error: null, created_at: "2026-01-01", updated_at: "2026-01-01" };
 const detail: MaterialDetail = { ...material, sections: [], chunk_count: 2, extracted_markdown: "<script>untrusted</script>\n  keep spacing" };
@@ -16,8 +16,8 @@ function deferred<T>() {
   const promise = new Promise<T>(done => { resolve = done; });
   return { promise, resolve };
 }
-async function ready() {
-  render(<CourseMaterials courseId="course-1" />);
+async function ready(currentUserId = "user") {
+  render(<CourseMaterials courseId="course-1" currentUserId={currentUserId} />);
   await waitFor(() => expect(screen.getByLabelText("PDF file")).toBeEnabled());
 }
 function choose(file = pdf()) {
@@ -200,6 +200,63 @@ it("ignores a stale detail response when another material is opened", async () =
   await screen.findByRole("article", { name: "Material details: other.pdf" });
   await act(async () => pending.resolve(detail));
   expect(screen.queryByRole("article", { name: "Material details: notes.pdf" })).not.toBeInTheDocument();
+});
+
+it("shows remove failed upload for the current uploader and hides it for others", async () => {
+  mock.materials.mockResolvedValue([
+    { ...material, id: "failed-own", uploaded_by_user_id: "user", status: "FAILED", processing_error: "Could not extract text." },
+    { ...material, id: "failed-other", uploaded_by_user_id: "other-user", status: "FAILED", original_filename: "other.pdf" },
+    { ...material, id: "ready", uploaded_by_user_id: "user", status: "READY", original_filename: "ready.pdf" },
+  ]);
+  await ready("user");
+  expect(screen.getAllByRole("button", { name: "Remove failed upload" })).toHaveLength(1);
+  expect(screen.getByText("Could not extract text.")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Remove failed upload" })).toBeInTheDocument();
+});
+
+it("cancelling confirmation makes no delete API call", async () => {
+  mock.deleteMaterial.mockResolvedValue(undefined);
+  mock.materials.mockResolvedValue([{ ...material, id: "failed-own", uploaded_by_user_id: "user", status: "FAILED", original_filename: "failed.pdf" }]);
+  await ready("user");
+  fireEvent.click(screen.getByRole("button", { name: "Remove failed upload" }));
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(mock.deleteMaterial).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "Confirm remove" })).not.toBeInTheDocument();
+  expect(screen.getByText("failed.pdf")).toBeInTheDocument();
+});
+
+it("confirms deletion and clears an already-open detail while a delete is pending", async () => {
+  const pending = deferred<void>();
+  mock.deleteMaterial.mockReturnValue(pending.promise);
+  mock.materials.mockResolvedValue([{ ...material, id: "failed-own", uploaded_by_user_id: "user", status: "FAILED", original_filename: "failed.pdf" }]);
+  mock.material.mockResolvedValue({ ...detail, id: "failed-own", status: "FAILED", processing_error: "Could not extract text.", original_filename: "failed.pdf" });
+  await ready("user");
+  fireEvent.click(screen.getByRole("button", { name: "View details: failed.pdf" }));
+  await screen.findByRole("article", { name: "Material details: failed.pdf" });
+  fireEvent.click(screen.getByRole("button", { name: "Remove failed upload" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
+  expect(mock.deleteMaterial).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("button", { name: "Removing…" })).toBeDisabled();
+  await act(async () => pending.resolve());
+  await waitFor(() => expect(screen.queryByText("failed.pdf")).not.toBeInTheDocument());
+  expect(screen.queryByRole("article", { name: "Material details: failed.pdf" })).not.toBeInTheDocument();
+});
+
+it("preserves state after a failed delete and allows retry through the normal UI", async () => {
+  mock.deleteMaterial.mockRejectedValueOnce(new Error("Delete failed")).mockResolvedValueOnce(undefined);
+  mock.materials.mockResolvedValue([{ ...material, id: "failed-own", uploaded_by_user_id: "user", status: "FAILED", original_filename: "failed.pdf" }]);
+  mock.material.mockResolvedValue({ ...detail, id: "failed-own", status: "FAILED", processing_error: "Could not extract text.", original_filename: "failed.pdf" });
+  await ready("user");
+  fireEvent.click(screen.getByRole("button", { name: "View details: failed.pdf" }));
+  await screen.findByRole("article", { name: "Material details: failed.pdf" });
+  fireEvent.click(screen.getByRole("button", { name: "Remove failed upload" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Delete failed");
+  expect(screen.getAllByText("failed.pdf")).toHaveLength(2);
+  expect(screen.getByRole("article", { name: "Material details: failed.pdf" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Remove failed upload" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
+  await waitFor(() => expect(screen.queryAllByText("failed.pdf")).toHaveLength(0));
 });
 
 it.each([[0, "0 B"], [850, "850 B"], [1400, "1.4 KB"], [2300000, "2.3 MB"], [1000000000, "1 GB"]])("formats %s bytes as %s", (bytes, label) => {

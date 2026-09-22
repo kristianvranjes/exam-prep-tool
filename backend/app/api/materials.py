@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, UploadFile
+from fastapi import APIRouter, Depends, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -47,3 +47,17 @@ def get_chunks(
     material_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> list[MaterialChunk]:
     return service.list_chunks(db, user, material_id)
+
+
+@router.delete("/materials/{material_id}", status_code=204)
+def delete_material(
+    material_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> Response:
+    settings = Settings()
+    service.delete_material(
+        db,
+        user,
+        material_id,
+        LocalMaterialStorage(settings.material_storage_dir),
+    )
+    return Response(status_code=204)

@@ -16,15 +16,18 @@ function ProcessingMessage({ material }: { material: Material }) {
   </>;
 }
 
-export function CourseMaterials({ courseId }: { courseId: string }) {
+export function CourseMaterials({ courseId, currentUserId }: { courseId: string; currentUserId?: string }) {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [detail, setDetail] = useState<MaterialDetail | null>(null);
   const [selected, setSelected] = useState<Material | null>(null);
   const [listError, setListError] = useState("");
   const [detailError, setDetailError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [opening, setOpening] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [listRevision, setListRevision] = useState(0);
   const [detailRevision, setDetailRevision] = useState(0);
 
@@ -56,6 +59,25 @@ export function CourseMaterials({ courseId }: { courseId: string }) {
       setMaterials(current => [...current.filter(item => item.id !== material.id), material]);
     } finally { setUploading(false); }
   }
+  async function deleteMaterial(material: Material) {
+    setDeletingId(material.id); setDeleteError("");
+    try {
+      await api.deleteMaterial(material.id);
+      setMaterials(current => current.filter(item => item.id !== material.id));
+      if (selected?.id === material.id) {
+        setSelected(null);
+        setDetail(null);
+        setDetailError("");
+        setOpening(false);
+      }
+      setConfirmDeleteId(null);
+    } catch (cause) {
+      setDeleteError(`${cause instanceof Error ? cause.message : "Could not remove this failed upload."} Your materials are unchanged. Try again.`);
+      setConfirmDeleteId(null);
+    } finally {
+      setDeletingId(null);
+    }
+  }
   function open(material: Material) {
     setOpening(true); setDetailError(""); setSelected(material); setDetailRevision(value => value + 1);
   }
@@ -68,6 +90,7 @@ export function CourseMaterials({ courseId }: { courseId: string }) {
     <MaterialUpload disabled={loading} busy={uploading} upload={upload} />
     <div className="flex flex-wrap items-center justify-between gap-3"><h4 className="text-lg font-semibold">Your materials</h4><Button variant="secondary" disabled={loading || uploading} onClick={refresh}>{listError ? "Retry materials" : "Refresh materials"}</Button></div>
     {listError && <Alert>{listError}</Alert>}
+    {deleteError && <Alert>{deleteError}</Alert>}
     {loading && <LoadingState>Loading materials…</LoadingState>}
     {!loading && !listError && materials.length === 0 && <EmptyState title="No materials yet.">Choose a PDF above to add your first study material.</EmptyState>}
     <ul aria-label="Materials list" className="flex min-w-0 flex-col gap-3">{materials.map(material => <li key={material.id} className="min-w-0">
@@ -75,7 +98,18 @@ export function CourseMaterials({ courseId }: { courseId: string }) {
         <div className="flex flex-wrap items-start justify-between gap-3"><h5 className="min-w-0 break-words font-semibold">{material.original_filename}</h5><Badge>{materialStatus[material.status]}</Badge></div>
         <p className="text-sm text-muted">{formatFileSize(material.file_size_bytes)}</p>
         <ProcessingMessage material={material} />
-        <Button variant="secondary" className="self-start" aria-label={`View details: ${material.original_filename}`} aria-pressed={detail?.id === material.id} onClick={() => open(material)}>View details</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" className="self-start" aria-label={`View details: ${material.original_filename}`} aria-pressed={detail?.id === material.id} onClick={() => open(material)}>View details</Button>
+          {material.status === "FAILED" && material.uploaded_by_user_id === currentUserId && (
+            confirmDeleteId === material.id ? <>
+              <p className="text-sm text-danger">This failed upload will be permanently removed.</p>
+              <Button variant="secondary" disabled={deletingId !== null} onClick={() => void deleteMaterial(material)}>
+                {deletingId === material.id ? "Removing…" : "Confirm remove"}
+              </Button>
+              <Button variant="ghost" disabled={deletingId === material.id} onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+            </> : <Button variant="ghost" disabled={deletingId !== null} onClick={() => setConfirmDeleteId(material.id)}>Remove failed upload</Button>
+          )}
+        </div>
       </Surface>
     </li>)}</ul>
     {opening && <LoadingState>Loading details for {selected?.original_filename}…</LoadingState>}

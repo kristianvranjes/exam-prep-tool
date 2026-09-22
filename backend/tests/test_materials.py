@@ -172,3 +172,182 @@ def test_derived_write_failure_rolls_back(clients, monkeypatch):
     with SessionLocal() as db:
         assert db.scalar(select(func.count()).select_from(MaterialSection)) == 0
         assert db.scalar(select(func.count()).select_from(MaterialChunk)) == 0
+
+
+def test_failed_material_delete_by_uploader(clients, monkeypatch, tmp_path):
+    _, member, _, course_id = clients
+
+    def fail(path):
+        raise RuntimeError("secret-password /private/path traceback")
+
+    monkeypatch.setattr(extraction, "extract_document", fail)
+    response = upload(member, course_id)
+    material = response.json()
+    material_id = UUID(material["id"])
+    assert response.status_code == 201
+    assert material["status"] == "FAILED"
+
+    delete_response = member.delete(f"/materials/{material_id}")
+    assert delete_response.status_code == 204
+    assert delete_response.content == b""
+
+    with SessionLocal() as db:
+        assert db.get(Material, material_id) is None
+    assert not list(tmp_path.iterdir())
+
+
+def test_failed_material_delete_permissions(clients, monkeypatch, tmp_path):
+    owner, member, stranger, course_id = clients
+
+    def fail(path):
+        raise RuntimeError("secret-password /private/path traceback")
+
+    monkeypatch.setattr(extraction, "extract_document", fail)
+    response = upload(member, course_id)
+    material = response.json()
+    material_id = UUID(material["id"])
+    assert response.status_code == 201
+
+    assert stranger.delete(f"/materials/{material_id}").status_code == 404
+    assert owner.delete(f"/materials/{material_id}").status_code == 403
+
+    with SessionLocal() as db:
+        assert db.get(Material, material_id) is not None
+    assert len(list(tmp_path.iterdir())) == 1
+
+
+def test_failed_material_delete_rejects_ready_material(clients, tmp_path):
+    _, member, _, course_id = clients
+    response = upload(member, course_id)
+    material = response.json()
+    assert response.status_code == 201
+    assert material["status"] == "READY"
+
+    delete_response = member.delete(f"/materials/{material['id']}")
+    assert delete_response.status_code == 409
+    assert len(list(tmp_path.iterdir())) == 1
+
+    with SessionLocal() as db:
+        assert db.get(Material, UUID(material["id"])) is not None
+
+
+def test_failed_material_delete_storage_failure_keeps_row(clients, monkeypatch, tmp_path):
+    _, member, _, course_id = clients
+
+    def fail(path):
+        raise RuntimeError("secret-password /private/path traceback")
+
+    monkeypatch.setattr(extraction, "extract_document", fail)
+    response = upload(member, course_id)
+    material = response.json()
+    material_id = UUID(material["id"])
+    assert response.status_code == 201
+
+    def fail_delete(self, key):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(LocalMaterialStorage, "delete", fail_delete)
+    delete_response = member.delete(f"/materials/{material_id}")
+    assert delete_response.status_code == 503
+    assert "disk full" not in delete_response.text
+    assert "private" not in delete_response.text
+
+    with SessionLocal() as db:
+        assert db.get(Material, material_id) is not None
+    assert len(list(tmp_path.iterdir())) == 1
+
+
+def test_failed_material_delete_anonymous_requires_auth(clients, monkeypatch):
+    _, member, _, course_id = clients
+
+    def fail(path):
+        raise RuntimeError("secret-password /private/path traceback")
+
+    monkeypatch.setattr(extraction, "extract_document", fail)
+    response = upload(member, course_id)
+    material_id = UUID(response.json()["id"])
+
+    with TestClient(app) as anonymous:
+        assert anonymous.delete(f"/materials/{material_id}").status_code == 401
+
+    with SessionLocal() as db:
+        assert db.get(Material, material_id) is not None
+
+
+@pytest.mark.parametrize("status", ["UPLOADED", "PROCESSING"])
+def test_failed_material_delete_rejects_non_failed_statuses(clients, monkeypatch, status):
+    _, member, _, course_id = clients
+
+    response = upload(member, course_id)
+    material_id = UUID(response.json()["id"])
+    with SessionLocal() as db:
+        row = db.get(Material, material_id)
+        assert row is not None
+        row.status = status
+        db.commit()
+
+    delete_response = member.delete(f"/materials/{material_id}")
+    assert delete_response.status_code == 409
+
+    with SessionLocal() as db:
+        assert db.get(Material, material_id) is not None
+
+
+def test_failed_material_delete_db_failure_rolls_back_and_retry_is_safe(
+    clients, monkeypatch, tmp_path
+):
+    _, member, _, course_id = clients
+    from sqlalchemy.orm import Session
+
+    def fail(path):
+        raise RuntimeError("secret-password /private/path traceback")
+
+    monkeypatch.setattr(extraction, "extract_document", fail)
+    response = upload(member, course_id)
+    material = response.json()
+    material_id = UUID(material["id"])
+    assert response.status_code == 201
+
+    original_commit = Session.commit
+
+    def fail_commit(self, *args, **kwargs):
+        raise RuntimeError("db commit blew up")
+
+    monkeypatch.setattr(Session, "commit", fail_commit)
+    delete_response = member.delete(f"/materials/{material_id}")
+    assert delete_response.status_code == 503
+    assert "db commit blew up" not in delete_response.text
+
+    with SessionLocal() as db:
+        row = db.get(Material, material_id)
+        assert row is not None
+        storage = LocalMaterialStorage(tmp_path)
+        storage.delete(row.storage_key)
+
+    monkeypatch.setattr(Session, "commit", original_commit)
+    retry_response = member.delete(f"/materials/{material_id}")
+    assert retry_response.status_code == 204
+
+    with SessionLocal() as db:
+        assert db.get(Material, material_id) is None
+
+
+def test_failed_material_delete_duplicate_safe(clients, monkeypatch):
+    _, member, _, course_id = clients
+
+    def fail(path):
+        raise RuntimeError("secret-password /private/path traceback")
+
+    monkeypatch.setattr(extraction, "extract_document", fail)
+    response = upload(member, course_id)
+    material = response.json()
+    material_id = UUID(material["id"])
+    assert response.status_code == 201
+
+    first = member.delete(f"/materials/{material_id}")
+    second = member.delete(f"/materials/{material_id}")
+    assert first.status_code == 204
+    assert second.status_code == 404
+
+    with SessionLocal() as db:
+        assert db.get(Material, material_id) is None

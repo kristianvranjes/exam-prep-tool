@@ -66,6 +66,27 @@ def list_chunks(db: Session, user: User, material_id: UUID) -> list[MaterialChun
     )
 
 
+def delete_material(db: Session, user: User, material_id: UUID, storage: MaterialStorage) -> None:
+    material = db.scalar(select(Material).where(Material.id == material_id).with_for_update())
+    if material is None:
+        raise HTTPException(404, "Material not found")
+    get_member_course(db, user, material.course_id)
+    if material.uploaded_by_user_id != user.id:
+        raise HTTPException(403, "You can only delete your own failed upload")
+    if material.status != MaterialStatus.FAILED.value:
+        raise HTTPException(409, "Only failed uploads can be deleted")
+    try:
+        storage.delete(material.storage_key)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(503, "Could not remove failed upload") from exc
+    try:
+        db.delete(material)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(503, "Could not remove failed upload") from None
+
+
 def process_material(
     db: Session, material: Material, storage: MaterialStorage, settings: Settings
 ) -> Material:
