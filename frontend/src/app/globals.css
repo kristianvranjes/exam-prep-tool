@@ -1,4 +1,69 @@
 @import "tailwindcss";
-:root { --background: #fafafa; --foreground: #171717; }
-@theme inline { --color-background: var(--background); --color-foreground: var(--foreground); }
-body { background: var(--background); color: var(--foreground); font-family: Arial, Helvetica, sans-serif; }
+
+:root {
+  --background: #f6f7f9;
+  --foreground: #20242d;
+  --surface: #ffffff;
+  --subtle: #eceef2;
+  --muted: #596273;
+  --line: #ccd1db;
+  --accent: #414eae;
+  --accent-hover: #333f95;
+  --accent-foreground: #ffffff;
+  --accent-surface: #eef0ff;
+  --danger: #b42336;
+  --danger-surface: #fff1f2;
+}
+[data-theme="dark"] {
+  --background: #181b22;
+  --foreground: #e9ecf3;
+  --surface: #212630;
+  --subtle: #2c3340;
+  --muted: #b0b9c9;
+  --line: #4a5568;
+  --accent: #a6b2ff;
+  --accent-hover: #c3cbff;
+  --accent-foreground: #1d2556;
+  --accent-surface: #2b3456;
+  --danger: #ffacb6;
+  --danger-surface: #422630;
+}
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-surface: var(--accent-surface);
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+}
+@layer base {
+  * { border-color: var(--line); }
+  body { background: var(--background); color: var(--foreground); font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; line-height: 1.6; overflow-wrap: anywhere; }
+  h1, h2, h3, h4 { text-wrap: balance; line-height: 1.25; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  [id] { scroll-margin-top: 1.5rem; }
+  button, a, input, select, textarea, summary { touch-action: manipulation; }
+  button, summary { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  button, select, summary { min-height: 2.75rem; }
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea { min-height: 2.75rem; max-width: 100%; background-color: var(--surface); color: var(--foreground); }
+  input, textarea { caret-color: var(--accent); }
+  input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
+  label:has(input[type="checkbox"], input[type="radio"]) { display: inline-flex; align-items: center; gap: .5rem; min-height: 2.75rem; }
+  ::placeholder { color: var(--muted); opacity: 1; }
+  ::selection { background: var(--accent); color: var(--accent-foreground); }
+  pre { max-width: 100%; overflow-x: auto; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+}
+@layer components {
+  .nav-link { display: flex; align-items: center; gap: .75rem; min-height: 2.75rem; padding: .65rem .75rem; border-radius: .5rem; font-size: .875rem; font-weight: 500; }
+  .nav-link:hover { background: var(--subtle); }
+  .skip-link { position: absolute; left: 1rem; top: 1rem; z-index: 50; transform: translateY(-200%); padding: .75rem 1rem; background: var(--surface); border: 1px solid var(--line); }
+  .skip-link:focus { transform: translateY(0); }
+}
