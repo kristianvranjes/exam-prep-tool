@@ -61,7 +61,7 @@ on an already processed material is a no-op, so it cannot duplicate chunks.
 `DELETE /materials/{material_id}` is the explicit cleanup path for a material that
 failed processing. The delete operation is restricted to the uploader and only for a
 row currently in FAILED status. A non-member or missing material returns 404; a
-member who did not upload it returns 403; and ACTIVE, UPLOADED or PROCESSING rows
+member who did not upload it returns 403; and READY, UPLOADED or PROCESSING rows
 return 409. READY deletion remains intentionally out of scope.
 
 The request first removes the file from the private storage and then deletes the DB
@@ -78,10 +78,12 @@ The parser runs synchronously in the API worker and is not a sandbox; the size
 limit is not a CPU/memory/time limit for malformed compressed PDFs. Keep this
 local development stack private. Process termination can leave PROCESSING rows
 and a crash between file save and metadata commit can leave an orphan file.
-There is no automatic retry, reprocess endpoint, delete endpoint or garbage
-collector. Course deletion cascades database rows but retains source files in the
-private store; reclaim those only after checking database references and backups.
-Material list/detail/chunk APIs are unpaginated for this local foundation.
+There is still no automatic retry, reprocess endpoint, general READY-material
+deletion lifecycle or garbage collector. FAILED uploader-owned cleanup now exists via
+`DELETE /materials/{material_id}`. Course deletion cascades database rows but retains
+source files in the private store; reclaim those only after checking database
+references and backups. Material list/detail/chunk APIs are unpaginated for this
+local foundation.
 
 ## Verification
 
