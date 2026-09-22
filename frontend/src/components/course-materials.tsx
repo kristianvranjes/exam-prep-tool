@@ -1,95 +1,94 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { api, Material, MaterialDetail } from "../lib/api";
+import { useEffect, useState } from "react";
+import { api, type Material, type MaterialDetail } from "../lib/api";
 import { ConceptReview } from "./concept-review";
+import { MaterialUpload } from "./material-upload";
+import { formatFileSize, materialStatus } from "./material-format";
+import { Alert, Badge, Button, EmptyState, LoadingState, Surface } from "./ui";
+
+function ProcessingMessage({ material }: { material: Material }) {
+  return <>
+    {material.processing_error && <p className="text-sm text-danger">{material.processing_error}</p>}
+    {material.status === "FAILED" && <p className="text-sm text-muted">This PDF could not be processed. You can upload another PDF.</p>}
+    {material.status === "PROCESSING" && <p className="text-sm text-muted">Processing this PDF. Reopen its details or refresh the list to check its status.</p>}
+    {material.status === "UPLOADED" && <p className="text-sm text-muted">Upload received; waiting for processing. Refresh to check its status.</p>}
+  </>;
+}
 
 export function CourseMaterials({ courseId }: { courseId: string }) {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [detail, setDetail] = useState<MaterialDetail | null>(null);
-  const [error, setError] = useState("");
+  const [selected, setSelected] = useState<Material | null>(null);
+  const [listError, setListError] = useState("");
+  const [detailError, setDetailError] = useState("");
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [opening, setOpening] = useState(false);
+  const [listRevision, setListRevision] = useState(0);
+  const [detailRevision, setDetailRevision] = useState(0);
 
   useEffect(() => {
     let active = true;
-    api.materials(courseId).then((rows) => { if (active) setMaterials(rows); })
-      .catch(() => { if (active) setError("Could not load materials."); })
+    api.materials(courseId).then(rows => { if (active) setMaterials(rows); })
+      .catch(() => { if (active) setListError("Could not load materials. Try refreshing the list."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [courseId]);
+  }, [courseId, listRevision]);
 
-  async function upload(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const file = new FormData(form).get("file");
-    if (!(file instanceof File) || file.size === 0) {
-      setError("Choose a non-empty PDF.");
-      return;
-    }
+  useEffect(() => {
+    if (!selected) return;
+    let active = true;
+    api.material(selected.id).then(row => {
+      if (active) {
+        setDetail(row);
+        setMaterials(current => current.map(item => item.id === row.id ? row : item));
+      }
+    }).catch(() => { if (active) setDetailError("Could not load material details. Try again."); })
+      .finally(() => { if (active) setOpening(false); });
+    return () => { active = false; };
+  }, [selected, detailRevision]);
+
+  async function upload(file: File) {
     setUploading(true);
-    setError("");
     try {
       const material = await api.uploadMaterial(courseId, file);
-      setMaterials((current) => [...current, material]);
-      if (material.status === "FAILED") setError(material.processing_error || "PDF processing failed.");
-      form.reset();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed.");
-    } finally {
-      setUploading(false);
-    }
+      setMaterials(current => [...current.filter(item => item.id !== material.id), material]);
+    } finally { setUploading(false); }
+  }
+  function open(material: Material) {
+    setOpening(true); setDetailError(""); setSelected(material); setDetailRevision(value => value + 1);
+  }
+  function refresh() {
+    setLoading(true); setListError(""); setListRevision(value => value + 1);
   }
 
-  async function open(id: string) {
-    setOpening(true);
-    setError("");
-    setDetail(null);
-    try {
-      setDetail(await api.material(id));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load material.");
-    } finally {
-      setOpening(false);
-    }
-  }
-
-  return (
-    <section className="mt-6 border-t pt-6" aria-label="Course materials">
-      <h3 className="text-lg font-semibold">Study materials</h3>
-      <form onSubmit={upload} className="my-4 space-y-3">
-        <label className="block text-sm">
-          PDF file
-          <input name="file" type="file" accept=".pdf,application/pdf" required
-            className="mt-1 block w-full" disabled={uploading || loading} />
-        </label>
-        <button disabled={uploading || loading} className="rounded bg-black px-4 py-2 text-white disabled:opacity-50">
-          {uploading ? "Uploading and processing…" : "Upload PDF"}
-        </button>
-      </form>
-      {error && <p role="alert" className="my-3 text-red-700">{error}</p>}
-      {loading ? <p role="status">Loading materials…</p> : materials.length === 0
-        ? <p>No materials yet.</p>
-        : <ul className="space-y-2">{materials.map((material) => (
-          <li key={material.id}>
-            <button onClick={() => open(material.id)} disabled={opening} className="text-left underline">
-              {material.original_filename}
-            </button>{" — "}<span>{material.status}</span>
-            {material.processing_error && <p className="text-sm text-red-700">{material.processing_error}</p>}
-          </li>
-        ))}</ul>}
-      {opening && <p role="status">Loading material…</p>}
-      {detail && <article className="mt-4 rounded border p-4">
-        <h4 className="font-semibold">{detail.original_filename}</h4>
-        <p>{detail.status} · {detail.file_size_bytes} bytes · {detail.sections.length} sections · {detail.chunk_count} chunks</p>
-        {detail.processing_error && <p className="text-red-700">{detail.processing_error}</p>}
-        <details className="mt-3">
-          <summary>Extracted text</summary>
-          <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-sm">{detail.extracted_markdown || "No extracted text."}</pre>
-        </details>
-        {detail.status === "READY" && <ConceptReview key={detail.id} courseId={courseId} materialId={detail.id} />}
-      </article>}
-    </section>
-  );
+  return <section className="mt-6 flex min-w-0 flex-col gap-5 border-t border-line pt-6" aria-label="Course materials">
+    <div><h3 className="text-xl font-semibold">Study materials</h3><p className="mt-2 text-muted">Keep your course PDFs and extracted study text together.</p></div>
+    <MaterialUpload disabled={loading} busy={uploading} upload={upload} />
+    <div className="flex flex-wrap items-center justify-between gap-3"><h4 className="text-lg font-semibold">Your materials</h4><Button variant="secondary" disabled={loading || uploading} onClick={refresh}>{listError ? "Retry materials" : "Refresh materials"}</Button></div>
+    {listError && <Alert>{listError}</Alert>}
+    {loading && <LoadingState>Loading materials…</LoadingState>}
+    {!loading && !listError && materials.length === 0 && <EmptyState title="No materials yet.">Choose a PDF above to add your first study material.</EmptyState>}
+    <ul aria-label="Materials list" className="flex min-w-0 flex-col gap-3">{materials.map(material => <li key={material.id} className="min-w-0">
+      <Surface className="flex min-w-0 flex-col gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3"><h5 className="min-w-0 break-words font-semibold">{material.original_filename}</h5><Badge>{materialStatus[material.status]}</Badge></div>
+        <p className="text-sm text-muted">{formatFileSize(material.file_size_bytes)}</p>
+        <ProcessingMessage material={material} />
+        <Button variant="secondary" className="self-start" aria-label={`View details: ${material.original_filename}`} aria-pressed={detail?.id === material.id} onClick={() => open(material)}>View details</Button>
+      </Surface>
+    </li>)}</ul>
+    {opening && <LoadingState>Loading details for {selected?.original_filename}…</LoadingState>}
+    {detailError && <div><Alert>{detailError} {selected?.original_filename}</Alert><Button variant="secondary" className="mt-3" disabled={opening} onClick={() => selected && open(selected)}>Retry details</Button></div>}
+    {detail && <article aria-label={`Material details: ${detail.original_filename}`} className="min-w-0 rounded-xl border border-line bg-surface p-5 sm:p-6">
+      <h4 className="break-words text-lg font-semibold">{detail.original_filename}</h4>
+      <div className="mt-3 flex flex-wrap items-center gap-3"><Badge>{materialStatus[detail.status]}</Badge><p className="text-sm text-muted">{formatFileSize(detail.file_size_bytes)} · {detail.sections.length} sections · {detail.chunk_count} chunks</p></div>
+      <div className="mt-3 flex flex-col gap-2"><ProcessingMessage material={detail} /></div>
+      <details className="mt-4">
+        <summary className="rounded-lg py-2 font-medium">Extracted text</summary>
+        <pre role="region" aria-label="Extracted material text" tabIndex={0} className="mt-3 max-h-80 max-w-full overflow-auto rounded-lg bg-subtle p-4 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">{detail.extracted_markdown || "No extracted text available."}</pre>
+      </details>
+      {detail.status === "READY" && <ConceptReview key={detail.id} courseId={courseId} materialId={detail.id} />}
+    </article>}
+  </section>;
 }

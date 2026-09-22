@@ -68,6 +68,34 @@ state, available answer keys/explanations, and total/correct/incorrect/pending c
 derived solely from the frozen attempt. Pending answers do not imply AI/manual
 grading is available. Active history entries resume; submitted entries open results.
 
+## Materials upload and browsing
+
+`CourseMaterials` owns list/detail reads and upload integration. `MaterialUpload`
+provides a labeled native file picker and drop area, with an explicit Upload PDF
+action. Select/drop one non-empty `.pdf` file; when the browser supplies a MIME type,
+it must be `application/pdf`. Client validation is a convenience, not PDF content
+verification: server validation remains authoritative. No upload API contract changes.
+
+The selected filename/size is shown and announced before uploading. Pending uploads
+disable selection, duplicate submits and list refresh. Success appends the returned
+material immediately and clears selection, including when its processing status is
+Failed. Request failure keeps the selected file and existing list for retry.
+
+Rows and details use theme tokens, wrapping filenames, decimal B/KB/MB/GB file sizes
+and text labels Uploaded, Processing, Ready and Failed. Failed materials show their
+processing error and explain that another PDF can be uploaded. No retry-processing
+or deletion action is offered; those lifecycle features are intentionally deferred.
+
+List/detail errors remain local with read retry controls. Refresh failures keep
+existing rows; opening a different material retains the previous detail until the
+new one loads. Late responses cannot replace a newer detail selection. Refresh
+materials or reopen View details to fetch the latest status; there is no polling.
+
+Details show size, section/chunk counts and a native Extracted text disclosure. The
+text is rendered as escaped text, preserving whitespace in a bounded, keyboard-
+scrollable, wrapping region, without a PDF viewer or HTML execution. Ready details
+mount the existing `ConceptReview` unchanged; other statuses do not.
+
 ## Theme and tokens
 
 `ThemeProvider` wraps the application through `next-themes`. System is the default;
