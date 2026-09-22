@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
-import type { Course, Faculty } from "../src/lib/api";
+import type { Course, CourseMembership, Faculty } from "../src/lib/api";
 
 const mock = vi.hoisted(() => ({ faculties: vi.fn(), facultyCourses: vi.fn(), joinCourse: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
@@ -12,6 +12,7 @@ const faculties: Faculty[] = [
 ];
 const course: Course = { id: "c1", faculty_id: "f1", name: "Algorithms", code: "ALG", description: "Study algorithms.", is_active: true, created_by_user_id: "u1", created_at: "2026-01-01", updated_at: "2026-01-01" };
 const onJoined = vi.fn();
+const membership: CourseMembership = { course_id: course.id, user_id: "user-1", role: "MEMBER" };
 const onOpen = vi.fn();
 function view(joinedCourses: Course[] = [], loadingMembership = false) {
   return <CourseBrowser joinedCourses={joinedCourses} loadingMembership={loadingMembership} onJoined={onJoined} onOpen={onOpen} />;
@@ -28,7 +29,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mock.faculties.mockResolvedValue(faculties);
   mock.facultyCourses.mockResolvedValue([course]);
-  mock.joinCourse.mockResolvedValue(course);
+  mock.joinCourse.mockResolvedValue(membership);
 });
 
 it("loads faculties in backend order, then courses only on selection", async () => {
@@ -95,7 +96,7 @@ it("opens the existing joined course without posting another join", async () => 
 });
 
 it("disables joining while membership is loading and while that join is pending", async () => {
-  const pending = deferred<Course>();
+  const pending = deferred<CourseMembership>();
   mock.joinCourse.mockReturnValue(pending.promise);
   const rendered = render(view([], true));
   await selectFaculty();
@@ -105,15 +106,16 @@ it("disables joining while membership is loading and while that join is pending"
   const joining = screen.getByRole("button", { name: "Joining course: Algorithms" });
   expect(joining).toBeDisabled();
   fireEvent.click(joining);
-  pending.resolve(course);
+  pending.resolve(membership);
   await waitFor(() => expect(onJoined).toHaveBeenCalledWith(course));
+  expect(screen.getByRole("status")).toHaveTextContent("Algorithms added to My courses.");
   expect(mock.joinCourse).toHaveBeenCalledTimes(1);
   rendered.rerender(view([course]));
   expect(screen.getByRole("link", { name: "Open course: Algorithms" })).toBeInTheDocument();
 });
 
 it("allows retrying a failed join and keeps the faculty selected", async () => {
-  mock.joinCourse.mockRejectedValueOnce(new Error("Unavailable")).mockResolvedValue(course);
+  mock.joinCourse.mockRejectedValueOnce(new Error("Unavailable")).mockResolvedValue(membership);
   render(view());
   await selectFaculty();
   fireEvent.click(await screen.findByRole("button", { name: "Join course: Algorithms" }));
@@ -126,12 +128,12 @@ it("allows retrying a failed join and keeps the faculty selected", async () => {
 });
 
 it("does not update a later session when a join finishes after unmount", async () => {
-  const pending = deferred<Course>();
+  const pending = deferred<CourseMembership>();
   mock.joinCourse.mockReturnValue(pending.promise);
   const rendered = render(view());
   await selectFaculty();
   fireEvent.click(await screen.findByRole("button", { name: "Join course: Algorithms" }));
   rendered.unmount();
-  await act(async () => pending.resolve(course));
+  await act(async () => pending.resolve(membership));
   expect(onJoined).not.toHaveBeenCalled();
 });

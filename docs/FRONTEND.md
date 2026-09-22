@@ -23,8 +23,9 @@ loading is independent of the shell's existing moderator-faculty lookup, so perm
 lookup failures do not prevent browsing.
 
 Membership comes from the shell's joined-course list. Join course is disabled while
-that list loads or the specific join is pending. Successful joins use the returned
-course to update My courses with ID-based deduplication; they announce success without
+that list loads or the specific join is pending. The join endpoint returns membership
+metadata, not a course. After success, the selected catalog course updates My courses
+with ID-based deduplication, without an extra fetch; joins announce success without
 changing selection, theme or navigation. Open course selects the joined course and
 links to its study tools. Failed joins keep existing courses/selection and offer retry.
 Responses arriving after logout/unmount do not update the next session.

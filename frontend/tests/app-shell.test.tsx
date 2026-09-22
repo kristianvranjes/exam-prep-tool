@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CourseMembership } from "../src/lib/api";
 
 const apiMock = vi.hoisted(() => ({
   faculties: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock("../src/components/question-bank", () => ({ QuestionBank: ({ courseId }:
 import { AppShell } from "../src/components/app-shell";
 
 const user = { id: "user-1", email: "student@example.com", display_name: "Student", is_active: true, created_at: "2026-01-01" };
+const membership: CourseMembership = { course_id: "course-1", user_id: user.id, role: "MEMBER" };
 const course = { id: "course-1", name: "Algorithms", code: "ALG101", description: "Core course", created_by_user_id: "user-1", created_at: "2026-01-01", updated_at: "2026-01-01" };
 
 beforeEach(() => {
@@ -38,7 +40,7 @@ beforeEach(() => {
     apiMock.login.mockResolvedValue(user);
     apiMock.logout.mockResolvedValue(undefined);
     apiMock.facultyCourses.mockResolvedValue([course]);
-    apiMock.joinCourse.mockResolvedValue(course);
+    apiMock.joinCourse.mockResolvedValue(membership);
   });
 
 describe("authentication and course flow", () => {
@@ -175,6 +177,7 @@ it("adds joined courses immediately, opens all study tools and avoids repeated j
   fireEvent.click(await screen.findByRole("button", { name: "Join course: Algorithms" }));
   const myCourses = screen.getByRole("region", { name: "Your courses" });
   expect(await within(myCourses).findByRole("button", { name: /Algorithms/ })).toBeInTheDocument();
+  expect(screen.getByText(/Algorithms added to My courses/)).toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Practice quiz" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("link", { name: "Open course: Algorithms" }));
   for (const name of ["Course materials", "Practice quiz", "Review progress", "Question bank"]) {
@@ -206,7 +209,7 @@ it("keeps My courses and selection intact when the catalog or join fails", async
 });
 
 it("deduplicates a join completed after the same course was added through creation", async () => {
-  let finishJoin!: (value: typeof course) => void;
+  let finishJoin!: (value: CourseMembership) => void;
   apiMock.me.mockResolvedValue(user);
   apiMock.joinCourse.mockReturnValue(new Promise(resolve => { finishJoin = resolve; }));
   render(<AppShell />);
@@ -218,7 +221,7 @@ it("deduplicates a join completed after the same course was added through creati
   fireEvent.submit(form);
   const myCourses = screen.getByRole("region", { name: "Your courses" });
   await within(myCourses).findByRole("button", { name: /Algorithms/ });
-  finishJoin(course);
+  finishJoin(membership);
   await screen.findByText(/added to My courses/);
   expect(within(myCourses).getAllByRole("button", { name: /Algorithms/ })).toHaveLength(1);
 });

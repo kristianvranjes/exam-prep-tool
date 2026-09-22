@@ -50,10 +50,10 @@ export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOp
     setJoinErrors(current => ({ ...current, [course.id]: "" }));
     setNotice("");
     try {
-      const joined = await api.joinCourse(course.id);
+      await api.joinCourse(course.id);
       if (mounted.current) {
-        onJoined(joined);
-        setNotice(`${joined.name} added to My courses. Open it when you’re ready to study.`);
+        onJoined(course);
+        setNotice(`${course.name} added to My courses. Open it when you’re ready to study.`);
       }
     } catch {
       if (mounted.current) setJoinErrors(current => ({ ...current, [course.id]: "Could not join this course. Try again, or choose another course if it is no longer available." }));

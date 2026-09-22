@@ -1,5 +1,6 @@
 export type User = { id: string; email: string; display_name: string; is_active: boolean; created_at: string };
 export type Faculty = { id: string; name: string; slug: string; university_name: string | null };
+export type CourseMembership = { course_id: string; user_id: string; role: "OWNER" | "MEMBER" };
 export type Course = { id: string; faculty_id: string; is_active: boolean; name: string; code: string | null; description: string | null; created_by_user_id: string; created_at: string; updated_at: string };
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
@@ -19,7 +20,7 @@ export const api = {
   moderatorStatus: (facultyId: string) => request<{ is_moderator: boolean }>(`/faculties/${facultyId}/moderator-status`),
   faculties: () => request<Faculty[]>("/faculties"),
   facultyCourses: (facultyId: string) => request<Course[]>(`/faculties/${facultyId}/courses`),
-  joinCourse: (courseId: string) => request<Course>(`/courses/${courseId}/join`, { method: "POST" }),
+  joinCourse: (courseId: string) => request<CourseMembership>(`/courses/${courseId}/join`, { method: "POST" }),
   reviewProgress: (courseId: string, offset = 0) => request<ReviewProgress[]>(`/courses/${courseId}/review-progress?limit=20&offset=${offset}`),
   membership: (courseId: string) => request<{ role: "OWNER" | "MEMBER" }>(`/courses/${courseId}/membership`),
   concepts: (courseId: string, materialId?: string) => request<Concept[]>(`/courses/${courseId}/concepts${materialId ? `?material_id=${encodeURIComponent(materialId)}` : ""}`),
