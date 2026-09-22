@@ -9,7 +9,7 @@ from app.config import Settings
 from app.models import User
 from app.models.question import Question
 from app.schemas.question import OwnerQuestion, QuizImport
-from app.services.courses import get_owner_course
+from app.services.courses import get_member_course
 from app.services.questions.service import add_version, owner_view, save_content
 
 
@@ -39,7 +39,7 @@ async def read_import(request: Request) -> QuizImport:
 def import_questions(
     db: Session, user: User, course_id: UUID, document: QuizImport
 ) -> list[OwnerQuestion]:
-    get_owner_course(db, user, course_id)
+    get_member_course(db, user, course_id)
     try:
         rows = []
         for content in document.questions:

@@ -174,6 +174,7 @@ def generate_questions(
             .where(
                 Question.course_id == course_id,
                 Question.status != "ARCHIVED",
+                Question.created_by_user_id == user.id,
                 Question.normalized_stem.in_(stems),
             )
             .limit(1)

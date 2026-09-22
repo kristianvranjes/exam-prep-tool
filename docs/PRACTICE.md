@@ -1,7 +1,7 @@
 # Practice quizzes and grading (Phases 7–8 / Issues #20, #22)
 
 Open a course, then **Open practice quizzes**. Choose 1–20 questions and one or
-more types. Selection is deterministic: APPROVED questions in this course, ordered
+more types. Selection is deterministic: APPROVED questions plus the caller's own DRAFT/PENDING_REVIEW questions in this course, ordered
 by `created_at ASC, id ASC`, filtered by requested types. There is no randomization,
 adaptation, concept requirement, embedding lookup, or AI call. If the bank has fewer
 eligible questions than requested, creation returns 409 with the available count;
@@ -68,8 +68,7 @@ ACTIVE responses use an explicit public allowlist for both OWNER and MEMBER: ste
 type, difficulty, option position/text and the user's saved answer. They omit keys,
 reference answers, explanations, source snapshots and grading fields altogether.
 Only SUBMITTED responses include result fields. The practice UI never loads owner
-Question Bank content. Existing OWNER review permissions in the separate bank remain
-unchanged; practice is a study tool, not a proctored exam or access revocation mechanism.
+Question Bank content. Creator/faculty-moderator permissions apply in the separate bank; practice is a study tool, not a proctored exam or access revocation mechanism.
 
 Answer upserts and final submission lock the same attempt row. Final grading, state
 and server timestamp are committed in one transaction, with rollback on any failure.
@@ -192,11 +191,15 @@ and due times stay stable. Another course member must see only their own progres
 ## Adaptive quiz selection (Phase 9B)
 
 The existing start endpoint accepts `selection_mode`: `STANDARD` (default when
-omitted) or `ADAPTIVE`. Standard practice keeps oldest-approved creation/id order,
+omitted) or `ADAPTIVE`. Standard practice keeps oldest-eligible creation/id order,
 including questions already in active attempts. Count and type filters are unchanged.
 
 Adaptive review uses one UTC selection timestamp captured after acquiring the
-user lock, and ranks only current APPROVED questions in the requested course/types:
+user lock, and ranks eligible questions in the requested course/types: shared APPROVED plus the
+caller's own DRAFT/PENDING_REVIEW. REJECTED/ARCHIVED and another creator's
+unapproved questions are excluded in both modes. Private questions use the same
+snapshot, grading and progress flow; later moderation never changes an attempt.
+See [community rules](COMMUNITY.md). Ranking remains:
 
 1. Resolved progress due at or before selection time, earliest due_at first.
 2. Truly unseen questions, ordered by question created_at then id.

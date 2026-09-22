@@ -1,5 +1,9 @@
 # ExamPrep
 
+Phase 10B adds [community contributions and faculty moderation](docs/COMMUNITY.md).
+Joined students import private drafts and practice them immediately. A different
+faculty moderator must approve them before they become shared course questions.
+
 Phase 10A adds the [Faculty -> Course catalog and enrollment foundation](docs/API.md#faculty-catalog-and-enrollment-phase-10a).
 Select a faculty when creating a course. Existing courses retain all their data
 under **Legacy / Unassigned**; authenticated catalog/join APIs prepare future browsing UI.
@@ -23,8 +27,8 @@ then use human review. This temporary staging bypass needs no AI provider or emb
 Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
 configuration below applies when explicitly enabling that pipeline.
 
-A local-first university exam preparation platform. **Implemented scope: through issue #29,
-Phase 10A — faculty catalog and course enrollment foundation.**
+A local-first university exam preparation platform. **Implemented scope: through issue #31,
+Phase 10B — community contributions and faculty moderation.**
 
 Phase 6.5 prepares **Vercel + Railway + managed PostgreSQL/pgvector staging** without
 deploying resources. Follow [the exact staging guide](docs/STAGING.md) for required
@@ -236,10 +240,10 @@ authenticated API docs to embed the material (requires the optional local model
 setup above). Start with 1–3 questions and a small source count.
 
 Choose a draft to inspect its answer, concepts, material/chunk references and history.
-Edit as needed, **Submit for review**, then **Approve question** or provide a reason
-to **Reject question**. Editing rejected content returns it to DRAFT. Approved
+Creators edit and **Submit for review**; a different faculty moderator approves
+or rejects with a reason. Editing rejected content returns it to DRAFT. Approved
 content can only be archived; archived content cannot be reopened. AI never approves.
-MEMBER sees only approved questions without answers or review controls. Quiz-taking
+Members see their own private questions and answer-free approved questions from others. Quiz-taking
 and deterministic grading are available separately through Phase 7 practice quizzes.
 
 Generation uses the configured AIProvider: laptop development → FreeLLMAPI;

@@ -31,7 +31,7 @@ beforeEach(() => {
 
 async function open() {
   fireEvent.click(screen.getByRole("button", { name: "Open practice quizzes" }));
-  await screen.findByText("No saved attempts yet. Start with approved questions from this course.");
+  await screen.findByText("No saved attempts yet. Start with shared approved questions or your own drafts from this course.");
 }
 
 it("starts, saves all types, resumes after remount, and reviews a final result", async () => {

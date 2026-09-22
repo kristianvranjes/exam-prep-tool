@@ -10,6 +10,7 @@ from app.api.courses import router as courses_router
 from app.api.faculties import router as faculties_router
 from app.api.health import router as health_router
 from app.api.materials import router as materials_router
+from app.api.moderation import router as moderation_router
 from app.api.progress import router as progress_router
 from app.api.questions import router as questions_router
 from app.api.quizzes import router as quizzes_router
@@ -46,6 +47,7 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(courses_router)
 app.include_router(faculties_router)
+app.include_router(moderation_router)
 app.include_router(materials_router)
 app.include_router(concepts_router)
 app.include_router(retrieval_router)

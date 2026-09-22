@@ -6,8 +6,8 @@ Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal
 configuration below applies when explicitly enabling that pipeline.
 
 Questions are curated course data. AI produces proposals; it cannot approve them.
-This phase contains a bank and review workflow, with no quiz sessions, student
-answers, grading, semantic duplicate detection, or Phase 7 behavior.
+Community authorization is defined by Phase 10B below. Practice and grading use
+the separate [practice engine](PRACTICE.md); no semantic duplicate detection is added.
 
 ## Types and lifecycle
 
@@ -18,8 +18,8 @@ answers, grading, semantic duplicate detection, or Phase 7 behavior.
 | SHORT_ANSWER | A nonblank reference answer; no options/boolean |
 
 The shared Pydantic discriminated union validates model output and the complete
-result of each owner edit. Extra/wrong-type fields are rejected. AI explanations
-are required; owners may clear explanations while editing. Stems/options are
+result of each creator edit. Extra/wrong-type fields are rejected. AI explanations
+are required; creators may clear explanations while editing. Stems/options are
 bounded to 400 characters, explanation/reference to 2000, difficulty to 1–5.
 
 ```text
@@ -28,24 +28,25 @@ AI generation → DRAFT → submit → PENDING_REVIEW → approve → APPROVED �
                                  REJECTED → edit → DRAFT
 ```
 
-These are the only transitions. OWNER can edit DRAFT/REJECTED; a rejected edit
+These are the only transitions. The creator can edit their own DRAFT/REJECTED; a rejected edit
 clears reviewer, timestamp and reason. APPROVED content is immutable except
 archival. ARCHIVED is terminal. Submit/approve revalidate answer and provenance.
 
 ## Permissions and UI
 
-OWNER opens a course → Open question bank → selects approved concepts, types,
-count and sources per concept → Generate drafts. Select a row to inspect answers,
-concepts, material/chunk references and generation job ID. Edit → submit → approve
-or reject with a reason → archive. Status/type filters and pagination keep the
-list bounded; version history provides prior review/content snapshots.
+Joined MEMBER/OWNER contributors import USER drafts, edit their own DRAFT/REJECTED
+content, and submit for review. They see their own statuses, answers and versions.
+Other ordinary members see only answer-free APPROVED content, including through
+status filters; hidden UUIDs and histories return 404. Course OWNER alone cannot
+read or moderate another contributor's private questions.
 
-MEMBER lists/reads APPROVED only. The backend uses an explicit public response
-allowlist: id, course_id, type, status, stem, difficulty, option positions/text and
-visibility. It omits correctness flags, TF/reference answers, explanations,
-review metadata and AI audit. Hidden direct IDs return 404; approved mutations
-and versions return 403. Outsiders get 404; unauthenticated requests get 401.
-Client UI hides curation and never offers answering/scoring interactions.
+Faculty moderators can inspect full questions/versions across their faculty and
+approve/reject pending questions from other creators. They cannot self-review or
+silently edit someone else's content. Moderators may archive approved questions.
+The minimal UI gates actions using the backend moderator status and creator ID.
+Internal AI generation remains OWNER-only. The faculty review queue and trusted
+role provisioning are documented in [COMMUNITY.md](COMMUNITY.md); polished review
+and navigation UI are deferred to Phase 10C.
 
 ## Generation and retrieval
 
@@ -89,9 +90,11 @@ states, answer column shapes, option positions, unique joins and version numbers
 Pydantic handles child aggregate invariants without database triggers.
 
 Stems normalize by strip → whitespace collapse → Unicode casefold, preserving
-punctuation. Duplicates inside a batch or against any non-ARCHIVED course question
-reject the entire operation. A partial unique DB index closes the concurrent
-insert race. Reruns never update/overwrite existing questions, including drafts;
+punctuation. Duplicates inside a batch or against the creator's own non-ARCHIVED course question
+reject the entire operation. Different creators may hold same-stem private drafts.
+A separate unique index permits only one APPROVED stem per course. A conflicting
+approval returns a generic 409 and rolls back status/history; the question stays
+PENDING_REVIEW. Both indexes close concurrent races without exposing hidden content. Reruns never update/overwrite existing questions, including drafts;
 archive an approved question only when intentional. Archived stems can be reused.
 The 400-character stem limit bounds UTF-8 B-tree index keys, including casefold
 expansion; no semantic or punctuation-insensitive matching is performed.
@@ -162,5 +165,5 @@ Generation is synchronous and can occupy a request worker until its bounded
 provider timeout. There is no cancellation/retry worker. A process crash can
 leave RUNNING audit state: an operator must confirm the worker stopped before
 marking it FAILED and retrying. Small-model factual quality and reproducibility
-are not guaranteed; OWNER review remains necessary. Concept/source inspection
+are not guaranteed; Independent faculty moderator review remains necessary. Concept/source inspection
 inherits existing scale limits; question lists and version pages are bounded.

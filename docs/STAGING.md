@@ -158,7 +158,8 @@ python -m alembic upgrade head
 python -m alembic current
 ```
 
-Expected head is 0008 (Phase 8 grading provenance). Practice grading needs no AI
+Expected head is 0011 (community moderation). Provision faculty moderators using
+the trusted [operator procedure](COMMUNITY.md#operator-only-provisioning). Practice grading needs no AI
 provider or embeddings; `AI_PROVIDER=disabled` remains supported. Verify an exact
 normalized short answer shows Correct and a different answer stays Pending after
 submission, including after refresh. See [grading rules](PRACTICE.md).

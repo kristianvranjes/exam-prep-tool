@@ -6,6 +6,7 @@ import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from community_helpers import provision
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select, text
 from sqlalchemy.exc import DataError, IntegrityError
@@ -34,6 +35,7 @@ def faculty(name="Engineering", **kwargs):
 
 
 def create(client, faculty_id, name="Algorithms"):
+    provision(client, faculty_id)
     response = client.post("/courses", json={"name": name, "faculty_id": str(faculty_id)})
     assert response.status_code == 201, response.text
     return response.json()
@@ -171,7 +173,7 @@ def test_join_member_idempotent_concurrent_and_no_elevation(bank):
     assert result.status_code == 200
     assert stranger.post(attempt_path + "/submit").json() == result.json()
     assert len(stranger.get(f"/courses/{course}/review-progress").json()) == 2
-    assert stranger.post(f"/courses/{course}/questions/import", json=document()).status_code == 403
+    assert stranger.post(f"/courses/{course}/questions/import", json=document()).status_code == 201
 
 
 @pytest.mark.parametrize("inactive", ["faculty", "course"])
@@ -233,7 +235,7 @@ def test_legacy_roundtrip_preserves_courses_and_all_children(bank):
         for _ in range(2):
             command.downgrade(config, "0009")
             assert historical_rows() == before
-            command.upgrade(config, "0010")
+            command.upgrade(config, "head")
             assert historical_rows() == before
             with SessionLocal() as db:
                 assert db.get(Course, UUID(course)).faculty_id == LEGACY

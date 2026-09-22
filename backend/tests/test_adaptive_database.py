@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
+from community_helpers import create_course, review_question
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select, text
 from test_materials import clients as clients
@@ -35,7 +36,7 @@ def bank(clients):
     for row in rows:
         assert row["concept_ids"] == [] and row["source"] == "USER"
         assert owner.post(f"/questions/{row['id']}/submit").status_code == 200
-        assert owner.post(f"/questions/{row['id']}/approve").status_code == 200
+        assert review_question(owner, f"/questions/{row['id']}/approve").status_code == 200
     with SessionLocal() as db:
         for i, row in enumerate(rows):
             db.get(Question, UUID(row["id"])).created_at = NOW + timedelta(seconds=i)
@@ -153,8 +154,8 @@ def test_user_history_progress_active_and_course_isolation(bank):
         assert (
             anonymous.post(path, json={"count": 1, "selection_mode": "ADAPTIVE"}).status_code == 401
         )
-    other = member.post(
-        "/courses", json={"name": "Empty", "faculty_id": member.get("/faculties").json()[0]["id"]}
+    other = create_course(
+        member, json={"name": "Empty", "faculty_id": member.get("/faculties").json()[0]["id"]}
     ).json()["id"]
     assert (
         member.post(
@@ -168,7 +169,7 @@ def test_eligibility_type_filter_archive_deleted_and_snapshot(bank):
     owner, member, _, course, rows = bank
     add_progress(member, rows, {0: NOW - timedelta(days=1)})
     before = stored_progress()
-    assert owner.post(f"/questions/{rows[0]['id']}/archive").status_code == 200
+    assert review_question(owner, f"/questions/{rows[0]['id']}/archive").status_code == 200
     with SessionLocal() as db:
         db.execute(delete(Question).where(Question.id == UUID(rows[1]["id"])))
         db.get(Question, UUID(rows[2]["id"])).status = "DRAFT"
@@ -183,7 +184,7 @@ def test_eligibility_type_filter_archive_deleted_and_snapshot(bank):
     assert stored_progress() == before
     path = save_all(member, course, attempt)
     for q in rows[3:]:
-        owner.post(f"/questions/{q['id']}/archive")
+        review_question(owner, f"/questions/{q['id']}/archive")
     with SessionLocal() as db:
         db.get(Question, UUID(rows[3]["id"])).reference_answer = "My saved response"
         db.execute(delete(Question).where(Question.id == UUID(rows[4]["id"])))

@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { QuestionBank } from "../src/components/question-bank";
 import type { OwnerQuestion } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ importQuestions: vi.fn(), membership: vi.fn(), concepts: vi.fn(), questions: vi.fn(), generateQuestions: vi.fn(), editQuestion: vi.fn(), transitionQuestion: vi.fn(), questionVersions: vi.fn() }));
+const mock = vi.hoisted(() => ({ me: vi.fn(), course: vi.fn(), moderatorStatus: vi.fn(), importQuestions: vi.fn(), membership: vi.fn(), concepts: vi.fn(), questions: vi.fn(), generateQuestions: vi.fn(), editQuestion: vi.fn(), transitionQuestion: vi.fn(), questionVersions: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 
 const draft: OwnerQuestion = {
@@ -17,6 +17,9 @@ let current: OwnerQuestion;
 let version = 0;
 beforeEach(() => {
   vi.resetAllMocks(); current = structuredClone(draft); version = 0;
+  mock.me.mockResolvedValue({ id: "u1" });
+  mock.course.mockResolvedValue({ faculty_id: "faculty" });
+  mock.moderatorStatus.mockResolvedValue({ is_moderator: false });
   mock.membership.mockResolvedValue({ role: "OWNER" });
   mock.concepts.mockResolvedValue([{ id: "c1", name: "Matrices", status: "APPROVED" }, { id: "c2", name: "Unreviewed", status: "DRAFT" }]);
   mock.questions.mockImplementation(async () => [current]);
@@ -53,7 +56,7 @@ it("generates with selected approved concepts and bounded controls", async () =>
   expect(mock.generateQuestions).toHaveBeenCalledWith("course", { concept_ids: ["c1"], question_types: ["MULTIPLE_CHOICE", "TRUE_FALSE"], count: 2, retrieval_top_k: 3 });
 });
 
-it("completes owner edit, rejection/rework, approval, archive and history", async () => {
+it("lets a creator edit and submit without granting OWNER moderation", async () => {
   await open();
   fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
   expect(await screen.findByText(/Material material1 · chunk 1/)).toBeInTheDocument();
@@ -64,22 +67,12 @@ it("completes owner edit, rejection/rework, approval, archive and history", asyn
   fireEvent.click(screen.getByRole("button", { name: "Save question" }));
   await waitFor(() => expect(mock.editQuestion).toHaveBeenCalledWith("q1", expect.objectContaining({ stem: "Revised matrix question?", options: [{ text: "A table", is_correct: false }, { text: "Revised option", is_correct: true }] })));
   fireEvent.click(await screen.findByRole("button", { name: "Submit for review" }));
-  fireEvent.change(await screen.findByLabelText("Rejection reason"), { target: { value: "Clarify the stem" } });
-  fireEvent.click(screen.getByRole("button", { name: "Reject question" }));
-  expect(await screen.findByText("Rejection reason: Clarify the stem")).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Submit for review" })).not.toBeInTheDocument());
   expect(screen.queryByRole("button", { name: "Approve question" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Edit question" }));
-  fireEvent.click(screen.getByRole("button", { name: "Save question" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Submit for review" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Approve question" }));
-  await screen.findByRole("button", { name: "Archive question" });
-  await waitFor(() => expect(screen.getByRole("button", { name: "View versions" })).toBeEnabled());
-  fireEvent.click(await screen.findByRole("button", { name: "View versions" }));
-  expect(await screen.findByText(/Version 1 · created/)).toBeInTheDocument();
-  expect(mock.questionVersions).toHaveBeenCalledWith("q1", 0);
-  fireEvent.click(screen.getByRole("button", { name: "Archive question" }));
-  await waitFor(() => expect(screen.queryByRole("button", { name: "Archive question" })).not.toBeInTheDocument());
-  expect(mock.transitionQuestion.mock.calls.map((c) => c[1])).toEqual(["submit", "reject", "submit", "approve", "archive"]);
+  expect(screen.queryByRole("button", { name: "Reject question" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "View versions" }));
+  expect(await screen.findByText(/Version 1/)).toBeInTheDocument();
+  expect(mock.transitionQuestion.mock.calls.map(c => c[1])).toEqual(["submit"]);
 });
 
 it.each(["TRUE_FALSE", "SHORT_ANSWER"] as const)("edits the complete %s answer", async (type) => {
@@ -100,7 +93,7 @@ it("renders a member's approved representation without keys or owner controls", 
   expect(screen.getByText("A table")).toBeInTheDocument();
   expect(screen.queryByText(/\(correct\)/)).not.toBeInTheDocument();
   expect(screen.queryByText(/Explanation:|Reference answer:|Correct answer:|Provenance/)).not.toBeInTheDocument();
-  expect(screen.queryByLabelText("Status")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Status")).toBeInTheDocument();
   for (const name of ["Generate drafts", "Edit question", "Submit for review", "Approve question", "Archive question", "View versions"]) expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
   expect(mock.concepts).not.toHaveBeenCalled();
 });
@@ -146,4 +139,90 @@ it("imports without concepts and resets filters to drafts for review", async () 
   fireEvent.click(screen.getByRole("button", { name: "Import drafts" }));
   await screen.findByRole("button", { name: "Submit for review" });
   await waitFor(() => expect(mock.questions).toHaveBeenLastCalledWith("course", { status: "DRAFT", type: undefined, limit: 20, offset: 0 }));
+});
+
+it("allows a MEMBER to import and edit their own draft", async () => {
+  mock.membership.mockResolvedValue({ role: "MEMBER" });
+  await open();
+  expect(screen.getByLabelText("Quiz JSON file")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  expect(await screen.findByRole("button", { name: "Edit question" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Approve question" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Edit question" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save question" }));
+  await waitFor(() => expect(mock.editQuestion).toHaveBeenCalledWith("q1", expect.objectContaining({ concept_ids: ["c1"] })));
+});
+
+it("shows review actions only for a faculty moderator reviewing someone else's pending question", async () => {
+  mock.me.mockResolvedValue({ id: "reviewer" });
+  mock.moderatorStatus.mockResolvedValue({ is_moderator: true });
+  current.status = "PENDING_REVIEW";
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "Approve question" }));
+  await waitFor(() => expect(mock.transitionQuestion).toHaveBeenCalledWith("q1", "approve", undefined));
+  expect(screen.queryByRole("button", { name: "Edit question" })).not.toBeInTheDocument();
+});
+
+it("does not allow a moderator to self-approve", async () => {
+  mock.moderatorStatus.mockResolvedValue({ is_moderator: true });
+  current.status = "PENDING_REVIEW";
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  expect(screen.queryByRole("button", { name: "Approve question" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Reject question" })).not.toBeInTheDocument();
+});
+
+it("lets a moderator reject with a reason but never edit another creator's content", async () => {
+  mock.me.mockResolvedValue({ id: "reviewer" });
+  mock.moderatorStatus.mockResolvedValue({ is_moderator: true });
+  current.status = "PENDING_REVIEW";
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  fireEvent.change(await screen.findByLabelText("Rejection reason"), { target: { value: "Needs precision" } });
+  fireEvent.click(screen.getByRole("button", { name: "Reject question" }));
+  expect(await screen.findByText("Rejection reason: Needs precision")).toBeInTheDocument();
+  expect(mock.transitionQuestion).toHaveBeenCalledWith("q1", "reject", "Needs precision");
+  expect(screen.queryByRole("button", { name: "Edit question" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Approve question" })).not.toBeInTheDocument();
+});
+
+it("lets the contributor rework a rejected question and resubmit", async () => {
+  mock.membership.mockResolvedValue({ role: "MEMBER" });
+  current.status = "REJECTED";
+  current.rejection_reason = "Needs precision";
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  expect(await screen.findByText("Rejection reason: Needs precision")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Edit question" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save question" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Submit for review" }));
+  await waitFor(() => expect(mock.transitionQuestion).toHaveBeenCalledWith("q1", "submit", undefined));
+  expect(screen.queryByText("Rejection reason: Needs precision")).not.toBeInTheDocument();
+});
+
+it("archives approved content as a moderator and retains version access", async () => {
+  mock.me.mockResolvedValue({ id: "reviewer" });
+  mock.moderatorStatus.mockResolvedValue({ is_moderator: true });
+  current.status = "APPROVED";
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "Archive question" }));
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Archive question" })).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole("button", { name: "View versions" }));
+  expect(await screen.findByText(/Version 1/)).toBeInTheDocument();
+  expect(mock.transitionQuestion).toHaveBeenCalledWith("q1", "archive", undefined);
+});
+
+it("leaves conflicting approval pending and reports the safe server error", async () => {
+  mock.me.mockResolvedValue({ id: "reviewer" });
+  mock.moderatorStatus.mockResolvedValue({ is_moderator: true });
+  current.status = "PENDING_REVIEW";
+  mock.transitionQuestion.mockRejectedValue(new Error("Question conflicts with existing content; review not saved"));
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "Approve question" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("review not saved");
+  expect(screen.getByRole("button", { name: "Approve question" })).toBeEnabled();
+  expect(screen.queryByRole("button", { name: "Archive question" })).not.toBeInTheDocument();
 });

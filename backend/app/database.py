@@ -14,6 +14,7 @@ from app.models import (  # noqa: E402,F401
     course,
     course_membership,
     faculty,
+    faculty_moderator,
     material,
     material_chunk,
     material_section,
