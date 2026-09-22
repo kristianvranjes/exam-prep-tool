@@ -67,9 +67,7 @@ def list_chunks(db: Session, user: User, material_id: UUID) -> list[MaterialChun
 
 
 def delete_material(db: Session, user: User, material_id: UUID, storage: MaterialStorage) -> None:
-    material = db.scalar(
-        select(Material).where(Material.id == material_id).with_for_update()
-    )
+    material = db.scalar(select(Material).where(Material.id == material_id).with_for_update())
     if material is None:
         raise HTTPException(404, "Material not found")
     get_member_course(db, user, material.course_id)

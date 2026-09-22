@@ -214,31 +214,49 @@ it("shows remove failed upload for the current uploader and hides it for others"
   expect(screen.queryByRole("button", { name: "Remove failed upload" })).toBeInTheDocument();
 });
 
-it("confirms deletion and prevents duplicate requests while a delete is pending", async () => {
-  const pending = deferred<void>();
-  mock.deleteMaterial.mockReturnValue(pending.promise);
+it("cancelling confirmation makes no delete API call", async () => {
+  mock.deleteMaterial.mockResolvedValue(undefined);
   mock.materials.mockResolvedValue([{ ...material, id: "failed-own", uploaded_by_user_id: "user", status: "FAILED", original_filename: "failed.pdf" }]);
   await ready("user");
   fireEvent.click(screen.getByRole("button", { name: "Remove failed upload" }));
-  expect(screen.getByRole("button", { name: "Confirm remove" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(mock.deleteMaterial).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "Confirm remove" })).not.toBeInTheDocument();
+  expect(screen.getByText("failed.pdf")).toBeInTheDocument();
+});
+
+it("confirms deletion and clears an already-open detail while a delete is pending", async () => {
+  const pending = deferred<void>();
+  mock.deleteMaterial.mockReturnValue(pending.promise);
+  mock.materials.mockResolvedValue([{ ...material, id: "failed-own", uploaded_by_user_id: "user", status: "FAILED", original_filename: "failed.pdf" }]);
+  mock.material.mockResolvedValue({ ...detail, id: "failed-own", status: "FAILED", processing_error: "Could not extract text.", original_filename: "failed.pdf" });
+  await ready("user");
+  fireEvent.click(screen.getByRole("button", { name: "View details: failed.pdf" }));
+  await screen.findByRole("article", { name: "Material details: failed.pdf" });
+  fireEvent.click(screen.getByRole("button", { name: "Remove failed upload" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
   expect(mock.deleteMaterial).toHaveBeenCalledTimes(1);
   expect(screen.getByRole("button", { name: "Removing…" })).toBeDisabled();
   await act(async () => pending.resolve());
   await waitFor(() => expect(screen.queryByText("failed.pdf")).not.toBeInTheDocument());
+  expect(screen.queryByRole("article", { name: "Material details: failed.pdf" })).not.toBeInTheDocument();
 });
 
-it("preserves state after a failed delete and allows retry", async () => {
+it("preserves state after a failed delete and allows retry through the normal UI", async () => {
   mock.deleteMaterial.mockRejectedValueOnce(new Error("Delete failed")).mockResolvedValueOnce(undefined);
   mock.materials.mockResolvedValue([{ ...material, id: "failed-own", uploaded_by_user_id: "user", status: "FAILED", original_filename: "failed.pdf" }]);
+  mock.material.mockResolvedValue({ ...detail, id: "failed-own", status: "FAILED", processing_error: "Could not extract text.", original_filename: "failed.pdf" });
   await ready("user");
+  fireEvent.click(screen.getByRole("button", { name: "View details: failed.pdf" }));
+  await screen.findByRole("article", { name: "Material details: failed.pdf" });
   fireEvent.click(screen.getByRole("button", { name: "Remove failed upload" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Delete failed");
-  expect(screen.getByText("failed.pdf")).toBeInTheDocument();
+  expect(screen.getAllByText("failed.pdf")).toHaveLength(2);
+  expect(screen.getByRole("article", { name: "Material details: failed.pdf" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Remove failed upload" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
-  await waitFor(() => expect(screen.queryByText("failed.pdf")).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryAllByText("failed.pdf")).toHaveLength(0));
 });
 
 it.each([[0, "0 B"], [850, "850 B"], [1400, "1.4 KB"], [2300000, "2.3 MB"], [1000000000, "1 GB"]])("formats %s bytes as %s", (bytes, label) => {

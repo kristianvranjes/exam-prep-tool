@@ -257,6 +257,81 @@ def test_failed_material_delete_storage_failure_keeps_row(clients, monkeypatch, 
     assert len(list(tmp_path.iterdir())) == 1
 
 
+def test_failed_material_delete_anonymous_requires_auth(clients, monkeypatch):
+    _, member, _, course_id = clients
+
+    def fail(path):
+        raise RuntimeError("secret-password /private/path traceback")
+
+    monkeypatch.setattr(extraction, "extract_document", fail)
+    response = upload(member, course_id)
+    material_id = UUID(response.json()["id"])
+
+    with TestClient(app) as anonymous:
+        assert anonymous.delete(f"/materials/{material_id}").status_code == 401
+
+    with SessionLocal() as db:
+        assert db.get(Material, material_id) is not None
+
+
+@pytest.mark.parametrize("status", ["UPLOADED", "PROCESSING"])
+def test_failed_material_delete_rejects_non_failed_statuses(clients, monkeypatch, status):
+    _, member, _, course_id = clients
+
+    response = upload(member, course_id)
+    material_id = UUID(response.json()["id"])
+    with SessionLocal() as db:
+        row = db.get(Material, material_id)
+        assert row is not None
+        row.status = status
+        db.commit()
+
+    delete_response = member.delete(f"/materials/{material_id}")
+    assert delete_response.status_code == 409
+
+    with SessionLocal() as db:
+        assert db.get(Material, material_id) is not None
+
+
+def test_failed_material_delete_db_failure_rolls_back_and_retry_is_safe(
+    clients, monkeypatch, tmp_path
+):
+    _, member, _, course_id = clients
+    from sqlalchemy.orm import Session
+
+    def fail(path):
+        raise RuntimeError("secret-password /private/path traceback")
+
+    monkeypatch.setattr(extraction, "extract_document", fail)
+    response = upload(member, course_id)
+    material = response.json()
+    material_id = UUID(material["id"])
+    assert response.status_code == 201
+
+    original_commit = Session.commit
+
+    def fail_commit(self, *args, **kwargs):
+        raise RuntimeError("db commit blew up")
+
+    monkeypatch.setattr(Session, "commit", fail_commit)
+    delete_response = member.delete(f"/materials/{material_id}")
+    assert delete_response.status_code == 503
+    assert "db commit blew up" not in delete_response.text
+
+    with SessionLocal() as db:
+        row = db.get(Material, material_id)
+        assert row is not None
+        storage = LocalMaterialStorage(tmp_path)
+        storage.delete(row.storage_key)
+
+    monkeypatch.setattr(Session, "commit", original_commit)
+    retry_response = member.delete(f"/materials/{material_id}")
+    assert retry_response.status_code == 204
+
+    with SessionLocal() as db:
+        assert db.get(Material, material_id) is None
+
+
 def test_failed_material_delete_duplicate_safe(clients, monkeypatch):
     _, member, _, course_id = clients
 

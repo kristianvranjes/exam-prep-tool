@@ -28,7 +28,6 @@ export function CourseMaterials({ courseId, currentUserId }: { courseId: string;
   const [opening, setOpening] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [retryDeleteId, setRetryDeleteId] = useState<string | null>(null);
   const [listRevision, setListRevision] = useState(0);
   const [detailRevision, setDetailRevision] = useState(0);
 
@@ -71,11 +70,9 @@ export function CourseMaterials({ courseId, currentUserId }: { courseId: string;
         setDetailError("");
         setOpening(false);
       }
-      setRetryDeleteId(null);
       setConfirmDeleteId(null);
     } catch (cause) {
       setDeleteError(`${cause instanceof Error ? cause.message : "Could not remove this failed upload."} Your materials are unchanged. Try again.`);
-      setRetryDeleteId(material.id);
       setConfirmDeleteId(null);
     } finally {
       setDeletingId(null);
@@ -93,7 +90,7 @@ export function CourseMaterials({ courseId, currentUserId }: { courseId: string;
     <MaterialUpload disabled={loading} busy={uploading} upload={upload} />
     <div className="flex flex-wrap items-center justify-between gap-3"><h4 className="text-lg font-semibold">Your materials</h4><Button variant="secondary" disabled={loading || uploading} onClick={refresh}>{listError ? "Retry materials" : "Refresh materials"}</Button></div>
     {listError && <Alert>{listError}</Alert>}
-    {deleteError && <Alert>{deleteError} {retryDeleteId && <Button variant="secondary" className="mt-2" onClick={() => retryDeleteId && setMaterials(current => current.some(item => item.id === retryDeleteId) ? current : current)}>Retry remove</Button>}</Alert>}
+    {deleteError && <Alert>{deleteError}</Alert>}
     {loading && <LoadingState>Loading materials…</LoadingState>}
     {!loading && !listError && materials.length === 0 && <EmptyState title="No materials yet.">Choose a PDF above to add your first study material.</EmptyState>}
     <ul aria-label="Materials list" className="flex min-w-0 flex-col gap-3">{materials.map(material => <li key={material.id} className="min-w-0">

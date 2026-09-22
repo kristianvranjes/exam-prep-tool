@@ -56,6 +56,20 @@ with a fixed safe error message. The source remains for inspection. If initial
 metadata creation fails, the source is deleted. Calling internal processing again
 on an already processed material is a no-op, so it cannot duplicate chunks.
 
+## Failed upload cleanup
+
+`DELETE /materials/{material_id}` is the explicit cleanup path for a material that
+failed processing. The delete operation is restricted to the uploader and only for a
+row currently in FAILED status. A non-member or missing material returns 404; a
+member who did not upload it returns 403; and ACTIVE, UPLOADED or PROCESSING rows
+return 409. READY deletion remains intentionally out of scope.
+
+The request first removes the file from the private storage and then deletes the DB
+row. If storage deletion or the DB delete/commit fails, the API returns a safe 503
+without exposing internal details, and the DB transaction is rolled back so the row
+remains. Because storage deletion is missing-safe, a retry is safe even if the
+source file is already gone.
+
 ## Limits
 
 Scanned/image-only or encrypted PDFs may fail; this phase does not add OCR.
