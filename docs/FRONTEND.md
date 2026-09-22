@@ -6,7 +6,33 @@ and restores button focus. A skip link reaches the main content. Course selectio
 keeps the existing materials, practice, review progress and question-bank components
 mounted together. Navigation uses section anchors, so moving between tools does not
 discard an in-progress answer or form. Selecting another course retains the existing
-remount behavior. No new discovery or cross-course moderation UI is introduced.
+remount behavior. Cross-course moderation UI is not part of this shell.
+
+## My courses and Browse courses
+
+My courses shows joined courses and opens the existing study tools. Its empty state
+links to Browse courses, available in both desktop and mobile navigation.
+`CourseBrowser` owns faculty/catalog interaction and reuses the existing API client
+and Faculty/Course types. Faculties appear in backend order with optional university
+names; Legacy / Unassigned receives the same neutral treatment as every faculty.
+
+Faculty courses load only after selection, never across the whole catalog in advance.
+Loading, empty and retryable error states stay inside the browser. Out-of-order
+responses cannot replace the currently selected faculty's catalog. Faculty catalog
+loading is independent of the shell's existing moderator-faculty lookup, so permission
+lookup failures do not prevent browsing.
+
+Membership comes from the shell's joined-course list. Join course is disabled while
+that list loads or the specific join is pending. The join endpoint returns membership
+metadata, not a course. After success, the selected catalog course updates My courses
+with ID-based deduplication, without an extra fetch; joins announce success without
+changing selection, theme or navigation. Open course selects the joined course and
+links to its study tools. Failed joins keep existing courses/selection and offer retry.
+Responses arriving after logout/unmount do not update the next session.
+
+Course creation stays secondary, below the catalog/study content, and is rendered
+only when the current user moderates at least one active faculty. The existing
+backend authorization and course-creation request are unchanged.
 
 ## Theme and tokens
 
