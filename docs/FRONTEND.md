@@ -34,6 +34,40 @@ Course creation stays secondary, below the catalog/study content, and is rendere
 only when the current user moderates at least one active faculty. The existing
 backend authorization and course-creation request are unchanged.
 
+## Study and Exam quizzes
+
+Quiz experience is a frontend presentation choice, separate from the server's
+STANDARD / ADAPTIVE question-selection strategy. Study shows one question at a time
+with Previous/Next controls. Exam uses the same editor with a compact question
+navigator, current/answered/unanswered/flagged text, and Next unanswered/Next flagged
+actions. Switching presentation keeps the draft and saved answers intact.
+
+`PracticeQuiz` orchestrates setup, history, start/resume and submitted review.
+`ActiveQuiz` manages the mounted attempt's navigation/save/confirmation interaction;
+the answer editor, navigator and results are focused components using existing types
+and theme primitives. No API contracts, selection logic or grading rules change.
+
+Edited answers save before question navigation or opening submission confirmation.
+Unsaved changes, Saving…, Saved and Save failed states are explicit. Save failure
+retains the draft and current question for retry; pending operations cannot duplicate
+saves. Returning to history or reloading with edits requires Save and continue,
+Discard changes and continue, or Keep editing. A browser-leave warning protects
+unsaved edits on page unload. This protection applies to quiz navigation and page
+unload; changing course still unmounts the course tools as before.
+
+Flags are local to the mounted active attempt, never sent to the server. They survive
+question navigation and presentation switches, but may reset after returning to
+history, changing course or refreshing/resuming. Saved answers remain server-owned.
+
+Final submission uses an inline named confirmation region with predictable heading
+focus, answered/unanswered/flagged counts and an explicit irreversible warning.
+Confirmation is disabled until every answer is saved. Submission failure preserves
+the attempt and permits retry or return to editing. No correctness appears before
+submission. Results show each student's answer, backend Correct/Incorrect/Pending
+state, available answer keys/explanations, and total/correct/incorrect/pending counts
+derived solely from the frozen attempt. Pending answers do not imply AI/manual
+grading is available. Active history entries resume; submitted entries open results.
+
 ## Theme and tokens
 
 `ThemeProvider` wraps the application through `next-themes`. System is the default;
