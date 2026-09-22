@@ -1,6 +1,6 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from alembic.autogenerate import compare_metadata
@@ -19,6 +19,7 @@ from app.database import Base, SessionLocal, engine
 from app.main import app
 from app.models.faculty import Faculty
 from app.models.faculty_moderator import FacultyModerator
+from app.models.question import Question
 
 pytestmark = pytest.mark.skipif(os.getenv("RUN_DB_TESTS") != "1", reason="Requires PostgreSQL")
 
@@ -34,7 +35,14 @@ def community(clients):
         db.commit()
         other_id = str(other.id)
     provision(moderator, faculty)
-    return owner, creator, moderator, course, faculty, other_id
+    try:
+        yield owner, creator, moderator, course, faculty, other_id
+    finally:
+        # Remove only this fixture's data after assertions, so the deliberate
+        # conflicting-downgrade case cannot poison subsequent CI roundtrips.
+        with SessionLocal() as db:
+            db.execute(delete(Question).where(Question.course_id == UUID(course)))
+            db.commit()
 
 
 def contribute(client, course, stem="Private statement"):
@@ -57,7 +65,10 @@ def test_private_lifecycle_queue_and_scoped_authority(community):
             queued = moderator.get(queue).json()
             assert [r["id"] for r in queued] == [row["id"]]
             assert queued[0]["correct_boolean"] is True
-            assert moderator.patch(path, json={"stem": "No silent edit"}).status_code in (403, 404)
+            assert moderator.get(path + "/versions").status_code == 200
+            assert moderator.post(f"/courses/{course}/join").status_code == 200
+            assert moderator.patch(path, json={"stem": "No silent edit"}).status_code == 403
+            assert moderator.post(path + "/submit").status_code == 403
         if state == "REJECTED":
             rejected = moderator.post(path + "/reject", json={"reason": "Needs rework"}).json()
             assert rejected["reviewed_by_user_id"] == moderator.get("/auth/me").json()["id"]
@@ -197,6 +208,60 @@ def history():
             conn.execute(text(f"SELECT * FROM {table} ORDER BY id")).all()
             for table in ("questions", "question_versions", "question_options")
         ]
+
+
+def test_ordinary_member_cannot_discover_private_content(community):
+    _, creator, moderator, course, faculty, _ = community
+    with TestClient(app) as student:
+        assert (
+            student.post(
+                "/auth/register",
+                json={
+                    "email": f"student-{uuid4().hex}@example.com",
+                    "password": "correct horse",
+                    "display_name": "Student",
+                },
+            ).status_code
+            == 201
+        )
+        assert student.post(f"/courses/{course}/join").status_code == 200
+        row = contribute(creator, course)
+        path = f"/questions/{row['id']}"
+        for state in ("DRAFT", "PENDING_REVIEW", "REJECTED"):
+            if state == "PENDING_REVIEW":
+                assert creator.post(path + "/submit").status_code == 200
+            if state == "REJECTED":
+                assert (
+                    moderator.post(path + "/reject", json={"reason": "Rework"}).status_code == 200
+                )
+            for suffix in ("", f"?status={state}", "?type=TRUE_FALSE&limit=1"):
+                assert student.get(f"/courses/{course}/questions{suffix}").json() == []
+            for suffix in ("", "/versions"):
+                assert student.get(path + suffix).status_code == 404
+            assert student.patch(path, json={"stem": "Unauthorized"}).status_code == 404
+            for action in ("submit", "approve", "reject", "archive"):
+                response = student.post(path + "/" + action, json={"reason": "Unauthorized"})
+                assert response.status_code == 404
+                assert row["stem"] not in response.text
+        assert student.get(f"/faculties/{faculty}/question-review").status_code == 403
+        assert creator.patch(path, json={"stem": "Reworked private"}).status_code == 200
+        assert creator.post(path + "/submit").status_code == 200
+        assert moderator.post(path + "/approve").status_code == 200
+        public = student.get(path).json()
+        assert public["visibility"] == "MEMBER"
+        assert_no_keys(public)
+        assert moderator.post(path + "/archive").status_code == 200
+        for mode in ("STANDARD", "ADAPTIVE"):
+            assert (
+                creator.post(
+                    f"/courses/{course}/attempts",
+                    json={
+                        "count": 1,
+                        "selection_mode": mode,
+                    },
+                ).status_code
+                == 409
+            )
 
 
 def test_migration_roundtrip_and_conflicting_downgrade_is_non_destructive(community):

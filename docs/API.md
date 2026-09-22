@@ -1,5 +1,9 @@
 # API
 
+Phase 10B [community API and permissions](COMMUNITY.md#api-additions-and-governance)
+adds faculty moderator status/review queue, member imports, creator-only edits and
+faculty-scoped review. Course creation requires faculty moderator authority.
+
 `GET /health` returns HTTP 200 and `{"status":"ok"}` when FastAPI is running.
 It does not require PostgreSQL. `GET /health/db` executes SELECT 1 through SQLAlchemy
 and returns `{"status":"ok","database":"ok"}` on success or HTTP 503 when unavailable.
@@ -26,7 +30,7 @@ and are never returned.
 
 ## Courses
 
-- `POST /courses` creates a course for the authenticated user and creates an OWNER
+- `POST /courses` requires a moderator of the selected faculty (otherwise 403) and creates an OWNER
   membership in the same transaction. The request requires `faculty_id` of an active
   faculty plus `name` (and optional `code`, `description`). Missing faculty_id is 422;
   unknown/inactive faculty is 404. Responses include faculty_id and is_active.
@@ -115,28 +119,29 @@ These endpoints do not invoke text generation, reparse PDFs, or construct RAG pr
 ## Question bank (Phase 6)
 
 All routes require a session (401 otherwise). Outsiders/missing resources return
-404. OWNER can read all statuses and curate. MEMBER sees APPROVED only, receives
-404 for hidden question UUIDs (including versions/mutations), and receives 403 for
-generation or mutation/version access on an otherwise visible approved question.
+404. Members read their own questions in all states and public APPROVED content.
+Only faculty moderators may inspect other creators' private content. OWNER alone
+is not moderation authority. Hidden UUIDs, versions and mutations return 404.
+See [community permissions](COMMUNITY.md) for the creator/moderator action matrix.
 
 | Method/path | Contract |
 | --- | --- |
 | POST `/courses/{course_id}/questions/generate` | OWNER, `{concept_ids, question_types, count, retrieval_top_k}`. Unique approved concept IDs (1–5), unique types (1–3), count/top-k (1–10). Returns completed JobDetail, HTTP 200 for SUCCEEDED or FAILED. |
-| GET `/courses/{course_id}/questions` | `status`, `type`, `limit` (default 20, 1–50), `offset` (default 0, 0–10000). Stable created_at descending then ID. OWNER status filter; MEMBER ignores any valid status filter and always gets APPROVED. |
+| GET `/courses/{course_id}/questions` | `status`, `type`, `limit` (default 20, 1–50), `offset` (default 0, 0–10000). Stable created_at descending then ID. Status filters intersect visible content; no filter reveals another creator's private question. |
 | GET `/questions/{question_id}` | OWNER/review or MEMBER/public representation. |
-| PATCH `/questions/{question_id}` | OWNER, DRAFT/REJECTED only. Partial stem/explanation/difficulty, options, correct_answer, reference_answer, concept_ids. Full merged content is validated; source chunks/type/status/source are not editable. |
-| POST `/questions/{question_id}/submit` | DRAFT → PENDING_REVIEW. |
-| POST `/questions/{question_id}/approve` | PENDING_REVIEW → APPROVED with reviewer/time. |
-| POST `/questions/{question_id}/reject` | PENDING_REVIEW → REJECTED; `{reason}` must be nonblank, at most 1000 characters. |
-| POST `/questions/{question_id}/archive` | APPROVED → ARCHIVED, terminal. |
-| GET `/questions/{question_id}/versions` | OWNER, version ascending; `limit` default 50/max 100, `offset` max 10000. |
+| PATCH `/questions/{question_id}` | Creator, DRAFT/REJECTED only. Partial stem/explanation/difficulty, options, correct_answer, reference_answer, concept_ids. Full merged content is validated; source chunks/type/status/source are not editable. |
+| POST `/questions/{question_id}/submit` | Creator only: DRAFT → PENDING_REVIEW. |
+| POST `/questions/{question_id}/approve` | Non-creator faculty moderator: PENDING_REVIEW → APPROVED with reviewer/time. |
+| POST `/questions/{question_id}/reject` | Non-creator faculty moderator: PENDING_REVIEW → REJECTED; `{reason}` must be nonblank, at most 1000 characters. |
+| POST `/questions/{question_id}/archive` | Faculty moderator: APPROVED → ARCHIVED, terminal. |
+| GET `/questions/{question_id}/versions` | Creator or faculty moderator, version ascending; `limit` default 50/max 100, `offset` max 10000. |
 
 Supported types: MULTIPLE_CHOICE (2–6 options, one correct), TRUE_FALSE (strict
 boolean `correct_answer` in write payloads), SHORT_ANSWER (nonblank reference).
 Stems/option texts max 400 characters; explanation/reference max 2000; optional
 difficulty integer 1–5. Editing rejected content returns DRAFT and clears review.
 
-OWNER responses have `visibility: OWNER`, correctness flags, `correct_boolean`,
+Creator/moderator full responses retain the compatibility tag `visibility: OWNER`, correctness flags, `correct_boolean`,
 reference/explanation, concepts, source_chunks (chunk_id/material_id/ordinal),
 source/ai_job_id and review metadata. MEMBER has `visibility: MEMBER`, id/course_id,
 type, status APPROVED, stem, difficulty and option position/text **only**. Even
@@ -173,6 +178,6 @@ Join uses PostgreSQL ON CONFLICT DO NOTHING on the existing unique course/user
 membership constraint, then reads the membership. Shared course/faculty locks keep
 availability stable through the transaction. Catalog access is distinct from private
 course access: browsing does not grant membership. Joining enables the existing
-member material/question/practice APIs while preserving OWNER-only editing/review.
-Inactive entries keep existing members' historical access. There is no leave endpoint,
-faculty moderator role, or community question visibility change in this phase.
+member material/question/practice APIs while enforcing creator edits and faculty-scoped moderation.
+Inactive entries keep existing members' historical access. There is no leave endpoint.
+Phase 10B adds the faculty moderator role and community visibility described above.

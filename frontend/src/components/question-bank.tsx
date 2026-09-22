@@ -168,7 +168,7 @@ function QuestionEditor({ question: q, concepts, busy, save }: { question: Owner
   const [options, setOptions] = useState(q.options.map((o) => ({ text: o.text, is_correct: o.is_correct })));
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const data = new FormData(e.currentTarget);
-    const body: QuestionEdit = { stem: String(data.get("stem")), explanation: String(data.get("explanation") || "") || null, difficulty: data.get("difficulty") ? Number(data.get("difficulty")) : null, concept_ids: data.getAll("editConcept").map(String) };
+    const body: QuestionEdit = { stem: String(data.get("stem")), explanation: String(data.get("explanation") || "") || null, difficulty: data.get("difficulty") ? Number(data.get("difficulty")) : null, concept_ids: [...q.concept_ids.filter(id => !concepts.some(c => c.id === id && c.status === "APPROVED")), ...data.getAll("editConcept").map(String)] };
     if (q.type === "MULTIPLE_CHOICE") body.options = options;
     if (q.type === "TRUE_FALSE") body.correct_answer = data.get("answer") === "true";
     if (q.type === "SHORT_ANSWER") body.reference_answer = String(data.get("reference"));

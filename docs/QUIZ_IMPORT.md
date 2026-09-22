@@ -13,7 +13,7 @@ To restore internal generation, explicitly select and configure an existing prov
 
 ## Using the Question Bank
 
-1. As the course OWNER, open Question bank → Import external quiz drafts.
+1. As a joined course MEMBER or OWNER, open Question bank → Import external quiz drafts.
 2. Open **External AI prompt and example** and copy the prompt (or select its text).
    Supply only study material you are permitted to share with your chosen external tool.
 3. Ask that tool to use only that material. Save its response as a UTF-8 `.json` file,
@@ -22,9 +22,9 @@ To restore internal generation, explicitly select and configure an existing prov
    clears type/page filters and opens the first imported question. All imported drafts
    remain in the normal paginated bank. Errors save nothing; correct the file and retry.
 5. Check answers and explanations against the original material, edit as needed,
-   submit for review, then explicitly approve or reject each question. Rejected questions
-   can be edited and resubmitted. Import cannot approve content. MEMBER users cannot
-   import or view drafts and see only the existing answer-free approved representation.
+   submit for a different faculty moderator to approve or reject. Rejected questions
+   can be edited and resubmitted. Creators may immediately practice their own DRAFT
+   and PENDING_REVIEW questions. Other students see only answer-free approved content.
 
 The copyable prompt is maintained in
 [`quiz-import-prompt.ts`](../frontend/src/lib/quiz-import-prompt.ts).
@@ -61,7 +61,7 @@ Internally generated `AI` questions retain mandatory concept/source validation.
 `Content-Type: application/json` and the usual session cookie. Hosted calls must also
 send the trusted `Origin`. The course comes from the URL, never the file. Success is
 201 with the imported owner question representations. The route uses the existing
-membership rules: 401 anonymous, 403 non-owner member, 404 unavailable course.
+membership rules: 401 anonymous, MEMBER/OWNER may import, 404 unavailable course.
 
 `QUESTION_IMPORT_MAX_BYTES` defaults to 262144 (256 KiB) and
 `QUESTION_IMPORT_MAX_COUNT` defaults to 50. Operators may lower them; these are also
@@ -72,11 +72,13 @@ errors without echoing the document; wrong content type is 415 and oversize is 4
 
 All content is validated before writes. Questions, options and initial history are
 committed together. Duplicate normalized stems within a file are rejected; an active
-stem already in the course causes 409 and rolls back the entire import. Repeated
+stem already owned by the same creator in the course causes 409 and rolls back the entire import. Repeated
 imports do not silently create duplicates. Database failures return a safe 503 and
 roll back all writes. There is no automatic retry or partial import.
 
-No schema migration is needed. Run targeted backend tests `test_quiz_import.py` and
+The import format is unchanged; migration 0011 updates community uniqueness and
+moderator assignments. Different creators may import identical private stems;
+only one may become APPROVED per course. See [community rules](COMMUNITY.md). Run targeted backend tests `test_quiz_import.py` and
 `test_quiz_import_database.py` (the latter against disposable PostgreSQL with
 `RUN_DB_TESTS=1`), plus frontend quiz-import/question-bank/question-api tests. The full
 README gates retain existing migration, provider and question lifecycle coverage.

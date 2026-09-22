@@ -1,5 +1,11 @@
 # Database infrastructure
 
+Migration **0011** adds `faculty_moderators` with a composite faculty/user key and
+cascade foreign keys. It replaces course-wide active-stem uniqueness with
+`uq_question_creator_active_stem` and `uq_question_approved_stem`. All question and
+version rows survive; existing owners are not promoted. Conflicting downgrade fails
+transactionally. See [community migration and provisioning](COMMUNITY.md).
+
 PostgreSQL 17 uses the pgvector/pgvector:pg17 image. The named postgres_data volume
 persists data. infra/postgres/init.sql enables vector on a fresh volume; Alembic
 revision 0001 also enables it idempotently for existing databases. Revision 0002 adds

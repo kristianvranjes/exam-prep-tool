@@ -58,7 +58,9 @@ AIProvider → strict Pydantic validation → atomic AI DRAFT questions. Neither
 question module imports provider adapters or duplicates vector SQL. The existing
 active AI-job index protects overlapping operations; inference runs outside the
 short final course lock. Review locks/reloads the individual question. Explicit
-OWNER and MEMBER schemas prevent answer-key and audit leakage; only OWNER curates.
+Full/public schemas prevent answer-key and audit leakage. The legacy OWNER schema
+tag denotes a full view, not a role grant. Creators edit/submit; faculty moderators
+review other creators. See [community boundaries](COMMUNITY.md).
 The Next.js bank is mounted on demand inside the current course, with no quiz/session
 engine. See [question bank](QUESTIONS.md) for boundaries and failure semantics.
 
@@ -76,7 +78,7 @@ unchanged.
 Authenticated catalog browsing does not require course membership and exposes
 metadata only. Joining an active course under an active faculty creates MEMBER;
 it never creates OWNER or changes an existing role. Existing course-private actions
-still require membership, and OWNER-only actions remain OWNER-only. Inactive catalog
+still require membership, and existing course/material management permissions remain unchanged. Inactive catalog
 entries retain historical/member access but cannot be discovered normally, joined,
 or used as faculties for new course creation.
 
