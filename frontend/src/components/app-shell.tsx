@@ -6,6 +6,7 @@ import { ProgressPanel } from "./progress-panel";
 import { PracticeQuiz } from "./practice-quiz";
 import { QuestionBank } from "./question-bank";
 import { CourseMaterials } from "./course-materials";
+import { CourseBrowser } from "./course-browser";
 import { ApplicationFrame, Brand } from "./application-frame";
 import { AuthScreen, type AuthMode } from "./auth-screen";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
@@ -80,7 +81,7 @@ export function AppShell() {
       <p className="mt-2 text-muted">Choose a course and pick up where you left off.</p>
       {error && <Alert className="mt-5">{error}</Alert>}
       <div className="mt-6">
-        {loadingCourses ? <LoadingState>Loading courses…</LoadingState> : courses.length === 0 ? <EmptyState title="No courses yet">You do not belong to any courses yet. Your joined courses will appear here.</EmptyState> :
+        {loadingCourses ? <LoadingState>Loading courses…</LoadingState> : courses.length === 0 ? <EmptyState title="No courses yet">Find your faculty in <a href="#browse-courses" className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-foreground">Browse courses</a> and join a course to start studying.</EmptyState> :
           <ul className="grid gap-3 sm:grid-cols-2">{courses.map(course => <li key={course.id}>
             <button type="button" aria-pressed={selected?.id === course.id} className="h-full w-full rounded-xl border border-line bg-surface p-5 text-left hover:border-accent aria-pressed:border-accent aria-pressed:bg-accent-surface" onClick={() => setSelected(course)}>
               <span className="block text-lg font-semibold">{course.name}</span>{course.code && <Badge className="mt-2">{course.code}</Badge>}<span className="mt-3 block text-sm text-muted">{course.description || "No description"}</span>
@@ -88,14 +89,15 @@ export function AppShell() {
           </li>)}</ul>}
       </div>
     </section>
-    {selected && <section className="mt-10" aria-labelledby="selected-course-heading">
+    <CourseBrowser joinedCourses={courses} loadingMembership={loadingCourses} onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])} onOpen={setSelected} />
+    {selected && <section id="selected-course" tabIndex={-1} className="mt-10" aria-labelledby="selected-course-heading">
       <div className="border-t border-line pt-8"><h2 id="selected-course-heading" className="text-2xl font-semibold tracking-tight">{selected.name}</h2>{selected.code && <p className="mt-1 text-sm text-muted">{selected.code}</p>}<p className="mt-3 text-muted">{selected.description || "No description"}</p></div>
       <div id="materials" tabIndex={-1}><CourseMaterials key={selected.id} courseId={selected.id} /></div>
       <div id="practice" tabIndex={-1}><PracticeQuiz key={`practice-${selected.id}`} courseId={selected.id} /></div>
       <div id="progress" tabIndex={-1}><ProgressPanel key={`progress-${selected.id}`} courseId={selected.id} /></div>
       <div id="questions" tabIndex={-1}><QuestionBank key={`questions-${selected.id}`} courseId={selected.id} /></div>
     </section>}
-    <Surface className="mt-10">
+    {faculties.length > 0 && <Surface className="mt-10">
       <form onSubmit={createCourse} className="space-y-4" aria-label="Create a course">
         <div><h2 className="text-lg font-semibold">Create a course</h2><p className="mt-1 text-sm text-muted">Only faculty moderators can create shared courses.</p></div>
         <label className="block text-sm font-medium">Faculty<Select name="faculty_id" required defaultValue="" className="mt-2"><option value="" disabled>Select a faculty</option>{faculties.map(faculty => <option key={faculty.id} value={faculty.id}>{faculty.name}</option>)}</Select></label>
@@ -103,6 +105,6 @@ export function AppShell() {
         <label className="block text-sm font-medium">Description (optional)<textarea name="description" maxLength={2000} rows={3} className="mt-2 w-full rounded-lg border border-line bg-surface p-3 text-base" /></label>
         <Button type="submit" disabled={busy || faculties.length === 0}>{busy ? "Creating…" : "Create course"}</Button>
       </form>
-    </Surface>
+    </Surface>}
   </ApplicationFrame>;
 }

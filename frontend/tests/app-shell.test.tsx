@@ -12,6 +12,8 @@ const apiMock = vi.hoisted(() => ({
   courses: vi.fn(),
   course: vi.fn(),
   createCourse: vi.fn(),
+  facultyCourses: vi.fn(),
+  joinCourse: vi.fn(),
 }));
 
 vi.mock("../src/lib/api", () => ({ api: apiMock }));
@@ -35,6 +37,8 @@ beforeEach(() => {
     apiMock.moderatorStatus.mockResolvedValue({ is_moderator: true });
     apiMock.login.mockResolvedValue(user);
     apiMock.logout.mockResolvedValue(undefined);
+    apiMock.facultyCourses.mockResolvedValue([course]);
+    apiMock.joinCourse.mockResolvedValue(course);
   });
 
 describe("authentication and course flow", () => {
@@ -46,7 +50,7 @@ describe("authentication and course flow", () => {
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "correct horse" } });
     fireEvent.submit(screen.getByRole("button", { name: "Register" }).closest("form")!);
     expect(await screen.findByText("student@example.com")).toBeInTheDocument();
-    await screen.findByRole("option", { name: "Engineering" });
+    await screen.findByRole("form", { name: "Create a course" });
     fireEvent.change(screen.getByLabelText("Faculty"), { target: { value: "faculty-1" } });
     fireEvent.change(screen.getByPlaceholderText("Course name"), { target: { value: "Algorithms" } });
     fireEvent.click(screen.getByRole("button", { name: "Create course" }));
@@ -100,6 +104,7 @@ it("keeps all course tools reachable and switches their selected course", async 
   fireEvent.click(menu);
   expect(menu).toHaveAttribute("aria-expanded", "true");
   const nav = screen.getByRole("navigation", { name: "Main navigation" });
+  expect(within(nav).getByRole("link", { name: "Browse courses" })).toHaveAttribute("href", "#browse-courses");
   expect(within(nav).getByRole("link", { name: "Practice" })).toHaveAttribute("href", "#practice");
   expect(within(nav).getByRole("link", { name: "Question bank" })).toHaveAttribute("href", "#questions");
   fireEvent.keyDown(nav, { key: "Escape" });
@@ -134,22 +139,22 @@ it("keeps the signed-in shell when logout fails and shows a retryable error", as
   expect(screen.getByRole("button", { name: "Log out" })).toBeEnabled();
 });
 
-it("does not silently select a faculty and disables creation when the catalog is empty", async () => {
+it("hides creation when the catalog is empty and directs students to browse", async () => {
   apiMock.me.mockResolvedValue(user);
   apiMock.courses.mockResolvedValue([]);
   apiMock.faculties.mockResolvedValue([]);
   render(<AppShell />);
-  const select = await screen.findByLabelText("Faculty");
-  expect(select).toHaveValue("");
-  expect(select).toBeRequired();
-  expect(screen.getByRole("button", { name: "Create course" })).toBeDisabled();
+  await screen.findByText("No faculties available");
+  expect(screen.queryByRole("form", { name: "Create a course" })).not.toBeInTheDocument();
+  expect(within(screen.getByRole("region", { name: "Your courses" })).getByRole("link", { name: "Browse courses" })).toHaveAttribute("href", "#browse-courses");
 });
 
 it("reports faculty loading errors", async () => {
   apiMock.me.mockResolvedValue(user);
   apiMock.faculties.mockRejectedValue(new Error("Unavailable"));
   render(<AppShell />);
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load faculties");
+  const courses = await screen.findByRole("region", { name: "Your courses" });
+  expect(await within(courses).findByRole("alert")).toHaveTextContent("Could not load faculties");
 });
 
 it("does not offer course creation to ordinary faculty members", async () => {
@@ -157,7 +162,63 @@ it("does not offer course creation to ordinary faculty members", async () => {
   apiMock.faculties.mockResolvedValue([{ id: "f", name: "Faculty", slug: "faculty" }]);
   apiMock.moderatorStatus.mockResolvedValue({ is_moderator: false });
   render(<AppShell />);
-  await screen.findByText("Only faculty moderators can create shared courses.");
+  await screen.findByLabelText("Browse by faculty");
   await waitFor(() => expect(apiMock.moderatorStatus).toHaveBeenCalledWith("f"));
-  expect(screen.getByRole("button", { name: "Create course" })).toBeDisabled();
+  expect(screen.queryByRole("form", { name: "Create a course" })).not.toBeInTheDocument();
+});
+
+it("adds joined courses immediately, opens all study tools and avoids repeated joins", async () => {
+  apiMock.me.mockResolvedValue(user);
+  apiMock.moderatorStatus.mockResolvedValue({ is_moderator: false });
+  render(<AppShell />);
+  fireEvent.change(await screen.findByLabelText("Browse by faculty"), { target: { value: "faculty-1" } });
+  fireEvent.click(await screen.findByRole("button", { name: "Join course: Algorithms" }));
+  const myCourses = screen.getByRole("region", { name: "Your courses" });
+  expect(await within(myCourses).findByRole("button", { name: /Algorithms/ })).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Practice quiz" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("link", { name: "Open course: Algorithms" }));
+  for (const name of ["Course materials", "Practice quiz", "Review progress", "Question bank"]) {
+    expect(screen.getByRole("region", { name })).toHaveTextContent("course-1");
+  }
+  fireEvent.change(screen.getByLabelText("Browse by faculty"), { target: { value: "" } });
+  fireEvent.change(screen.getByLabelText("Browse by faculty"), { target: { value: "faculty-1" } });
+  fireEvent.click(await screen.findByRole("link", { name: "Open course: Algorithms" }));
+  expect(within(myCourses).getAllByRole("button", { name: /Algorithms/ })).toHaveLength(1);
+  expect(apiMock.joinCourse).toHaveBeenCalledTimes(1);
+});
+
+it("keeps My courses and selection intact when the catalog or join fails", async () => {
+  apiMock.me.mockResolvedValue(user);
+  apiMock.courses.mockResolvedValue([course]);
+  apiMock.facultyCourses.mockRejectedValueOnce(new Error("Unavailable"));
+  apiMock.joinCourse.mockRejectedValue(new Error("Unavailable"));
+  render(<AppShell />);
+  fireEvent.click(await screen.findByRole("button", { name: /Algorithms/ }));
+  fireEvent.change(await screen.findByLabelText("Browse by faculty"), { target: { value: "faculty-1" } });
+  expect(await screen.findByText(/Could not load courses for this faculty/)).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Practice quiz" })).toHaveTextContent("course-1");
+  apiMock.facultyCourses.mockResolvedValue([{ ...course, id: "new", name: "Statistics" }]);
+  fireEvent.click(screen.getByRole("button", { name: "Retry courses" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Join course: Statistics" }));
+  expect(await screen.findByText(/Could not join this course/)).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Practice quiz" })).toHaveTextContent("course-1");
+  expect(within(screen.getByRole("region", { name: "Your courses" })).getAllByRole("button")).toHaveLength(1);
+});
+
+it("deduplicates a join completed after the same course was added through creation", async () => {
+  let finishJoin!: (value: typeof course) => void;
+  apiMock.me.mockResolvedValue(user);
+  apiMock.joinCourse.mockReturnValue(new Promise(resolve => { finishJoin = resolve; }));
+  render(<AppShell />);
+  fireEvent.change(await screen.findByLabelText("Browse by faculty"), { target: { value: "faculty-1" } });
+  fireEvent.click(await screen.findByRole("button", { name: "Join course: Algorithms" }));
+  const form = await screen.findByRole("form", { name: "Create a course" });
+  fireEvent.change(within(form).getByLabelText("Faculty"), { target: { value: "faculty-1" } });
+  fireEvent.change(within(form).getByLabelText("Course name"), { target: { value: "Algorithms" } });
+  fireEvent.submit(form);
+  const myCourses = screen.getByRole("region", { name: "Your courses" });
+  await within(myCourses).findByRole("button", { name: /Algorithms/ });
+  finishJoin(course);
+  await screen.findByText(/added to My courses/);
+  expect(within(myCourses).getAllByRole("button", { name: /Algorithms/ })).toHaveLength(1);
 });

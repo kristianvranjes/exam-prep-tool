@@ -18,6 +18,8 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 export const api = {
   moderatorStatus: (facultyId: string) => request<{ is_moderator: boolean }>(`/faculties/${facultyId}/moderator-status`),
   faculties: () => request<Faculty[]>("/faculties"),
+  facultyCourses: (facultyId: string) => request<Course[]>(`/faculties/${facultyId}/courses`),
+  joinCourse: (courseId: string) => request<Course>(`/courses/${courseId}/join`, { method: "POST" }),
   reviewProgress: (courseId: string, offset = 0) => request<ReviewProgress[]>(`/courses/${courseId}/review-progress?limit=20&offset=${offset}`),
   membership: (courseId: string) => request<{ role: "OWNER" | "MEMBER" }>(`/courses/${courseId}/membership`),
   concepts: (courseId: string, materialId?: string) => request<Concept[]>(`/courses/${courseId}/concepts${materialId ? `?material_id=${encodeURIComponent(materialId)}` : ""}`),

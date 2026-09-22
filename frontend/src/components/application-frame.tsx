@@ -36,6 +36,7 @@ export function ApplicationFrame({ user, courseName, logout, busy, children }: {
         <div id="app-navigation" className={cn("p-4 md:sticky md:top-0 md:block md:p-6", !menuOpen && "hidden")} onKeyDown={event => { if (event.key === "Escape" && menuOpen) { setMenuOpen(false); menuButton.current?.focus(); } }}>
           <nav aria-label="Main navigation" className="space-y-1" onClick={event => { if ((event.target as HTMLElement).closest("a")) setMenuOpen(false); }}>
             <a className="nav-link" href="#courses"><GraduationCap aria-hidden="true" className="size-5" />My courses</a>
+            <a className="nav-link" href="#browse-courses"><FolderOpen aria-hidden="true" className="size-5" />Browse courses</a>
             {courseName && <><p className="mt-7 mb-2 break-words text-sm font-semibold text-muted">{courseName}</p>{courseLinks.map(({ href, label, icon: Icon }) => <a key={href} className="nav-link" href={href}><Icon aria-hidden="true" className="size-5 shrink-0" />{label}</a>)}</>}
           </nav>
           <div className="mt-8 border-t border-line pt-5"><p className="break-words text-sm font-semibold">{user.display_name}</p><p className="mt-1 break-all text-xs text-muted">{user.email}</p><Button variant="secondary" className="mt-4 w-full" onClick={logout} disabled={busy}>{busy ? "Logging out…" : "Log out"}</Button></div>
