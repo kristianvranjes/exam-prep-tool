@@ -92,7 +92,7 @@ export function AppShell() {
     <CourseBrowser joinedCourses={courses} loadingMembership={loadingCourses} onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])} onOpen={setSelected} />
     {selected && <section id="selected-course" tabIndex={-1} className="mt-10" aria-labelledby="selected-course-heading">
       <div className="border-t border-line pt-8"><h2 id="selected-course-heading" className="text-2xl font-semibold tracking-tight">{selected.name}</h2>{selected.code && <p className="mt-1 text-sm text-muted">{selected.code}</p>}<p className="mt-3 text-muted">{selected.description || "No description"}</p></div>
-      <div id="materials" tabIndex={-1}><CourseMaterials key={selected.id} courseId={selected.id} /></div>
+      <div id="materials" tabIndex={-1}><CourseMaterials key={selected.id} courseId={selected.id} currentUserId={user.id} /></div>
       <div id="practice" tabIndex={-1}><PracticeQuiz key={`practice-${selected.id}`} courseId={selected.id} /></div>
       <div id="progress" tabIndex={-1}><ProgressPanel key={`progress-${selected.id}`} courseId={selected.id} /></div>
       <div id="questions" tabIndex={-1}><QuestionBank key={`questions-${selected.id}`} courseId={selected.id} /></div>

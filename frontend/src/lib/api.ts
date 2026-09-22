@@ -46,6 +46,7 @@ export const api = {
     body.append("file", file);
     return request<Material>(`/courses/${courseId}/materials`, { method: "POST", body });
   },
+  deleteMaterial: (materialId: string) => request<void>(`/materials/${materialId}`, { method: "DELETE" }),
   me: () => request<User>("/auth/me"),
   register: (body: { email: string; password: string; display_name: string }) => request<User>("/auth/register", { method: "POST", body: JSON.stringify(body) }),
   login: (body: { email: string; password: string }) => request<User>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
