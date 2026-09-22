@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { PracticeQuiz } from "../src/components/practice-quiz";
 import type { Attempt, PracticeAnswer } from "../src/lib/practice-api";
@@ -45,7 +45,9 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
   fireEvent.click(screen.getByLabelText("One"));
   fireEvent.click(screen.getByRole("button", { name: "Save answer" }));
   await screen.findByText("1 / 3 answered and saved");
-  expect(screen.getByRole("button", { name: "Submit quiz — final" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Submit quiz — final" }));
+  expect(await screen.findByRole("button", { name: "Confirm final submission" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Keep reviewing" }));
   view.unmount();
   mock.history.mockResolvedValue([current]);
   render(<PracticeQuiz courseId="course" />);
@@ -53,16 +55,17 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
   fireEvent.click(await screen.findByRole("button", { name: /Resume quiz/ }));
   expect(await screen.findByLabelText("One")).toBeChecked();
   fireEvent.click(screen.getByRole("button", { name: "Next question" }));
-  fireEvent.click(screen.getByLabelText("False"));
+  fireEvent.click(await screen.findByLabelText("False"));
   fireEvent.click(screen.getByRole("button", { name: "Save answer" }));
   await screen.findByText("2 / 3 answered and saved");
   fireEvent.click(screen.getByRole("button", { name: "Next question" }));
-  fireEvent.change(screen.getByLabelText("Your short answer"), { target: { value: "My explanation" } });
+  fireEvent.change(await screen.findByLabelText("Your short answer"), { target: { value: "My explanation" } });
   fireEvent.click(screen.getByRole("button", { name: "Save answer" }));
   await screen.findByText("3 / 3 answered and saved");
   fireEvent.click(screen.getByRole("button", { name: "Submit quiz — final" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Confirm final submission" }));
   await screen.findByText("Quiz results");
-  expect(screen.getAllByText("Correct")).toHaveLength(2);
+  expect(screen.getAllByRole("article").filter(article => within(article).queryByText("Correct"))).toHaveLength(2);
   expect(screen.getByText(/Pending \/ ungraded/)).toBeInTheDocument();
   expect(screen.getByText("Reference answer: Mass attracts mass")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Save answer" })).not.toBeInTheDocument();
@@ -87,6 +90,7 @@ it("keeps failed saves unsaved and allows reloading an already submitted attempt
   expect(screen.getByText("0 / 3 answered and saved")).toBeInTheDocument();
   await mock.submit();
   fireEvent.click(screen.getByRole("button", { name: "Reload saved attempt" }));
+  fireEvent.click(screen.getByRole("button", { name: "Discard changes and continue" }));
   await screen.findByText("Quiz results");
 });
 
@@ -108,11 +112,13 @@ it("reloads the saved selection even when the current draft differs", async () =
   fireEvent.click(screen.getByRole("button", { name: "Start practice quiz" }));
   fireEvent.click(await screen.findByLabelText("One"));
   fireEvent.click(screen.getByRole("button", { name: "Save answer" }));
-  await screen.findByText("Answer saved");
+  await screen.findByText("Saved");
   fireEvent.click(screen.getByLabelText("Two"));
   fireEvent.click(screen.getByRole("button", { name: "Reload saved attempt" }));
+  expect(screen.getByRole("region", { name: "Unsaved answer" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Discard changes and continue" }));
   await waitFor(() => expect(screen.getByLabelText("One")).toBeChecked());
-  expect(screen.getByText("Answer saved")).toBeInTheDocument();
+  expect(screen.getByText("Saved")).toBeInTheDocument();
 });
 
 it("preserves the original short answer after saving", async () => {
@@ -127,7 +133,7 @@ it("preserves the original short answer after saving", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Start practice quiz" }));
   fireEvent.change(await screen.findByLabelText("Your short answer"), { target: { value: "  Saved text  " } });
   fireEvent.click(screen.getByRole("button", { name: "Save answer" }));
-  await screen.findByText("Answer saved");
+  await screen.findByText("Saved");
   expect(screen.getByLabelText("Your short answer")).toHaveValue("  Saved text  ");
 });
 
@@ -152,7 +158,7 @@ it.each(["CORRECT", "PENDING"] as const)("reviews a frozen %s short answer after
   expect(screen.getByText(/^Your answer:/).textContent).toBe(`Your answer: ${raw}`);
   expect(screen.getByText(/^Your answer:/)).toHaveClass("whitespace-pre-wrap");
   expect(screen.getByText("Reference answer: Mass attracts mass")).toBeInTheDocument();
-  expect(screen.getByText(gradingStatus === "CORRECT" ? "Correct" : "Pending / ungraded — semantic/manual grading is not yet available.")).toBeInTheDocument();
+  expect(within(screen.getByRole("article")).getByText(gradingStatus === "CORRECT" ? "Correct" : "Pending / ungraded")).toBeInTheDocument();
   expect(screen.queryByText(/score|%/i)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Save answer" })).not.toBeInTheDocument();
   expect(mock.submit).not.toHaveBeenCalled();
@@ -169,4 +175,189 @@ it("launches adaptive review with the existing count and type controls", async (
   fireEvent.click(screen.getByRole("button", { name: "Start practice quiz" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Only 1 eligible");
   expect(mock.start).toHaveBeenCalledWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE");
+});
+
+async function start(experience: "Study" | "Exam" = "Study") {
+  render(<PracticeQuiz courseId="course" />);
+  await open();
+  fireEvent.click(screen.getByLabelText(experience));
+  fireEvent.click(screen.getByRole("button", { name: "Start practice quiz" }));
+  await screen.findByText("Choose a number");
+}
+function allAnswered() {
+  current.questions[0].answer = { type: "MULTIPLE_CHOICE", option_position: 1 };
+  current.questions[1].answer = { type: "TRUE_FALSE", value: false };
+  current.questions[2].answer = { type: "SHORT_ANSWER", text: "My explanation" };
+}
+
+it("keeps Study/Exam separate from the selection strategy and saves before navigating", async () => {
+  render(<PracticeQuiz courseId="course" />);
+  await open();
+  expect(screen.getByLabelText("Study")).toBeChecked();
+  expect(screen.getByLabelText("Standard practice")).toBeChecked();
+  fireEvent.click(screen.getByLabelText("Exam"));
+  fireEvent.click(screen.getByLabelText("Adaptive review"));
+  fireEvent.click(screen.getByRole("button", { name: "Start practice quiz" }));
+  await screen.findByText("Choose a number");
+  expect(mock.start).toHaveBeenCalledWith("course", 5, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE");
+  fireEvent.click(screen.getByLabelText("Study"));
+  expect(screen.queryByRole("navigation", { name: "Question navigator" })).not.toBeInTheDocument();
+  expect(screen.queryByText("The sky is green")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText("Two"));
+  expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+  await screen.findByText("The sky is green");
+  expect(mock.save).toHaveBeenCalledWith("course", "attempt", "mcq", { type: "MULTIPLE_CHOICE", option_position: 1 });
+  expect(screen.getByText("Question 2 of 3")).toHaveFocus();
+  fireEvent.click(screen.getByRole("button", { name: "Previous question" }));
+  expect(await screen.findByLabelText("Two")).toBeChecked();
+  expect(screen.getByText("Saved")).toBeInTheDocument();
+});
+
+it("keeps failed save-on-navigation editable and prevents duplicate pending saves", async () => {
+  await start();
+  fireEvent.click(screen.getByLabelText("One"));
+  let fail!: (error: Error) => void;
+  mock.save.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+  fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+  expect(screen.getByText("Saving…")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Save answer" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+  expect(mock.save).toHaveBeenCalledTimes(1);
+  await act(async () => fail(new Error("Network failed")));
+  expect(screen.getByText("Save failed")).toBeInTheDocument();
+  expect(screen.getByLabelText("One")).toBeChecked();
+  expect(screen.getByRole("alert")).toHaveTextContent("Try again");
+  fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+  await screen.findByText("The sky is green");
+  expect(mock.save).toHaveBeenCalledTimes(2);
+});
+
+it("supports direct jumps, answered states, local flags and revisit actions in Exam", async () => {
+  await start("Exam");
+  const nav = screen.getByRole("navigation", { name: "Question navigator" });
+  expect(within(nav).getAllByRole("button", { name: /Question [123]/ })).toHaveLength(3);
+  expect(within(nav).getByRole("button", { name: /Question 1/ })).toHaveAttribute("aria-current", "step");
+  fireEvent.click(screen.getByRole("button", { name: "Flag for review" }));
+  expect(within(nav).getByRole("button", { name: /Question 1.*Unanswered.*Flagged/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText("One"));
+  fireEvent.click(within(nav).getByRole("button", { name: /Question 3/ }));
+  await screen.findByText("Explain gravity");
+  expect(within(nav).getByRole("button", { name: /Question 1.*Answered.*Flagged/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Next flagged" }));
+  await screen.findByText("Choose a number");
+  expect(screen.getByRole("button", { name: "Unflag question" })).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(screen.getByLabelText("Study"));
+  fireEvent.click(screen.getByLabelText("Exam"));
+  expect(screen.getByRole("button", { name: "Unflag question" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Unflag question" }));
+  expect(screen.getByRole("button", { name: "Next flagged" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Next unanswered" }));
+  await screen.findByText("The sky is green");
+});
+
+it("requires an explicit decision before leaving or reloading an edited answer", async () => {
+  await start();
+  fireEvent.click(screen.getByLabelText("One"));
+  const event = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Back to saved attempts" }));
+  expect(screen.getByText("Keep your unsaved answer?")).toHaveFocus();
+  fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
+  expect(screen.getByText("Question 1 of 3")).toHaveFocus();
+  expect(screen.getByLabelText("One")).toBeChecked();
+  fireEvent.click(screen.getByRole("button", { name: "Back to saved attempts" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
+  await screen.findByRole("button", { name: "Start practice quiz" });
+  expect(current.questions[0].answer).toEqual({ type: "MULTIPLE_CHOICE", option_position: 0 });
+});
+
+it("shows incomplete submission counts and does not call submit without saved answers", async () => {
+  await start();
+  fireEvent.click(screen.getByRole("button", { name: "Flag for review" }));
+  fireEvent.click(screen.getByRole("button", { name: "Submit quiz — final" }));
+  const confirmation = await screen.findByRole("region", { name: "Confirm submission" });
+  expect(within(confirmation).getByText("Submit this quiz?")).toHaveFocus();
+  expect(confirmation).toHaveTextContent("Answered: 0 · Unanswered: 3 · Flagged: 1");
+  expect(within(confirmation).getByRole("button", { name: "Confirm final submission" })).toBeDisabled();
+  expect(mock.submit).not.toHaveBeenCalled();
+});
+
+it("preserves answers on submit failure, retries, and derives result counts from frozen data", async () => {
+  allAnswered();
+  await start("Exam");
+  fireEvent.click(screen.getByRole("button", { name: "Flag for review" }));
+  fireEvent.click(screen.getByRole("button", { name: "Submit quiz — final" }));
+  await screen.findByRole("region", { name: "Confirm submission" });
+  expect(mock.submit).not.toHaveBeenCalled();
+  expect(screen.getByText("Answered: 3 · Unanswered: 0 · Flagged: 1")).toBeInTheDocument();
+  mock.submit.mockRejectedValueOnce(new Error("Submission unavailable"));
+  fireEvent.click(screen.getByRole("button", { name: "Confirm final submission" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Submission unavailable");
+  fireEvent.click(screen.getByRole("button", { name: "Keep reviewing" }));
+  expect(screen.getByLabelText("Two")).toBeChecked();
+  const submit = mock.submit.getMockImplementation()!;
+  mock.submit.mockImplementationOnce(async () => {
+    const result = await submit();
+    result.questions[0].grading_status = "INCORRECT";
+    return result;
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Submit quiz — final" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Confirm final submission" }));
+  await screen.findByText("Quiz results");
+  const summary = screen.getByLabelText("Results summary");
+  expect(summary).toHaveTextContent("Total3");
+  const results = screen.getByRole("region", { name: "Quiz results" });
+  expect(results).toHaveTextContent("Correct1");
+  expect(results).toHaveTextContent("Incorrect1");
+  expect(results).toHaveTextContent("Pending1");
+  expect(within(screen.getByRole("article", { name: "Question 1 result" })).getByText("Your answer: Two")).toBeInTheDocument();
+  expect(screen.getByText("Correct answer: One")).toBeInTheDocument();
+  expect(screen.getByText("Correct answer: false")).toBeInTheDocument();
+  expect(screen.getAllByText("Reviewed explanation")).toHaveLength(3);
+});
+
+it("saves the current draft before opening final confirmation", async () => {
+  allAnswered();
+  await start();
+  fireEvent.click(screen.getByLabelText("One"));
+  fireEvent.click(screen.getByRole("button", { name: "Submit quiz — final" }));
+  await screen.findByRole("region", { name: "Confirm submission" });
+  expect(mock.save).toHaveBeenCalledWith("course", "attempt", "mcq", { type: "MULTIPLE_CHOICE", option_position: 0 });
+  expect(mock.submit).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Keep reviewing" }));
+  expect(screen.getByLabelText("One")).toBeChecked();
+  expect(screen.getByText("Saved")).toBeInTheDocument();
+});
+
+it("blocks navigation for an empty short-answer edit without losing the edit", async () => {
+  await start("Exam");
+  fireEvent.click(screen.getByRole("button", { name: /Question 3.*Unanswered/ }));
+  fireEvent.change(await screen.findByLabelText("Your short answer"), { target: { value: "   " } });
+  fireEvent.click(screen.getByRole("button", { name: "Previous question" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Enter an answer");
+  expect(screen.getByLabelText("Your short answer")).toHaveValue("   ");
+  expect(mock.save).not.toHaveBeenCalled();
+});
+
+it("preserves attempt history pagination and prevents duplicate starts", async () => {
+  mock.history.mockResolvedValue(Array.from({ length: 20 }, (_, index) => ({ ...current, id: `attempt-${index}` })));
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(screen.getByRole("button", { name: "Open practice quizzes" }));
+  await screen.findAllByRole("button", { name: /Resume quiz/ });
+  fireEvent.click(screen.getByRole("button", { name: "Older attempts" }));
+  await waitFor(() => expect(mock.history).toHaveBeenLastCalledWith("course", 20));
+  await screen.findAllByRole("button", { name: /Resume quiz/ });
+  fireEvent.click(screen.getByRole("button", { name: "Newer attempts" }));
+  await waitFor(() => expect(mock.history).toHaveBeenLastCalledWith("course", 0));
+  await screen.findAllByRole("button", { name: /Resume quiz/ });
+  let finish!: (value: Attempt) => void;
+  mock.start.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const startButton = screen.getByRole("button", { name: "Start practice quiz" });
+  fireEvent.click(startButton);
+  fireEvent.click(startButton);
+  expect(mock.start).toHaveBeenCalledTimes(1);
+  await act(async () => finish(structuredClone(current)));
+  expect(screen.getByText("Choose a number")).toBeInTheDocument();
 });
