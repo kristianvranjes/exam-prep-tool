@@ -38,10 +38,16 @@ and are never returned.
 - `GET /courses/{course_id}` returns a member's course; inaccessible courses return
   `404`.
 - `GET /courses/{course_id}/membership` returns the caller's membership role.
-- `PATCH /courses/{course_id}` updates name, code or description for an OWNER;
+- `PATCH /courses/{course_id}` updates `name` (1–150 characters), `code` (nullable,
+  at most 50) or `description` (nullable, at most 2000) for an OWNER; joined
   non-owners receive `403`.
-- `DELETE /courses/{course_id}` deletes a course for an OWNER; other members receive
-  `403`.
+- `DELETE /courses/{course_id}` returns `204` for an OWNER after deleting every
+  original material source PDF through private storage and committing the course
+  deletion. Existing database cascades remove memberships, materials, questions,
+  attempts, progress and other course children. Joined non-owners receive `403`;
+  inaccessible or already deleted courses receive `404`. Storage or DB cleanup
+  failure returns safe `503` and rolls back DB deletion. Some source files may
+  already be absent; retry is safe because source deletion is missing-safe.
 
 All course endpoints require the session cookie. Validation errors return `422`.
 

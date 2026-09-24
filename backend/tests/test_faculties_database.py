@@ -126,6 +126,28 @@ def test_explicit_active_faculty_required_for_new_course(clients):
     assert owner.get(f"/courses/{course['id']}/membership").json()["role"] == "OWNER"
 
 
+def test_empty_course_delete_permissions_cascade_and_duplicate(clients):
+    owner, member, stranger, course_id = clients
+    path = f"/courses/{course_id}"
+    with SessionLocal() as db:
+        faculty_id = db.get(Course, UUID(course_id)).faculty_id
+    with TestClient(app) as anonymous:
+        assert anonymous.delete(path).status_code == 401
+    assert stranger.delete(path).status_code == 404
+    assert member.delete(path).status_code == 403
+    assert owner.delete(path).status_code == 204
+    assert owner.delete(path).status_code == 404
+    with SessionLocal() as db:
+        assert db.get(Course, UUID(course_id)) is None
+        assert (
+            db.scalars(
+                select(CourseMembership).where(CourseMembership.course_id == UUID(course_id))
+            ).all()
+            == []
+        )
+        assert db.get(Faculty, faculty_id) is not None
+
+
 def test_join_member_idempotent_concurrent_and_no_elevation(bank):
     owner, _, stranger, course, _ = bank
     path = f"/courses/{course}/join"

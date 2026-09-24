@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import Settings
 from app.dependencies import get_current_user, get_db
 from app.models import Course, CourseMembership, User
 from app.schemas.course import CourseCreate, CourseResponse, CourseUpdate, MembershipResponse
@@ -15,6 +16,7 @@ from app.services.courses import (
     list_member_courses,
     update_course,
 )
+from app.services.materials.storage import LocalMaterialStorage
 
 router = APIRouter(prefix="/courses", tags=["courses"])
 
@@ -69,7 +71,8 @@ def update(
 def remove(
     course_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> Response:
-    delete_course(db, user, course_id)
+    settings = Settings()
+    delete_course(db, user, course_id, LocalMaterialStorage(settings.material_storage_dir))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

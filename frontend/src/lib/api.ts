@@ -65,6 +65,8 @@ export const api = {
   logout: () => request<void>("/auth/logout", { method: "POST" }),
   courses: () => request<Course[]>("/courses"),
   course: (id: string) => request<Course>(`/courses/${id}`),
+  updateCourse: (id: string, body: { name: string; code: string | null; description: string | null }) => request<Course>(`/courses/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteCourse: (id: string) => request<void>(`/courses/${id}`, { method: "DELETE" }),
   createCourse: (body: { faculty_id: string; name: string; code?: string; description?: string }) => request<Course>("/courses", { method: "POST", body: JSON.stringify(body) }),
 };
 

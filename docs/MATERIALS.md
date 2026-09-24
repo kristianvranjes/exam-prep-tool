@@ -70,6 +70,12 @@ without exposing internal details, and the DB transaction is rolled back so the 
 remains. Because storage deletion is missing-safe, a retry is safe even if the
 source file is already gone.
 
+Deleting the entire course is a separate OWNER-only lifecycle action. It removes
+every original course material source PDF through private storage, regardless of
+material processing status, then commits the course deletion and its database child
+cascades. A failed storage or DB step returns safe 503 with DB rows retained; retry
+continues safely when some source PDFs are already missing.
+
 ## Limits
 
 Scanned/image-only or encrypted PDFs may fail; this phase does not add OCR.
@@ -78,11 +84,10 @@ The parser runs synchronously in the API worker and is not a sandbox; the size
 limit is not a CPU/memory/time limit for malformed compressed PDFs. Keep this
 local development stack private. Process termination can leave PROCESSING rows
 and a crash between file save and metadata commit can leave an orphan file.
-There is still no automatic retry, reprocess endpoint, general READY-material
-deletion lifecycle or garbage collector. FAILED uploader-owned cleanup now exists via
-`DELETE /materials/{material_id}`. Course deletion cascades database rows but retains
-source files in the private store; reclaim those only after checking database
-references and backups. Material list/detail/chunk APIs are unpaginated for this
+There is still no automatic retry, reprocess endpoint, standalone READY-material
+deletion lifecycle or garbage collector. FAILED uploader-owned cleanup exists via
+`DELETE /materials/{material_id}`; OWNER course deletion removes all course sources.
+Material list/detail/chunk APIs are unpaginated for this
 local foundation.
 
 ## Verification
