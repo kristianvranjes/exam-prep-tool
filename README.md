@@ -1,32 +1,12 @@
 # ExamPrep
 
-ExamPrep is a local-first university exam preparation platform. Through Phase 11B,
-the frontend includes [Faculty/Course discovery and joining](docs/FRONTEND.md#my-courses-and-browse-courses),
-[Study/Exam quizzes](docs/FRONTEND.md#study-and-exam-quizzes),
-[materials upload, browsing and FAILED-upload cleanup](docs/FRONTEND.md#materials-upload-and-browsing),
-a [cross-course faculty moderation queue](docs/FRONTEND.md#faculty-moderation),
-and a [selected-course Question Bank](docs/FRONTEND.md#question-bank-and-contributions)
-where members author private drafts in-app, import JSON or use optional OWNER AI generation
-before faculty review. [Learning progress](docs/FRONTEND.md#learning-progress) guides adaptive review.
-See [community lifecycle](docs/COMMUNITY.md) for moderation details.
-
-Phase 10A adds the [Faculty -> Course catalog and enrollment foundation](docs/API.md#faculty-catalog-and-enrollment-phase-10a).
-Select a faculty when creating a course. Existing courses retain all their data
-under **Legacy / Unassigned**; authenticated catalog/join APIs prepare future browsing UI.
-
-Phase 9B adds **Adaptive review** in the practice launcher: due questions first,
-then truly unseen questions, then deterministic fallback. Standard practice remains
-the default. See [selection rules](docs/PRACTICE.md#adaptive-quiz-selection-phase-9b).
-
-Phase 9A adds private [question review progress](docs/PRACTICE.md#question-review-progress-phase-9a)
-and deterministic review scheduling. Open **Review progress** in a course after
-submitting practice answers. Pending answers leave progress unchanged; existing
-historical attempts are not backfilled. No AI or concepts are required.
-
-Phase 8 adds [conservative deterministic grading](docs/PRACTICE.md) to Phase 7 practice quizzes. Open a course,
-choose **Open practice quizzes**, answer approved questions, save progress, and submit
-for deterministic MCQ/true-false results. Short answers matching the normalized
-reference are correct; all other short answers remain pending. No AI is required.
+ExamPrep is a local-first university exam preparation platform. Through Phase 11D,
+students can [discover and join faculty courses](docs/FRONTEND.md#my-courses-and-browse-courses),
+upload and browse PDF materials, write and submit private Question Bank drafts,
+and practice in Study or Exam mode with deterministic grading, learning progress
+and adaptive review. Faculty moderators review contributions across courses; course
+owners can update or delete their courses. See [frontend journeys](docs/FRONTEND.md),
+[community moderation](docs/COMMUNITY.md) and [practice rules](docs/PRACTICE.md).
 
 Optional [external AI quiz import](docs/QUIZ_IMPORT.md) accepts versioned JSON as drafts
 for human review. Manual in-app authoring also needs no AI provider or embeddings.
@@ -167,12 +147,16 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run test:e2e # after starting and seeding the disposable Compose E2E stack
 ```
+
+See [browser acceptance setup](docs/E2E.md) for the guarded seed, isolated Compose
+commands and Chromium installation.
 
 From the root: `docker compose config --quiet`. If GNU Make is installed,
 `make up`, `make down`, `make backend-check`, `make frontend-check`, and
 `make migrate` wrap the commands above (activate the Python environment first).
-CI runs backend, frontend and Compose smoke checks on pushes and pull requests.
+CI runs backend, frontend, Compose smoke and browser acceptance checks on pushes and pull requests.
 
 ## Repository
 

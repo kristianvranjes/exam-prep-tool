@@ -209,6 +209,9 @@ workaround. See [MDN third-party cookie behavior](https://developer.mozilla.org/
 
 ## Smoke test (operator, after deploying)
 
+The [disposable CI browser acceptance test](E2E.md) uses local Compose and test-only
+cookies. It does not replace these hosted cookie, CORS and persistence checks.
+
 1. Fetch backend `/health` and `/health/db`: 200, safe JSON; verify frontend loads.
 2. In the frontend browser, register a disposable test account, log out, log in,
    reload, and create a course. Verify the cookie is Secure/HttpOnly with the

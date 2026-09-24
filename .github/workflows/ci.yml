@@ -18,14 +18,15 @@ jobs:
         env:
           POSTGRES_USER: examprep
           POSTGRES_PASSWORD: examprep
-          POSTGRES_DB: examprep
+          POSTGRES_DB: examprep_e2e
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U examprep -d examprep"
+          --health-cmd "pg_isready -U examprep -d examprep_e2e"
           --health-interval 5s --health-timeout 3s --health-retries 15
     env:
-      DATABASE_URL: postgresql+psycopg://examprep:examprep@localhost:5432/examprep
+      DATABASE_URL: postgresql+psycopg://examprep:examprep@localhost:5432/examprep_e2e
       RUN_DB_TESTS: "1"
+      RUN_E2E_SEED_TESTS: "1"
     defaults:
       run:
         working-directory: backend
@@ -75,3 +76,40 @@ jobs:
         run: docker compose logs
       - if: always()
         run: docker compose down
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: test
+      POSTGRES_DB: examprep_e2e
+      POSTGRES_PORT: "55460"
+      AI_PROVIDER: disabled
+      SESSION_SECRET: e2e-only-session-secret-for-disposable-ci
+      FRONTEND_URL: http://localhost:3000
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: cp .env.example .env
+      - run: docker compose -p examprep-e2e config --quiet
+      - run: docker compose -p examprep-e2e up --build --wait --wait-timeout 240
+      - run: docker compose -p examprep-e2e exec -T backend python -m app.e2e_seed
+      - run: npm run test:e2e
+        working-directory: frontend
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure
+          path: frontend/test-results/
+          if-no-files-found: ignore
+      - if: failure()
+        run: docker compose -p examprep-e2e logs
+      - if: always()
+        run: docker compose -p examprep-e2e down -v
