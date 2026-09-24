@@ -152,6 +152,7 @@ See [community permissions](COMMUNITY.md) for the creator/moderator action matri
 
 | Method/path | Contract |
 | --- | --- |
+| POST `/courses/{course_id}/questions` | Joined MEMBER/OWNER creates one private USER/DRAFT question; HTTP 201 `OwnerQuestion`. Flat strict body discriminated by `type`, with content fields and optional `concept_ids` (default `[]`, at most five unique APPROVED concepts from this course). Creator/course/status/source and provenance are server-owned. No AI, embeddings or material source is needed. Question, options/concepts and version 1 `CREATED` are atomic. |
 | POST `/courses/{course_id}/questions/generate` | OWNER, `{concept_ids, question_types, count, retrieval_top_k}`. Unique approved concept IDs (1–5), unique types (1–3), count/top-k (1–10). Returns completed JobDetail, HTTP 200 for SUCCEEDED or FAILED. |
 | GET `/courses/{course_id}/questions` | `status`, `type`, `limit` (default 20, 1–50), `offset` (default 0, 0–10000). Stable created_at descending then ID. Status filters intersect visible content; no filter reveals another creator's private question. |
 | GET `/questions/{question_id}` | OWNER/review or MEMBER/public representation. |
@@ -165,7 +166,9 @@ See [community permissions](COMMUNITY.md) for the creator/moderator action matri
 Supported types: MULTIPLE_CHOICE (2–6 options, one correct), TRUE_FALSE (strict
 boolean `correct_answer` in write payloads), SHORT_ANSWER (nonblank reference).
 Stems/option texts max 400 characters; explanation/reference max 2000; optional
-difficulty integer 1–5. Editing rejected content returns DRAFT and clears review.
+difficulty integer 1–5. MCQ option text must be unique after normalization. Manual
+creation rejects unknown or server-owned fields and accepts zero concepts. Editing
+rejected content returns DRAFT and clears review.
 
 Creator/moderator full responses retain the compatibility tag `visibility: OWNER`, correctness flags, `correct_boolean`,
 reference/explanation, concepts, source_chunks (chunk_id/material_id/ordinal),
@@ -181,6 +184,9 @@ provider returns safe 503 before generation. Model/output or final persistence
 failures return a persisted FAILED job, with no partial questions. Clients must
 inspect job.status even on HTTP 200. Failed owner persistence returns safe 503.
 No raw provider response, internal URL, key or exception is returned.
+Manual create returns 422 for invalid/foreign/unapproved concepts, safe 409 for a
+duplicate active normalized stem, and safe 503 with full rollback on unexpected
+persistence failure. Faculty moderator status alone does not grant creation access.
 See [question design and examples](QUESTIONS.md).
 
 

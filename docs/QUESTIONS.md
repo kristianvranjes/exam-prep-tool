@@ -1,7 +1,9 @@
 # Question bank — Phase 6
 
-Phase 6.6 adds [external AI quiz import](QUIZ_IMPORT.md): import versioned JSON as drafts,
-then use human review. This temporary staging bypass needs no AI provider or embeddings.
+Joined members can author a private USER draft directly in the Question Bank. Manual
+questions need no AI, embeddings, concepts or material provenance. Optional approved
+course concepts may be linked. [External AI quiz import](QUIZ_IMPORT.md) remains a
+separate versioned JSON contribution path; both use the same human review lifecycle.
 Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
 configuration below applies when explicitly enabling that pipeline.
 
@@ -23,9 +25,9 @@ are required; creators may clear explanations while editing. Stems/options are
 bounded to 400 characters, explanation/reference to 2000, difficulty to 1–5.
 
 ```text
-AI generation → DRAFT → submit → PENDING_REVIEW → approve → APPROVED → archive → ARCHIVED
-                                    ↓ reject
-                                 REJECTED → edit → DRAFT
+Manual create / JSON import / AI generation → DRAFT → submit → PENDING_REVIEW → approve → APPROVED → archive → ARCHIVED
+                                                               ↓ reject
+                                                            REJECTED → edit → DRAFT
 ```
 
 These are the only transitions. The creator can edit their own DRAFT/REJECTED; a rejected edit
@@ -34,7 +36,8 @@ archival. ARCHIVED is terminal. Submit/approve revalidate answer and provenance.
 
 ## Permissions and UI
 
-Joined MEMBER/OWNER contributors import USER drafts, edit their own DRAFT/REJECTED
+Joined MEMBER/OWNER contributors create one USER draft in-app or import USER drafts,
+then edit their own DRAFT/REJECTED
 content, and submit for review. They see their own statuses, answers and versions.
 Other ordinary members see only answer-free APPROVED content, including through
 status filters; hidden UUIDs and histories return 404. Course OWNER alone cannot
@@ -43,10 +46,9 @@ read or moderate another contributor's private questions.
 Faculty moderators can inspect full questions/versions across their faculty and
 approve/reject pending questions from other creators. They cannot self-review or
 silently edit someone else's content. Moderators may archive approved questions.
-The minimal UI gates actions using the backend moderator status and creator ID.
+The Question Bank UI gates actions using the backend moderator status and creator ID.
 Internal AI generation remains OWNER-only. The faculty review queue and trusted
-role provisioning are documented in [COMMUNITY.md](COMMUNITY.md); polished review
-and navigation UI are deferred to Phase 10C.
+role provisioning are documented in [COMMUNITY.md](COMMUNITY.md).
 
 ## Generation and retrieval
 

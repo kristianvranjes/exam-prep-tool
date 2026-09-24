@@ -30,3 +30,16 @@ it("sends raw import JSON with session credentials and surfaces validation error
   await expect(api.importQuestions("course", "{}" )).rejects.toThrow("questions.0: invalid type");
   expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/courses/course/questions/import"), expect.objectContaining({ method: "POST", body: "{}", credentials: "include" }));
 });
+
+it("creates a typed question with session credentials and propagates safe errors", async () => {
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ id: "q-new" }) })
+    .mockResolvedValueOnce({ ok: false, status: 409, json: async () => ({ detail: "Duplicate active question stem or conflicting change" }) });
+  vi.stubGlobal("fetch", fetchMock);
+  const body = { type: "TRUE_FALSE" as const, stem: "A statement", explanation: null, difficulty: null, concept_ids: [], correct_answer: false };
+  await expect(api.createQuestion("course", body)).resolves.toEqual({ id: "q-new" });
+  expect(fetchMock).toHaveBeenNthCalledWith(1, expect.stringContaining("/courses/course/questions"), expect.objectContaining({
+    method: "POST", body: JSON.stringify(body), credentials: "include",
+  }));
+  await expect(api.createQuestion("course", body)).rejects.toThrow("Duplicate active question stem or conflicting change");
+});

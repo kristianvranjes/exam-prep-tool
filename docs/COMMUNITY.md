@@ -1,8 +1,10 @@
 # Community contributions and faculty moderation (Phase 10B / #31)
 
-Joined MEMBER/OWNER users import bounded, validated USER questions as private
-DRAFTs. The authenticated user is always the creator; imports are atomic and
-require no AI. Course OWNER is a management role, not moderation authority.
+Joined MEMBER/OWNER users create a USER question in-app or import bounded, validated
+USER questions as private DRAFTs. The authenticated user is always the creator;
+both paths are atomic and require no AI. Moderator status alone does not grant
+creation without course membership. Course OWNER is a management role, not
+moderation authority.
 
 | Actor | Read/list | Edit/submit | Review |
 | --- | --- | --- | --- |
@@ -38,9 +40,9 @@ submission results.
   OWNER membership. Other students browse/join via catalog/enrollment APIs.
   Course update/delete management permissions remain unchanged.
 
-Minimal UI supports member imports, own statuses/edit/submit, and moderator actions
-in joined courses. The cross-course queue is API-only. Polished catalog navigation
-and review UI are deferred to Phase 10C.
+The selected-course Question Bank supports manual creation, JSON import, own
+statuses/edit/submit and moderator actions. Faculty moderators also have a
+cross-course review queue in the frontend.
 
 ## Operator-only provisioning
 

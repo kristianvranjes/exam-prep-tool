@@ -62,8 +62,13 @@ permissions, self-review restrictions and question lifecycle decisions.
 
 The Question Bank opens within the selected course and loads questions only when
 opened. Its paged list keeps status and type filters, with a selected question detail
-view. Importing questions creates private DRAFTs; after import, the bank switches to
-the DRAFT filter and selects an imported question for review.
+view. Joined members can **Create question** directly: choose a type, enter its answer,
+and optionally link up to five approved course concepts. Saving creates a private
+USER/DRAFT without AI, embeddings or material provenance. Success selects the draft,
+switches to the DRAFT filter, clears the type filter and returns to page one without
+submitting it; failure keeps the form, list and selection for retry. Changing course
+clears an unfinished form. Imported JSON also creates private DRAFTs and selects an
+imported question after switching to the DRAFT filter.
 
 Creators can edit their DRAFT or REJECTED questions and submit DRAFTs for review.
 Editing a REJECTED question returns it to DRAFT so the creator can rework and
@@ -74,7 +79,8 @@ OWNER membership alone does not grant moderation. MEMBER views of approved
 questions omit answer keys, correctness, explanations, reference answers,
 provenance, version history and privileged actions.
 
-External JSON import is the reliable staging workflow: users can copy the prompt
+Manual authoring is the primary non-AI in-app contribution path. External JSON import
+remains a separate bulk/staging workflow: users can copy the prompt
 for an external AI tool, download an example, check a selected `.json` file locally,
 and send its raw JSON to the existing import API for server validation. Imported
 questions remain private drafts until reviewed. The separate internal AI generation

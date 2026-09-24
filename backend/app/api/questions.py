@@ -10,6 +10,7 @@ from app.schemas.concept import JobDetail
 from app.schemas.question import (
     GenerationRequest,
     OwnerQuestion,
+    QuestionCreate,
     QuestionPatch,
     QuestionResponse,
     QuestionStatus,
@@ -27,6 +28,16 @@ from app.services.questions.generation import generate_questions
 from app.services.questions.importing import import_questions, read_import
 
 router = APIRouter(tags=["questions"])
+
+
+@router.post("/courses/{course_id}/questions", response_model=OwnerQuestion, status_code=201)
+def create(
+    course_id: UUID,
+    data: QuestionCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OwnerQuestion:
+    return service.create_question(db, user, course_id, data)
 
 
 @router.post(
