@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 from typing import cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -26,6 +26,7 @@ from app.schemas.question import (
     PublicOption,
     PublicQuestion,
     QuestionContent,
+    QuestionCreate,
     QuestionPatch,
     QuestionResponse,
     QuestionStatus,
@@ -252,6 +253,40 @@ def add_version(db: Session, question: Question, user: User, reason: str) -> Non
             reason=reason,
         )
     )
+
+
+def create_question(
+    db: Session, user: User, course_id: UUID, data: QuestionCreate
+) -> OwnerQuestion:
+    get_member_course(db, user, course_id)
+    try:
+        concepts = validate_concepts(db, course_id, data.concept_ids) if data.concept_ids else []
+        question = Question(
+            id=uuid4(),
+            course_id=course_id,
+            created_by_user_id=user.id,
+            type=data.type,
+            status="DRAFT",
+            source="USER",
+            ai_job_id=None,
+        )
+        db.add(question)
+        save_content(db, question, data)
+        for concept in concepts:
+            db.add(QuestionConcept(question_id=question.id, concept_id=concept.id))
+        add_version(db, question, user, "CREATED")
+        result = owner_view(db, question)
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Duplicate active question stem or conflicting change") from None
+    except Exception:
+        db.rollback()
+        raise HTTPException(503, "Could not create question") from None
+    return result
 
 
 def edit_question(

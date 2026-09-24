@@ -57,6 +57,35 @@ QuestionContent = Annotated[MCQ | TrueFalse | ShortAnswer, Field(discriminator="
 content_adapter: TypeAdapter[QuestionContent] = TypeAdapter(QuestionContent)
 
 
+class ManualConcepts(StrictModel):
+    concept_ids: list[Annotated[UUID, Field(strict=False)]] = Field(
+        default_factory=list, max_length=5
+    )
+
+    @model_validator(mode="after")
+    def unique_concepts(self) -> Self:
+        if len(set(self.concept_ids)) != len(self.concept_ids):
+            raise ValueError("Concept IDs must be unique")
+        return self
+
+
+class CreateMCQ(MCQ, ManualConcepts):
+    pass
+
+
+class CreateTrueFalse(TrueFalse, ManualConcepts):
+    pass
+
+
+class CreateShortAnswer(ShortAnswer, ManualConcepts):
+    pass
+
+
+QuestionCreate = Annotated[
+    CreateMCQ | CreateTrueFalse | CreateShortAnswer, Field(discriminator="type")
+]
+
+
 class Citations(StrictModel):
     explanation: Text
     concept_refs: list[str] = Field(min_length=1, max_length=5)

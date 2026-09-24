@@ -1,11 +1,13 @@
 # ExamPrep
 
-ExamPrep is a local-first university exam preparation platform. Through Phase 10F,
+ExamPrep is a local-first university exam preparation platform. Through Phase 11B,
 the frontend includes [Faculty/Course discovery and joining](docs/FRONTEND.md#my-courses-and-browse-courses),
 [Study/Exam quizzes](docs/FRONTEND.md#study-and-exam-quizzes),
 [materials upload, browsing and FAILED-upload cleanup](docs/FRONTEND.md#materials-upload-and-browsing),
 a [cross-course faculty moderation queue](docs/FRONTEND.md#faculty-moderation),
-and a [polished selected-course Question Bank contribution/review flow](docs/FRONTEND.md#question-bank-and-contributions).
+and a [selected-course Question Bank](docs/FRONTEND.md#question-bank-and-contributions)
+where members author private drafts in-app, import JSON or use optional OWNER AI generation
+before faculty review. [Learning progress](docs/FRONTEND.md#learning-progress) guides adaptive review.
 See [community lifecycle](docs/COMMUNITY.md) for moderation details.
 
 Phase 10A adds the [Faculty -> Course catalog and enrollment foundation](docs/API.md#faculty-catalog-and-enrollment-phase-10a).
@@ -26,8 +28,8 @@ choose **Open practice quizzes**, answer approved questions, save progress, and 
 for deterministic MCQ/true-false results. Short answers matching the normalized
 reference are correct; all other short answers remain pending. No AI is required.
 
-Phase 6.6 adds [external AI quiz import](docs/QUIZ_IMPORT.md): import versioned JSON as drafts,
-then use human review. This temporary staging bypass needs no AI provider or embeddings.
+Optional [external AI quiz import](docs/QUIZ_IMPORT.md) accepts versioned JSON as drafts
+for human review. Manual in-app authoring also needs no AI provider or embeddings.
 Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
 configuration below applies when explicitly enabling that pipeline.
 
@@ -233,9 +235,11 @@ The model download and inference are optional manual steps, never part of CI.
 
 ## Question bank and human review (Phase 6)
 
-Select a course and **Open question bank**. OWNER can select 1–5 approved concepts,
-choose multiple-choice, true/false or short-answer questions, and generate 1–10
-drafts. Each selected concept needs current embedded READY sources. First extract
+Select a course and **Open question bank**. Any joined member can **Create question**
+as a private USER draft, with optional approved concepts, then edit and submit it for
+review. JSON import remains available for bulk contributions. OWNER may optionally
+select 1–5 approved concepts and generate 1–10 experimental AI drafts. Each selected
+concept needs current embedded READY sources. First extract
 and approve concepts, then use `POST /materials/{material_id}/embeddings` in the
 authenticated API docs to embed the material (requires the optional local model
 setup above). Start with 1–3 questions and a small source count.

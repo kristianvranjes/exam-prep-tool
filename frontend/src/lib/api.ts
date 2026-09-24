@@ -38,6 +38,7 @@ export const api = {
     Object.entries(filters).forEach(([key, value]) => { if (value !== undefined) params.set(key, String(value)); });
     return request<Question[]>(`/courses/${courseId}/questions?${params}`);
   },
+  createQuestion: (courseId: string, body: QuestionCreate) => request<OwnerQuestion>(`/courses/${courseId}/questions`, { method: "POST", body: JSON.stringify(body) }),
   importQuestions: (courseId: string, json: string) => request<OwnerQuestion[]>(`/courses/${courseId}/questions/import`, { method: "POST", body: json }),
   generateQuestions: (courseId: string, body: QuestionGeneration) => request<AIJob>(`/courses/${courseId}/questions/generate`, { method: "POST", body: JSON.stringify(body) }),
   question: (id: string) => request<Question>(`/questions/${id}`),
@@ -88,6 +89,12 @@ export type OwnerQuestion = QuestionBase & {
 };
 export type Question = PublicQuestion | OwnerQuestion;
 export type QuestionGeneration = { concept_ids: string[]; question_types: QuestionType[]; count: number; retrieval_top_k: number };
+type QuestionCreateBase = { stem: string; explanation: string | null; difficulty: number | null; concept_ids: string[] };
+export type QuestionCreate = QuestionCreateBase & (
+  | { type: "MULTIPLE_CHOICE"; options: { text: string; is_correct: boolean }[] }
+  | { type: "TRUE_FALSE"; correct_answer: boolean }
+  | { type: "SHORT_ANSWER"; reference_answer: string }
+);
 export type QuestionEdit = { stem: string; explanation: string | null; difficulty: number | null; concept_ids: string[]; options?: { text: string; is_correct: boolean }[]; correct_answer?: boolean; reference_answer?: string };
 export type QuestionVersion = { version_number: number; reason: string; snapshot: OwnerQuestion; changed_by_user_id: string; created_at: string };
 
