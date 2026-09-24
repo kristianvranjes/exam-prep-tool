@@ -27,8 +27,7 @@ def normalize(text: str) -> str:
 def grade(snapshot: OwnerQuestion, answer: AnswerPayload) -> GradingResult:
     """Return a decision for the submission transaction to persist and freeze.
 
-    A future semantic grader can consume the same inputs and return this result
-    contract. Pending is a decision, not a queued AI job or permission to regrade.
+    Pending short answers are intentionally ungraded, not queued for regrading.
     """
     if snapshot.type != answer.type:
         raise ValueError("Answer type does not match snapshot")
@@ -40,12 +39,5 @@ def grade(snapshot: OwnerQuestion, answer: AnswerPayload) -> GradingResult:
     elif isinstance(answer, BooleanAnswer):
         correct = answer.value == snapshot.correct_boolean
     else:
-        reference = snapshot.reference_answer
-        if (
-            reference is None
-            or not normalize(reference)
-            or normalize(answer.text) != normalize(reference)
-        ):
-            return GradingResult("PENDING", "PENDING_SEMANTIC")
-        correct = True
+        return GradingResult("PENDING", "PENDING_SEMANTIC")
     return GradingResult("CORRECT" if correct else "INCORRECT", "DETERMINISTIC")

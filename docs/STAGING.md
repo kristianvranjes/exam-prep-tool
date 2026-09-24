@@ -160,9 +160,10 @@ python -m alembic current
 
 Expected head is 0011 (community moderation). Provision faculty moderators using
 the trusted [operator procedure](COMMUNITY.md#operator-only-provisioning). Practice grading needs no AI
-provider or embeddings; `AI_PROVIDER=disabled` remains supported. Verify an exact
-normalized short answer shows Correct and a different answer stays Pending after
-submission, including after refresh. See [grading rules](PRACTICE.md).
+provider or embeddings; `AI_PROVIDER=disabled` remains supported. Verify both an
+exact-reference short answer and a different answer show Ungraded after submission
+and refresh, with the submitted and reference text visible. Neither should change
+review progress. See [grading rules](PRACTICE.md).
 Enable the Railway HTTPS public domain after configuration,
 then verify `/health` and `/health/db` before building the frontend. `/health` is
 process liveness, `/health/db` executes a short DB query and returns safe 503 on

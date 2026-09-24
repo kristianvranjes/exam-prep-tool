@@ -97,10 +97,6 @@ def test_progression_counters_reset_and_frozen_repeat(bank):
 
 def test_pending_strict_noop_and_mixed_quiz(bank):
     _, member, _, course, rows = bank
-    path = save_all(member, course, start(member, course))
-    assert member.post(path + "/submit").status_code == 200
-    assert len(progress(member, course)) == 2  # unresolved short answer creates nothing
-    assert summary(member, course)["reviewed_questions"] == 2
     source = next(q for q in rows if q["type"] == "SHORT_ANSWER")
     for answer in [source["reference_answer"], "Unresolved answer"]:
         attempt = start(member, course, 1, question_types=["SHORT_ANSWER"])
@@ -111,14 +107,34 @@ def test_pending_strict_noop_and_mixed_quiz(bank):
         )
         before = stored()
         before_summary = summary(member, course)
-        assert member.post(path + "/submit").status_code == 200
-        if answer != source["reference_answer"]:
-            assert stored() == before  # includes every timestamp and internal field
-            after_summary = summary(member, course)
-            assert {key: value for key, value in after_summary.items() if key != "as_of"} == {
-                key: value for key, value in before_summary.items() if key != "as_of"
-            }
-    assert len(progress(member, course)) == 3
+        response = member.post(path + "/submit")
+        assert response.status_code == 200, response.text
+        assert response.json()["questions"][0]["grading_status"] == "PENDING"
+        assert progress(member, course) == []
+        assert stored() == before  # includes every timestamp and internal field
+        after_summary = summary(member, course)
+        assert {key: value for key, value in after_summary.items() if key != "as_of"} == {
+            key: value for key, value in before_summary.items() if key != "as_of"
+        }
+
+    path = save_all(member, course, start(member, course))
+    response = member.post(path + "/submit")
+    assert response.status_code == 200, response.text
+    grades = {q["type"]: q["grading_status"] for q in response.json()["questions"]}
+    assert grades["SHORT_ANSWER"] == "PENDING"
+    assert grades["MULTIPLE_CHOICE"] in {"CORRECT", "INCORRECT"}
+    assert grades["TRUE_FALSE"] in {"CORRECT", "INCORRECT"}
+    objective_ids = {q["id"] for q in rows if q["type"] != "SHORT_ANSWER"}
+    scheduled = progress(member, course)
+    assert {row["question_id"] for row in scheduled} == objective_ids
+    assert all(row["resolved_review_count"] == 1 for row in scheduled)
+    assert sum(row["correct_review_count"] for row in scheduled) == list(grades.values()).count(
+        "CORRECT"
+    )
+    assert sum(row["incorrect_review_count"] for row in scheduled) == list(grades.values()).count(
+        "INCORRECT"
+    )
+    assert summary(member, course)["resolved_review_count"] == 2
 
 
 def test_submission_rollback_restores_existing_and_new_progress(bank, monkeypatch):

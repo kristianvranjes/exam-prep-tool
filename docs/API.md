@@ -51,6 +51,18 @@ and are never returned.
 
 All course endpoints require the session cookie. Validation errors return `422`.
 
+## Practice attempt results
+
+`POST /courses/{course_id}/attempts/{attempt_id}/submit` and
+`GET /courses/{course_id}/attempts/{attempt_id}` for a submitted attempt return
+the caller's frozen answers and snapshot-derived result fields. MULTIPLE_CHOICE
+and TRUE_FALSE results have automatic `grading_status` CORRECT or INCORRECT.
+SHORT_ANSWER results always have `grading_status: PENDING`, including an exact
+textual match. They include the original submitted `answer.text` and frozen
+`reference_answer` for self-review; PENDING is not counted as incorrect and does
+not update review progress or scheduling. The UI labels it Ungraded. Semantic and
+manual grading are future work only. See [practice](PRACTICE.md) for the lifecycle.
+
 ## Learning progress summary
 
 `GET /courses/{course_id}/review-progress/summary` returns the authenticated
