@@ -148,7 +148,19 @@ materials or reopen View details to fetch the latest status; there is no polling
 Details show size, section/chunk counts and a native Extracted text disclosure. The
 text is rendered as escaped text, preserving whitespace in a bounded, keyboard-
 scrollable, wrapping region, without a PDF viewer or HTML execution. Ready details
-mount the existing `ConceptReview` unchanged; other statuses do not.
+mount `ConceptReview`; other statuses do not.
+
+## Concept extraction and review
+
+Only READY material details mount concept review. MEMBER and OWNER may run
+AI-assisted extraction and inspect concept sources. Extracted drafts require human
+review: only the course OWNER may approve or reject DRAFT concepts, and this UI
+does not reopen reviewed concepts.
+
+Source text is rendered as escaped text. Load, extraction, review and source
+inspection failures stay local and allow explicit retry; concept-list refresh
+failures preserve the displayed rows. There is no polling or automatic retry.
+The backend remains authoritative for permissions, extraction and review.
 
 ## Theme and tokens
 
