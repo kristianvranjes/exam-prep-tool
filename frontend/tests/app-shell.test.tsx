@@ -249,7 +249,7 @@ it("clears typed deletion confirmation when switching courses", async () => {
   apiMock.membership.mockResolvedValue({ ...membership, role: "OWNER" });
   render(<AppShell />);
   const myCourses = await screen.findByRole("region", { name: "Your courses" });
-  fireEvent.click(within(myCourses).getByRole("button", { name: /Algorithms/ }));
+  fireEvent.click(await within(myCourses).findByRole("button", { name: /Algorithms/ }));
   fireEvent.change(within(await screen.findByRole("region", { name: "Course settings" })).getByLabelText("Type the exact course name to confirm"), { target: { value: "Algorithms" } });
   fireEvent.click(within(myCourses).getByRole("button", { name: /Statistics/ }));
   fireEvent.click(within(myCourses).getByRole("button", { name: /Algorithms/ }));
