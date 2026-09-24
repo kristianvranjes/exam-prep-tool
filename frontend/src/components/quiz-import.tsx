@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useId, useRef, useState } from "react";
 import { api, OwnerQuestion } from "../lib/api";
 import { quizImportPrompt } from "../lib/quiz-import-prompt";
+import { Alert, Button, Surface } from "./ui";
 
 export function QuizImport({ courseId, disabled, onImported }: {
   courseId: string; disabled: boolean; onImported: (questions: OwnerQuestion[]) => void;
@@ -12,7 +13,9 @@ export function QuizImport({ courseId, disabled, onImported }: {
   const pending = useRef(false);
   const input = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
+  const [copyError, setCopyError] = useState("");
   const [notice, setNotice] = useState("");
+  const id = useId();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -32,23 +35,28 @@ export function QuizImport({ courseId, disabled, onImported }: {
     finally { pending.current = false; setBusy(false); }
   }
 
-  return <section className="space-y-3 rounded border bg-white p-4">
-    <h4 className="font-medium">Import external quiz drafts</h4>
-    <p className="text-sm">Temporary staging workflow: supply study material to an external AI with this prompt, save its JSON, then import and review. Internal AI remains available separately.</p>
-    <details><summary className="cursor-pointer text-sm">External AI prompt and example</summary>
-      <textarea aria-label="External AI prompt" className="mt-2 w-full rounded border p-2 text-sm" rows={12} readOnly value={quizImportPrompt} />
-      <button type="button" className="rounded border px-3 py-2 text-sm" onClick={async () => {
-        try { await navigator.clipboard.writeText(quizImportPrompt); setNotice("Prompt copied."); }
-        catch { setError("Could not copy. Select and copy the prompt text above."); }
-      }}>Copy prompt</button>
-      <a className="ml-3 text-sm underline" href="/quiz-import-v1.example.json" download>Download example JSON</a>
+  return <Surface className="min-w-0 space-y-4">
+    <div className="space-y-2">
+      <h4 className="font-semibold">Import external quiz drafts</h4>
+      <p className="max-w-prose text-sm text-muted">Supply study material to an external AI with this prompt, save its JSON, then import and review the drafts. Internal AI remains available separately.</p>
+    </div>
+    <details className="rounded-lg border border-line bg-subtle/50 p-3 sm:p-4"><summary className="text-sm font-medium">External AI prompt and example</summary>
+      <textarea aria-label="External AI prompt" className="mt-3 w-full rounded-lg border border-line bg-surface p-3 text-sm text-foreground" rows={12} readOnly value={quizImportPrompt} />
+      <div className="mt-3 flex flex-wrap items-center gap-3"><Button type="button" variant="secondary" onClick={async () => {
+        try { await navigator.clipboard.writeText(quizImportPrompt); setCopyError(""); setNotice("Prompt copied."); }
+        catch { setCopyError("Could not copy. Select and copy the prompt text above."); }
+      }}>Copy prompt</Button>
+      <a className="inline-flex min-h-11 items-center text-sm font-medium text-accent underline underline-offset-4 hover:text-accent-hover" href="/quiz-import-v1.example.json" download>Download example JSON</a></div>
+      {copyError && <Alert className="mt-3">{copyError}</Alert>}
     </details>
-    <form onSubmit={submit} className="space-y-2">
-      <label className="block text-sm">Quiz JSON file<input ref={input} className="ml-2" type="file" accept=".json,application/json" disabled={busy || disabled} onChange={(e) => { setFile(e.target.files?.[0] ?? null); setError(""); setNotice(""); }} /></label>
-      <p className="text-xs text-neutral-600">1–50 questions, up to 256 KiB. Server limits may be lower. Reimporting active question stems is rejected; nothing is saved on error.</p>
-      <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" disabled={busy || disabled || !file}>{busy ? "Importing…" : "Import drafts"}</button>
+    <form onSubmit={submit} className="space-y-3">
+      <label htmlFor={`${id}-file`} className="block text-sm font-medium">Quiz JSON file</label>
+      <input ref={input} id={`${id}-file`} type="file" accept=".json,application/json" aria-describedby={`${id}-help${file ? ` ${id}-selected` : ""}${error ? ` ${id}-error` : ""}`} aria-invalid={!!error} className="block min-h-11 w-full min-w-0 text-sm file:mr-3 file:min-h-11 file:rounded-lg file:border file:border-line file:bg-subtle file:px-3 file:text-foreground" disabled={busy || disabled} onChange={(e) => { setFile(e.target.files?.[0] ?? null); setError(""); setNotice(""); }} />
+      <p id={`${id}-help`} className="text-xs text-muted">1–50 questions, up to 256 KiB. Server limits may be lower. Reimporting active question stems is rejected; nothing is saved on error.</p>
+      {file && <p id={`${id}-selected`} role="status" className="break-words text-sm text-muted">Selected file: <span className="font-medium text-foreground">{file.name}</span></p>}
+      <Button type="submit" disabled={busy || disabled || !file}>{busy ? "Importing…" : "Import drafts"}</Button>
     </form>
-    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-    {notice && <p role="status" className="text-sm">{notice}</p>}
-  </section>;
+    {error && <Alert id={`${id}-error`}>{error}</Alert>}
+    {notice && <p role="status" className="rounded-lg border border-line bg-subtle p-3 text-sm text-foreground">{notice}</p>}
+  </Surface>;
 }

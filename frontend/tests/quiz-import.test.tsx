@@ -13,12 +13,20 @@ function choose(text = '{"version":"quiz-import-v1","questions":[]}', name = "qu
   fireEvent.change(screen.getByLabelText("Quiz JSON file"), { target: { files: [file] } });
 }
 function open() { render(<QuizImport courseId="course" disabled={false} onImported={onImported} />); }
+it("shows the selected filename before import", () => {
+  open(); choose("{}", "lecture-quiz.json");
+  expect(screen.getByRole("status")).toHaveTextContent("Selected file: lecture-quiz.json");
+  expect(screen.getByRole("button", { name: "Import drafts" })).toBeEnabled();
+});
 it("imports the file, refreshes the bank, and explains draft review", async () => {
   open(); choose(); fireEvent.click(screen.getByRole("button", { name: "Import drafts" }));
-  expect(await screen.findByText(/Imported 1 DRAFT/)).toBeInTheDocument();
+  await screen.findByText(/Imported 1 DRAFT/);
+  expect(screen.getByRole("status")).toHaveTextContent("Imported 1 DRAFT questions. Review each before approval.");
   expect(onImported).toHaveBeenCalledWith(imported);
   expect(mock.importQuestions).toHaveBeenCalledWith("course", expect.stringContaining("quiz-import-v1"));
   expect(screen.getByRole("button", { name: "Import drafts" })).toBeDisabled();
+  expect(screen.queryByText("Selected file:")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Quiz JSON file")).toHaveValue("");
 });
 it("reports malformed JSON without sending it", async () => {
   open(); choose("```json"); fireEvent.click(screen.getByRole("button", { name: "Import drafts" }));
@@ -29,9 +37,12 @@ it("shows backend validation errors and permits retry", async () => {
   mock.importQuestions.mockRejectedValueOnce(new Error("questions.0.options: Exactly one correct option is required"));
   open(); choose(); fireEvent.click(screen.getByRole("button", { name: "Import drafts" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("questions.0.options");
+  expect(screen.getByRole("status")).toHaveTextContent("Selected file: quiz.json");
+  expect(screen.getByLabelText("Quiz JSON file")).toHaveAttribute("aria-invalid", "true");
   expect(onImported).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Import drafts" }));
   await screen.findByText(/Imported 1 DRAFT/);
+  expect(mock.importQuestions).toHaveBeenCalledTimes(2);
 });
 it("rejects wrong extensions and oversize files", async () => {
   open(); choose("{}", "quiz.txt"); fireEvent.click(screen.getByRole("button", { name: "Import drafts" }));
@@ -57,4 +68,16 @@ it("provides a copyable prompt and downloadable example", async () => {
   await screen.findByText("Prompt copied.");
   expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Use only the study material"));
   expect(screen.getByRole("link", { name: "Download example JSON" })).toHaveAttribute("href", "/quiz-import-v1.example.json");
+  expect(screen.getByRole("link", { name: "Download example JSON" })).toHaveAttribute("download");
+});
+it("explains how to copy the prompt when clipboard access fails", async () => {
+  const writeText = vi.fn().mockRejectedValue(new Error("Clipboard unavailable"));
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  open(); fireEvent.click(screen.getByText("External AI prompt and example"));
+  fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Select and copy the prompt text above.");
+  expect(writeText).toHaveBeenCalledTimes(1);
+  const fileInput = screen.getByLabelText("Quiz JSON file");
+  expect(fileInput).toHaveAttribute("aria-invalid", "false");
+  expect(fileInput.getAttribute("aria-describedby")).not.toContain("-error");
 });

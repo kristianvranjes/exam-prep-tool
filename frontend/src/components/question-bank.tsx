@@ -4,17 +4,24 @@ import { FormEvent, useEffect, useState } from "react";
 import { api, Concept, OwnerQuestion, Question, QuestionAction, QuestionEdit, QuestionStatus, QuestionType, QuestionVersion } from "../lib/api";
 
 import { QuizImport } from "./quiz-import";
+import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
 
 const types: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
 const statuses: QuestionStatus[] = ["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED", "ARCHIVED"];
 const label = (value: string) => value.toLowerCase().replaceAll("_", " ");
-const control = "rounded border px-3 py-2 text-sm disabled:opacity-50";
+const textareaClass = "min-h-28 w-full rounded-lg border border-line bg-surface px-3 py-2 text-foreground";
 
 export function QuestionBank({ courseId }: { courseId: string }) {
   const [open, setOpen] = useState(false);
-  return <section className="mt-8 border-t pt-6">
-    <button className={control} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Close question bank" : "Open question bank"}</button>
-    {open && <BankContents courseId={courseId} />}
+  return <section className="mt-8 min-w-0 border-t border-line pt-6" aria-label="Question bank">
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="max-w-prose">
+        <h3 className="text-xl font-semibold">Question bank</h3>
+        <p className="mt-2 text-sm text-muted">Import private drafts, practice them, and submit questions for faculty review.</p>
+      </div>
+      <Button type="button" variant="secondary" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Close question bank" : "Open question bank"}</Button>
+    </div>
+    {open && <BankContents key={courseId} courseId={courseId} />}
   </section>;
 }
 
@@ -32,6 +39,7 @@ function BankContents({ courseId }: { courseId: string }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [listError, setListError] = useState("");
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
@@ -55,12 +63,12 @@ function BankContents({ courseId }: { courseId: string }) {
     let active = true;
     api.questions(courseId, { status: status || undefined, type: type || undefined, limit: 20, offset })
       .then((result) => { if (active) setRows(result); })
-      .catch(() => { if (active) setError("Could not load questions"); })
+      .catch(() => { if (active) setListError("Could not load questions. Try again."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [courseId, status, type, offset, revision]);
 
-  function refresh() { setLoading(true); setRevision((value) => value + 1); }
+  function refresh() { setLoading(true); setListError(""); setRevision((value) => value + 1); }
 
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -87,41 +95,86 @@ function BankContents({ courseId }: { courseId: string }) {
     finally { setBusy(false); }
   }
 
-  return <div className="mt-5 space-y-5">
-    <h3 className="text-xl font-semibold">Question bank</h3>
-    <p className="text-sm text-neutral-600">Import your own private drafts, practice them immediately, and submit them for faculty moderator review to share with the course.</p>
-    {<QuizImport courseId={courseId} disabled={busy} onImported={(imported) => {
+  return <div className="mt-5 min-w-0 space-y-6">
+    <QuizImport courseId={courseId} disabled={busy} onImported={(imported) => {
       setStatus("DRAFT"); setType(""); setOffset(0); setSelected(imported[0] ?? null); refresh();
-    }} />}
-    {owner && <form onSubmit={generate} className="space-y-3 rounded border bg-white p-4">
-      <fieldset disabled={busy || loading} className="space-y-3">
-        <legend className="font-medium">Generate draft questions (experimental internal AI)</legend>
-        <fieldset><legend className="text-sm">Approved concepts (select 1–5)</legend>
-          {concepts.filter((c) => c.status === "APPROVED").map((c) => <label key={c.id} className="mr-4 inline-flex gap-2 text-sm"><input type="checkbox" name="concept" value={c.id} />{c.name}</label>)}
-          {!concepts.some((c) => c.status === "APPROVED") && <p className="text-sm">Approve concepts before generating questions.</p>}
+    }} />
+
+    {owner && <Surface className="space-y-4 border-dashed">
+      <div>
+        <h4 className="text-lg font-semibold">Generate draft questions (experimental internal AI)</h4>
+        <p className="mt-1 text-sm text-muted">Optional generation from approved concepts. Review every draft before sharing it.</p>
+      </div>
+      <form onSubmit={generate} className="space-y-4">
+        <fieldset disabled={busy || loading} className="space-y-4">
+          <fieldset>
+            <legend className="font-medium">Approved concepts (select 1–5)</legend>
+            <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
+              {concepts.filter((c) => c.status === "APPROVED").map((c) => <label key={c.id} className="text-sm"><input type="checkbox" name="concept" value={c.id} />{c.name}</label>)}
+            </div>
+            {!concepts.some((c) => c.status === "APPROVED") && <p className="mt-2 text-sm text-muted">Approve concepts before generating questions.</p>}
+          </fieldset>
+          <fieldset>
+            <legend className="font-medium">Question types</legend>
+            <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
+              {types.map((t) => <label key={t} className="text-sm"><input type="checkbox" name="questionType" value={t} defaultChecked />{label(t)}</label>)}
+            </div>
+          </fieldset>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm font-medium">Question count<Input className="mt-1" name="count" type="number" min={1} max={10} defaultValue={3} required /></label>
+            <label className="block text-sm font-medium">Sources per concept<Input className="mt-1" name="topK" type="number" min={1} max={10} defaultValue={3} required /></label>
+          </div>
+          <Button type="submit" disabled={busy}>{busy ? "Working…" : "Generate drafts"}</Button>
         </fieldset>
-        <fieldset><legend className="text-sm">Question types</legend>{types.map((t) => <label key={t} className="mr-4 inline-flex gap-2 text-sm"><input type="checkbox" name="questionType" value={t} defaultChecked />{label(t)}</label>)}</fieldset>
-        <div className="flex flex-wrap gap-4"><label className="text-sm">Question count<input className={`${control} ml-2 w-20`} name="count" type="number" min={1} max={10} defaultValue={3} required /></label>
-          <label className="text-sm">Sources per concept<input className={`${control} ml-2 w-20`} name="topK" type="number" min={1} max={10} defaultValue={3} required /></label></div>
-        <button className={`${control} bg-black text-white`}>{busy ? "Working…" : "Generate drafts"}</button>
-      </fieldset>
-    </form>}
-    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-    {notice && <p role="status" className="text-sm">{notice}</p>}
-    <div className="flex flex-wrap gap-3">
-      {<label className="text-sm">Status <select className={control} value={status} disabled={busy} onChange={(e) => { setStatus(e.target.value as QuestionStatus | ""); setOffset(0); setLoading(true); }}><option value="">All statuses</option>{statuses.map((s) => <option key={s} value={s}>{label(s)}</option>)}</select></label>}
-      <label className="text-sm">Type <select className={control} value={type} disabled={busy} onChange={(e) => { setType(e.target.value as QuestionType | ""); setOffset(0); setLoading(true); }}><option value="">All types</option>{types.map((t) => <option key={t} value={t}>{label(t)}</option>)}</select></label>
-    </div>
-    {loading ? <p role="status">Loading questions…</p> : <ul className="space-y-2">{rows.map((q) => <li key={q.id} className="rounded border bg-white p-3">
-      <button disabled={busy} className="w-full text-left" onClick={() => { setSelected(q); setError(""); }}><span className="block text-xs uppercase text-neutral-500">{label(q.type)} · {label(q.status)}</span><span>{q.stem}</span></button>
-    </li>)}{!rows.length && <li className="text-sm text-neutral-600">No questions match this view.</li>}</ul>}
-    <div className="flex items-center gap-3"><button className={control} disabled={busy || loading || offset === 0} onClick={() => { setOffset(offset - 20); setLoading(true); }}>Previous</button><span className="text-sm">Page {offset / 20 + 1}</span><button className={control} disabled={busy || loading || rows.length < 20 || offset >= 10000} onClick={() => { setOffset(offset + 20); setLoading(true); }}>Next</button></div>
-    {selected && <article className="space-y-3 rounded border bg-white p-4">
-      <button className={control} disabled={busy} onClick={() => setSelected(null)}>Close question</button>
-      <h4 className="font-semibold">{selected.stem}</h4>
-      <p className="text-sm">{label(selected.type)} · {label(selected.status)}{selected.difficulty && ` · Difficulty ${selected.difficulty}/5`}</p>
-      <ul>{selected.options.map((option) => <li key={option.position}>{option.text}{selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (correct)" : ""}</li>)}</ul>
-      {selected.visibility === "OWNER" && <OwnerReview key={`${selected.id}:${selected.updated_at}`} question={selected} creator={selected.created_by_user_id === userId} moderator={moderator} concepts={concepts} busy={busy} mutate={mutate} />}
+      </form>
+    </Surface>}
+
+    {error && <Alert>{error}</Alert>}
+    {notice && <p role="status" className="rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{notice}</p>}
+
+    <Surface className="min-w-0 space-y-4" role="region" aria-label="Browse questions">
+      <div>
+        <h4 className="text-lg font-semibold">Browse questions</h4>
+        <p className="mt-1 text-sm text-muted">Choose a question to see its details and available actions.</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-sm font-medium">Status
+          <Select className="mt-1" value={status} disabled={busy} onChange={(e) => { setStatus(e.target.value as QuestionStatus | ""); setOffset(0); setListError(""); setLoading(true); }}>
+            <option value="">All statuses</option>{statuses.map((s) => <option key={s} value={s}>{label(s)}</option>)}
+          </Select>
+        </label>
+        <label className="block text-sm font-medium">Type
+          <Select className="mt-1" value={type} disabled={busy} onChange={(e) => { setType(e.target.value as QuestionType | ""); setOffset(0); setListError(""); setLoading(true); }}>
+            <option value="">All types</option>{types.map((t) => <option key={t} value={t}>{label(t)}</option>)}
+          </Select>
+        </label>
+      </div>
+      {listError && <div className="space-y-3"><Alert>{listError}</Alert><Button type="button" variant="secondary" onClick={refresh}>Retry questions</Button></div>}
+      {loading && <LoadingState>Loading questions…</LoadingState>}
+      {!loading && !listError && rows.length === 0 && <EmptyState title="No questions match this view.">Try another status or type, or import a draft above.</EmptyState>}
+      {!loading && !listError && rows.length > 0 && <ul className="space-y-2" aria-label="Questions list">
+        {rows.map((q) => <li key={q.id} className="min-w-0 rounded-lg border border-line bg-surface">
+          <Button type="button" variant="ghost" disabled={busy} aria-pressed={selected?.id === q.id} className="h-auto w-full min-w-0 flex-col items-start gap-2 whitespace-normal p-3 text-left" onClick={() => { setSelected(q); setError(""); }}>
+            <span className="flex flex-wrap gap-2"><Badge>{label(q.type)}</Badge><Badge>{label(q.status)}</Badge></span>
+            <span className="max-w-full break-words font-medium [overflow-wrap:anywhere]">{q.stem}</span>
+          </Button>
+        </li>)}
+      </ul>}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="button" variant="secondary" disabled={busy || loading || !!listError || offset === 0} onClick={() => { setOffset(offset - 20); setLoading(true); }}>Previous</Button>
+        <span className="text-sm text-muted">Page {offset / 20 + 1}</span>
+        <Button type="button" variant="secondary" disabled={busy || loading || !!listError || rows.length < 20 || offset >= 10000} onClick={() => { setOffset(offset + 20); setLoading(true); }}>Next</Button>
+      </div>
+    </Surface>
+
+    {selected && <article aria-label="Selected question" className="min-w-0 space-y-4 rounded-xl border border-line bg-surface p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h4 className="min-w-0 break-words text-lg font-semibold [overflow-wrap:anywhere]">{selected.stem}</h4>
+        <Button type="button" variant="secondary" disabled={busy} onClick={() => setSelected(null)}>Close question</Button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2"><Badge>{label(selected.type)}</Badge><Badge>{label(selected.status)}</Badge>{selected.difficulty && <span className="text-sm text-muted">Difficulty {selected.difficulty}/5</span>}</div>
+      <ul className="list-inside list-disc space-y-1 text-sm">{selected.options.map((option) => <li key={option.position} className="break-words [overflow-wrap:anywhere]">{option.text}{selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (correct)" : ""}</li>)}</ul>
+      {selected.visibility === "OWNER" && <OwnerReview key={selected.id + ":" + selected.updated_at} question={selected} creator={selected.created_by_user_id === userId} moderator={moderator} concepts={concepts} busy={busy} mutate={mutate} />}
     </article>}
   </div>;
 }
@@ -141,26 +194,56 @@ function OwnerReview({ question: q, creator, moderator, concepts, busy, mutate }
     finally { setVersionBusy(false); }
   }
 
-  return <div className="space-y-3 text-sm">
-    {q.type === "TRUE_FALSE" && <p>Correct answer: {String(q.correct_boolean)}</p>}
-    {q.reference_answer && <p>Reference answer: {q.reference_answer}</p>}
-    {q.explanation && <p>Explanation: {q.explanation}</p>}
-    {q.rejection_reason && <p>Rejection reason: {q.rejection_reason}</p>}
-    {q.reviewed_at && <p>Reviewed {new Date(q.reviewed_at).toLocaleString()}</p>}
-    <div><h5 className="font-medium">Provenance</h5><p>Concepts: {q.concept_ids.map((id) => concepts.find((c) => c.id === id)?.name || id).join(", ")}</p>
-      <ul>{q.source_chunks.map((s) => <li key={s.chunk_id} className="break-all">Material {s.material_id} · chunk {s.ordinal + 1} ({s.chunk_id})</li>)}</ul>
-      <p className="break-all">Source: {q.source}{q.ai_job_id && ` · Generation job ${q.ai_job_id}`}</p></div>
-    <div className="flex flex-wrap gap-2">
-      {creator && ["DRAFT", "REJECTED"].includes(q.status) && <button className={control} disabled={busy} onClick={() => setEditing(!editing)}>{editing ? "Cancel edit" : "Edit question"}</button>}
-      {creator && q.status === "DRAFT" && <button className={control} disabled={busy} onClick={() => transition("submit")}>Submit for review</button>}
-      {moderator && !creator && q.status === "PENDING_REVIEW" && <button className={control} disabled={busy} onClick={() => transition("approve")}>Approve question</button>}
-      {moderator && q.status === "APPROVED" && <button className={control} disabled={busy} onClick={() => transition("archive")}>Archive question</button>}
-      {hasMore && <button className={control} disabled={busy || versionBusy} onClick={loadVersions}>{versions.length ? "Load more versions" : "View versions"}</button>}
+  return <div className="min-w-0 space-y-5 text-sm">
+    <div className="space-y-2 break-words [overflow-wrap:anywhere]">
+      {q.type === "TRUE_FALSE" && <p>Correct answer: {String(q.correct_boolean)}</p>}
+      {q.reference_answer && <p>Reference answer: {q.reference_answer}</p>}
+      {q.explanation && <p>Explanation: {q.explanation}</p>}
+      {q.rejection_reason && <p className="rounded-lg border border-danger/30 bg-danger-surface p-3 text-danger">Rejection reason: {q.rejection_reason}</p>}
+      {q.reviewed_at && <p className="text-muted">Reviewed {new Date(q.reviewed_at).toLocaleString()}</p>}
     </div>
-    {moderator && !creator && q.status === "PENDING_REVIEW" && <form onSubmit={(e) => { e.preventDefault(); const reason = String(new FormData(e.currentTarget).get("reason")); void transition("reject", reason); }} className="flex gap-2"><input aria-label="Rejection reason" className={`${control} min-w-0 flex-1`} name="reason" required maxLength={1000} placeholder="Reason for rejection" disabled={busy} /><button className={control} disabled={busy}>Reject question</button></form>}
+
+    <div className="min-w-0 rounded-lg bg-subtle p-4">
+      <h5 className="font-semibold">Provenance</h5>
+      <p className="mt-2 break-words [overflow-wrap:anywhere]">Concepts: {q.concept_ids.map((id) => concepts.find((c) => c.id === id)?.name || id).join(", ")}</p>
+      <ul className="mt-2 space-y-1">{q.source_chunks.map((s) => <li key={s.chunk_id} className="break-words [overflow-wrap:anywhere]">Material {s.material_id} · chunk {s.ordinal + 1} ({s.chunk_id})</li>)}</ul>
+      <p className="mt-2 break-words [overflow-wrap:anywhere]">Source: {q.source}{q.ai_job_id && " · Generation job " + q.ai_job_id}</p>
+    </div>
+
+    <div className="flex flex-wrap gap-2">
+      {creator && ["DRAFT", "REJECTED"].includes(q.status) && <Button type="button" variant="secondary" disabled={busy} onClick={() => setEditing(!editing)}>{editing ? "Cancel edit" : "Edit question"}</Button>}
+      {creator && q.status === "DRAFT" && <Button type="button" disabled={busy} onClick={() => transition("submit")}>Submit for review</Button>}
+      {moderator && !creator && q.status === "PENDING_REVIEW" && <Button type="button" disabled={busy} onClick={() => transition("approve")}>Approve question</Button>}
+      {moderator && q.status === "APPROVED" && <Button type="button" variant="secondary" disabled={busy} onClick={() => transition("archive")}>Archive question</Button>}
+      {hasMore && <Button type="button" variant="secondary" disabled={busy || versionBusy} onClick={loadVersions}>{versions.length ? "Load more versions" : "View versions"}</Button>}
+    </div>
+
+    {moderator && !creator && q.status === "PENDING_REVIEW" && <form onSubmit={(e) => { e.preventDefault(); const reason = String(new FormData(e.currentTarget).get("reason")); void transition("reject", reason); }} className="flex flex-col gap-2 sm:flex-row">
+      <Input aria-label="Rejection reason" className="min-w-0 flex-1" name="reason" required maxLength={1000} placeholder="Reason for rejection" disabled={busy} />
+      <Button type="submit" variant="secondary" disabled={busy}>Reject question</Button>
+    </form>}
     {editing && <QuestionEditor question={q} concepts={concepts} busy={busy} save={(body) => mutate(() => api.editQuestion(q.id, body))} />}
-    {versionError && <p role="alert">{versionError}</p>}
-    {versions.length > 0 && <ol className="space-y-2">{versions.map((v) => <li key={v.version_number}><details><summary>Version {v.version_number} · {label(v.reason)} · {new Date(v.created_at).toLocaleString()}</summary><p>{v.snapshot.stem}</p><p>{v.snapshot.explanation}</p>{v.snapshot.options.map((o) => <p key={o.position}>{o.text}{o.is_correct ? " (correct)" : ""}</p>)}{v.snapshot.type === "TRUE_FALSE" && <p>Answer: {String(v.snapshot.correct_boolean)}</p>}{v.snapshot.reference_answer && <p>{v.snapshot.reference_answer}</p>}<p>Concepts: {v.snapshot.concept_ids.join(", ")}</p><p>Sources: {v.snapshot.source_chunks.map((s) => s.chunk_id).join(", ")}</p></details></li>)}</ol>}
+
+    {(versions.length > 0 || versionBusy || versionError) && <section className="min-w-0 space-y-3 border-t border-line pt-4" aria-label="Question history">
+      <h5 className="font-semibold">Version history</h5>
+      {versionBusy && <p role="status" className="text-muted">Loading question history…</p>}
+      {versionError && <Alert>{versionError}</Alert>}
+      {versions.length > 0 && <ol className="space-y-2">{versions.map((v) => <li key={v.version_number} className="min-w-0 rounded-lg border border-line">
+        <details className="group">
+          <summary className="min-w-0 break-words px-4 py-2 font-medium [overflow-wrap:anywhere]">Version {v.version_number} · {label(v.reason)} · {new Date(v.created_at).toLocaleString()}</summary>
+          <div className="min-w-0 space-y-2 border-t border-line p-4 break-words [overflow-wrap:anywhere]">
+            <p className="font-medium">{v.snapshot.stem}</p>
+            {v.snapshot.explanation && <p>Explanation: {v.snapshot.explanation}</p>}
+            {v.snapshot.options.map((o) => <p key={o.position}>{o.text}{o.is_correct ? " (correct)" : ""}</p>)}
+            {v.snapshot.type === "TRUE_FALSE" && <p>Answer: {String(v.snapshot.correct_boolean)}</p>}
+            {v.snapshot.reference_answer && <p>Reference answer: {v.snapshot.reference_answer}</p>}
+            <p>Concepts: {v.snapshot.concept_ids.join(", ")}</p>
+            <p>Source: {v.snapshot.source}</p>
+            <p>Sources: {v.snapshot.source_chunks.map((s) => s.chunk_id).join(", ")}</p>
+          </div>
+        </details>
+      </li>)}</ol>}
+    </section>}
   </div>;
 }
 
@@ -174,15 +257,39 @@ function QuestionEditor({ question: q, concepts, busy, save }: { question: Owner
     if (q.type === "SHORT_ANSWER") body.reference_answer = String(data.get("reference"));
     void save(body);
   }
-  return <form onSubmit={submit} className="rounded border p-3"><fieldset disabled={busy} className="space-y-3">
-    <legend className="font-medium">Edit draft content</legend>
-    <label className="block">Question stem<textarea className={`${control} w-full`} name="stem" defaultValue={q.stem} required maxLength={400} /></label>
-    <label className="block">Explanation<textarea className={`${control} w-full`} name="explanation" defaultValue={q.explanation || ""} maxLength={2000} /></label>
-    <label className="block">Difficulty (optional)<input className={`${control} ml-2 w-20`} name="difficulty" type="number" min={1} max={5} defaultValue={q.difficulty || ""} /></label>
-    {q.type === "MULTIPLE_CHOICE" && <fieldset><legend>Options (select one correct answer)</legend>{options.map((o, index) => <div key={index} className="mt-2 flex gap-2"><input aria-label={`Correct option ${index + 1}`} type="radio" name="correctOption" checked={o.is_correct} onChange={() => setOptions(options.map((item, i) => ({ ...item, is_correct: i === index })))} required /><input aria-label={`Option ${index + 1}`} className={`${control} min-w-0 flex-1`} value={o.text} required maxLength={400} onChange={(e) => setOptions(options.map((item, i) => i === index ? { ...item, text: e.target.value } : item))} /><button type="button" aria-label={`Remove option ${index + 1}`} className={control} disabled={options.length <= 2} onClick={() => setOptions(options.filter((_, i) => i !== index))}>Remove</button></div>)}<button type="button" className={`${control} mt-2`} disabled={options.length >= 6} onClick={() => setOptions([...options, { text: "", is_correct: false }])}>Add option</button></fieldset>}
-    {q.type === "TRUE_FALSE" && <label className="block">Correct answer<select className={`${control} ml-2`} name="answer" defaultValue={String(q.correct_boolean)}><option value="true">True</option><option value="false">False</option></select></label>}
-    {q.type === "SHORT_ANSWER" && <label className="block">Reference answer<textarea className={`${control} w-full`} name="reference" defaultValue={q.reference_answer || ""} required maxLength={2000} /></label>}
-    <fieldset><legend>Concept associations</legend>{concepts.filter((c) => c.status === "APPROVED").map((c) => <label key={c.id} className="mr-3 inline-flex gap-2"><input type="checkbox" name="editConcept" value={c.id} defaultChecked={q.concept_ids.includes(c.id)} />{c.name}</label>)}</fieldset>
-    <button className={control}>Save question</button>
-  </fieldset></form>;
+  return <form onSubmit={submit} className="min-w-0 rounded-lg border border-line bg-subtle p-4">
+    <fieldset disabled={busy} className="space-y-4">
+      <legend className="px-1 font-semibold">Edit draft content</legend>
+      <label className="block font-medium">Question stem
+        <textarea className={textareaClass + " mt-1"} name="stem" defaultValue={q.stem} required maxLength={400} />
+      </label>
+      <label className="block font-medium">Explanation
+        <textarea className={textareaClass + " mt-1"} name="explanation" defaultValue={q.explanation || ""} maxLength={2000} />
+      </label>
+      <label className="block font-medium">Difficulty (optional)
+        <Input className="mt-1 sm:w-24" name="difficulty" type="number" min={1} max={5} defaultValue={q.difficulty || ""} />
+      </label>
+
+      {q.type === "MULTIPLE_CHOICE" && <fieldset className="space-y-2">
+        <legend className="font-medium">Options (select one correct answer)</legend>
+        {options.map((o, index) => <div key={index} className="flex min-w-0 flex-wrap items-center gap-2">
+          <input aria-label={"Correct option " + (index + 1)} type="radio" name="correctOption" checked={o.is_correct} onChange={() => setOptions(options.map((item, i) => ({ ...item, is_correct: i === index })))} required />
+          <Input aria-label={"Option " + (index + 1)} className="min-w-32 flex-1" value={o.text} required maxLength={400} onChange={(e) => setOptions(options.map((item, i) => i === index ? { ...item, text: e.target.value } : item))} />
+          <Button type="button" variant="secondary" aria-label={"Remove option " + (index + 1)} disabled={options.length <= 2} onClick={() => setOptions(options.filter((_, i) => i !== index))}>Remove</Button>
+        </div>)}
+        <Button type="button" variant="secondary" disabled={options.length >= 6} onClick={() => setOptions([...options, { text: "", is_correct: false }])}>Add option</Button>
+      </fieldset>}
+      {q.type === "TRUE_FALSE" && <label className="block font-medium">Correct answer
+        <Select className="mt-1" name="answer" defaultValue={String(q.correct_boolean)}><option value="true">True</option><option value="false">False</option></Select>
+      </label>}
+      {q.type === "SHORT_ANSWER" && <label className="block font-medium">Reference answer
+        <textarea className={textareaClass + " mt-1"} name="reference" defaultValue={q.reference_answer || ""} required maxLength={2000} />
+      </label>}
+      <fieldset>
+        <legend className="font-medium">Concept associations</legend>
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">{concepts.filter((c) => c.status === "APPROVED").map((c) => <label key={c.id}><input type="checkbox" name="editConcept" value={c.id} defaultChecked={q.concept_ids.includes(c.id)} />{c.name}</label>)}</div>
+      </fieldset>
+      <Button type="submit">Save question</Button>
+    </fieldset>
+  </form>;
 }
