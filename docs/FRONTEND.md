@@ -58,6 +58,32 @@ The queue refreshes only on selection, pagination or explicit user request; ther
 no polling or realtime update. The backend remains authoritative for faculty
 permissions, self-review restrictions and question lifecycle decisions.
 
+## Question Bank and contributions
+
+The Question Bank opens within the selected course and loads questions only when
+opened. Its paged list keeps status and type filters, with a selected question detail
+view. Importing questions creates private DRAFTs; after import, the bank switches to
+the DRAFT filter and selects an imported question for review.
+
+Creators can edit their DRAFT or REJECTED questions and submit DRAFTs for review.
+Editing a REJECTED question returns it to DRAFT so the creator can rework and
+resubmit it. Faculty moderators can approve or reject another creator's
+PENDING_REVIEW question and archive APPROVED questions according to the existing
+workflow. Moderators never see review actions on their own submissions, and course
+OWNER membership alone does not grant moderation. MEMBER views of approved
+questions omit answer keys, correctness, explanations, reference answers,
+provenance, version history and privileged actions.
+
+External JSON import is the reliable staging workflow: users can copy the prompt
+for an external AI tool, download an example, check a selected `.json` file locally,
+and send its raw JSON to the existing import API for server validation. Imported
+questions remain private drafts until reviewed. The separate internal AI generation
+control remains an optional, experimental OWNER feature.
+
+The list and details refresh on user actions rather than polling or realtime
+updates. The backend remains authoritative for visibility, editing, moderation,
+validation and lifecycle transitions.
+
 ## Study and Exam quizzes
 
 Quiz experience is a frontend presentation choice, separate from the server's

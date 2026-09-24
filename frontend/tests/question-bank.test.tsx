@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { QuestionBank } from "../src/components/question-bank";
 import type { OwnerQuestion } from "../src/lib/api";
@@ -42,6 +42,33 @@ async function open() {
   await screen.findByRole("button", { name: /What is a matrix/ });
 }
 
+it("loads only after opening and shows an explicit loading state", async () => {
+  let resolve!: (rows: OwnerQuestion[]) => void;
+  mock.questions.mockReturnValue(new Promise<OwnerQuestion[]>((finish) => { resolve = finish; }));
+  render(<QuestionBank courseId="course" />);
+  expect(mock.questions).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Open question bank" }));
+  expect(screen.getByText("Loading questions…")).toBeInTheDocument();
+  await act(async () => resolve([draft]));
+  expect(await screen.findByRole("button", { name: /What is a matrix/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Close question bank" }));
+  expect(screen.queryByRole("button", { name: /What is a matrix/ })).not.toBeInTheDocument();
+});
+
+it("shows an empty view and retries a failed list without losing the bank", async () => {
+  mock.questions.mockResolvedValueOnce([]);
+  render(<QuestionBank courseId="course" />);
+  fireEvent.click(screen.getByRole("button", { name: "Open question bank" }));
+  expect(await screen.findByText("No questions match this view.")).toBeInTheDocument();
+  mock.questions.mockRejectedValueOnce(new Error("temporary list failure")).mockResolvedValueOnce([draft]);
+  fireEvent.change(screen.getByLabelText("Status"), { target: { value: "DRAFT" } });
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load questions");
+  expect(screen.queryByRole("button", { name: /What is a matrix/ })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Retry questions" }));
+  expect(await screen.findByRole("button", { name: /What is a matrix/ })).toBeInTheDocument();
+  expect(mock.questions).toHaveBeenCalledTimes(3);
+});
+
 it("generates with selected approved concepts and bounded controls", async () => {
   await open();
   await screen.findByLabelText("Matrices");
@@ -75,6 +102,31 @@ it("lets a creator edit and submit without granting OWNER moderation", async () 
   expect(mock.transitionQuestion.mock.calls.map(c => c[1])).toEqual(["submit"]);
 });
 
+it("sends the complete MCQ edit payload with one correct option and native bounds", async () => {
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "Edit question" }));
+  expect(screen.getByLabelText("Question stem")).toHaveAttribute("required");
+  expect(screen.getByLabelText("Question stem")).toHaveAttribute("maxLength", "400");
+  expect(screen.getByLabelText("Difficulty (optional)")).toHaveAttribute("min", "1");
+  expect(screen.getByLabelText("Difficulty (optional)")).toHaveAttribute("max", "5");
+  fireEvent.change(screen.getByLabelText("Explanation"), { target: { value: "Revised explanation" } });
+  fireEvent.change(screen.getByLabelText("Difficulty (optional)"), { target: { value: "4" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add option" }));
+  fireEvent.change(screen.getByLabelText("Option 3"), { target: { value: "A vector" } });
+  fireEvent.click(screen.getByLabelText("Correct option 3"));
+  fireEvent.click(screen.getByRole("button", { name: "Remove option 2" }));
+  expect(screen.getByRole("button", { name: "Remove option 1" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Save question" }));
+  await waitFor(() => expect(mock.editQuestion).toHaveBeenCalledWith("q1", {
+    stem: draft.stem,
+    explanation: "Revised explanation",
+    difficulty: 4,
+    concept_ids: ["c1"],
+    options: [{ text: "A table", is_correct: false }, { text: "A vector", is_correct: true }],
+  }));
+});
+
 it.each(["TRUE_FALSE", "SHORT_ANSWER"] as const)("edits the complete %s answer", async (type) => {
   current = { ...draft, type, options: [], correct_boolean: type === "TRUE_FALSE" ? false : null, reference_answer: type === "SHORT_ANSWER" ? "Original answer" : null };
   await open();
@@ -93,9 +145,11 @@ it("renders a member's approved representation without keys or owner controls", 
   expect(screen.getByText("A table")).toBeInTheDocument();
   expect(screen.queryByText(/\(correct\)/)).not.toBeInTheDocument();
   expect(screen.queryByText(/Explanation:|Reference answer:|Correct answer:|Provenance/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/material1|Generation job|Source:/)).not.toBeInTheDocument();
   expect(screen.getByLabelText("Status")).toBeInTheDocument();
   for (const name of ["Generate drafts", "Edit question", "Submit for review", "Approve question", "Archive question", "View versions"]) expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
   expect(mock.concepts).not.toHaveBeenCalled();
+  expect(mock.questionVersions).not.toHaveBeenCalled();
 });
 
 it("shows failed generation, prevents overlapping clicks and allows retry", async () => {
@@ -105,9 +159,15 @@ it("shows failed generation, prevents overlapping clicks and allows retry", asyn
   fireEvent.click(await screen.findByLabelText("Matrices"));
   fireEvent.click(screen.getByRole("button", { name: "Generate drafts" }));
   expect(screen.getByRole("button", { name: "Working…" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Working…" }));
+  expect(mock.generateQuestions).toHaveBeenCalledTimes(1);
   resolve({ status: "FAILED", error_message: "Question generation failed safely" });
   expect(await screen.findByRole("alert")).toHaveTextContent("Question generation failed safely");
   await waitFor(() => expect(screen.getByRole("button", { name: "Generate drafts" })).toBeEnabled());
+  mock.generateQuestions.mockResolvedValueOnce({ status: "SUCCEEDED", model: "fake" });
+  fireEvent.click(screen.getByRole("button", { name: "Generate drafts" }));
+  expect(await screen.findByText(/Generation SUCCEEDED/)).toBeInTheDocument();
+  expect(mock.generateQuestions).toHaveBeenCalledTimes(2);
 });
 
 it("keeps a rejected mutation visible and displays the API error", async () => {
@@ -125,6 +185,40 @@ it("sends owner filters to the bounded listing API", async () => {
   fireEvent.change(screen.getByLabelText("Type"), { target: { value: "SHORT_ANSWER" } });
   await waitFor(() => expect(mock.questions).toHaveBeenLastCalledWith("course", { status: "PENDING_REVIEW", type: "SHORT_ANSWER", limit: 20, offset: 0 }));
 });
+
+it("pages by 20, stops at the lower boundary, and resets the offset when filtering", async () => {
+  const page = [draft, ...Array.from({ length: 19 }, (_, index) => ({ ...draft, id: "other-" + index, stem: "Other question " + index }))];
+  mock.questions.mockResolvedValue(page);
+  await open();
+  expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  await waitFor(() => expect(mock.questions).toHaveBeenLastCalledWith("course", { status: undefined, type: undefined, limit: 20, offset: 20 }));
+  expect(screen.getByText("Page 2")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+  await waitFor(() => expect(mock.questions).toHaveBeenLastCalledWith("course", { status: undefined, type: undefined, limit: 20, offset: 0 }));
+  expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  await waitFor(() => expect(screen.getByText("Page 2")).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText("Status"), { target: { value: "DRAFT" } });
+  fireEvent.change(screen.getByLabelText("Type"), { target: { value: "SHORT_ANSWER" } });
+  await waitFor(() => expect(mock.questions).toHaveBeenLastCalledWith("course", { status: "DRAFT", type: "SHORT_ANSWER", limit: 20, offset: 0 }));
+  expect(screen.getByText("Page 1")).toBeInTheDocument();
+});
+
+it("stops Next at the API's maximum offset", async () => {
+  const page = [draft, ...Array.from({ length: 19 }, (_, index) => ({ ...draft, id: "other-" + index, stem: "Other question " + index }))];
+  mock.questions.mockResolvedValue(page);
+  await open();
+  const next = screen.getByRole("button", { name: "Next" });
+  for (let number = 2; number <= 501; number += 1) {
+    expect(next).toBeEnabled();
+    await act(async () => { fireEvent.click(next); });
+    expect(screen.getByText("Page " + number)).toBeInTheDocument();
+  }
+  expect(mock.questions).toHaveBeenLastCalledWith("course", { status: undefined, type: undefined, limit: 20, offset: 10000 });
+  expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+}, 60_000);
 
 
 it("imports without concepts and resets filters to drafts for review", async () => {
@@ -212,6 +306,49 @@ it("archives approved content as a moderator and retains version access", async 
   fireEvent.click(screen.getByRole("button", { name: "View versions" }));
   expect(await screen.findByText(/Version 1/)).toBeInTheDocument();
   expect(mock.transitionQuestion).toHaveBeenCalledWith("q1", "archive", undefined);
+});
+
+it("loads version history in 50-row pages with a local retry", async () => {
+  const firstPage = Array.from({ length: 50 }, (_, index) => ({
+    version_number: index + 1, reason: "EDITED", snapshot: draft, created_at: draft.created_at,
+  }));
+  mock.questionVersions.mockRejectedValueOnce(new Error("temporary history failure"))
+    .mockResolvedValueOnce(firstPage)
+    .mockResolvedValueOnce([{ version_number: 51, reason: "EDITED", snapshot: draft, created_at: draft.created_at }]);
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  fireEvent.click(screen.getByRole("button", { name: "View versions" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load question history");
+  expect(screen.getByRole("button", { name: "View versions" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "View versions" }));
+  expect(await screen.findByText(/^Version 1 ·/)).toBeInTheDocument();
+  expect(mock.questionVersions).toHaveBeenNthCalledWith(2, "q1", 0);
+  fireEvent.click(screen.getByRole("button", { name: "Load more versions" }));
+  expect(await screen.findByText(/^Version 51 ·/)).toBeInTheDocument();
+  expect(mock.questionVersions).toHaveBeenNthCalledWith(3, "q1", 50);
+  expect(screen.queryByRole("button", { name: "Load more versions" })).not.toBeInTheDocument();
+});
+
+it("clears private selection immediately when the selected course changes", async () => {
+  const view = render(<QuestionBank courseId="course" />);
+  fireEvent.click(screen.getByRole("button", { name: "Open question bank" }));
+  fireEvent.click(await screen.findByRole("button", { name: /What is a matrix/ }));
+  expect(screen.getByText(/Material material1 · chunk 1/)).toBeInTheDocument();
+  mock.questions.mockReturnValue(new Promise(() => {}));
+  view.rerender(<QuestionBank courseId="another-course" />);
+  expect(screen.queryByText(/Material material1 · chunk 1/)).not.toBeInTheDocument();
+  expect(screen.getByText("Loading questions…")).toBeInTheDocument();
+});
+
+it("keeps long question and provenance content in flexible containers", async () => {
+  const longId = "material-" + "x".repeat(180);
+  current = { ...draft, stem: "Long question " + "word ".repeat(100), source_chunks: [{ chunk_id: "chunk-" + "y".repeat(180), material_id: longId, ordinal: 0 }] };
+  render(<QuestionBank courseId="course" />);
+  fireEvent.click(screen.getByRole("button", { name: "Open question bank" }));
+  fireEvent.click(await screen.findByRole("button", { name: /Long question/ }));
+  const detail = screen.getByRole("article", { name: "Selected question" });
+  expect(detail).toHaveClass("min-w-0");
+  expect(screen.getByText(new RegExp("Material " + longId))).toBeInTheDocument();
 });
 
 it("leaves conflicting approval pending and reports the safe server error", async () => {
