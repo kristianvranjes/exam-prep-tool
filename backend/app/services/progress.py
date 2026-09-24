@@ -1,12 +1,13 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.models import User
 from app.models.question import Question
 from app.models.user_question_progress import UserQuestionProgress
+from app.schemas.progress import ProgressSummary, StageCount
 from app.schemas.quiz import Grade
 from app.services.courses import get_member_course
 from app.services.scheduling import schedule
@@ -84,4 +85,50 @@ def list_progress(
             .limit(limit)
             .offset(offset)
         )
+    )
+
+
+def summarize_progress(db: Session, user: User, course_id: UUID) -> ProgressSummary:
+    get_member_course(db, user, course_id)
+    as_of = datetime.now(UTC)
+    progress = UserQuestionProgress
+    scope = (progress.user_id == user.id, Question.course_id == course_id)
+    totals = db.execute(
+        select(
+            func.count(progress.id),
+            func.coalesce(func.sum(case((progress.due_at <= as_of, 1), else_=0)), 0),
+            func.coalesce(func.sum(case((progress.due_at > as_of, 1), else_=0)), 0),
+            func.coalesce(func.sum(progress.resolved_review_count), 0),
+            func.coalesce(func.sum(progress.correct_review_count), 0),
+            func.coalesce(func.sum(progress.incorrect_review_count), 0),
+            func.max(progress.last_reviewed_at),
+            func.min(progress.due_at),
+        )
+        .select_from(progress)
+        .join(Question)
+        .where(*scope)
+    ).one()
+    counts: dict[int, int] = {
+        stage: count
+        for stage, count in db.execute(
+            select(progress.review_stage, func.count(progress.id))
+            .join(Question)
+            .where(*scope)
+            .group_by(progress.review_stage)
+        ).all()
+    }
+    return ProgressSummary(
+        as_of=as_of,
+        reviewed_questions=totals[0],
+        due_now=totals[1],
+        upcoming=totals[2],
+        resolved_review_count=totals[3],
+        correct_review_count=totals[4],
+        incorrect_review_count=totals[5],
+        last_reviewed_at=totals[6],
+        next_due_at=totals[7],
+        stage_counts=[
+            StageCount(review_stage=stage, question_count=counts.get(stage, 0))
+            for stage in range(6)
+        ],
     )

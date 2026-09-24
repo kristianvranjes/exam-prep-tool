@@ -3,7 +3,7 @@
 ExamPrep uses a compact header, desktop sidebar and a single main study area.
 On mobile, the labeled navigation button expands an inline menu; Escape closes it
 and restores button focus. A skip link reaches the main content. Course selection
-keeps the existing materials, practice, review progress and question-bank components
+keeps the existing materials, practice, learning progress and question-bank components
 mounted together. Navigation uses section anchors, so moving between tools does not
 discard an in-progress answer or form. Selecting another course retains the existing
 remount behavior. Faculty moderators also have a separate Moderation anchor that
@@ -117,6 +117,23 @@ submission. Results show each student's answer, backend Correct/Incorrect/Pendin
 state, available answer keys/explanations, and total/correct/incorrect/pending counts
 derived solely from the frozen attempt. Pending answers do not imply AI/manual
 grading is available. Active history entries resume; submitted entries open results.
+
+## Learning progress
+
+The selected course's Learning progress dashboard loads only when opened. First
+open fetches the server summary and page 0 together. It shows resolved review
+totals, resolved-only accuracy, due/upcoming counts, last and next review times,
+all six stages, and 20-row question schedule pages. Due labels use the summary's
+server `as_of`, never the browser clock. Loading, empty and retryable error states
+stay in the dashboard; failed refresh or page navigation keeps the last good data.
+Page navigation fetches rows only; Refresh progress fetches summary and the
+current page. There is no polling or realtime update.
+
+Open adaptive review focuses `#practice`, opens Practice Quiz and selects
+ADAPTIVE without starting an attempt or changing count, types, Study/Exam mode,
+history or active attempts. The handoff is scoped to the selected course and
+clears on a course change. The backend remains authoritative for review times,
+membership, scheduling and adaptive question eligibility.
 
 ## Materials upload and browsing
 
