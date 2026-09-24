@@ -133,8 +133,12 @@ Failed. Request failure keeps the selected file and existing list for retry.
 
 Rows and details use theme tokens, wrapping filenames, decimal B/KB/MB/GB file sizes
 and text labels Uploaded, Processing, Ready and Failed. Failed materials show their
-processing error and explain that another PDF can be uploaded. No retry-processing
-or deletion action is offered; those lifecycle features are intentionally deferred.
+processing error and explain that another PDF can be uploaded. There is no retry or
+reprocess action. The uploader may remove their own terminal FAILED material after
+explicit confirmation. Success removes it from the visible list and clears matching
+detail without a page reload. Failure preserves the list and detail for retry.
+Removal of UPLOADED, PROCESSING and READY materials, and general deletion, remain
+unavailable.
 
 List/detail errors remain local with read retry controls. Refresh failures keep
 existing rows; opening a different material retains the previous detail until the
