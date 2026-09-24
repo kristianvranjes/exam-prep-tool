@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api, type Material, type MaterialDetail } from "../lib/api";
 import { ConceptReview } from "./concept-review";
 import { MaterialUpload } from "./material-upload";
+import { MaterialEmbedding } from "./material-embedding";
 import { formatFileSize, materialStatus } from "./material-format";
 import { Alert, Badge, Button, EmptyState, LoadingState, Surface } from "./ui";
 
@@ -122,6 +123,7 @@ export function CourseMaterials({ courseId, currentUserId }: { courseId: string;
         <summary className="rounded-lg py-2 font-medium">Extracted text</summary>
         <pre role="region" aria-label="Extracted material text" tabIndex={0} className="mt-3 max-h-80 max-w-full overflow-auto rounded-lg bg-subtle p-4 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">{detail.extracted_markdown || "No extracted text available."}</pre>
       </details>
+      {detail.status === "READY" && detail.id === selected?.id && <MaterialEmbedding materialId={detail.id} />}
       {detail.status === "READY" && <ConceptReview key={detail.id} courseId={courseId} materialId={detail.id} />}
     </article>}
   </section>;

@@ -5,7 +5,7 @@ import { formatFileSize } from "../src/components/material-format";
 import type { Material, MaterialDetail } from "../src/lib/api";
 vi.mock("../src/components/concept-review", () => ({ ConceptReview: ({ materialId }: { materialId: string }) => <section aria-label="Concept review">Concepts for {materialId}</section> }));
 
-const mock = vi.hoisted(() => ({ materials: vi.fn(), material: vi.fn(), uploadMaterial: vi.fn(), deleteMaterial: vi.fn() }));
+const mock = vi.hoisted(() => ({ materials: vi.fn(), material: vi.fn(), uploadMaterial: vi.fn(), deleteMaterial: vi.fn(), materialEmbeddingStatus: vi.fn(), embedMaterial: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 const material: Material = { id: "m1", course_id: "course-1", uploaded_by_user_id: "user", original_filename: "notes.pdf", media_type: "application/pdf", file_size_bytes: 1400, status: "READY", processing_error: null, created_at: "2026-01-01", updated_at: "2026-01-01" };
 const detail: MaterialDetail = { ...material, sections: [], chunk_count: 2, extracted_markdown: "<script>untrusted</script>\n  keep spacing" };
@@ -29,6 +29,8 @@ beforeEach(() => {
   mock.materials.mockResolvedValue([]);
   mock.uploadMaterial.mockResolvedValue(material);
   mock.material.mockResolvedValue(detail);
+  mock.materialEmbeddingStatus.mockResolvedValue({ material_id: "m1", total_chunks: 2, current_chunks: 0, stale_chunks: 2, is_current: false });
+  mock.embedMaterial.mockResolvedValue({ material_id: "m1", embedded: 2, skipped: 0, signature: "private" });
 });
 
 it("uploads a chosen PDF, resets selection and opens safe extracted text with concepts", async () => {
@@ -53,6 +55,8 @@ it("uploads a chosen PDF, resets selection and opens safe extracted text with co
   expect(text).toHaveAttribute("tabindex", "0");
   expect(document.querySelector("script")).toBeNull();
   expect(screen.getByRole("region", { name: "Concept review" })).toHaveTextContent("m1");
+  expect(await screen.findByText("0 current · 2 stale · 2 total chunks")).toBeInTheDocument();
+  expect(mock.embedMaterial).not.toHaveBeenCalled();
 });
 
 it("accepts a dropped PDF while keeping explicit upload and keyboard file input", async () => {
@@ -68,6 +72,20 @@ it("accepts a dropped PDF while keeping explicit upload and keyboard file input"
   fireEvent.click(screen.getByRole("button", { name: "Upload PDF" }));
   await within(list()).findByText("notes.pdf");
   expect(mock.uploadMaterial).toHaveBeenCalledWith("course-1", file);
+});
+
+it("prepares a READY material without remounting concept review or reloading details", async () => {
+  mock.materials.mockResolvedValue([material]);
+  mock.materialEmbeddingStatus.mockResolvedValueOnce({ material_id: "m1", total_chunks: 2, current_chunks: 0, stale_chunks: 2, is_current: false })
+    .mockResolvedValueOnce({ material_id: "m1", total_chunks: 2, current_chunks: 2, stale_chunks: 0, is_current: true });
+  await ready();
+  fireEvent.click(screen.getByRole("button", { name: "View details: notes.pdf" }));
+  const concepts = await screen.findByRole("region", { name: "Concept review" });
+  fireEvent.click(await screen.findByRole("button", { name: "Prepare semantic sources" }));
+  expect(await screen.findByText("Current")).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Concept review" })).toBe(concepts);
+  expect(mock.material).toHaveBeenCalledTimes(1);
+  expect(mock.embedMaterial).toHaveBeenCalledWith("m1");
 });
 
 it.each([
@@ -167,6 +185,7 @@ it.each(["UPLOADED", "PROCESSING", "READY", "FAILED"] as const)("renders readabl
   fireEvent.click(screen.getByRole("button", { name: "View details: notes.pdf" }));
   await screen.findByRole("article", { name: "Material details: notes.pdf" });
   expect(!!screen.queryByRole("region", { name: "Concept review" })).toBe(status === "READY");
+  expect(!!screen.queryByRole("region", { name: "Semantic sources" })).toBe(status === "READY");
 });
 
 it("keeps the previous detail and list while a new detail loads or fails, then retries", async () => {

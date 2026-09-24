@@ -144,8 +144,11 @@ and an explicit [AI provider](AI.md). Laptop → FreeLLMAPI development gateway;
 home PC → Ollama/Qwen; future production/demo → explicit supported provider.
 FreeLLMAPI is development/prototyping infrastructure with no production guarantee.
 
-After uploading and processing a material, extract/approve concepts and run its
-embedding endpoint in authenticated `/docs`. Then generate in the course bank.
+After uploading and processing a material, open its READY detail in Materials and
+explicitly prepare semantic sources there. Extract and approve relevant concepts,
+then generate in the course bank when those concepts have current sources. If the
+local embedding model is unavailable, preparation fails safely and can be retried;
+manual question creation and JSON import remain available.
 The generation request is:
 
 ```json

@@ -14,3 +14,18 @@ it("sends multipart uploads with cookies and a browser-generated boundary", asyn
   expect(options.body.get("file")).toEqual(file);
   expect(options.headers.has("Content-Type")).toBe(false);
 });
+
+it("uses the same authenticated material endpoint for status and explicit preparation", async () => {
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ material_id: "m1" }) });
+  vi.stubGlobal("fetch", fetchMock);
+  await api.materialEmbeddingStatus("m1");
+  await api.embedMaterial("m1");
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+    "http://localhost:8000/materials/m1/embeddings",
+    "http://localhost:8000/materials/m1/embeddings",
+  ]);
+  expect(fetchMock.mock.calls[0][1].credentials).toBe("include");
+  expect(fetchMock.mock.calls[0][1].method).toBeUndefined();
+  expect(fetchMock.mock.calls[1][1].method).toBe("POST");
+});

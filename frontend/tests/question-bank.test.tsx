@@ -78,6 +78,8 @@ it("shows an empty view and retries a failed list without losing the bank", asyn
 
 it("generates with selected approved concepts and bounded controls", async () => {
   await open();
+  expect(screen.getByRole("link", { name: "Open a Ready material in Materials" })).toHaveAttribute("href", "#materials");
+  expect(screen.getByText(/Generation needs approved concepts and current semantic sources/)).toBeInTheDocument();
   await screen.findByLabelText("Matrices");
   expect(screen.queryByText("Unreviewed")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Generate drafts" }));
@@ -155,6 +157,7 @@ it("renders a member's approved representation without keys or owner controls", 
   expect(screen.queryByText(/material1|Generation job|Source:/)).not.toBeInTheDocument();
   expect(screen.getByLabelText("Status")).toBeInTheDocument();
   for (const name of ["Generate drafts", "Edit question", "Submit for review", "Approve question", "Archive question", "View versions"]) expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Open a Ready material in Materials" })).not.toBeInTheDocument();
   expect(mock.concepts).toHaveBeenCalledWith("course");
   expect(mock.questionVersions).not.toHaveBeenCalled();
 });

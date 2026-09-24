@@ -226,7 +226,8 @@ Phase 5 adds a separate `EmbeddingProvider` for BGE-M3 dense vectors. `AIProvide
 continues to handle Ollama/FreeLLMAPI text generation independently. Phase 6 reuses
 retrieval to generate question drafts. The base Docker image and CI exclude the optional
 ML stack and model weights; all existing application features start without them.
-Embedding/search requests return a safe 503 until a local embedding model is available.
+Embedding refresh/search requests return a safe 503 until a local embedding model is available;
+the READY material status read works without loading it.
 
 For real CPU embedding, run the backend natively with the optional `embeddings`
 extra and a predownloaded pinned model. See [exact setup, authenticated requests,
@@ -239,10 +240,12 @@ Select a course and **Open question bank**. Any joined member can **Create quest
 as a private USER draft, with optional approved concepts, then edit and submit it for
 review. JSON import remains available for bulk contributions. OWNER may optionally
 select 1–5 approved concepts and generate 1–10 experimental AI drafts. Each selected
-concept needs current embedded READY sources. First extract
-and approve concepts, then use `POST /materials/{material_id}/embeddings` in the
-authenticated API docs to embed the material (requires the optional local model
-setup above). Start with 1–3 questions and a small source count.
+concept needs current embedded READY sources. Open a READY material in the course
+Materials section and explicitly prepare or refresh its semantic sources, then
+extract and approve concepts before generation (requires the optional local model
+setup above). See [retrieval details](docs/RETRIEVAL.md) and start with 1–3 questions
+and a small source count. Manual question creation and JSON import remain available
+without the local embedding model.
 
 Choose a draft to inspect its answer, concepts, material/chunk references and history.
 Creators edit and **Submit for review**; a different faculty moderator approves

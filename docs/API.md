@@ -125,11 +125,16 @@ clients should inspect job status even when extraction returns HTTP 200.
 
 ## Embeddings and semantic retrieval (Phase 5)
 
-Both endpoints require authentication (401) and OWNER or MEMBER course access;
+These endpoints require authentication (401) and OWNER or MEMBER course access;
 outsiders and missing resources return 404. MEMBER has the same permissions as
 OWNER here, so there is no separate owner-only 403 operation in this phase.
 
-- `POST /materials/{material_id}/embeddings`: refresh persisted READY chunks.
+- `GET /materials/{material_id}/embeddings`: read READY material freshness without
+  running inference. Returns `{material_id, total_chunks, current_chunks,
+  stale_chunks, is_current}`. Current means a stored vector, timestamp, matching
+  provider signature and exact UTF-8 content hash. An empty READY material returns
+  zero counts and `is_current: false`; non-READY returns 409.
+- `POST /materials/{material_id}/embeddings`: explicitly refresh persisted READY chunks.
   Returns `{material_id, embedded, skipped, signature}`. Non-READY or busy refresh:
   409. Empty/oversized material or tokenizer/input limit: 422. Model/output/storage
   failure: safe 503, with the entire refresh rolled back.

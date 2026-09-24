@@ -91,6 +91,73 @@ def data(monkeypatch):
             app.dependency_overrides.pop(get_embedding_provider, None)
 
 
+def test_embedding_status_is_read_only_and_authorized(data):
+    d = data
+    with TestClient(app) as anonymous:
+        assert anonymous.get(d.embed).status_code == 401
+    assert d.outsider.get(d.embed).status_code == 404
+    assert d.member.get(f"/materials/{uuid4()}/embeddings").status_code == 404
+    expected = {
+        "material_id": d.material,
+        "total_chunks": 3,
+        "current_chunks": 0,
+        "stale_chunks": 3,
+        "is_current": False,
+    }
+    assert d.member.get(d.embed).json() == expected
+    assert d.owner.get(d.embed).json() == expected
+    assert d.provider.calls == []
+    assert d.member.post(d.embed).status_code == 200
+    calls = list(d.provider.calls)
+    current = d.member.get(d.embed)
+    assert current.status_code == 200
+    assert current.json() == {
+        **expected,
+        "current_chunks": 3,
+        "stale_chunks": 0,
+        "is_current": True,
+    }
+    assert d.owner.get(d.embed).json() == current.json()
+    assert d.provider.calls == calls
+    assert set(current.json()) == set(expected)
+    assert "signature" not in current.text and "embedding" not in current.text
+    assert d.member.post(d.embed).json()["skipped"] == 3
+    assert d.member.get(d.embed).json() == current.json()
+
+
+def test_embedding_status_detects_content_signature_and_empty_material(data):
+    d = data
+    empty = add_material(d.course, d.user, [])
+    assert d.member.get(f"/materials/{empty}/embeddings").json() == {
+        "material_id": empty,
+        "total_chunks": 0,
+        "current_chunks": 0,
+        "stale_chunks": 0,
+        "is_current": False,
+    }
+    assert d.member.post(d.embed).status_code == 200
+    with SessionLocal() as db:
+        chunk = db.scalar(
+            select(MaterialChunk).where(
+                MaterialChunk.material_id == UUID(d.material), MaterialChunk.ordinal == 0
+            )
+        )
+        chunk.content = "alpha changed"
+        chunk.char_count = len(chunk.content)
+        db.commit()
+    assert d.member.get(d.embed).json()["current_chunks"] == 2
+    assert d.member.get(d.embed).json()["stale_chunks"] == 1
+    d.provider.signature = "b" * 64
+    assert d.member.get(d.embed).json()["current_chunks"] == 0
+    assert d.member.get(d.embed).json()["stale_chunks"] == 3
+    assert d.member.post(d.embed).json()["embedded"] == 3
+    assert d.member.get(d.embed).json()["is_current"] is True
+    with SessionLocal() as db:
+        db.get(Material, UUID(d.material)).status = "PROCESSING"
+        db.commit()
+    assert d.member.get(d.embed).status_code == 409
+
+
 def test_embedding_order_idempotency_content_and_model_change(data):
     d = data
     first = d.member.post(d.embed)
