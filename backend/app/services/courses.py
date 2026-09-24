@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.models import Course, CourseMembership, MembershipRole, User
 from app.models.faculty import Faculty
+from app.models.material import Material
 from app.schemas.course import CourseCreate, CourseUpdate
 from app.services.faculties import active_faculty
+from app.services.materials.storage import MaterialStorage
 from app.services.moderation import require_moderator
 
 
@@ -71,10 +73,37 @@ def update_course(db: Session, user: User, course_id: UUID, data: CourseUpdate) 
     return course
 
 
-def delete_course(db: Session, user: User, course_id: UUID) -> None:
-    course = get_owner_course(db, user, course_id)
-    db.delete(course)
-    db.commit()
+def delete_course(db: Session, user: User, course_id: UUID, storage: MaterialStorage) -> None:
+    get_owner_course(db, user, course_id)
+    try:
+        # Serialize deletes and keep new child rows from appearing during cleanup.
+        course = db.scalar(
+            select(Course)
+            .where(Course.id == course_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    except Exception:
+        db.rollback()
+        raise HTTPException(503, "Could not delete course") from None
+    if course is None:
+        db.rollback()
+        raise HTTPException(404, "Course not found")
+    try:
+        materials = db.scalars(
+            select(Material)
+            .where(Material.course_id == course_id)
+            .order_by(Material.id)
+            .with_for_update()
+        )
+        keys = [material.storage_key for material in materials]
+        for key in keys:
+            storage.delete(key)
+        db.delete(course)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(503, "Could not delete course") from None
 
 
 def join_course(db: Session, user: User, course_id: UUID) -> CourseMembership:

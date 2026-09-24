@@ -6,11 +6,12 @@ from community_helpers import create_course
 from fastapi.testclient import TestClient
 from pdf_fixture import make_pdf
 from sqlalchemy import func, select, text
+from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.database import SessionLocal, engine
 from app.main import app
-from app.models import CourseMembership
+from app.models import Course, CourseMembership
 from app.models.material import Material
 from app.models.material_chunk import MaterialChunk
 from app.models.material_section import MaterialSection
@@ -54,6 +55,95 @@ def upload(client, course_id, data=None, filename="notes.pdf", mime="application
         f"/courses/{course_id}/materials",
         files={"file": (filename, make_pdf() if data is None else data, mime)},
     )
+
+
+def source_paths(course_id, root):
+    storage = LocalMaterialStorage(root)
+    with SessionLocal() as db:
+        rows = list(
+            db.scalars(
+                select(Material).where(Material.course_id == UUID(course_id)).order_by(Material.id)
+            )
+        )
+        return [(row.id, storage.path(row.storage_key)) for row in rows]
+
+
+def test_course_delete_removes_all_sources_and_leaves_other_course(clients, tmp_path):
+    owner, member, _, course_id = clients
+    with SessionLocal() as db:
+        faculty_id = db.get(Course, UUID(course_id)).faculty_id
+    other = create_course(owner, json={"name": "Unrelated", "faculty_id": str(faculty_id)}).json()[
+        "id"
+    ]
+    assert upload(owner, course_id).status_code == 201
+    assert upload(member, course_id).status_code == 201
+    assert upload(owner, other).status_code == 201
+    sources = source_paths(course_id, tmp_path)
+    unrelated = source_paths(other, tmp_path)
+    assert len(sources) == 2 and all(path.is_file() for _, path in sources)
+    with SessionLocal() as db:
+        db.get(Material, sources[1][0]).status = "FAILED"
+        db.commit()
+    assert len(unrelated) == 1 and unrelated[0][1].is_file()
+    assert owner.delete(f"/courses/{course_id}").status_code == 204
+    assert all(not path.exists() for _, path in sources)
+    assert unrelated[0][1].is_file()
+    with SessionLocal() as db:
+        assert db.get(Course, UUID(course_id)) is None
+        assert all(db.get(Material, material_id) is None for material_id, _ in sources)
+        assert db.get(Course, UUID(other)) is not None
+        assert db.get(Material, unrelated[0][0]) is not None
+
+
+def test_course_delete_storage_failure_rolls_back_and_retries(clients, monkeypatch, tmp_path):
+    owner, _, _, course_id = clients
+    assert upload(owner, course_id).status_code == 201
+    assert upload(owner, course_id).status_code == 201
+    sources = source_paths(course_id, tmp_path)
+    original_delete = LocalMaterialStorage.delete
+    calls = 0
+
+    def fail_second(self, key):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("private /storage/path and secret key")
+        return original_delete(self, key)
+
+    monkeypatch.setattr(LocalMaterialStorage, "delete", fail_second)
+    response = owner.delete(f"/courses/{course_id}")
+    assert response.status_code == 503
+    assert "private" not in response.text and "secret" not in response.text
+    assert all(path.name not in response.text for _, path in sources)
+    assert not sources[0][1].exists() and sources[1][1].is_file()
+    with SessionLocal() as db:
+        assert db.get(Course, UUID(course_id)) is not None
+        assert all(db.get(Material, material_id) is not None for material_id, _ in sources)
+    monkeypatch.setattr(LocalMaterialStorage, "delete", original_delete)
+    assert owner.delete(f"/courses/{course_id}").status_code == 204
+    assert all(not path.exists() for _, path in sources)
+
+
+def test_course_delete_commit_failure_rolls_back_and_retries(clients, monkeypatch, tmp_path):
+    owner, _, _, course_id = clients
+    assert upload(owner, course_id).status_code == 201
+    sources = source_paths(course_id, tmp_path)
+    original_commit = Session.commit
+
+    def fail_commit(self):
+        raise RuntimeError("private database failure")
+
+    monkeypatch.setattr(Session, "commit", fail_commit)
+    response = owner.delete(f"/courses/{course_id}")
+    monkeypatch.setattr(Session, "commit", original_commit)
+    assert response.status_code == 503 and "private" not in response.text
+    assert all(not path.exists() for _, path in sources)
+    with SessionLocal() as db:
+        assert db.get(Course, UUID(course_id)) is not None
+        assert all(db.get(Material, material_id) is not None for material_id, _ in sources)
+    assert owner.delete(f"/courses/{course_id}").status_code == 204
+    with SessionLocal() as db:
+        assert db.get(Course, UUID(course_id)) is None
 
 
 def test_member_pdf_and_non_member_access(clients, tmp_path):

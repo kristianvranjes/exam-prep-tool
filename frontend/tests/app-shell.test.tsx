@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CourseMembership } from "../src/lib/api";
 
@@ -12,6 +12,9 @@ const apiMock = vi.hoisted(() => ({
   logout: vi.fn(),
   courses: vi.fn(),
   course: vi.fn(),
+  membership: vi.fn(),
+  updateCourse: vi.fn(),
+  deleteCourse: vi.fn(),
   createCourse: vi.fn(),
   facultyCourses: vi.fn(),
   questionReview: vi.fn().mockResolvedValue([]),
@@ -44,7 +47,16 @@ beforeEach(() => {
   apiMock.facultyCourses.mockResolvedValue([course]);
   apiMock.questionReview.mockResolvedValue([]);
   apiMock.joinCourse.mockResolvedValue(membership);
+  apiMock.membership.mockResolvedValue(membership);
+  apiMock.updateCourse.mockResolvedValue({ ...course, name: "Algorithms II", code: null, description: null });
+  apiMock.deleteCourse.mockResolvedValue(undefined);
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(done => { resolve = done; });
+  return { promise, resolve };
+}
 
 describe("authentication and course flow", () => {
   it("registers and creates a course", async () => {
@@ -120,6 +132,130 @@ it("keeps all course tools reachable and switches their selected course", async 
   expect(screen.getByRole("link", { name: "Skip to content" })).toHaveAttribute("href", "#main-content");
 });
 
+it("uses selected membership rather than creator identity for owner settings", async () => {
+  apiMock.me.mockResolvedValue(user);
+  apiMock.courses.mockResolvedValue([course]);
+  render(<AppShell />);
+  fireEvent.click(await screen.findByRole("button", { name: /Algorithms/ }));
+  await waitFor(() => expect(apiMock.membership).toHaveBeenCalledWith("course-1"));
+  expect(screen.queryByRole("link", { name: "Course settings" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Course settings" })).not.toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Practice quiz" })).toBeInTheDocument();
+});
+
+it("ignores stale membership from an earlier course selection", async () => {
+  const old = deferred<CourseMembership>();
+  apiMock.me.mockResolvedValue(user);
+  apiMock.courses.mockResolvedValue([course, { ...course, id: "course-2", name: "Statistics" }]);
+  apiMock.membership.mockReturnValueOnce(old.promise).mockResolvedValueOnce({ ...membership, course_id: "course-2", role: "MEMBER" });
+  render(<AppShell />);
+  fireEvent.click(await screen.findByRole("button", { name: /Algorithms/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Statistics/ }));
+  await waitFor(() => expect(apiMock.membership).toHaveBeenCalledWith("course-2"));
+  await act(async () => old.resolve({ ...membership, role: "OWNER" }));
+  expect(screen.queryByRole("region", { name: "Course settings" })).not.toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Practice quiz" })).toHaveTextContent("course-2");
+});
+
+it("keeps normal tools after membership failure and reveals settings on retry", async () => {
+  apiMock.me.mockResolvedValue(user);
+  apiMock.courses.mockResolvedValue([course]);
+  apiMock.membership.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({ ...membership, role: "OWNER" });
+  render(<AppShell />);
+  fireEvent.click(await screen.findByRole("button", { name: /Algorithms/ }));
+  expect(await screen.findByText(/Could not check course permissions/)).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Course materials" })).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Practice quiz" })).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Course settings" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Retry course permissions" }));
+  expect(await screen.findByRole("region", { name: "Course settings" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Course settings" })).toHaveAttribute("href", "#course-settings");
+});
+
+it("updates joined and selected metadata and refreshes only the active catalog", async () => {
+  const updated = { ...course, name: "Algorithms II", code: null, description: "Revised course" };
+  apiMock.me.mockResolvedValue(user);
+  apiMock.courses.mockResolvedValue([course]);
+  apiMock.membership.mockResolvedValue({ ...membership, role: "OWNER" });
+  apiMock.moderatorStatus.mockResolvedValue({ is_moderator: false });
+  apiMock.updateCourse.mockResolvedValue(updated);
+  apiMock.facultyCourses.mockResolvedValueOnce([course]).mockResolvedValueOnce([updated]);
+  render(<AppShell />);
+  fireEvent.change(await screen.findByLabelText("Browse by faculty"), { target: { value: "faculty-1" } });
+  await screen.findByRole("link", { name: "Open course: Algorithms" });
+  fireEvent.click(within(screen.getByRole("region", { name: "Your courses" })).getByRole("button", { name: /Algorithms/ }));
+  const settings = await screen.findByRole("region", { name: "Course settings" });
+  fireEvent.change(within(settings).getByLabelText("Course name"), { target: { value: "Algorithms II" } });
+  fireEvent.change(within(settings).getByLabelText("Course code"), { target: { value: "" } });
+  fireEvent.change(within(settings).getByLabelText("Description"), { target: { value: "Revised course" } });
+  fireEvent.click(within(settings).getByRole("button", { name: "Save course" }));
+  await waitFor(() => expect(apiMock.updateCourse).toHaveBeenCalledWith("course-1", { name: "Algorithms II", code: null, description: "Revised course" }));
+  expect(await within(screen.getByRole("region", { name: "Your courses" })).findByRole("button", { name: /Algorithms II/ })).toBeInTheDocument();
+  expect(screen.getByRole("navigation", { name: "Main navigation" })).toHaveTextContent("Algorithms II");
+  expect(screen.getByRole("region", { name: "Practice quiz" })).toHaveTextContent("course-1");
+  await waitFor(() => expect(apiMock.facultyCourses).toHaveBeenCalledTimes(2));
+  expect(await screen.findByRole("link", { name: "Open course: Algorithms II" })).toBeInTheDocument();
+});
+
+it("keeps a saved course update when the catalog refresh fails locally", async () => {
+  const updated = { ...course, name: "Algorithms II" };
+  apiMock.me.mockResolvedValue(user);
+  apiMock.courses.mockResolvedValue([course]);
+  apiMock.membership.mockResolvedValue({ ...membership, role: "OWNER" });
+  apiMock.moderatorStatus.mockResolvedValue({ is_moderator: false });
+  apiMock.updateCourse.mockResolvedValue(updated);
+  apiMock.facultyCourses.mockResolvedValueOnce([course]).mockRejectedValueOnce(new Error("offline"));
+  render(<AppShell />);
+  fireEvent.change(await screen.findByLabelText("Browse by faculty"), { target: { value: "faculty-1" } });
+  await screen.findByRole("link", { name: "Open course: Algorithms" });
+  fireEvent.click(within(screen.getByRole("region", { name: "Your courses" })).getByRole("button", { name: /Algorithms/ }));
+  const settings = await screen.findByRole("region", { name: "Course settings" });
+  fireEvent.change(within(settings).getByLabelText("Course name"), { target: { value: "Algorithms II" } });
+  fireEvent.click(within(settings).getByRole("button", { name: "Save course" }));
+  expect(await screen.findByText(/Could not load courses for this faculty/)).toBeInTheDocument();
+  expect(within(screen.getByRole("region", { name: "Your courses" })).getByRole("button", { name: /Algorithms II/ })).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Practice quiz" })).toHaveTextContent("course-1");
+});
+
+it("deletes the selected course, clears tools and handoff, and keeps another course", async () => {
+  apiMock.me.mockResolvedValue(user);
+  apiMock.courses.mockResolvedValue([course, { ...course, id: "course-2", name: "Statistics" }]);
+  apiMock.membership.mockResolvedValue({ ...membership, role: "OWNER" });
+  apiMock.moderatorStatus.mockResolvedValue({ is_moderator: false });
+  apiMock.facultyCourses.mockResolvedValueOnce([course]).mockResolvedValueOnce([]);
+  render(<AppShell />);
+  fireEvent.change(await screen.findByLabelText("Browse by faculty"), { target: { value: "faculty-1" } });
+  await screen.findByRole("link", { name: "Open course: Algorithms" });
+  fireEvent.click(within(screen.getByRole("region", { name: "Your courses" })).getByRole("button", { name: /Algorithms/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Open adaptive review" }));
+  expect(screen.getByRole("region", { name: "Practice quiz" })).toHaveTextContent("handoff 1");
+  const settings = await screen.findByRole("region", { name: "Course settings" });
+  fireEvent.change(within(settings).getByLabelText("Type the exact course name to confirm"), { target: { value: "Algorithms" } });
+  fireEvent.click(within(settings).getByRole("button", { name: "Delete course permanently" }));
+  await waitFor(() => expect(apiMock.deleteCourse).toHaveBeenCalledWith("course-1"));
+  expect(await screen.findByText("Algorithms was permanently deleted.")).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Course settings" })).not.toBeInTheDocument();
+  for (const name of ["Course materials", "Practice quiz", "Learning progress", "Question bank"]) expect(screen.queryByRole("region", { name })).not.toBeInTheDocument();
+  expect(within(screen.getByRole("region", { name: "Your courses" })).queryByRole("button", { name: /Algorithms/ })).not.toBeInTheDocument();
+  expect(within(screen.getByRole("region", { name: "Your courses" })).getByRole("button", { name: /Statistics/ })).toBeInTheDocument();
+  await waitFor(() => expect(apiMock.facultyCourses).toHaveBeenCalledTimes(2));
+  fireEvent.click(within(screen.getByRole("region", { name: "Your courses" })).getByRole("button", { name: /Statistics/ }));
+  expect(screen.getByRole("region", { name: "Practice quiz" })).toHaveTextContent("course-2 · handoff 0");
+});
+
+it("clears typed deletion confirmation when switching courses", async () => {
+  apiMock.me.mockResolvedValue(user);
+  apiMock.courses.mockResolvedValue([course, { ...course, id: "course-2", name: "Statistics" }]);
+  apiMock.membership.mockResolvedValue({ ...membership, role: "OWNER" });
+  render(<AppShell />);
+  const myCourses = await screen.findByRole("region", { name: "Your courses" });
+  fireEvent.click(within(myCourses).getByRole("button", { name: /Algorithms/ }));
+  fireEvent.change(within(await screen.findByRole("region", { name: "Course settings" })).getByLabelText("Type the exact course name to confirm"), { target: { value: "Algorithms" } });
+  fireEvent.click(within(myCourses).getByRole("button", { name: /Statistics/ }));
+  fireEvent.click(within(myCourses).getByRole("button", { name: /Algorithms/ }));
+  expect(within(await screen.findByRole("region", { name: "Course settings" })).getByLabelText("Type the exact course name to confirm")).toHaveValue("");
+});
+
 it("logs in and clears the account, courses and selected tools on logout", async () => {
   apiMock.courses.mockResolvedValue([course]);
   render(<AppShell />);
@@ -133,6 +269,20 @@ it("logs in and clears the account, courses and selected tools on logout", async
   expect(apiMock.logout).toHaveBeenCalledOnce();
   expect(screen.queryByText(user.email)).not.toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Practice quiz" })).not.toBeInTheDocument();
+});
+
+it("ignores a late owner membership response after logout", async () => {
+  const pending = deferred<CourseMembership>();
+  apiMock.me.mockResolvedValue(user);
+  apiMock.courses.mockResolvedValue([course]);
+  apiMock.membership.mockReturnValue(pending.promise);
+  render(<AppShell />);
+  fireEvent.click(await screen.findByRole("button", { name: /Algorithms/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+  await screen.findByRole("form", { name: "Login" });
+  await act(async () => pending.resolve({ ...membership, role: "OWNER" }));
+  expect(screen.queryByRole("link", { name: "Course settings" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Course settings" })).not.toBeInTheDocument();
 });
 
 it("keeps the signed-in shell when logout fails and shows a retryable error", async () => {

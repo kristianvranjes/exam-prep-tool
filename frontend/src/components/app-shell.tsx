@@ -1,12 +1,13 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { api, Course, Faculty, User } from "../lib/api";
+import { api, Course, Faculty, User, type CourseMembership } from "../lib/api";
 import { ProgressPanel } from "./progress-panel";
 import { PracticeQuiz } from "./practice-quiz";
 import { QuestionBank } from "./question-bank";
 import { CourseMaterials } from "./course-materials";
 import { CourseBrowser } from "./course-browser";
+import { CourseSettings } from "./course-settings";
 import { ApplicationFrame, Brand } from "./application-frame";
 import { FacultyModeration } from "./faculty-moderation";
 import { AuthScreen, type AuthMode } from "./auth-screen";
@@ -17,6 +18,11 @@ export function AppShell() {
   const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selected, setSelected] = useState<Course | null>(null);
+  const [selectedRole, setSelectedRole] = useState<{ courseId: string; role: CourseMembership["role"] } | null>(null);
+  const [membershipError, setMembershipError] = useState("");
+  const [membershipRetry, setMembershipRetry] = useState(0);
+  const [catalogRevision, setCatalogRevision] = useState(0);
+  const [deletedNotice, setDeletedNotice] = useState("");
   const [adaptiveReviewRequest, setAdaptiveReviewRequest] = useState(0);
   const [mode, setMode] = useState<AuthMode>("login");
   const [error, setError] = useState("");
@@ -24,6 +30,7 @@ export function AppShell() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [loadingCourses, setLoadingCourses] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
+  const selectedId = selected?.id;
 
   useEffect(() => {
     let active = true;
@@ -39,6 +46,14 @@ export function AppShell() {
       .finally(() => { if (active) setLoadingCourses(false); });
     return () => { active = false; };
   }, [user]);
+  useEffect(() => {
+    if (!user || !selectedId) return;
+    let active = true;
+    api.membership(selectedId)
+      .then(membership => { if (active) setSelectedRole({ courseId: selectedId, role: membership.role }); })
+      .catch(() => { if (active) setMembershipError("Could not check course permissions. Course tools remain available."); });
+    return () => { active = false; };
+  }, [user, selectedId, membershipRetry]);
   useEffect(() => {
     if (!user) return;
     let active = true;
@@ -69,14 +84,33 @@ export function AppShell() {
 
   async function logout() {
     setLoggingOut(true); setError("");
-    try { await api.logout(); setUser(null); setCourses([]); setFaculties([]); setSelected(null); setAdaptiveReviewRequest(0); setMode("login"); }
+    try { await api.logout(); setUser(null); setCourses([]); setFaculties([]); setSelected(null); setSelectedRole(null); setMembershipError(""); setDeletedNotice(""); setAdaptiveReviewRequest(0); setMode("login"); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not log out. Try again."); }
     finally { setLoggingOut(false); }
   }
 
   function selectCourse(course: Course) {
     setSelected(course);
+    setSelectedRole(null);
+    setMembershipError("");
+    setDeletedNotice("");
     setAdaptiveReviewRequest(0);
+  }
+
+  function courseUpdated(updated: Course) {
+    setCourses(current => current.map(course => course.id === updated.id ? updated : course));
+    setSelected(current => current?.id === updated.id ? updated : current);
+    setCatalogRevision(value => value + 1);
+  }
+
+  function courseDeleted(deleted: Course) {
+    setCourses(current => current.filter(course => course.id !== deleted.id));
+    setSelected(null);
+    setSelectedRole(null);
+    setMembershipError("");
+    setAdaptiveReviewRequest(0);
+    setCatalogRevision(value => value + 1);
+    setDeletedNotice(`${deleted.name} was permanently deleted.`);
   }
 
   function openAdaptiveReview() {
@@ -89,11 +123,13 @@ export function AppShell() {
   if (checkingSession) return <main className="mx-auto max-w-6xl px-6 py-8"><Brand /><LoadingState>Loading your study space…</LoadingState></main>;
   if (!user) return <AuthScreen mode={mode} busy={busy} error={error} submit={submitAuth} changeMode={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }} />;
 
-  return <ApplicationFrame user={user} courseName={selected?.name} logout={() => void logout()} busy={loggingOut} moderationLink={faculties.length > 0}>
+  const isOwner = !!selected && selectedRole?.courseId === selected.id && selectedRole.role === "OWNER";
+  return <ApplicationFrame user={user} courseName={selected?.name} logout={() => void logout()} busy={loggingOut} moderationLink={faculties.length > 0} ownerSettingsLink={isOwner}>
     <section id="courses" tabIndex={-1} aria-labelledby="courses-heading">
       <h1 id="courses-heading" className="text-3xl font-semibold tracking-tight">Your courses</h1>
       <p className="mt-2 text-muted">Choose a course and pick up where you left off.</p>
       {error && <Alert className="mt-5">{error}</Alert>}
+      {deletedNotice && <p role="status" className="mt-5 rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{deletedNotice}</p>}
       <div className="mt-6">
         {loadingCourses ? <LoadingState>Loading courses…</LoadingState> : courses.length === 0 ? <EmptyState title="No courses yet">Find your faculty in <a href="#browse-courses" className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-foreground">Browse courses</a> and join a course to start studying.</EmptyState> :
           <ul className="grid gap-3 sm:grid-cols-2">{courses.map(course => <li key={course.id}>
@@ -103,14 +139,16 @@ export function AppShell() {
           </li>)}</ul>}
       </div>
     </section>
-    <CourseBrowser joinedCourses={courses} loadingMembership={loadingCourses} onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])} onOpen={selectCourse} />
+    <CourseBrowser joinedCourses={courses} loadingMembership={loadingCourses} onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])} onOpen={selectCourse} refreshRevision={catalogRevision} />
     {faculties.length > 0 && <FacultyModeration currentUserId={user.id} moderatedFaculties={faculties} />}
     {selected && <section id="selected-course" tabIndex={-1} className="mt-10" aria-labelledby="selected-course-heading">
       <div className="border-t border-line pt-8"><h2 id="selected-course-heading" className="text-2xl font-semibold tracking-tight">{selected.name}</h2>{selected.code && <p className="mt-1 text-sm text-muted">{selected.code}</p>}<p className="mt-3 text-muted">{selected.description || "No description"}</p></div>
+      {membershipError && <div className="mt-4"><Alert>{membershipError}</Alert><Button variant="secondary" className="mt-3" onClick={() => { setMembershipError(""); setMembershipRetry(value => value + 1); }}>Retry course permissions</Button></div>}
       <div id="materials" tabIndex={-1}><CourseMaterials key={selected.id} courseId={selected.id} currentUserId={user.id} /></div>
       <div id="practice" tabIndex={-1}><PracticeQuiz key={`practice-${selected.id}`} courseId={selected.id} adaptiveReviewRequest={adaptiveReviewRequest} /></div>
       <div id="progress" tabIndex={-1}><ProgressPanel key={`progress-${selected.id}`} courseId={selected.id} onOpenAdaptiveReview={openAdaptiveReview} /></div>
       <div id="questions" tabIndex={-1}><QuestionBank key={`questions-${selected.id}`} courseId={selected.id} /></div>
+      {isOwner && <CourseSettings key={selected.id} course={selected} onUpdated={courseUpdated} onDeleted={courseDeleted} />}
     </section>}
     {faculties.length > 0 && <Surface className="mt-10">
       <form onSubmit={createCourse} className="space-y-4" aria-label="Create a course">

@@ -31,6 +31,31 @@ changing selection, theme or navigation. Open course selects the joined course a
 links to its study tools. Failed joins keep existing courses/selection and offer retry.
 Responses arriving after logout/unmount do not update the next session.
 
+## Course settings
+
+The selected course's OWNER role comes from `GET /courses/{course_id}/membership`,
+not the course creator field. Only a positively resolved OWNER sees the Course settings
+navigation link and section; MEMBER users do not. A failed lookup leaves Materials,
+Practice, Learning progress and Question Bank usable and offers a local permission
+retry. Switching course or logging out ignores late role responses.
+
+The OWNER form edits name, code and description with native length limits. Blank
+optional values submit as null. A successful save uses the returned course to update
+My courses and selected-course/sidebar details immediately, while preserving the
+mounted tools. Failure keeps the form and selected course for retry. Save and delete
+requests cannot overlap or duplicate.
+
+The separate Danger zone warns that deleting a course permanently removes uploaded
+source PDFs, questions, attempts, study history and other course data. Delete requires
+typing the exact current course name, with case-sensitive matching. Success removes
+the course from My courses, clears the selection, role and adaptive handoff, unmounts
+the selected tools, and leaves a shell-level confirmation. Failure keeps the course
+and confirmation for retry. Switching courses clears that confirmation.
+
+After either successful mutation, Browse courses refetches only its selected faculty
+catalog. A catalog error stays local and does not undo the course change. There is no
+polling or realtime update.
+
 Course creation stays secondary, below the catalog/study content, and is rendered
 only when the current user moderates at least one active faculty. The existing
 backend authorization and course-creation request are unchanged.

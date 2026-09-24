@@ -14,8 +14,8 @@ const course: Course = { id: "c1", faculty_id: "f1", name: "Algorithms", code: "
 const onJoined = vi.fn();
 const membership: CourseMembership = { course_id: course.id, user_id: "user-1", role: "MEMBER" };
 const onOpen = vi.fn();
-function view(joinedCourses: Course[] = [], loadingMembership = false) {
-  return <CourseBrowser joinedCourses={joinedCourses} loadingMembership={loadingMembership} onJoined={onJoined} onOpen={onOpen} />;
+function view(joinedCourses: Course[] = [], loadingMembership = false, refreshRevision = 0) {
+  return <CourseBrowser joinedCourses={joinedCourses} loadingMembership={loadingMembership} onJoined={onJoined} onOpen={onOpen} refreshRevision={refreshRevision} />;
 }
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -63,6 +63,30 @@ it("ignores an old faculty response after a newer selection", async () => {
   await act(async () => stale.resolve([course]));
   expect(screen.queryByText("Algorithms")).not.toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Legacy / Unassigned" })).toBeInTheDocument();
+});
+
+it("does not fetch courses on an external revision until a faculty is selected", async () => {
+  const rendered = render(view());
+  await screen.findByLabelText("Browse by faculty");
+  rendered.rerender(view([], false, 1));
+  expect(mock.facultyCourses).not.toHaveBeenCalled();
+  await selectFaculty("f2");
+  await waitFor(() => expect(mock.facultyCourses).toHaveBeenCalledWith("f2"));
+  rendered.rerender(view([], false, 2));
+  await waitFor(() => expect(mock.facultyCourses.mock.calls).toEqual([["f2"], ["f2"]]));
+});
+
+it("refreshes only the selected faculty and ignores a stale pre-refresh response", async () => {
+  const old = deferred<Course[]>();
+  const updated = { ...course, name: "Algorithms II" };
+  mock.facultyCourses.mockReturnValueOnce(old.promise).mockResolvedValueOnce([updated]);
+  const rendered = render(view());
+  await selectFaculty("f1");
+  rendered.rerender(view([], false, 1));
+  expect(await screen.findByRole("button", { name: "Join course: Algorithms II" })).toBeInTheDocument();
+  await act(async () => old.resolve([course]));
+  expect(screen.queryByRole("button", { name: "Join course: Algorithms" })).not.toBeInTheDocument();
+  expect(mock.facultyCourses.mock.calls).toEqual([["f1"], ["f1"]]);
 });
 
 it("shows an empty faculty catalog", async () => {

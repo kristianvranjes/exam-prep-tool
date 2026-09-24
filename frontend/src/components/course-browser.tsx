@@ -4,18 +4,19 @@ import { useEffect, useRef, useState } from "react";
 import { api, type Course, type Faculty } from "../lib/api";
 import { Alert, Badge, Button, EmptyState, LoadingState, Select, Surface } from "./ui";
 
-export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOpen }: {
+export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOpen, refreshRevision = 0 }: {
   joinedCourses: Course[];
   loadingMembership: boolean;
   onJoined: (course: Course) => void;
   onOpen: (course: Course) => void;
+  refreshRevision?: number;
 }) {
   const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [loadingFaculties, setLoadingFaculties] = useState(true);
   const [facultyError, setFacultyError] = useState(false);
   const [facultyRetry, setFacultyRetry] = useState(0);
   const [selectedId, setSelectedId] = useState("");
-  const [catalog, setCatalog] = useState<{ facultyId: string; courses: Course[]; failed: boolean } | null>(null);
+  const [catalog, setCatalog] = useState<{ facultyId: string; revision: number; courses: Course[]; failed: boolean } | null>(null);
   const [catalogRetry, setCatalogRetry] = useState(0);
   const [joining, setJoining] = useState<Set<string>>(new Set());
   const [joinErrors, setJoinErrors] = useState<Record<string, string>>({});
@@ -38,10 +39,10 @@ export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOp
     if (!selectedId) return;
     let active = true;
     api.facultyCourses(selectedId)
-      .then(courses => { if (active) setCatalog({ facultyId: selectedId, courses, failed: false }); })
-      .catch(() => { if (active) setCatalog({ facultyId: selectedId, courses: [], failed: true }); });
+      .then(courses => { if (active) setCatalog({ facultyId: selectedId, revision: refreshRevision, courses, failed: false }); })
+      .catch(() => { if (active) setCatalog({ facultyId: selectedId, revision: refreshRevision, courses: [], failed: true }); });
     return () => { active = false; };
-  }, [selectedId, catalogRetry]);
+  }, [selectedId, catalogRetry, refreshRevision]);
 
   async function join(course: Course) {
     if (pending.current.has(course.id)) return;
@@ -64,7 +65,7 @@ export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOp
   }
 
   const selectedFaculty = faculties.find(faculty => faculty.id === selectedId);
-  const currentCatalog = catalog?.facultyId === selectedId ? catalog : null;
+  const currentCatalog = catalog?.facultyId === selectedId && catalog.revision === refreshRevision ? catalog : null;
   return <section id="browse-courses" tabIndex={-1} aria-labelledby="browse-heading" className="mt-10 border-t border-line pt-8">
     <h2 id="browse-heading" className="text-2xl font-semibold tracking-tight">Browse courses</h2>
     <p className="mt-2 text-muted">Choose your faculty to find courses to join.</p>
