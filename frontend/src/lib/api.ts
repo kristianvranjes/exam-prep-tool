@@ -50,6 +50,8 @@ export const api = {
   reviewConcept: (id: string, status: "APPROVED" | "REJECTED") => request<Concept>(`/concepts/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   materials: (courseId: string) => request<Material[]>(`/courses/${courseId}/materials`),
   material: (id: string) => request<MaterialDetail>(`/materials/${id}`),
+  materialEmbeddingStatus: (id: string) => request<MaterialEmbeddingStatus>(`/materials/${id}/embeddings`),
+  embedMaterial: (id: string) => request<MaterialEmbeddingResult>(`/materials/${id}/embeddings`, { method: "POST" }),
   materialChunks: (id: string) => request<MaterialChunk[]>(`/materials/${id}/chunks`),
   uploadMaterial: (courseId: string, file: File) => {
     const body = new FormData();
@@ -68,6 +70,8 @@ export const api = {
 
 export type Material = { id: string; course_id: string; uploaded_by_user_id: string; original_filename: string; media_type: string; file_size_bytes: number; status: 'UPLOADED' | 'PROCESSING' | 'READY' | 'FAILED'; processing_error: string | null; created_at: string; updated_at: string };
 export type MaterialDetail = Material & { extracted_markdown: string | null; sections: { id: string; ordinal: number; title: string | null; level: number | null; content: string }[]; chunk_count: number };
+export type MaterialEmbeddingStatus = { material_id: string; total_chunks: number; current_chunks: number; stale_chunks: number; is_current: boolean };
+export type MaterialEmbeddingResult = { material_id: string; embedded: number; skipped: number; signature: string };
 export type MaterialChunk = { id: string; material_id: string; section_id: string | null; ordinal: number; content: string; char_count: number };
 
 export type Concept = { id: string; course_id: string; name: string; normalized_name: string; description: string | null; aliases: string[]; importance: 'LOW' | 'MEDIUM' | 'HIGH'; status: 'DRAFT' | 'APPROVED' | 'REJECTED'; created_by: string; created_at: string; updated_at: string };

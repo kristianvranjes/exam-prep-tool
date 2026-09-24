@@ -171,7 +171,17 @@ materials or reopen View details to fetch the latest status; there is no polling
 Details show size, section/chunk counts and a native Extracted text disclosure. The
 text is rendered as escaped text, preserving whitespace in a bounded, keyboard-
 scrollable, wrapping region, without a PDF viewer or HTML execution. Ready details
-mount `ConceptReview`; other statuses do not.
+mount `ConceptReview` and semantic source preparation; other statuses do not. MEMBER
+and OWNER see current/stale/total chunk counts and may explicitly prepare or refresh
+semantic sources for optional internal AI generation. Status reads do not run inference;
+there is no automatic embedding or polling. A failed preparation retains the previous
+status for retry. If preparation succeeds but status refresh fails, Retry status only
+repeats the read. Concept review state remains in place. Manual questions and JSON
+import remain available when the optional local embedding model is unavailable.
+
+The owner-only Question Bank generation form links to Materials and explains that
+generation needs approved concepts with current semantic sources. It does not prepare
+sources or imply that a current material guarantees generation.
 
 ## Concept extraction and review
 

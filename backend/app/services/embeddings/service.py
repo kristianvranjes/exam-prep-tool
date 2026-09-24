@@ -10,7 +10,7 @@ from app.config import Settings
 from app.models import User
 from app.models.material import Material
 from app.models.material_chunk import MaterialChunk
-from app.schemas.retrieval import EmbeddingResult
+from app.schemas.retrieval import EmbeddingResult, EmbeddingStatus
 from app.services.embeddings.base import (
     EmbeddingError,
     EmbeddingProvider,
@@ -46,6 +46,41 @@ def provider_failure(error: EmbeddingError) -> HTTPException:
     if str(error) == "INPUT_LIMIT":
         return HTTPException(422, "Text exceeds embedding model input limits")
     return HTTPException(503, "Embedding service unavailable or returned invalid vectors")
+
+
+def get_embedding_status(
+    db: Session, user: User, material_id: UUID, provider: EmbeddingProvider
+) -> EmbeddingStatus:
+    material = get_material(db, user, material_id)
+    if material.status != "READY":
+        raise HTTPException(409, "Material must be READY")
+    # Select only the fields needed for freshness; never read or return vector values.
+    chunks = db.execute(
+        select(
+            MaterialChunk.content,
+            MaterialChunk.embedding.is_not(None),
+            MaterialChunk.embedded_at,
+            MaterialChunk.embedding_content_hash,
+            MaterialChunk.embedding_signature,
+        ).where(MaterialChunk.material_id == material_id)
+    )
+    total = current = 0
+    for content, has_embedding, embedded_at, stored_hash, signature in chunks:
+        total += 1
+        if (
+            has_embedding
+            and embedded_at is not None
+            and signature == provider.signature
+            and stored_hash == content_hash(content)
+        ):
+            current += 1
+    return EmbeddingStatus(
+        material_id=material_id,
+        total_chunks=total,
+        current_chunks=current,
+        stale_chunks=total - current,
+        is_current=total > 0 and current == total,
+    )
 
 
 def embed_material(

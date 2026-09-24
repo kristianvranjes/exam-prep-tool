@@ -132,6 +132,7 @@ function BankContents({ courseId }: { courseId: string }) {
       <div>
         <h4 className="text-lg font-semibold">Generate draft questions (experimental internal AI)</h4>
         <p className="mt-1 text-sm text-muted">Optional generation from approved concepts. Review every draft before sharing it.</p>
+        <p className="mt-1 text-sm text-muted">Generation needs approved concepts and current semantic sources. <a className="font-medium text-accent underline" href="#materials">Open a Ready material in Materials</a> to prepare or refresh its sources first.</p>
       </div>
       <form onSubmit={generate} className="space-y-4">
         <fieldset disabled={busy || loading} className="space-y-4">

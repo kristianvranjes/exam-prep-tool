@@ -18,7 +18,8 @@ The normal backend image/test dependencies include only the small pgvector Pytho
 integration (and its NumPy dependency, already used by PDF extraction). Torch and
 Sentence Transformers belong to the optional `embeddings` extra. Neither the base
 Docker build nor CI installs that extra or downloads a model. Without the extra/cache,
-embedding operations safely return 503; the base application still starts normally.
+embedding refresh/search operations safely return 503; the read-only READY material
+status remains available and the base application still starts normally.
 
 Recommended real local path: Python 3.12 native backend plus the Compose database.
 From the root, copy `.env.example` to `.env` if needed, then:
@@ -79,8 +80,17 @@ worker/queue or automatic retry. Process termination causes transaction rollback
 
 ## Search and authorization
 
-OWNER and MEMBER can embed and search their own courses. Unauthenticated requests
+OWNER and MEMBER can read status, embed and search their own courses. Unauthenticated requests
 return 401; outsiders receive 404 before inference. No operation here is owner-only.
+
+In the course Materials section, open a READY material to see its semantic source
+status and current/stale/total chunk counts. Use Prepare semantic sources or Refresh
+semantic sources explicitly when needed. A successful refresh updates the status
+without reloading the page; a failed refresh leaves the prior status for retry.
+Status reads do not load the model or run inference. An empty READY material is not
+current. There is no automatic embedding, retry or polling. The optional local model
+is needed only when preparing sources for internal AI generation; manual question
+creation and JSON import continue to work without it.
 
 Search embeds the query once and uses a parameterized pgvector cosine-distance
 expression in PostgreSQL. The SQL query filters by requested course, READY material,
@@ -94,13 +104,15 @@ ranking. No approximate index is justified yet.
 
 ## Authenticated local calls
 
-In the frontend, register/login, create a course and upload a PDF. Copy the course
-and READY material IDs from API responses or `/docs`. The following requests use
+The normal user workflow is the in-app READY material control above. For developer
+diagnostics, copy course and READY material IDs from API responses or `/docs`.
+The following requests use
 the same cookie; replace the sample account and IDs with yours. Keep the temporary
 cookie file outside the repository and delete it afterwards.
 
 ```sh
 curl -c /tmp/examprep-cookies -H 'Content-Type: application/json' -d '{"email":"you@example.com","password":"your-password"}' http://localhost:8000/auth/login
+curl -b /tmp/examprep-cookies http://localhost:8000/materials/MATERIAL_ID/embeddings
 curl -b /tmp/examprep-cookies -X POST http://localhost:8000/materials/MATERIAL_ID/embeddings
 curl -b /tmp/examprep-cookies -H 'Content-Type: application/json' -d '{"query":"Kako radi binarno stablo pretrazivanja?","top_k":5}' http://localhost:8000/courses/COURSE_ID/retrieval/search
 ```
@@ -109,6 +121,7 @@ PowerShell equivalent (keeps the cookie in memory):
 
 ```powershell
 Invoke-RestMethod http://localhost:8000/auth/login -Method Post -ContentType 'application/json' -Body '{"email":"you@example.com","password":"your-password"}' -SessionVariable session
+Invoke-RestMethod http://localhost:8000/materials/MATERIAL_ID/embeddings -WebSession $session
 Invoke-RestMethod http://localhost:8000/materials/MATERIAL_ID/embeddings -Method Post -WebSession $session
 Invoke-RestMethod http://localhost:8000/courses/COURSE_ID/retrieval/search -Method Post -WebSession $session -ContentType 'application/json' -Body '{"query":"Kako radi binarno stablo pretrazivanja?","top_k":5}'
 ```
@@ -131,4 +144,5 @@ python -m alembic upgrade head
 
 The Phase 5 ORM/parity check covers material_chunks. Existing unrelated identity
 schema redundancy (both a unique email constraint and unique index in migrations)
-is outside this phase. No frontend retrieval UI is added; use the API or `/docs`.
+is outside this phase. There is no frontend semantic search UI; use the API or `/docs`
+for search diagnostics.

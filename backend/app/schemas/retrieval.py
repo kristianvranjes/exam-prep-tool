@@ -24,3 +24,11 @@ class EmbeddingResult(BaseModel):
     embedded: int
     skipped: int
     signature: str
+
+
+class EmbeddingStatus(BaseModel):
+    material_id: UUID
+    total_chunks: int
+    current_chunks: int
+    stale_chunks: int
+    is_current: bool
