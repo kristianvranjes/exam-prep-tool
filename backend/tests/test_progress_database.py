@@ -1,6 +1,6 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from threading import Event
 from uuid import UUID, uuid4
 
@@ -10,7 +10,7 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from community_helpers import create_course, review_question
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.exc import IntegrityError
 from test_materials import clients as clients
 from test_practice_database import bank as bank
@@ -29,6 +29,12 @@ pytestmark = pytest.mark.skipif(os.getenv("RUN_DB_TESTS") != "1", reason="Requir
 
 def progress(client, course):
     response = client.get(f"/courses/{course}/review-progress")
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def summary(client, course):
+    response = client.get(f"/courses/{course}/review-progress/summary")
     assert response.status_code == 200, response.text
     return response.json()
 
@@ -79,9 +85,14 @@ def test_progression_counters_reset_and_frozen_repeat(bank):
         assert datetime.fromisoformat(row["last_reviewed_at"]) == submitted
         assert datetime.fromisoformat(row["due_at"]) == submitted + delay
         before = stored()
+        summary_before = summary(member, course)
         assert member.post(path + "/submit").json() == result
         assert member.get(path).json() == result
         assert stored() == before
+        unchanged = summary(member, course)
+        assert {key: value for key, value in unchanged.items() if key != "as_of"} == {
+            key: value for key, value in summary_before.items() if key != "as_of"
+        }
 
 
 def test_pending_strict_noop_and_mixed_quiz(bank):
@@ -89,6 +100,7 @@ def test_pending_strict_noop_and_mixed_quiz(bank):
     path = save_all(member, course, start(member, course))
     assert member.post(path + "/submit").status_code == 200
     assert len(progress(member, course)) == 2  # unresolved short answer creates nothing
+    assert summary(member, course)["reviewed_questions"] == 2
     source = next(q for q in rows if q["type"] == "SHORT_ANSWER")
     for answer in [source["reference_answer"], "Unresolved answer"]:
         attempt = start(member, course, 1, question_types=["SHORT_ANSWER"])
@@ -98,9 +110,14 @@ def test_pending_strict_noop_and_mixed_quiz(bank):
             json={"type": "SHORT_ANSWER", "text": answer},
         )
         before = stored()
+        before_summary = summary(member, course)
         assert member.post(path + "/submit").status_code == 200
         if answer != source["reference_answer"]:
             assert stored() == before  # includes every timestamp and internal field
+            after_summary = summary(member, course)
+            assert {key: value for key, value in after_summary.items() if key != "as_of"} == {
+                key: value for key, value in before_summary.items() if key != "as_of"
+            }
     assert len(progress(member, course)) == 3
 
 
@@ -192,15 +209,33 @@ def test_private_course_scoped_api_and_pagination(bank):
     member_id = member.get("/auth/me").json()["id"]
     assert owner.get(path + f"?user_id={member_id}").json() == []
     assert stranger.get(path).status_code == 404
+    assert stranger.get(path + "/summary").status_code == 404
     with TestClient(app) as anonymous:
         assert anonymous.get(path).status_code == 401
+        assert anonymous.get(path + "/summary").status_code == 401
     assert member.get(f"/courses/{uuid4()}/review-progress").status_code == 404
+    assert member.get(f"/courses/{uuid4()}/review-progress/summary").status_code == 404
     other = create_course(
         owner,
         json={"name": "Other course", "faculty_id": owner.get("/faculties").json()[0]["id"]},
     ).json()["id"]
     assert member.get(f"/courses/{other}/review-progress").status_code == 404
+    assert member.get(f"/courses/{other}/review-progress/summary").status_code == 404
     assert owner.get(f"/courses/{other}/review-progress").json() == []
+    empty = summary(owner, other)
+    assert empty == {
+        "as_of": empty["as_of"],
+        "reviewed_questions": 0,
+        "due_now": 0,
+        "upcoming": 0,
+        "resolved_review_count": 0,
+        "correct_review_count": 0,
+        "incorrect_review_count": 0,
+        "last_reviewed_at": None,
+        "next_due_at": None,
+        "stage_counts": [{"review_stage": stage, "question_count": 0} for stage in range(6)],
+    }
+    assert datetime.fromisoformat(empty["as_of"]).tzinfo is not None
     rows = progress(member, course)
     assert rows == sorted(rows, key=lambda r: (r["due_at"], r["question_id"]))
     assert member.get(path + "?limit=1&offset=1").json() == rows[1:2]
@@ -209,6 +244,45 @@ def test_private_course_scoped_api_and_pagination(bank):
     assert owner.post(save_all(owner, course, start(owner, course)) + "/submit").status_code == 200
     assert all(r["resolved_review_count"] == 1 for r in progress(owner, course))
     assert progress(member, course) == rows
+    assert summary(owner, course)["reviewed_questions"] == len(progress(owner, course))
+    assert summary(member, course)["reviewed_questions"] == len(rows)
+
+
+def test_summary_aggregates_current_member_rows_with_server_clock(bank):
+    _, member, _, course, _ = bank
+    assert (
+        member.post(save_all(member, course, start(member, course)) + "/submit").status_code == 200
+    )
+    rows = progress(member, course)
+    assert len(rows) == 2
+    with SessionLocal() as db:
+        db.execute(
+            update(UserQuestionProgress)
+            .where(UserQuestionProgress.question_id == UUID(rows[0]["question_id"]))
+            .values(due_at=datetime.now(UTC) - timedelta(minutes=1))
+        )
+        db.commit()
+    rows = progress(member, course)
+    data = summary(member, course)
+    as_of = datetime.fromisoformat(data["as_of"])
+    assert data["reviewed_questions"] == len(rows)
+    assert data["due_now"] == sum(datetime.fromisoformat(row["due_at"]) <= as_of for row in rows)
+    assert data["upcoming"] == sum(datetime.fromisoformat(row["due_at"]) > as_of for row in rows)
+    for name in ("resolved_review_count", "correct_review_count", "incorrect_review_count"):
+        assert data[name] == sum(row[name] for row in rows)
+    assert data["last_reviewed_at"] == max(row["last_reviewed_at"] for row in rows)
+    assert data["next_due_at"] == min(row["due_at"] for row in rows)
+    assert data["stage_counts"] == [
+        {
+            "review_stage": stage,
+            "question_count": sum(row["review_stage"] == stage for row in rows),
+        }
+        for stage in range(6)
+    ]
+    assert (
+        not {"user_id", "scheduling_version", "snapshot", "correct_boolean", "grading_status", "id"}
+        & data.keys()
+    )
 
 
 def test_snapshot_archive_and_deleted_source(bank):
@@ -223,10 +297,12 @@ def test_snapshot_archive_and_deleted_source(bank):
     result = member.post(path + "/submit").json()
     assert result["questions"][0]["grading_status"] == "CORRECT"
     assert progress(member, course)[0]["last_result"] == "CORRECT"
+    assert summary(member, course)["reviewed_questions"] == 1
     with SessionLocal() as db:
         db.execute(delete(Question).where(Question.id == UUID(source["id"])))
         db.commit()
     assert progress(member, course) == []
+    assert summary(member, course)["reviewed_questions"] == 0
     assert member.get(path).json() == result
     assert (
         member.post(deleted_path + "/submit").json()["questions"][0]["grading_status"] == "CORRECT"

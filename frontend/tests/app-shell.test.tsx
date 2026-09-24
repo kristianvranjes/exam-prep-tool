@@ -21,8 +21,8 @@ const apiMock = vi.hoisted(() => ({
 
 vi.mock("../src/lib/api", () => ({ api: apiMock }));
 vi.mock("../src/components/course-materials", () => ({ CourseMaterials: ({ courseId }: { courseId: string }) => <section aria-label="Course materials">Materials for {courseId}</section> }));
-vi.mock("../src/components/practice-quiz", () => ({ PracticeQuiz: ({ courseId }: { courseId: string }) => <section aria-label="Practice quiz">Practice for {courseId}</section> }));
-vi.mock("../src/components/progress-panel", () => ({ ProgressPanel: ({ courseId }: { courseId: string }) => <section aria-label="Review progress">Progress for {courseId}</section> }));
+vi.mock("../src/components/practice-quiz", () => ({ PracticeQuiz: ({ courseId, adaptiveReviewRequest }: { courseId: string; adaptiveReviewRequest: number }) => <section aria-label="Practice quiz">Practice for {courseId} · handoff {adaptiveReviewRequest}</section> }));
+vi.mock("../src/components/progress-panel", () => ({ ProgressPanel: ({ courseId, onOpenAdaptiveReview }: { courseId: string; onOpenAdaptiveReview: () => void }) => <section aria-label="Learning progress">Progress for {courseId}<button onClick={onOpenAdaptiveReview}>Open adaptive review</button></section> }));
 vi.mock("../src/components/question-bank", () => ({ QuestionBank: ({ courseId }: { courseId: string }) => <section aria-label="Question bank">Questions for {courseId}</section> }));
 
 import { AppShell } from "../src/components/app-shell";
@@ -101,7 +101,7 @@ it("keeps all course tools reachable and switches their selected course", async 
   apiMock.courses.mockResolvedValue([course, { ...course, id: "course-2", name: "Statistics" }]);
   render(<AppShell />);
   fireEvent.click(await screen.findByRole("button", { name: /Algorithms/ }));
-  for (const name of ["Course materials", "Practice quiz", "Review progress", "Question bank"]) {
+  for (const name of ["Course materials", "Practice quiz", "Learning progress", "Question bank"]) {
     expect(screen.getByRole("region", { name })).toHaveTextContent("course-1");
   }
   const menu = screen.getByRole("button", { name: "Open navigation" });
@@ -199,7 +199,7 @@ it("adds joined courses immediately, opens all study tools and avoids repeated j
   expect(screen.getByText(/Algorithms added to My courses/)).toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Practice quiz" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("link", { name: "Open course: Algorithms" }));
-  for (const name of ["Course materials", "Practice quiz", "Review progress", "Question bank"]) {
+  for (const name of ["Course materials", "Practice quiz", "Learning progress", "Question bank"]) {
     expect(screen.getByRole("region", { name })).toHaveTextContent("course-1");
   }
   fireEvent.change(screen.getByLabelText("Browse by faculty"), { target: { value: "" } });
@@ -207,6 +207,24 @@ it("adds joined courses immediately, opens all study tools and avoids repeated j
   fireEvent.click(await screen.findByRole("link", { name: "Open course: Algorithms" }));
   expect(within(myCourses).getAllByRole("button", { name: /Algorithms/ })).toHaveLength(1);
   expect(apiMock.joinCourse).toHaveBeenCalledTimes(1);
+});
+
+it("focuses Practice on adaptive handoff, repeats it, and clears the intent when courses change", async () => {
+  apiMock.me.mockResolvedValue(user);
+  apiMock.courses.mockResolvedValue([course, { ...course, id: "course-2", name: "Statistics" }]);
+  render(<AppShell />);
+  fireEvent.click(await screen.findByRole("button", { name: /Algorithms/ }));
+  const practice = screen.getByRole("region", { name: "Practice quiz" });
+  expect(practice).toHaveTextContent("handoff 0");
+  fireEvent.click(screen.getByRole("button", { name: "Open adaptive review" }));
+  expect(document.getElementById("practice")).toHaveFocus();
+  expect(practice).toHaveTextContent("handoff 1");
+  fireEvent.click(screen.getByRole("button", { name: "Open adaptive review" }));
+  expect(practice).toHaveTextContent("handoff 2");
+  fireEvent.click(screen.getByRole("button", { name: /Statistics/ }));
+  expect(screen.getByRole("region", { name: "Practice quiz" })).toHaveTextContent("course-2 · handoff 0");
+  fireEvent.click(screen.getByRole("button", { name: /Algorithms/ }));
+  expect(screen.getByRole("region", { name: "Practice quiz" })).toHaveTextContent("course-1 · handoff 0");
 });
 
 it("keeps My courses and selection intact when the catalog or join fails", async () => {

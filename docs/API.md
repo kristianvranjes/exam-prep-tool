@@ -45,6 +45,23 @@ and are never returned.
 
 All course endpoints require the session cookie. Validation errors return `422`.
 
+## Learning progress summary
+
+`GET /courses/{course_id}/review-progress/summary` returns the authenticated
+member's current course review summary. It uses the same user and source-question
+scope as the paginated review-progress list: archived questions remain, while
+deleted questions no longer contribute. Missing or inaccessible courses return
+404; unauthenticated requests return 401.
+
+The response contains one server UTC `as_of` timestamp, `reviewed_questions`,
+`due_now` (`due_at <= as_of`), `upcoming` (`due_at > as_of`), exact sums of
+`resolved_review_count`, `correct_review_count` and `incorrect_review_count`,
+nullable latest `last_reviewed_at`, nullable earliest `next_due_at`, and six
+ascending `stage_counts` entries for stages 0–5 (including zeros). Each stage
+entry has `review_stage` and `question_count`. Empty summaries have zero counts
+and null dates. The read does not change scheduling state and exposes no user ID,
+scheduling version, snapshots or grading data.
+
 ## Materials
 
 All endpoints require the same session cookie (401 when absent/invalid). OWNER and

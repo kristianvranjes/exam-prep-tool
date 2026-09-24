@@ -17,6 +17,7 @@ export function AppShell() {
   const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selected, setSelected] = useState<Course | null>(null);
+  const [adaptiveReviewRequest, setAdaptiveReviewRequest] = useState(0);
   const [mode, setMode] = useState<AuthMode>("login");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -62,15 +63,27 @@ export function AppShell() {
     event.preventDefault(); setBusy(true); setError("");
     const form = event.currentTarget;
     const values = Object.fromEntries(new FormData(form));
-    try { const course = await api.createCourse({ faculty_id: String(values.faculty_id), name: String(values.name), code: String(values.code || "") || undefined, description: String(values.description || "") || undefined }); setCourses(current => [...current, course]); setSelected(course); form.reset(); }
+    try { const course = await api.createCourse({ faculty_id: String(values.faculty_id), name: String(values.name), code: String(values.code || "") || undefined, description: String(values.description || "") || undefined }); setCourses(current => [...current, course]); selectCourse(course); form.reset(); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not create course"); } finally { setBusy(false); }
   }
 
   async function logout() {
     setLoggingOut(true); setError("");
-    try { await api.logout(); setUser(null); setCourses([]); setFaculties([]); setSelected(null); setMode("login"); }
+    try { await api.logout(); setUser(null); setCourses([]); setFaculties([]); setSelected(null); setAdaptiveReviewRequest(0); setMode("login"); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not log out. Try again."); }
     finally { setLoggingOut(false); }
+  }
+
+  function selectCourse(course: Course) {
+    setSelected(course);
+    setAdaptiveReviewRequest(0);
+  }
+
+  function openAdaptiveReview() {
+    setAdaptiveReviewRequest(value => value + 1);
+    const practice = document.getElementById("practice");
+    practice?.focus();
+    practice?.scrollIntoView?.();
   }
 
   if (checkingSession) return <main className="mx-auto max-w-6xl px-6 py-8"><Brand /><LoadingState>Loading your study space…</LoadingState></main>;
@@ -84,19 +97,19 @@ export function AppShell() {
       <div className="mt-6">
         {loadingCourses ? <LoadingState>Loading courses…</LoadingState> : courses.length === 0 ? <EmptyState title="No courses yet">Find your faculty in <a href="#browse-courses" className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-foreground">Browse courses</a> and join a course to start studying.</EmptyState> :
           <ul className="grid gap-3 sm:grid-cols-2">{courses.map(course => <li key={course.id}>
-            <button type="button" aria-pressed={selected?.id === course.id} className="h-full w-full rounded-xl border border-line bg-surface p-5 text-left hover:border-accent aria-pressed:border-accent aria-pressed:bg-accent-surface" onClick={() => setSelected(course)}>
+            <button type="button" aria-pressed={selected?.id === course.id} className="h-full w-full rounded-xl border border-line bg-surface p-5 text-left hover:border-accent aria-pressed:border-accent aria-pressed:bg-accent-surface" onClick={() => selectCourse(course)}>
               <span className="block text-lg font-semibold">{course.name}</span>{course.code && <Badge className="mt-2">{course.code}</Badge>}<span className="mt-3 block text-sm text-muted">{course.description || "No description"}</span>
             </button>
           </li>)}</ul>}
       </div>
     </section>
-    <CourseBrowser joinedCourses={courses} loadingMembership={loadingCourses} onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])} onOpen={setSelected} />
+    <CourseBrowser joinedCourses={courses} loadingMembership={loadingCourses} onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])} onOpen={selectCourse} />
     {faculties.length > 0 && <FacultyModeration currentUserId={user.id} moderatedFaculties={faculties} />}
     {selected && <section id="selected-course" tabIndex={-1} className="mt-10" aria-labelledby="selected-course-heading">
       <div className="border-t border-line pt-8"><h2 id="selected-course-heading" className="text-2xl font-semibold tracking-tight">{selected.name}</h2>{selected.code && <p className="mt-1 text-sm text-muted">{selected.code}</p>}<p className="mt-3 text-muted">{selected.description || "No description"}</p></div>
       <div id="materials" tabIndex={-1}><CourseMaterials key={selected.id} courseId={selected.id} currentUserId={user.id} /></div>
-      <div id="practice" tabIndex={-1}><PracticeQuiz key={`practice-${selected.id}`} courseId={selected.id} /></div>
-      <div id="progress" tabIndex={-1}><ProgressPanel key={`progress-${selected.id}`} courseId={selected.id} /></div>
+      <div id="practice" tabIndex={-1}><PracticeQuiz key={`practice-${selected.id}`} courseId={selected.id} adaptiveReviewRequest={adaptiveReviewRequest} /></div>
+      <div id="progress" tabIndex={-1}><ProgressPanel key={`progress-${selected.id}`} courseId={selected.id} onOpenAdaptiveReview={openAdaptiveReview} /></div>
       <div id="questions" tabIndex={-1}><QuestionBank key={`questions-${selected.id}`} courseId={selected.id} /></div>
     </section>}
     {faculties.length > 0 && <Surface className="mt-10">

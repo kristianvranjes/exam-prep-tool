@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { QuestionType } from "../lib/api";
 import { practiceApi, type Attempt, type AttemptSummary, type SelectionMode } from "../lib/practice-api";
 import { ActiveQuiz } from "./active-quiz";
@@ -14,7 +14,7 @@ const types: { type: QuestionType; label: string }[] = [
   { type: "SHORT_ANSWER", label: "Short answer" },
 ];
 
-export function PracticeQuiz({ courseId }: { courseId: string }) {
+export function PracticeQuiz({ courseId, adaptiveReviewRequest = 0 }: { courseId: string; adaptiveReviewRequest?: number }) {
   const [open, setOpen] = useState(false);
   const [history, setHistory] = useState<AttemptSummary[]>([]);
   const [offset, setOffset] = useState(0);
@@ -26,19 +26,33 @@ export function PracticeQuiz({ courseId }: { courseId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef(false);
+  const handledRequest = useRef(0);
 
-  async function run(action: () => Promise<void>) {
+  const run = useCallback(async (action: () => Promise<void>) => {
     if (pending.current) return;
     pending.current = true; setBusy(true); setError("");
     try { await action(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not complete request. Try again."); }
     finally { pending.current = false; setBusy(false); }
-  }
-  async function loadHistory(nextOffset = 0) {
+  }, []);
+  const loadHistory = useCallback(async (nextOffset = 0) => {
     const rows = await practiceApi.history(courseId, nextOffset);
     setHistory(rows); setOffset(nextOffset);
-  }
+  }, [courseId]);
   async function back() { await loadHistory(); setAttempt(null); }
+
+  useEffect(() => {
+    if (!adaptiveReviewRequest || handledRequest.current === adaptiveReviewRequest) return;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active || handledRequest.current === adaptiveReviewRequest) return;
+      handledRequest.current = adaptiveReviewRequest;
+      setSelectionMode("ADAPTIVE");
+      setOpen(true);
+      if (!open) void run(() => loadHistory());
+    });
+    return () => { active = false; };
+  }, [adaptiveReviewRequest, loadHistory, open, run]);
 
   return <section className="mt-6 flex min-w-0 flex-col gap-5 border-t border-line pt-6" aria-label="Practice quiz">
     {!open && <Button variant="secondary" className="self-start" disabled={busy} onClick={() => { setOpen(true); void run(() => loadHistory()); }}>Open practice quizzes</Button>}

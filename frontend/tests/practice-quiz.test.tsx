@@ -361,3 +361,38 @@ it("preserves attempt history pagination and prevents duplicate starts", async (
   await act(async () => finish(structuredClone(current)));
   expect(screen.getByText("Choose a number")).toBeInTheDocument();
 });
+
+it("opens adaptive review by handoff without starting and preserves setup controls", async () => {
+  const view = render(<PracticeQuiz courseId="course" adaptiveReviewRequest={0} />);
+  await open();
+  fireEvent.change(screen.getByLabelText("Practice question count"), { target: { value: "7" } });
+  fireEvent.click(screen.getByLabelText("Multiple choice"));
+  fireEvent.click(screen.getByLabelText("Exam"));
+  view.rerender(<PracticeQuiz courseId="course" adaptiveReviewRequest={1} />);
+  await waitFor(() => expect(screen.getByLabelText("Adaptive review")).toBeChecked());
+  expect(screen.getByLabelText("Practice question count")).toHaveValue(7);
+  expect(screen.getByLabelText("Multiple choice")).not.toBeChecked();
+  expect(screen.getByLabelText("True / false")).toBeChecked();
+  expect(screen.getByLabelText("Short answer")).toBeChecked();
+  expect(screen.getByLabelText("Exam")).toBeChecked();
+  expect(screen.getByLabelText("Study")).toBeInTheDocument();
+  expect(mock.start).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByLabelText("Standard practice"));
+  view.rerender(<PracticeQuiz courseId="course" adaptiveReviewRequest={2} />);
+  await waitFor(() => expect(screen.getByLabelText("Adaptive review")).toBeChecked());
+  expect(mock.start).not.toHaveBeenCalled();
+});
+
+it("opens a closed launcher on adaptive handoff and manual opening keeps Standard default", async () => {
+  const view = render(<PracticeQuiz courseId="course" adaptiveReviewRequest={0} />);
+  expect(screen.getByRole("button", { name: "Open practice quizzes" })).toBeInTheDocument();
+  view.rerender(<PracticeQuiz courseId="course" adaptiveReviewRequest={1} />);
+  expect(await screen.findByLabelText("Adaptive review")).toBeChecked();
+  expect(mock.history).toHaveBeenCalledWith("course", 0);
+  expect(mock.start).not.toHaveBeenCalled();
+  view.unmount();
+  render(<PracticeQuiz courseId="another" />);
+  await open();
+  expect(screen.getByLabelText("Standard practice")).toBeChecked();
+  expect(screen.getByLabelText("Adaptive review")).not.toBeChecked();
+});

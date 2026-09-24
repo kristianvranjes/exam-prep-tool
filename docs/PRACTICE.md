@@ -159,9 +159,9 @@ the frozen result without scheduling again. Live source correctness is never rea
 member's question_id, review_stage, resolved/correct/incorrect_review_count,
 last_result, last_reviewed_at and due_at, ordered by due_at then question_id.
 Limit is 1–100; offset is 0–10000. Authentication/membership follow existing
-401/404 conventions. The course **Review progress** panel reads this API;
-use Refresh review progress after a new submission. Due labels reflect the
-shown refresh time. No schedule is reconstructed from client attempt history.
+401/404 conventions. **Learning progress** reads this list in pages of 20 and
+uses the server summary timestamp for due labels. No schedule is reconstructed
+from client attempt history.
 
 Migration 0009 creates `question_review_progress` only: there is **no historical
 backfill**. Old submitted attempts remain frozen and never create progress on
@@ -229,3 +229,21 @@ and one future-scheduled question. Adaptive count 3 should return them in that o
 While that attempt remains active, another adaptive start must exclude all three.
 Check review progress before/after start: every field should be unchanged. Submit
 and verify the normal resolved/PENDING scheduling behavior and repeat-submit stability.
+
+## Course learning summary and adaptive handoff (Phase 11A)
+
+`GET /courses/{course_id}/review-progress/summary` aggregates the signed-in
+member's current source-question progress, including archived questions and
+excluding deleted questions. One server UTC `as_of` distinguishes due now from
+upcoming; it also returns resolved/correct/incorrect totals, latest review,
+earliest due time and counts for every stage 0–5. Dashboard accuracy is
+`correct_review_count / resolved_review_count * 100`; when no resolved reviews
+exist, it shows no data. PENDING answers create no progress and are never counted
+as incorrect. Stage 5 is a schedule stage, not permanent mastery.
+
+**Open adaptive review** focuses and opens the existing Practice Quiz launcher
+with ADAPTIVE selected. It does not start an attempt or change count, type or
+Study/Exam controls. Due now is not used as the requested quiz count because
+adaptive eligibility also excludes active-attempt sources and other ineligible
+questions. Phase 9A scheduling, transaction and idempotency rules and Phase 9B
+ranking and source eligibility remain unchanged.

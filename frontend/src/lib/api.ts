@@ -30,6 +30,7 @@ export const api = {
   },
   joinCourse: (courseId: string) => request<CourseMembership>(`/courses/${courseId}/join`, { method: "POST" }),
   reviewProgress: (courseId: string, offset = 0) => request<ReviewProgress[]>(`/courses/${courseId}/review-progress?limit=20&offset=${offset}`),
+  reviewProgressSummary: (courseId: string) => request<ReviewProgressSummary>(`/courses/${courseId}/review-progress/summary`),
   membership: (courseId: string) => request<{ role: "OWNER" | "MEMBER" }>(`/courses/${courseId}/membership`),
   concepts: (courseId: string, materialId?: string) => request<Concept[]>(`/courses/${courseId}/concepts${materialId ? `?material_id=${encodeURIComponent(materialId)}` : ""}`),
   questions: (courseId: string, filters: { status?: QuestionStatus; type?: QuestionType; limit?: number; offset?: number } = {}) => {
@@ -99,4 +100,18 @@ export type ReviewProgress = {
   last_result: "CORRECT" | "INCORRECT";
   last_reviewed_at: string;
   due_at: string;
+};
+
+export type ReviewStageCount = { review_stage: number; question_count: number };
+export type ReviewProgressSummary = {
+  as_of: string;
+  reviewed_questions: number;
+  due_now: number;
+  upcoming: number;
+  resolved_review_count: number;
+  correct_review_count: number;
+  incorrect_review_count: number;
+  last_reviewed_at: string | null;
+  next_due_at: string | null;
+  stage_counts: ReviewStageCount[];
 };
