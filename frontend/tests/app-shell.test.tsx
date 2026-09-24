@@ -14,6 +14,8 @@ const apiMock = vi.hoisted(() => ({
   course: vi.fn(),
   createCourse: vi.fn(),
   facultyCourses: vi.fn(),
+  questionReview: vi.fn().mockResolvedValue([]),
+  transitionQuestion: vi.fn(),
   joinCourse: vi.fn(),
 }));
 
@@ -30,18 +32,19 @@ const membership: CourseMembership = { course_id: "course-1", user_id: user.id, 
 const course = { id: "course-1", name: "Algorithms", code: "ALG101", description: "Core course", created_by_user_id: "user-1", created_at: "2026-01-01", updated_at: "2026-01-01" };
 
 beforeEach(() => {
-    vi.clearAllMocks();
-    apiMock.me.mockRejectedValue(new Error("signed out"));
-    apiMock.courses.mockResolvedValue([]);
-    apiMock.faculties.mockResolvedValue([{ id: "faculty-1", name: "Engineering", slug: "engineering", university_name: null }]);
-    apiMock.register.mockResolvedValue(user);
-    apiMock.createCourse.mockResolvedValue(course);
-    apiMock.moderatorStatus.mockResolvedValue({ is_moderator: true });
-    apiMock.login.mockResolvedValue(user);
-    apiMock.logout.mockResolvedValue(undefined);
-    apiMock.facultyCourses.mockResolvedValue([course]);
-    apiMock.joinCourse.mockResolvedValue(membership);
-  });
+  vi.clearAllMocks();
+  apiMock.me.mockRejectedValue(new Error("signed out"));
+  apiMock.courses.mockResolvedValue([]);
+  apiMock.faculties.mockResolvedValue([{ id: "faculty-1", name: "Engineering", slug: "engineering", university_name: null }]);
+  apiMock.register.mockResolvedValue(user);
+  apiMock.createCourse.mockResolvedValue(course);
+  apiMock.moderatorStatus.mockResolvedValue({ is_moderator: true });
+  apiMock.login.mockResolvedValue(user);
+  apiMock.logout.mockResolvedValue(undefined);
+  apiMock.facultyCourses.mockResolvedValue([course]);
+  apiMock.questionReview.mockResolvedValue([]);
+  apiMock.joinCourse.mockResolvedValue(membership);
+});
 
 describe("authentication and course flow", () => {
   it("registers and creates a course", async () => {
@@ -52,10 +55,10 @@ describe("authentication and course flow", () => {
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "correct horse" } });
     fireEvent.submit(screen.getByRole("button", { name: "Register" }).closest("form")!);
     expect(await screen.findByText("student@example.com")).toBeInTheDocument();
-    await screen.findByRole("form", { name: "Create a course" });
-    fireEvent.change(screen.getByLabelText("Faculty"), { target: { value: "faculty-1" } });
-    fireEvent.change(screen.getByPlaceholderText("Course name"), { target: { value: "Algorithms" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create course" }));
+    const createForm = await screen.findByRole("form", { name: "Create a course" });
+    fireEvent.change(within(createForm).getByLabelText("Faculty"), { target: { value: "faculty-1" } });
+    fireEvent.change(within(createForm).getByPlaceholderText("Course name"), { target: { value: "Algorithms" } });
+    fireEvent.click(within(createForm).getByRole("button", { name: "Create course" }));
     await waitFor(() => expect(apiMock.createCourse).toHaveBeenCalledWith({ faculty_id: "faculty-1", name: "Algorithms", code: undefined, description: undefined }));
     expect((await screen.findAllByText("Core course")).length).toBeGreaterThan(0);
   });
@@ -167,6 +170,22 @@ it("does not offer course creation to ordinary faculty members", async () => {
   await screen.findByLabelText("Browse by faculty");
   await waitFor(() => expect(apiMock.moderatorStatus).toHaveBeenCalledWith("f"));
   expect(screen.queryByRole("form", { name: "Create a course" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Moderation" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Moderation queue" })).not.toBeInTheDocument();
+});
+
+it("shows the moderation link and section for moderators", async () => {
+  apiMock.me.mockResolvedValue(user);
+  apiMock.faculties.mockResolvedValue([{ id: "faculty-1", name: "Engineering", slug: "engineering", university_name: null }]);
+  apiMock.moderatorStatus.mockResolvedValue({ is_moderator: true });
+  apiMock.questionReview.mockResolvedValue([]);
+  render(<AppShell />);
+  const nav = await screen.findByRole("navigation", { name: "Main navigation" });
+  expect(await within(nav).findByRole("link", { name: "Moderation" })).toHaveAttribute("href", "#moderation");
+  expect(await screen.findByRole("region", { name: "Moderation queue" })).toHaveAttribute("id", "moderation");
+  expect(screen.queryByRole("region", { name: "Practice quiz" })).not.toBeInTheDocument();
+  expect(within(nav).getByRole("link", { name: "My courses" })).toHaveAttribute("href", "#courses");
+  expect(within(nav).getByRole("link", { name: "Browse courses" })).toHaveAttribute("href", "#browse-courses");
 });
 
 it("adds joined courses immediately, opens all study tools and avoids repeated joins", async () => {
@@ -193,6 +212,7 @@ it("adds joined courses immediately, opens all study tools and avoids repeated j
 it("keeps My courses and selection intact when the catalog or join fails", async () => {
   apiMock.me.mockResolvedValue(user);
   apiMock.courses.mockResolvedValue([course]);
+  apiMock.moderatorStatus.mockResolvedValue({ is_moderator: false });
   apiMock.facultyCourses.mockRejectedValueOnce(new Error("Unavailable"));
   apiMock.joinCourse.mockRejectedValue(new Error("Unavailable"));
   render(<AppShell />);

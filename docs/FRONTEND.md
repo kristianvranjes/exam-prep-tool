@@ -6,7 +6,8 @@ and restores button focus. A skip link reaches the main content. Course selectio
 keeps the existing materials, practice, review progress and question-bank components
 mounted together. Navigation uses section anchors, so moving between tools does not
 discard an in-progress answer or form. Selecting another course retains the existing
-remount behavior. Cross-course moderation UI is not part of this shell.
+remount behavior. Faculty moderators also have a separate Moderation anchor that
+works without selecting or joining a course.
 
 ## My courses and Browse courses
 
@@ -33,6 +34,29 @@ Responses arriving after logout/unmount do not update the next session.
 Course creation stays secondary, below the catalog/study content, and is rendered
 only when the current user moderates at least one active faculty. The existing
 backend authorization and course-creation request are unchanged.
+
+## Faculty moderation
+
+Only users recognized as faculty moderators see the Moderation navigation link and
+cross-course queue. A moderator's first faculty loads automatically; moderators of
+multiple faculties can switch between them. The default **All courses** view loads
+`PENDING_REVIEW` questions in pages of 20. An optional course filter uses the active
+faculty's course catalog for friendly labels. Questions from inactive or otherwise
+missing catalog courses remain in All courses and show their course id.
+
+Review cards show the question, answer or reference, explanation, source, concepts
+and chunk provenance available in the existing review response. A moderator's own
+submission shows that another moderator must review it, with no action controls.
+For another creator's submission, Approve or Reject uses the existing question
+transition endpoint. Reject requires a reason of at most 1000 characters. Successful
+actions remove only the reviewed item from the visible queue and announce success;
+failed actions keep the item and rejection text for retry. Queue and course-catalog
+errors stay in the section with refresh or retry controls. Switching faculty or
+course ignores late responses from the previous selection.
+
+The queue refreshes only on selection, pagination or explicit user request; there is
+no polling or realtime update. The backend remains authoritative for faculty
+permissions, self-review restrictions and question lifecycle decisions.
 
 ## Study and Exam quizzes
 

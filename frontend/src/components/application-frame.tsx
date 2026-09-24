@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { BookOpen, FolderOpen, GraduationCap, ListChecks, Menu, TrendingUp, X } from "lucide-react";
+import { BookOpen, FolderOpen, GraduationCap, ListChecks, Menu, ShieldCheck, TrendingUp, X } from "lucide-react";
 import type { User } from "../lib/api";
 import { cn } from "../lib/utils";
 import { Button } from "./ui";
@@ -18,8 +18,8 @@ const courseLinks = [
   { href: "#questions", label: "Question bank", icon: ListChecks },
 ];
 
-export function ApplicationFrame({ user, courseName, logout, busy, children }: {
-  user: User; courseName?: string; logout: () => void; busy: boolean; children: React.ReactNode;
+export function ApplicationFrame({ user, courseName, logout, busy, moderationLink = false, children }: {
+  user: User; courseName?: string; logout: () => void; busy: boolean; moderationLink?: boolean; children: React.ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -37,6 +37,7 @@ export function ApplicationFrame({ user, courseName, logout, busy, children }: {
           <nav aria-label="Main navigation" className="space-y-1" onClick={event => { if ((event.target as HTMLElement).closest("a")) setMenuOpen(false); }}>
             <a className="nav-link" href="#courses"><GraduationCap aria-hidden="true" className="size-5" />My courses</a>
             <a className="nav-link" href="#browse-courses"><FolderOpen aria-hidden="true" className="size-5" />Browse courses</a>
+            {moderationLink && <a className="nav-link" href="#moderation"><ShieldCheck aria-hidden="true" className="size-5" />Moderation</a>}
             {courseName && <><p className="mt-7 mb-2 break-words text-sm font-semibold text-muted">{courseName}</p>{courseLinks.map(({ href, label, icon: Icon }) => <a key={href} className="nav-link" href={href}><Icon aria-hidden="true" className="size-5 shrink-0" />{label}</a>)}</>}
           </nav>
           <div className="mt-8 border-t border-line pt-5"><p className="break-words text-sm font-semibold">{user.display_name}</p><p className="mt-1 break-all text-xs text-muted">{user.email}</p><Button variant="secondary" className="mt-4 w-full" onClick={logout} disabled={busy}>{busy ? "Logging out…" : "Log out"}</Button></div>
