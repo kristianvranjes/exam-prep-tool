@@ -41,7 +41,7 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
   fireEvent.click(screen.getByRole("button", { name: "Start practice quiz" }));
   await screen.findByText("Choose a number");
   expect(mock.start).toHaveBeenCalledWith("course", 3, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "STANDARD");
-  expect(screen.queryByText(/Correct answer:|Reference answer:|Pending \/ ungraded/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Correct answer:|Reference answer:|Ungraded/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("One"));
   fireEvent.click(screen.getByRole("button", { name: "Save answer" }));
   await screen.findByText("1 / 3 answered and saved");
@@ -66,7 +66,7 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
   fireEvent.click(await screen.findByRole("button", { name: "Confirm final submission" }));
   await screen.findByText("Quiz results");
   expect(screen.getAllByRole("article").filter(article => within(article).queryByText("Correct"))).toHaveLength(2);
-  expect(screen.getByText(/Pending \/ ungraded/)).toBeInTheDocument();
+  expect(within(screen.getByRole("article", { name: "Question 3 result" })).getByText("Ungraded")).toBeInTheDocument();
   expect(screen.getByText("Reference answer: Mass attracts mass")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Save answer" })).not.toBeInTheDocument();
 });
@@ -137,12 +137,11 @@ it("preserves the original short answer after saving", async () => {
   expect(screen.getByLabelText("Your short answer")).toHaveValue("  Saved text  ");
 });
 
-it.each(["CORRECT", "PENDING"] as const)("reviews a frozen %s short answer after refresh", async gradingStatus => {
-  const raw = gradingStatus === "CORRECT" ? "  MASS\n attracts  mass  " : "  My different\n explanation  ";
+it.each(["  MASS\n attracts  mass  ", "  My different\n explanation  "])("reviews a frozen ungraded short answer after refresh: %s", async raw => {
   current = {
     ...current, status: "SUBMITTED", submitted_at: "2026-09-21T10:00:00Z",
     questions: [{ ...current.questions[2], answer: { type: "SHORT_ANSWER", text: raw },
-      options: [], grading_status: gradingStatus, reference_answer: "Mass attracts mass",
+      options: [], grading_status: "PENDING", reference_answer: "Mass attracts mass",
       correct_boolean: null, explanation: null }],
   };
   mock.history.mockResolvedValue([current]);
@@ -157,8 +156,14 @@ it.each(["CORRECT", "PENDING"] as const)("reviews a frozen %s short answer after
   await screen.findByText("Quiz results");
   expect(screen.getByText(/^Your answer:/).textContent).toBe(`Your answer: ${raw}`);
   expect(screen.getByText(/^Your answer:/)).toHaveClass("whitespace-pre-wrap");
-  expect(screen.getByText("Reference answer: Mass attracts mass")).toBeInTheDocument();
-  expect(within(screen.getByRole("article")).getByText(gradingStatus === "CORRECT" ? "Correct" : "Pending / ungraded")).toBeInTheDocument();
+  const result = screen.getByRole("article", { name: "Question 1 result" });
+  expect(within(result).getByText("Reference answer: Mass attracts mass")).toBeInTheDocument();
+  expect(within(result).getByText("Ungraded")).toBeInTheDocument();
+  expect(within(result).getByText("Short answers are not graded automatically. Compare your answer with the reference answer.")).toBeInTheDocument();
+  expect(within(result).queryByRole("button")).not.toBeInTheDocument();
+  expect(within(result).queryByText(/moderator|semantic|AI grading|mark (correct|incorrect)/i)).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Results summary")).toHaveTextContent("Ungraded1");
+  expect(screen.getByLabelText("Results summary")).not.toHaveTextContent("Pending");
   expect(screen.queryByText(/score|%/i)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Save answer" })).not.toBeInTheDocument();
   expect(mock.submit).not.toHaveBeenCalled();
@@ -311,7 +316,10 @@ it("preserves answers on submit failure, retries, and derives result counts from
   const results = screen.getByRole("region", { name: "Quiz results" });
   expect(results).toHaveTextContent("Correct1");
   expect(results).toHaveTextContent("Incorrect1");
-  expect(results).toHaveTextContent("Pending1");
+  expect(results).toHaveTextContent("Ungraded1");
+  expect(within(screen.getByRole("article", { name: "Question 1 result" })).getByText("Incorrect")).toBeInTheDocument();
+  expect(within(screen.getByRole("article", { name: "Question 2 result" })).getByText("Correct")).toBeInTheDocument();
+  expect(within(screen.getByRole("article", { name: "Question 3 result" })).getByText("Ungraded")).toBeInTheDocument();
   expect(within(screen.getByRole("article", { name: "Question 1 result" })).getByText("Your answer: Two")).toBeInTheDocument();
   expect(screen.getByText("Correct answer: One")).toBeInTheDocument();
   expect(screen.getByText("Correct answer: false")).toBeInTheDocument();

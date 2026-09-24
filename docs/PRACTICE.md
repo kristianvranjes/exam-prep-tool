@@ -51,9 +51,10 @@ changing it replaces the previous payload. Unsaved input is not persisted.
 `ACTIVE -> SUBMITTED` is the only transition. All questions must have a saved answer
 before final submission (otherwise 409, with no state or grade changes). Submission
 marks MCQ/TRUE_FALSE answers CORRECT or INCORRECT using exact option/boolean comparison.
-SHORT_ANSWER is CORRECT only for an exact normalized match against its snapshotted
-reference; otherwise it remains PENDING. No aggregate score treats pending answers
-as wrong. Answer mutations after submission return 409.
+SHORT_ANSWER always remains PENDING, even when its text exactly matches the
+snapshotted reference after normalization. Submitted results show the original
+student answer and frozen Reference answer for self-review. No aggregate score
+treats ungraded answers as wrong. Answer mutations after submission return 409.
 
 Quiz creation locks selected Question Bank rows using the same locking convention as
 bank edits/transitions. It copies the existing owner-view content into an independent
@@ -81,19 +82,20 @@ UUIDs and timestamps are assigned server-side.
 
 `app/services/grading.py` is a pure grading layer: immutable snapshot + typed answer
 in, immutable `GradingResult(status, method, version)` out. The submission transaction
-persists that result. Comparison uses Unicode NFC, case folding, NFC again, and
-whitespace splitting/joining (trim and collapse Unicode whitespace). It never rewrites
-student text or snapshots. Accents, punctuation, negation and mathematical symbols
-remain significant; there is no fuzzy matching or compatibility normalization.
-For example, `  MASS\n attracts  mass ` matches `Mass attracts mass`; `Mass repels mass`
-does not. Pending means correctness is unresolved, not incorrect: semantic/manual
-grading is not yet available. The UI displays original text and no overall score.
+persists that result. MCQ/TRUE_FALSE compare the frozen option/boolean key exactly.
+SHORT_ANSWER always returns PENDING; even `  MASS\n attracts  mass ` against
+`Mass attracts mass` is not marked correct. The existing Unicode normalization
+helper remains in code but does not decide short-answer correctness. Submitted
+text and snapshots are never rewritten. Pending means ungraded, not incorrect:
+the UI shows the student's answer, Reference answer and self-review guidance,
+without an overall score.
 
 Answers persist `grading_method` and `grading_version` internally. ACTIVE answers
 have both null; new submissions use `deterministic-v1` with `DETERMINISTIC` for
-CORRECT/INCORRECT or `PENDING_SEMANTIC` for unresolved short answers. Provenance is
-not exposed in API responses. A future semantic grader can implement the same input
-and result contract; this adds no provider, job, regrading endpoint or background work.
+CORRECT/INCORRECT or `PENDING_SEMANTIC` for ungraded short answers. The latter is
+retained for the existing database constraint, not as a queued grading job.
+Provenance is not exposed in API responses. Semantic/manual grading is future work;
+there is no provider, job, regrading endpoint or background work in this flow.
 Repeated submission and reads return persisted results without invoking the grader.
 AI stays disabled/off the critical grading path in staging, including with
 `AI_PROVIDER=disabled` and no credentials or embeddings.
@@ -131,7 +133,7 @@ alongside the README backend/frontend gates and Docker Compose HTTP health check
 
 ## Deliberate boundaries
 
-Phase 8 performs no AI grading and never guesses short-answer correctness.
+Current practice performs no AI or automatic short-answer grading.
 Phase 9A below adds question-level scheduling. Due/adaptive selection remains
 future Phase 9B work; mastery, analytics and AI grading are still out of scope.
 
@@ -183,7 +185,8 @@ answer and open Review progress: stage 1, one resolved/correct review, due one d
 after submission. Repeat in a new attempt to reach stage 2 (+3 days). Submit an
 incorrect answer in a new attempt: stage 0, incorrect counter +1, due +10 minutes.
 For a short-answer question, first submit the exact reference, then a nonmatching
-answer in a new attempt: PENDING must leave its entire progress row unchanged.
+answer in a new attempt: both remain PENDING and neither creates nor updates a
+progress row.
 Refresh the page/panel and repeat a submitted attempt's submit request: counts
 and due times stay stable. Another course member must see only their own progress.
 

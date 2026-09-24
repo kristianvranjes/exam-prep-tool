@@ -144,10 +144,13 @@ Final submission uses an inline named confirmation region with predictable headi
 focus, answered/unanswered/flagged counts and an explicit irreversible warning.
 Confirmation is disabled until every answer is saved. Submission failure preserves
 the attempt and permits retry or return to editing. No correctness appears before
-submission. Results show each student's answer, backend Correct/Incorrect/Pending
-state, available answer keys/explanations, and total/correct/incorrect/pending counts
-derived solely from the frozen attempt. Pending answers do not imply AI/manual
-grading is available. Active history entries resume; submitted entries open results.
+submission. MCQ/TRUE_FALSE results show the backend's automatic Correct/Incorrect
+decision and available answer keys/explanations. SHORT_ANSWER results show Ungraded,
+the frozen student's answer, the frozen Reference answer and guidance to compare
+them; even exact text equality is not graded. The total/correct/incorrect/ungraded
+summary comes solely from the frozen attempt. Ungraded answers do not affect
+progress or scheduling; semantic/manual grading is future work only. Active history
+entries resume; submitted entries open results.
 
 ## Learning progress
 

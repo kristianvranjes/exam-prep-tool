@@ -49,12 +49,13 @@ def test_short_answer_snapshot_provenance_and_frozen_result(bank, monkeypatch, m
     assert response.status_code == 200, response.text
     result = response.json()
     reviewed = result["questions"][0]
-    assert reviewed["grading_status"] == ("CORRECT" if matches else "PENDING")
+    assert reviewed["grading_status"] == "PENDING"
     assert reviewed["reference_answer"] == source["reference_answer"]
     assert reviewed["answer"] == payload
     with SessionLocal() as db:
         answer = db.scalar(select(Answer).where(Answer.attempt_id == UUID(attempt["id"])))
-        assert answer.grading_method == ("DETERMINISTIC" if matches else "PENDING_SEMANTIC")
+        assert answer.grading_status == "PENDING"
+        assert answer.grading_method == "PENDING_SEMANTIC"
         assert answer.grading_version == ALGORITHM_VERSION
         frozen = (
             answer.payload,

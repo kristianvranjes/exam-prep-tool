@@ -125,7 +125,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await student.getByRole("button", { name: "Confirm final submission" }).click();
     const result = student.getByRole("article", { name: "Question 1 result" });
     await expect(result.getByText("Correct", { exact: true })).toBeVisible();
-    await expect(student.getByRole("region", { name: "Quiz results" })).toContainText("Pending0");
+    await expect(student.getByRole("region", { name: "Quiz results" })).toContainText("Ungraded0");
 
     await student.getByRole("button", { name: "Open learning progress" }).click();
     await expectMetricAtLeast(student, "Reviewed questions", 1);
