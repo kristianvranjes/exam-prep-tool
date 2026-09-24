@@ -1,8 +1,12 @@
 # ExamPrep
 
-Phase 10B adds [community contributions and faculty moderation](docs/COMMUNITY.md).
-Joined students import private drafts and practice them immediately. A different
-faculty moderator must approve them before they become shared course questions.
+ExamPrep is a local-first university exam preparation platform. Through Phase 10F,
+the frontend includes [Faculty/Course discovery and joining](docs/FRONTEND.md#my-courses-and-browse-courses),
+[Study/Exam quizzes](docs/FRONTEND.md#study-and-exam-quizzes),
+[materials upload, browsing and FAILED-upload cleanup](docs/FRONTEND.md#materials-upload-and-browsing),
+a [cross-course faculty moderation queue](docs/FRONTEND.md#faculty-moderation),
+and a [polished selected-course Question Bank contribution/review flow](docs/FRONTEND.md#question-bank-and-contributions).
+See [community lifecycle](docs/COMMUNITY.md) for moderation details.
 
 Phase 10A adds the [Faculty -> Course catalog and enrollment foundation](docs/API.md#faculty-catalog-and-enrollment-phase-10a).
 Select a faculty when creating a course. Existing courses retain all their data
@@ -26,9 +30,6 @@ Phase 6.6 adds [external AI quiz import](docs/QUIZ_IMPORT.md): import versioned 
 then use human review. This temporary staging bypass needs no AI provider or embeddings.
 Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
 configuration below applies when explicitly enabling that pipeline.
-
-A local-first university exam preparation platform. **Implemented scope: through issue #31,
-Phase 10B — community contributions and faculty moderation.**
 
 Phase 6.5 prepares **Vercel + Railway + managed PostgreSQL/pgvector staging** without
 deploying resources. Follow [the exact staging guide](docs/STAGING.md) for required
