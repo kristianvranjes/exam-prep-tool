@@ -8,6 +8,7 @@ import { QuestionBank } from "./question-bank";
 import { CourseMaterials } from "./course-materials";
 import { CourseBrowser } from "./course-browser";
 import { ApplicationFrame, Brand } from "./application-frame";
+import { FacultyModeration } from "./faculty-moderation";
 import { AuthScreen, type AuthMode } from "./auth-screen";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
 
@@ -75,7 +76,7 @@ export function AppShell() {
   if (checkingSession) return <main className="mx-auto max-w-6xl px-6 py-8"><Brand /><LoadingState>Loading your study space…</LoadingState></main>;
   if (!user) return <AuthScreen mode={mode} busy={busy} error={error} submit={submitAuth} changeMode={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }} />;
 
-  return <ApplicationFrame user={user} courseName={selected?.name} logout={() => void logout()} busy={loggingOut}>
+  return <ApplicationFrame user={user} courseName={selected?.name} logout={() => void logout()} busy={loggingOut} moderationLink={faculties.length > 0}>
     <section id="courses" tabIndex={-1} aria-labelledby="courses-heading">
       <h1 id="courses-heading" className="text-3xl font-semibold tracking-tight">Your courses</h1>
       <p className="mt-2 text-muted">Choose a course and pick up where you left off.</p>
@@ -90,6 +91,7 @@ export function AppShell() {
       </div>
     </section>
     <CourseBrowser joinedCourses={courses} loadingMembership={loadingCourses} onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])} onOpen={setSelected} />
+    {faculties.length > 0 && <FacultyModeration currentUserId={user.id} moderatedFaculties={faculties} />}
     {selected && <section id="selected-course" tabIndex={-1} className="mt-10" aria-labelledby="selected-course-heading">
       <div className="border-t border-line pt-8"><h2 id="selected-course-heading" className="text-2xl font-semibold tracking-tight">{selected.name}</h2>{selected.code && <p className="mt-1 text-sm text-muted">{selected.code}</p>}<p className="mt-3 text-muted">{selected.description || "No description"}</p></div>
       <div id="materials" tabIndex={-1}><CourseMaterials key={selected.id} courseId={selected.id} currentUserId={user.id} /></div>

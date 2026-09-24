@@ -20,6 +20,14 @@ export const api = {
   moderatorStatus: (facultyId: string) => request<{ is_moderator: boolean }>(`/faculties/${facultyId}/moderator-status`),
   faculties: () => request<Faculty[]>("/faculties"),
   facultyCourses: (facultyId: string) => request<Course[]>(`/faculties/${facultyId}/courses`),
+  questionReview: (facultyId: string, options: { course_id?: string; status?: QuestionStatus; limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (options.status) params.set("status", options.status);
+    if (options.course_id) params.set("course_id", options.course_id);
+    if (options.limit) params.set("limit", String(options.limit));
+    if (options.offset !== undefined) params.set("offset", String(options.offset));
+    return request<OwnerQuestion[]>(`/faculties/${facultyId}/question-review?${params}`);
+  },
   joinCourse: (courseId: string) => request<CourseMembership>(`/courses/${courseId}/join`, { method: "POST" }),
   reviewProgress: (courseId: string, offset = 0) => request<ReviewProgress[]>(`/courses/${courseId}/review-progress?limit=20&offset=${offset}`),
   membership: (courseId: string) => request<{ role: "OWNER" | "MEMBER" }>(`/courses/${courseId}/membership`),
