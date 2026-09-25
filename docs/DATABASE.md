@@ -1,5 +1,13 @@
 # Database infrastructure
 
+Revision **0012** adds `question_reports` with a question cascade FK, reporter
+RESTRICT FK and nullable resolver SET NULL FK. Checks constrain the reason, trimmed
+details (at most 1000 characters), OTHER details, and OPEN/RESOLVED metadata.
+A partial unique index permits only one OPEN report per question and reporter;
+resolved history does not block another report. The report queue has a status/time/ID
+index. Archive resolves OPEN reports in the same transaction as the question state
+and ARCHIVED version. Downgrading to 0011 removes only report infrastructure.
+
 Migration **0011** adds `faculty_moderators` with a composite faculty/user key and
 cascade foreign keys. It replaces course-wide active-stem uniqueness with
 `uq_question_creator_active_stem` and `uq_question_approved_stem`. All question and

@@ -184,6 +184,9 @@ See [community permissions](COMMUNITY.md) for the creator/moderator action matri
 | POST `/questions/{question_id}/approve` | Non-creator faculty moderator: PENDING_REVIEW → APPROVED with reviewer/time. |
 | POST `/questions/{question_id}/reject` | Non-creator faculty moderator: PENDING_REVIEW → REJECTED; `{reason}` must be nonblank, at most 1000 characters. |
 | POST `/questions/{question_id}/archive` | Faculty moderator: APPROVED → ARCHIVED, terminal. |
+| POST `/questions/{question_id}/reports` | Joined MEMBER/OWNER reports an APPROVED question, including their own. Strict `{reason, details?}`; reasons: `INCORRECT_ANSWER`, `MULTIPLE_CORRECT`, `UNCLEAR`, `TYPO`, `OUTDATED`, `DUPLICATE`, `OTHER`. Trimmed details are at most 1000 characters; OTHER requires them. Returns 201 with a safe receipt, 409 for a duplicate OPEN report or visible non-approved question. Hidden questions and non-member courses remain 404. |
+| GET `/faculties/{faculty_id}/question-reports` | Faculty moderator only, without course enrollment. Optional `course_id`, `status=OPEN|RESOLVED` (default OPEN), `limit` 1–50 (default 20), `offset` 0–10000. Oldest report first, then ID. Includes full question content for moderation but no reporter identity. Unknown faculty or foreign course filter is 404. |
+| POST `/question-reports/{report_id}/dismiss` | Correct faculty moderator resolves an OPEN report as DISMISSED with resolver and UTC time. Already resolved is 409; question and versions are unchanged. |
 | GET `/questions/{question_id}/versions` | Creator or faculty moderator, version ascending; `limit` default 50/max 100, `offset` max 10000. |
 
 Supported types: MULTIPLE_CHOICE (2–6 options, one correct), TRUE_FALSE (strict

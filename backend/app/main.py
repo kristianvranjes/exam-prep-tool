@@ -14,6 +14,7 @@ from app.api.moderation import router as moderation_router
 from app.api.progress import router as progress_router
 from app.api.questions import router as questions_router
 from app.api.quizzes import router as quizzes_router
+from app.api.reports import router as reports_router
 from app.api.retrieval import router as retrieval_router
 from app.config import Settings
 from app.database import engine
@@ -52,6 +53,7 @@ app.include_router(materials_router)
 app.include_router(concepts_router)
 app.include_router(retrieval_router)
 app.include_router(questions_router)
+app.include_router(reports_router)
 app.include_router(quizzes_router)
 
 app.include_router(progress_router)

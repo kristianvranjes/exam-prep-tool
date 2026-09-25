@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, type Course, type Faculty, type OwnerQuestion } from "../lib/api";
+import { api, type Course, type Faculty, type ModeratorReport, type OwnerQuestion } from "../lib/api";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
 
 type QuestionReasonMap = Record<string, string>;
@@ -64,6 +64,7 @@ function QuestionReviewCard({
 }
 
 export function FacultyModeration({ currentUserId, moderatedFaculties }: { currentUserId: string; moderatedFaculties: Faculty[]; }) {
+  const [mode, setMode] = useState<"review" | "reports">("review");
   const [facultyId, setFacultyId] = useState<string>(moderatedFaculties[0]?.id ?? "");
   const [courseId, setCourseId] = useState<string>("all");
   const [courseCatalog, setCourseCatalog] = useState<{ facultyId: string; rows: Course[] } | null>(null);
@@ -113,7 +114,7 @@ export function FacultyModeration({ currentUserId, moderatedFaculties }: { curre
   }, [activeFacultyId, catalogRevision]);
 
   useEffect(() => {
-    if (!activeFacultyId) return;
+    if (!activeFacultyId || mode !== "review") return;
     const requestId = ++queueRequest.current;
     let active = true;
 
@@ -137,7 +138,7 @@ export function FacultyModeration({ currentUserId, moderatedFaculties }: { curre
       });
 
     return () => { active = false; };
-  }, [activeFacultyId, courseId, offset, queueRevision]);
+  }, [activeFacultyId, courseId, offset, queueRevision, mode]);
 
   const facultyCourses = useMemo(() => courseCatalog?.facultyId === facultyId ? courseCatalog.rows : [], [courseCatalog, facultyId]);
 
@@ -190,7 +191,12 @@ export function FacultyModeration({ currentUserId, moderatedFaculties }: { curre
         <h2 id="moderation-heading" className="text-2xl font-semibold tracking-tight">Moderation queue</h2>
         <p className="mt-2 text-muted">Review pending faculty submissions across your moderated courses.</p>
       </div>
-      <Button variant="secondary" type="button" onClick={() => { setLoadingQueue(true); setQueueError(""); setSuccessNotice(""); setQueueRevision(value => value + 1); }} disabled={loadingQueue}>Refresh queue</Button>
+      {mode === "review" && <Button variant="secondary" type="button" onClick={() => { setLoadingQueue(true); setQueueError(""); setSuccessNotice(""); setQueueRevision(value => value + 1); }} disabled={loadingQueue}>Refresh queue</Button>}
+    </div>
+
+    <div className="mt-5 flex gap-2" role="group" aria-label="Moderation mode">
+      <Button type="button" variant={mode === "review" ? "primary" : "secondary"} aria-pressed={mode === "review"} onClick={() => { setMode("review"); setLoadingQueue(true); setQueueError(""); setQueueRevision(value => value + 1); }}>Question review</Button>
+      <Button type="button" variant={mode === "reports" ? "primary" : "secondary"} aria-pressed={mode === "reports"} onClick={() => setMode("reports")}>Reports</Button>
     </div>
 
     <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -208,6 +214,7 @@ export function FacultyModeration({ currentUserId, moderatedFaculties }: { curre
     </div>
 
     {catalogError && <div className="mt-4 flex flex-wrap items-center gap-3"><Alert>{catalogError}</Alert><Button variant="secondary" onClick={() => { setLoadingCourses(true); setCatalogError(""); setCatalogRevision(value => value + 1); }} disabled={loadingCourses}>Retry courses</Button></div>}
+    {mode === "review" && <>
     {queueError && <Alert className="mt-4">{queueError}</Alert>}
     {actionError && <Alert className="mt-4">{actionError}</Alert>}
     {successNotice && <p role="status" className="mt-4 rounded-lg border border-line bg-subtle p-3 text-sm text-foreground">{successNotice}</p>}
@@ -237,5 +244,89 @@ export function FacultyModeration({ currentUserId, moderatedFaculties }: { curre
       <span className="text-sm">Page {Math.floor(offset / 20) + 1}</span>
       <Button type="button" variant="secondary" disabled={pageResultCount < 20 || loadingQueue || !!queueError} onClick={() => { viewGeneration.current += 1; setQueue([]); setPageResultCount(0); setLoadingQueue(true); setQueueError(""); setSuccessNotice(""); setOffset(value => value + 20); }}>Next</Button>
     </div>
+    </>}
+    {mode === "reports" && activeFacultyId && <ReportsQueue key={`${activeFacultyId}:${courseId}`} facultyId={activeFacultyId} courseId={courseId} courses={facultyCourses} />}
   </section>;
+}
+
+function ReportsQueue({ facultyId, courseId, courses }: { facultyId: string; courseId: string; courses: Course[] }) {
+  const [rows, setRows] = useState<ModeratorReport[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [count, setCount] = useState(0);
+  const [revision, setRevision] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState<Record<string, "dismiss" | "archive">>({});
+  const pending = useRef(new Set<string>());
+  const resolved = useRef(new Set<string>());
+  const request = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+
+  useEffect(() => {
+    const current = ++request.current;
+    let active = true;
+    api.questionReports(facultyId, { course_id: courseId === "all" ? undefined : courseId, status: "OPEN", limit: 20, offset })
+      .then(result => { if (active && current === request.current) { setRows(result.filter(row => !resolved.current.has(row.id))); setCount(result.length); } })
+      .catch(() => { if (active && current === request.current) setError("Could not load reports. Try again."); })
+      .finally(() => { if (active && current === request.current) setLoading(false); });
+    return () => { active = false; };
+  }, [facultyId, courseId, offset, revision]);
+
+  async function decide(report: ModeratorReport, action: "dismiss" | "archive") {
+    if (pending.current.has(report.id)) return;
+    pending.current.add(report.id); setBusy(current => ({ ...current, [report.id]: action }));
+    setActionError(""); setNotice("");
+    try {
+      if (action === "dismiss") await api.dismissQuestionReport(report.id);
+      else await api.transitionQuestion(report.question_id, "archive");
+      if (!mounted.current) return;
+      const removed = action === "archive" ? rows.filter(row => row.question_id === report.question_id).map(row => row.id) : [report.id];
+      removed.forEach(id => resolved.current.add(id));
+      setRows(current => current.filter(row => !removed.includes(row.id)));
+      setNotice(action === "dismiss" ? "Report dismissed." : "Question archived and open reports resolved.");
+    } catch (e) { if (mounted.current) setActionError(e instanceof Error ? e.message : "Could not resolve report. Try again."); }
+    finally {
+      pending.current.delete(report.id);
+      if (mounted.current) setBusy(current => { const next = { ...current }; delete next[report.id]; return next; });
+    }
+  }
+
+  return <div className="mt-5 space-y-4" aria-label="Question reports queue">
+    <Button type="button" variant="secondary" disabled={loading} onClick={() => { setLoading(true); setError(""); setRevision(value => value + 1); }}>Refresh reports</Button>
+    {error && <div className="space-y-2"><Alert>{error}</Alert><Button type="button" variant="secondary" onClick={() => { setLoading(true); setError(""); setRevision(value => value + 1); }}>Retry reports</Button></div>}
+    {actionError && <Alert>{actionError}</Alert>}
+    {notice && <p role="status">{notice}</p>}
+    {loading && <LoadingState>Loading reports…</LoadingState>}
+    {!loading && !error && rows.length === 0 && <EmptyState title="No open reports">There are no open reports on this page.</EmptyState>}
+    {!loading && rows.map(report => {
+      const question = report.question;
+      const action = busy[report.id];
+      const questionBusy = rows.some(row => row.question_id === report.question_id && busy[row.id]);
+      return <Surface key={report.id} role="article" aria-label={`Report: ${question.stem}`} className="space-y-3">
+        <p className="text-sm text-muted">{courses.find(course => course.id === question.course_id)?.name ?? question.course_id}</p>
+        <h3 className="break-words text-lg font-semibold">{question.stem}</h3>
+        <div className="flex gap-2"><Badge>{question.type}</Badge><Badge>{question.source}</Badge></div>
+        {question.type === "MULTIPLE_CHOICE" && <p>Correct answer: {question.options.find(option => option.is_correct)?.text}</p>}
+        {question.type === "MULTIPLE_CHOICE" && <ul className="list-inside list-disc space-y-1">{question.options.map(option => <li key={option.position} className="break-words">{option.text}{option.is_correct ? " (correct)" : ""}</li>)}</ul>}
+        {question.type === "TRUE_FALSE" && <p>Answer: {question.correct_boolean ? "True" : "False"}</p>}
+        {question.type === "SHORT_ANSWER" && <p>Reference answer: {question.reference_answer}</p>}
+        {question.explanation && <p>Explanation: {question.explanation}</p>}
+        <p>Reason: {report.reason}</p>
+        {report.details && <p className="break-words">Details: {report.details}</p>}
+        <p className="text-sm text-muted">Reported {new Date(report.created_at).toLocaleString()}</p>
+        <div className="flex gap-2">
+          <Button type="button" disabled={!!questionBusy} onClick={() => void decide(report, "dismiss")}>{action === "dismiss" ? "Dismissing…" : "Dismiss report"}</Button>
+          <Button type="button" variant="secondary" disabled={!!questionBusy} onClick={() => void decide(report, "archive")}>{action === "archive" ? "Archiving…" : "Archive question"}</Button>
+        </div>
+      </Surface>;
+    })}
+    <div className="flex items-center gap-3">
+      <Button type="button" variant="secondary" disabled={offset === 0 || loading} onClick={() => { setRows([]); setLoading(true); setError(""); setOffset(value => Math.max(0, value - 20)); }}>Previous</Button>
+      <span>Page {Math.floor(offset / 20) + 1}</span>
+      <Button type="button" variant="secondary" disabled={count < 20 || loading || offset >= 10000 || !!error} onClick={() => { setRows([]); setLoading(true); setError(""); setOffset(value => value + 20); }}>Next</Button>
+    </div>
+  </div>;
 }

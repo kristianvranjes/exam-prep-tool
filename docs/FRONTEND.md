@@ -62,6 +62,13 @@ backend authorization and course-creation request are unchanged.
 
 ## Faculty moderation
 
+The moderation area has Question review and Reports modes. Reports shows the OPEN
+quality queue across a moderated faculty, with the existing faculty/course filters,
+pages and retry controls. Cards show the full moderator-only answer and explanation,
+reason, details and report time. Dismiss resolves one report; Archive question uses
+the existing archive action and clears all OPEN cards for that question. Failures
+leave the queue usable.
+
 Only users recognized as faculty moderators see the Moderation navigation link and
 cross-course queue. A moderator's first faculty loads automatically; moderators of
 multiple faculties can switch between them. The default **All courses** view loads
@@ -84,6 +91,12 @@ no polling or realtime update. The backend remains authoritative for faculty
 permissions, self-review restrictions and question lifecycle decisions.
 
 ## Question Bank and contributions
+
+A selected APPROVED question offers Report issue to a joined user, including the
+creator. The small form accepts a reason and up to 1000 characters of details;
+OTHER requires details. Success closes the form with a confirmation, while errors
+preserve the input for retry. Reporting never reveals an answer or explanation to
+someone viewing a public question.
 
 The Question Bank opens within the selected course and loads questions only when
 opened. Its paged list keeps status and type filters, with a selected question detail

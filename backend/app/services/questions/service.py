@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,7 @@ from app.models.question import (
     QuestionOption,
     QuestionVersion,
 )
+from app.models.question_report import QuestionReport
 from app.schemas.question import (
     MCQ,
     OwnerOption,
@@ -363,6 +364,17 @@ def transition(
         question.reviewed_at = datetime.now(UTC)
         question.rejection_reason = reason.strip() if action == "reject" and reason else None
     try:
+        if action == "archive":
+            db.execute(
+                update(QuestionReport)
+                .where(QuestionReport.question_id == question.id, QuestionReport.status == "OPEN")
+                .values(
+                    status="RESOLVED",
+                    resolution="QUESTION_ARCHIVED",
+                    resolved_by_user_id=user.id,
+                    resolved_at=datetime.now(UTC),
+                )
+            )
         add_version(db, question, user, version_reason)
         db.commit()
     except IntegrityError:

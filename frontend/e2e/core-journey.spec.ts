@@ -110,6 +110,22 @@ test("moderator and student complete the core exam-preparation journey", async (
       .getByRole("button", { name: new RegExp(questionStem.replace("?", "\\?")) }).click();
     await expect(student.getByRole("article", { name: "Selected question" })).toContainText("approved");
 
+    await student.getByRole("button", { name: "Report issue" }).click();
+    const reportForm = student.getByRole("form", { name: "Report question issue" });
+    await reportForm.getByLabel("Reason").selectOption("UNCLEAR");
+    await reportForm.getByLabel("Details").fill("E2E report: wording should be reviewed.");
+    await reportForm.getByRole("button", { name: "Submit report" }).click();
+    await expect(student.getByText("Report submitted for faculty review.")).toBeVisible();
+
+    await moderator.getByRole("button", { name: "Reports", exact: true }).click();
+    const reportCard = moderator.getByRole("article", { name: `Report: ${questionStem}` });
+    await expect(reportCard).toContainText(questionStem);
+    await expect(reportCard).toContainText("Reason: UNCLEAR");
+    await expect(reportCard).toContainText("E2E report: wording should be reviewed.");
+    await reportCard.getByRole("button", { name: "Dismiss report" }).click();
+    await expect(reportCard).toHaveCount(0);
+    await expect(moderator.getByText("Report dismissed.")).toBeVisible();
+
     await student.getByRole("button", { name: "Open practice quizzes" }).click();
     await student.getByRole("radio", { name: "Standard practice" }).check();
     await student.getByRole("radio", { name: "Study" }).check();

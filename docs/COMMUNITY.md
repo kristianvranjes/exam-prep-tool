@@ -1,5 +1,21 @@
 # Community contributions and faculty moderation (Phase 10B / #31)
 
+## Question quality reports (Phase 12B / #64)
+
+Joined course members and owners can report an APPROVED shared question, including
+their own, with a bounded reason and optional details (required for OTHER). Reasons
+are INCORRECT_ANSWER, MULTIPLE_CORRECT, UNCLEAR, TYPO, OUTDATED, DUPLICATE and OTHER.
+Each reporter may have one OPEN report per question; after resolution they may
+report again. Reporting does not alter the question or its version history. Private
+questions remain hidden from other members and nonmembers; the report receipt has
+no answer key or reporter identity.
+
+Faculty moderators inspect the cross-course Reports queue without enrollment. Its
+full question content is moderator-only, and reporter identity is omitted. A
+moderator may dismiss a report or use the existing question archive action. Archive
+atomically resolves all OPEN reports as QUESTION_ARCHIVED, preserving earlier
+DISMISSED reports, the single ARCHIVED version and historical quiz attempts.
+
 Joined MEMBER/OWNER users create a USER question in-app or import bounded, validated
 USER questions as private DRAFTs. The authenticated user is always the creator;
 both paths are atomic and require no AI. Moderator status alone does not grant

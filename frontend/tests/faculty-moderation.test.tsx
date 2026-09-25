@@ -1,11 +1,13 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FacultyModeration } from "../src/components/faculty-moderation";
-import type { Course, Faculty, OwnerQuestion } from "../src/lib/api";
+import type { Course, Faculty, ModeratorReport, OwnerQuestion } from "../src/lib/api";
 
 const apiMock = vi.hoisted(() => ({
   facultyCourses: vi.fn(),
   questionReview: vi.fn(),
+  questionReports: vi.fn(),
+  dismissQuestionReport: vi.fn(),
   transitionQuestion: vi.fn(),
 }));
 
@@ -61,7 +63,41 @@ describe("FacultyModeration", () => {
     vi.resetAllMocks();
     apiMock.facultyCourses.mockResolvedValue([]);
     apiMock.questionReview.mockResolvedValue([]);
+    apiMock.questionReports.mockResolvedValue([]);
+    apiMock.dismissQuestionReport.mockResolvedValue({});
     apiMock.transitionQuestion.mockResolvedValue(makeQuestion());
+  });
+
+  it("reviews reports and dismisses one while preserving the question review mode", async () => {
+    const question = makeQuestion({ status: "APPROVED" });
+    const report: ModeratorReport = { id: "report-1", question_id: question.id, reason: "UNCLEAR", details: "Wording needs review", status: "OPEN", created_at: "2026-01-01T00:00:00Z", resolution: null, resolved_by_user_id: null, resolved_at: null, question };
+    apiMock.questionReports.mockResolvedValue([report]);
+    render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties.slice(0, 1)} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Reports$/ }));
+    const card = await screen.findByRole("article", { name: "Report: What is 2 + 2?" });
+    expect(card).toHaveTextContent("Correct answer: 4");
+    expect(card).toHaveTextContent("3");
+    expect(card).toHaveTextContent("4 (correct)");
+    expect(card).toHaveTextContent("Reason: UNCLEAR");
+    expect(card).toHaveTextContent("Wording needs review");
+    fireEvent.click(within(card).getByRole("button", { name: "Dismiss report" }));
+    await waitFor(() => expect(apiMock.dismissQuestionReport).toHaveBeenCalledWith("report-1"));
+    await waitFor(() => expect(card).not.toBeInTheDocument());
+    expect(screen.getByText("Report dismissed.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Question review" }));
+    await waitFor(() => expect(apiMock.questionReview).toHaveBeenCalled());
+  });
+
+  it("archives all open reports for the same question via the existing action", async () => {
+    const question = makeQuestion({ status: "APPROVED" });
+    const report = (id: string): ModeratorReport => ({ id, question_id: question.id, reason: "TYPO", details: null, status: "OPEN", created_at: "2026-01-01T00:00:00Z", resolution: null, resolved_by_user_id: null, resolved_at: null, question });
+    apiMock.questionReports.mockResolvedValue([report("a"), report("b")]);
+    render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties.slice(0, 1)} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Reports$/ }));
+    const cards = await screen.findAllByRole("article", { name: "Report: What is 2 + 2?" });
+    fireEvent.click(within(cards[0]).getByRole("button", { name: "Archive question" }));
+    await waitFor(() => expect(apiMock.transitionQuestion).toHaveBeenCalledWith(question.id, "archive"));
+    await waitFor(() => expect(screen.queryAllByRole("article", { name: "Report: What is 2 + 2?" })).toHaveLength(0));
   });
 
   it("loads pending review automatically for a moderated faculty", async () => {
