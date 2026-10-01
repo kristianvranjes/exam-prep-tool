@@ -1,9 +1,9 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { QuestionBank } from "../src/components/question-bank";
-import type { OwnerQuestion } from "../src/lib/api";
+import type { OwnerQuestion, PublicQuestion } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ me: vi.fn(), course: vi.fn(), moderatorStatus: vi.fn(), createQuestion: vi.fn(), importQuestions: vi.fn(), membership: vi.fn(), concepts: vi.fn(), questions: vi.fn(), generateQuestions: vi.fn(), editQuestion: vi.fn(), transitionQuestion: vi.fn(), questionVersions: vi.fn(), reportQuestion: vi.fn() }));
+const mock = vi.hoisted(() => ({ me: vi.fn(), course: vi.fn(), moderatorStatus: vi.fn(), createQuestion: vi.fn(), importQuestions: vi.fn(), membership: vi.fn(), concepts: vi.fn(), questions: vi.fn(), generateQuestions: vi.fn(), editQuestion: vi.fn(), transitionQuestion: vi.fn(), questionVersions: vi.fn(), reportQuestion: vi.fn(), suggestQuestionEdit: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 
 const draft: OwnerQuestion = {
@@ -35,6 +35,7 @@ beforeEach(() => {
   });
   mock.questionVersions.mockResolvedValue([{ version_number: 1, reason: "CREATED", snapshot: draft, created_at: draft.created_at }]);
   mock.reportQuestion.mockResolvedValue({ status: "OPEN" });
+  mock.suggestQuestionEdit.mockResolvedValue({ id: "suggestion-1", status: "OPEN" });
 });
 
 it("reports an approved public question without revealing answer content", async () => {
@@ -566,4 +567,111 @@ it("clears an unfinished create form when the course changes", async () => {
   expect(screen.queryByRole("form", { name: "Create question form" })).not.toBeInTheDocument();
   expect(screen.queryByDisplayValue("Unsaved private question")).not.toBeInTheDocument();
   expect(mock.createQuestion).not.toHaveBeenCalled();
+});
+
+it.each(["DRAFT", "PENDING_REVIEW", "REJECTED", "ARCHIVED"] as const)("hides Suggest edit for %s", async status => {
+  current.status = status;
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  expect(screen.queryByRole("button", { name: "Suggest edit" })).not.toBeInTheDocument();
+});
+
+it("collects an owner's sparse proposal without copying private content, then resets without changing the question", async () => {
+  current.status = "APPROVED";
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Suggest edit" }));
+  const form = screen.getByRole("form", { name: "Suggest question edit" });
+  expect(within(form).getByLabelText("Proposed explanation")).toHaveValue("");
+  expect(within(form).getByLabelText("Proposed correct option")).toHaveValue("");
+  expect(form).not.toHaveTextContent(draft.explanation!);
+  fireEvent.submit(form);
+  expect(screen.getByText("Enter at least one proposed change.")).toBeInTheDocument();
+  expect(mock.suggestQuestionEdit).not.toHaveBeenCalled();
+  fireEvent.change(within(form).getByLabelText("Proposed option 2 text"), { target: { value: "  A new scalar  " } });
+  fireEvent.change(within(form).getByLabelText("Proposed difficulty"), { target: { value: "3" } });
+  fireEvent.change(within(form).getByLabelText("Suggestion note (optional)"), { target: { value: "  Review wording  " } });
+  fireEvent.submit(form);
+  await waitFor(() => expect(mock.suggestQuestionEdit).toHaveBeenCalledExactlyOnceWith("q1", { changes: { difficulty: 3, options: [{ position: 1, text: "A new scalar" }] }, note: "Review wording" }));
+  expect(await screen.findByText("Suggestion submitted for faculty review.")).toBeInTheDocument();
+  expect(screen.queryByRole("form", { name: "Suggest question edit" })).not.toBeInTheDocument();
+  expect(screen.getByRole("article", { name: "Selected question" })).toHaveTextContent("Difficulty 2/5");
+  expect(mock.editQuestion).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Suggest edit" }));
+  expect(screen.getByLabelText("Proposed option 2 text")).toHaveValue("");
+  expect(screen.getByLabelText("Suggestion note (optional)")).toHaveValue("");
+});
+
+it.each(["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"] as const)("keeps public %s answer proposals private and type-specific", async type => {
+  const publicQuestion: PublicQuestion = { id: "q1", course_id: "course", type, status: "APPROVED", visibility: "MEMBER", stem: draft.stem, difficulty: 2, options: type === "MULTIPLE_CHOICE" ? draft.options.map(({ position, text }) => ({ position, text })) : [] };
+  mock.me.mockResolvedValue({ id: "student" });
+  mock.questions.mockResolvedValue([publicQuestion]);
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  const selected = screen.getByRole("article", { name: "Selected question" });
+  expect(selected).not.toHaveTextContent(draft.explanation!);
+  expect(selected).not.toHaveTextContent("(correct)");
+  fireEvent.click(within(selected).getByRole("button", { name: "Suggest edit" }));
+  const form = within(selected).getByRole("form", { name: "Suggest question edit" });
+  expect(within(form).getByLabelText("Proposed explanation")).toHaveValue("");
+  let changes;
+  if (type === "MULTIPLE_CHOICE") {
+    expect(within(form).getByLabelText("Proposed correct option")).toHaveValue("");
+    expect(within(form).queryByLabelText("Proposed correct answer")).not.toBeInTheDocument();
+    expect(within(form).getAllByRole("option")).toHaveLength(3);
+    fireEvent.change(within(form).getByLabelText("Proposed correct option"), { target: { value: "1" } });
+    changes = { correct_option_position: 1 };
+  } else if (type === "TRUE_FALSE") {
+    expect(within(form).getByLabelText("Proposed correct answer")).toHaveValue("");
+    expect(within(form).queryByLabelText("Proposed reference answer")).not.toBeInTheDocument();
+    fireEvent.change(within(form).getByLabelText("Proposed correct answer"), { target: { value: "false" } });
+    changes = { correct_answer: false };
+  } else {
+    expect(within(form).getByLabelText("Proposed reference answer")).toHaveValue("");
+    expect(within(form).queryByLabelText("Proposed correct option")).not.toBeInTheDocument();
+    fireEvent.change(within(form).getByLabelText("Proposed reference answer"), { target: { value: "My proposed reference" } });
+    changes = { reference_answer: "My proposed reference" };
+  }
+  fireEvent.submit(form);
+  await waitFor(() => expect(mock.suggestQuestionEdit).toHaveBeenCalledWith("q1", { changes, note: null }));
+  expect(await screen.findByText("Suggestion submitted for faculty review.")).toBeInTheDocument();
+});
+
+it("deduplicates pending suggestions and preserves input after a duplicate conflict for retry", async () => {
+  current.status = "APPROVED";
+  let reject!: (error: Error) => void;
+  mock.suggestQuestionEdit.mockReturnValueOnce(new Promise((_resolve, fail) => { reject = fail; }));
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Suggest edit" }));
+  const form = screen.getByRole("form", { name: "Suggest question edit" });
+  fireEvent.change(within(form).getByLabelText("Proposed stem"), { target: { value: "Keep this proposal" } });
+  fireEvent.submit(form); fireEvent.submit(form);
+  expect(mock.suggestQuestionEdit).toHaveBeenCalledTimes(1);
+  expect(within(form).getByRole("button", { name: "Submitting suggestion…" })).toBeDisabled();
+  await act(async () => reject(new Error("You already have an open suggestion for this question")));
+  expect(await screen.findByText("You already have an open suggestion for this question")).toBeInTheDocument();
+  expect(within(form).getByLabelText("Proposed stem")).toHaveValue("Keep this proposal");
+  fireEvent.submit(form);
+  expect(await screen.findByText("Suggestion submitted for faculty review.")).toBeInTheDocument();
+  expect(mock.suggestQuestionEdit).toHaveBeenCalledTimes(2);
+});
+
+it("ignores suggestion completion after selecting a different question", async () => {
+  const first = { ...draft, status: "APPROVED" as const };
+  const second = { ...first, id: "q2", stem: "Another approved question?" };
+  mock.questions.mockResolvedValue([first, second]);
+  let resolve!: (value: object) => void;
+  mock.suggestQuestionEdit.mockReturnValueOnce(new Promise(done => { resolve = done; }));
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Suggest edit" }));
+  fireEvent.change(screen.getByLabelText("Proposed difficulty"), { target: { value: "4" } });
+  fireEvent.submit(screen.getByRole("form", { name: "Suggest question edit" }));
+  fireEvent.click(screen.getByRole("button", { name: /Another approved question/ }));
+  await act(async () => resolve({ status: "OPEN" }));
+  expect(screen.queryByText("Suggestion submitted for faculty review.")).not.toBeInTheDocument();
+  expect(screen.getByRole("article", { name: "Selected question" })).toHaveTextContent(second.stem);
+  fireEvent.click(screen.getByRole("button", { name: "Suggest edit" }));
+  expect(screen.getByLabelText("Proposed difficulty")).toHaveValue(null);
 });

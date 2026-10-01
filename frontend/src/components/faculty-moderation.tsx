@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type Course, type Faculty, type ModeratorReport, type OwnerQuestion } from "../lib/api";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
+import { QuestionSuggestionsQueue } from "./question-suggestions-queue";
 
 type QuestionReasonMap = Record<string, string>;
 
@@ -64,7 +65,7 @@ function QuestionReviewCard({
 }
 
 export function FacultyModeration({ currentUserId, moderatedFaculties }: { currentUserId: string; moderatedFaculties: Faculty[]; }) {
-  const [mode, setMode] = useState<"review" | "reports">("review");
+  const [mode, setMode] = useState<"review" | "reports" | "suggestions">("review");
   const [facultyId, setFacultyId] = useState<string>(moderatedFaculties[0]?.id ?? "");
   const [courseId, setCourseId] = useState<string>("all");
   const [courseCatalog, setCourseCatalog] = useState<{ facultyId: string; rows: Course[] } | null>(null);
@@ -194,9 +195,10 @@ export function FacultyModeration({ currentUserId, moderatedFaculties }: { curre
       {mode === "review" && <Button variant="secondary" type="button" onClick={() => { setLoadingQueue(true); setQueueError(""); setSuccessNotice(""); setQueueRevision(value => value + 1); }} disabled={loadingQueue}>Refresh queue</Button>}
     </div>
 
-    <div className="mt-5 flex gap-2" role="group" aria-label="Moderation mode">
+    <div className="mt-5 flex flex-wrap gap-2" role="group" aria-label="Moderation mode">
       <Button type="button" variant={mode === "review" ? "primary" : "secondary"} aria-pressed={mode === "review"} onClick={() => { setMode("review"); setLoadingQueue(true); setQueueError(""); setQueueRevision(value => value + 1); }}>Question review</Button>
       <Button type="button" variant={mode === "reports" ? "primary" : "secondary"} aria-pressed={mode === "reports"} onClick={() => setMode("reports")}>Reports</Button>
+      <Button type="button" variant={mode === "suggestions" ? "primary" : "secondary"} aria-pressed={mode === "suggestions"} onClick={() => setMode("suggestions")}>Suggestions</Button>
     </div>
 
     <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -246,6 +248,7 @@ export function FacultyModeration({ currentUserId, moderatedFaculties }: { curre
     </div>
     </>}
     {mode === "reports" && activeFacultyId && <ReportsQueue key={`${activeFacultyId}:${courseId}`} facultyId={activeFacultyId} courseId={courseId} courses={facultyCourses} />}
+    {mode === "suggestions" && activeFacultyId && <QuestionSuggestionsQueue key={`${activeFacultyId}:${courseId}`} facultyId={activeFacultyId} courseId={courseId} courses={facultyCourses} currentUserId={currentUserId} />}
   </section>;
 }
 

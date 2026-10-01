@@ -126,6 +126,32 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(reportCard).toHaveCount(0);
     await expect(moderator.getByText("Report dismissed.")).toBeVisible();
 
+    await selectedQuestion.getByRole("button", { name: "Suggest edit" }).click();
+    const suggestionForm = student.getByRole("form", { name: "Suggest question edit" });
+    await suggestionForm.getByLabel("Proposed difficulty").fill("3");
+    await suggestionForm.getByLabel("Suggestion note (optional)").fill("E2E suggestion: set difficulty to 3.");
+    await suggestionForm.getByRole("button", { name: "Submit suggestion" }).click();
+    await expect(student.getByText("Suggestion submitted for faculty review.")).toBeVisible();
+    await expect(selectedQuestion).not.toContainText("Difficulty 3/5");
+
+    await moderator.getByRole("button", { name: "Suggestions", exact: true }).click();
+    const suggestionCard = moderator.getByRole("article", { name: `Suggestion: ${questionStem}` });
+    await expect(suggestionCard).toContainText("Base version 3");
+    await expect(suggestionCard).toContainText("E2E suggestion: set difficulty to 3.");
+    const difficultyComparison = suggestionCard.getByRole("group", { name: "Difficulty comparison" });
+    await expect(difficultyComparison).toContainText("Not set");
+    await expect(difficultyComparison).toContainText("Proposed3");
+    await suggestionCard.getByRole("button", { name: "Approve & apply" }).click();
+    await expect(suggestionCard).toHaveCount(0);
+    await expect(moderator.getByText("Suggestion applied. Other open suggestions for this question were superseded.")).toBeVisible();
+
+    await student.getByRole("button", { name: "Close question bank" }).click();
+    await student.getByRole("button", { name: "Open question bank" }).click();
+    await student.getByRole("list", { name: "Questions list" })
+      .getByRole("button", { name: new RegExp(questionStem.replace("?", "\\?")) }).click();
+    await expect(selectedQuestion).toContainText("Difficulty 3/5");
+    await expect(selectedQuestion).toContainText("approved");
+
     await student.getByRole("button", { name: "Open practice quizzes" }).click();
     await student.getByRole("radio", { name: "Standard practice" }).check();
     await student.getByRole("radio", { name: "Study" }).check();

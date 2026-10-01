@@ -1,5 +1,30 @@
 # Community contributions and faculty moderation (Phase 10B / #31)
 
+## Moderated question edit suggestions (Phase 12C / #66)
+
+Joined students, owners and creators can suggest sparse corrections to APPROVED
+questions. Submission captures the current version and stores a full candidate
+internally; it leaves the live question, options, versions and reports unchanged.
+One OPEN suggestion per user/question is enforced in PostgreSQL; a resolved
+suggestion permits a later proposal. Public forms never prefill hidden explanations,
+correctness or reference answers. Receipts contain only safe identifiers/status/time,
+and valid answer proposals are accepted regardless of equality with the hidden key.
+
+Faculty moderators use the cross-course Suggestions queue without enrollment to
+compare the exact base and proposed content. A different moderator may reject with
+a bounded reason or approve and apply against an unchanged base version. Apply is
+atomic: keep APPROVED and provenance, update reviewer/time, append one EDITED version,
+resolve APPLIED with that version, and supersede all sibling OPEN suggestions.
+Reject changes only its suggestion. Reports remain unchanged by either decision.
+Archive closes OPEN reports and suggestions together as QUESTION_ARCHIVED, with one
+ARCHIVED version; earlier resolutions and historical practice snapshots survive.
+
+Question-first row locks serialize creation/decisions/archive, while unique indexes
+protect duplicate proposals and approved-stem races. Stale proposals are never rebased
+automatically. No direct collaborative edit, voting, AI correction or lifecycle change
+is introduced. See [API payloads and errors](API.md#moderated-edit-suggestions-phase-12c)
+and [migration 0013](DATABASE.md).
+
 ## Question quality reports (Phase 12B / #64)
 
 Joined course members and owners can report an APPROVED shared question, including
