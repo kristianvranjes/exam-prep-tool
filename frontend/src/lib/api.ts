@@ -28,6 +28,16 @@ export const api = {
     if (options.offset !== undefined) params.set("offset", String(options.offset));
     return request<OwnerQuestion[]>(`/faculties/${facultyId}/question-review?${params}`);
   },
+  questionReports: (facultyId: string, options: { course_id?: string; status?: ReportStatus; limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (options.course_id) params.set("course_id", options.course_id);
+    if (options.status) params.set("status", options.status);
+    if (options.limit) params.set("limit", String(options.limit));
+    if (options.offset !== undefined) params.set("offset", String(options.offset));
+    return request<ModeratorReport[]>(`/faculties/${facultyId}/question-reports?${params}`);
+  },
+  reportQuestion: (id: string, body: { reason: ReportReason; details: string | null }) => request<ReportReceipt>(`/questions/${id}/reports`, { method: "POST", body: JSON.stringify(body) }),
+  dismissQuestionReport: (id: string) => request<ModeratorReport>(`/question-reports/${id}/dismiss`, { method: "POST" }),
   joinCourse: (courseId: string) => request<CourseMembership>(`/courses/${courseId}/join`, { method: "POST" }),
   reviewProgress: (courseId: string, offset = 0) => request<ReviewProgress[]>(`/courses/${courseId}/review-progress?limit=20&offset=${offset}`),
   reviewProgressSummary: (courseId: string) => request<ReviewProgressSummary>(`/courses/${courseId}/review-progress/summary`),
@@ -83,6 +93,10 @@ export type AIJob = { id: string; status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 
 export type QuestionType = "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
 export type QuestionStatus = "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED";
 export type QuestionAction = "submit" | "approve" | "reject" | "archive";
+export type ReportReason = "INCORRECT_ANSWER" | "MULTIPLE_CORRECT" | "UNCLEAR" | "TYPO" | "OUTDATED" | "DUPLICATE" | "OTHER";
+export type ReportStatus = "OPEN" | "RESOLVED";
+export type ReportReceipt = { id: string; question_id: string; reason: ReportReason; details: string | null; status: ReportStatus; created_at: string };
+export type ModeratorReport = ReportReceipt & { resolution: "DISMISSED" | "QUESTION_ARCHIVED" | null; resolved_by_user_id: string | null; resolved_at: string | null; question: OwnerQuestion };
 type QuestionBase = { id: string; course_id: string; type: QuestionType; stem: string; difficulty: number | null };
 export type PublicQuestion = QuestionBase & { visibility: "MEMBER"; status: "APPROVED"; options: { position: number; text: string }[] };
 export type OwnerQuestion = QuestionBase & {

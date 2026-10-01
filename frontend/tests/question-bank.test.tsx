@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { QuestionBank } from "../src/components/question-bank";
 import type { OwnerQuestion } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ me: vi.fn(), course: vi.fn(), moderatorStatus: vi.fn(), createQuestion: vi.fn(), importQuestions: vi.fn(), membership: vi.fn(), concepts: vi.fn(), questions: vi.fn(), generateQuestions: vi.fn(), editQuestion: vi.fn(), transitionQuestion: vi.fn(), questionVersions: vi.fn() }));
+const mock = vi.hoisted(() => ({ me: vi.fn(), course: vi.fn(), moderatorStatus: vi.fn(), createQuestion: vi.fn(), importQuestions: vi.fn(), membership: vi.fn(), concepts: vi.fn(), questions: vi.fn(), generateQuestions: vi.fn(), editQuestion: vi.fn(), transitionQuestion: vi.fn(), questionVersions: vi.fn(), reportQuestion: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 
 const draft: OwnerQuestion = {
@@ -34,6 +34,44 @@ beforeEach(() => {
     return current;
   });
   mock.questionVersions.mockResolvedValue([{ version_number: 1, reason: "CREATED", snapshot: draft, created_at: draft.created_at }]);
+  mock.reportQuestion.mockResolvedValue({ status: "OPEN" });
+});
+
+it("reports an approved public question without revealing answer content", async () => {
+  current = { ...draft, status: "APPROVED" };
+  mock.me.mockResolvedValue({ id: "someone-else" });
+  mock.questions.mockResolvedValue([{ id: "q1", course_id: "course", type: "MULTIPLE_CHOICE", status: "APPROVED", visibility: "MEMBER", stem: draft.stem, difficulty: 2, options: draft.options.map(({ position, text }) => ({ position, text })) }]);
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  const selected = screen.getByRole("article", { name: "Selected question" });
+  expect(selected).not.toHaveTextContent("A table of numbers");
+  expect(selected).not.toHaveTextContent("(correct)");
+  fireEvent.click(within(selected).getByRole("button", { name: "Report issue" }));
+  const form = within(selected).getByRole("form", { name: "Report question issue" });
+  expect(within(form).getByRole("option", { name: "Multiple correct answers" })).toBeInTheDocument();
+  fireEvent.change(within(form).getByLabelText("Reason"), { target: { value: "OTHER" } });
+  expect(within(form).getByRole("button", { name: "Submit report" })).toBeDisabled();
+  fireEvent.change(within(form).getByLabelText("Details"), { target: { value: "  The wording is unclear  " } });
+  fireEvent.click(within(form).getByRole("button", { name: "Submit report" }));
+  await waitFor(() => expect(mock.reportQuestion).toHaveBeenCalledWith("q1", { reason: "OTHER", details: "The wording is unclear" }));
+  expect(await within(selected).findByText("Report submitted for faculty review.")).toBeInTheDocument();
+  expect(within(selected).queryByRole("form", { name: "Report question issue" })).not.toBeInTheDocument();
+});
+
+it("keeps an approved owner's report form for retry after a duplicate conflict", async () => {
+  current.status = "APPROVED";
+  mock.reportQuestion.mockRejectedValueOnce(new Error("You already have an open report for this question"));
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Report issue" }));
+  const form = screen.getByRole("form", { name: "Report question issue" });
+  fireEvent.change(within(form).getByLabelText("Details"), { target: { value: "Needs review" } });
+  fireEvent.click(within(form).getByRole("button", { name: "Submit report" }));
+  expect(await screen.findByText("You already have an open report for this question")).toBeInTheDocument();
+  expect(within(form).getByLabelText("Details")).toHaveValue("Needs review");
+  fireEvent.click(within(form).getByRole("button", { name: "Submit report" }));
+  await waitFor(() => expect(mock.reportQuestion).toHaveBeenCalledTimes(2));
+  expect(await screen.findByText("Report submitted for faculty review.")).toBeInTheDocument();
 });
 
 async function open() {

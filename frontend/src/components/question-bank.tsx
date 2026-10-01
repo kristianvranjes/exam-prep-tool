@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { api, Concept, OwnerQuestion, Question, QuestionAction, QuestionCreate, QuestionEdit, QuestionStatus, QuestionType, QuestionVersion } from "../lib/api";
+import { api, Concept, OwnerQuestion, Question, QuestionAction, QuestionCreate, QuestionEdit, QuestionStatus, QuestionType, QuestionVersion, type ReportReason } from "../lib/api";
 
 import { QuizImport } from "./quiz-import";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
@@ -204,8 +204,62 @@ function BankContents({ courseId }: { courseId: string }) {
       <div className="flex flex-wrap items-center gap-2"><Badge>{label(selected.type)}</Badge><Badge>{label(selected.status)}</Badge>{selected.difficulty && <span className="text-sm text-muted">Difficulty {selected.difficulty}/5</span>}</div>
       <ul className="list-inside list-disc space-y-1 text-sm">{selected.options.map((option) => <li key={option.position} className="break-words [overflow-wrap:anywhere]">{option.text}{selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (correct)" : ""}</li>)}</ul>
       {selected.visibility === "OWNER" && <OwnerReview key={selected.id + ":" + selected.updated_at} question={selected} creator={selected.created_by_user_id === userId} moderator={moderator} concepts={concepts} busy={busy} mutate={mutate} />}
+      {joined && selected.status === "APPROVED" && <ReportIssue key={selected.id} questionId={selected.id} />}
     </article>}
   </div>;
+}
+
+const reportReasons: { value: ReportReason; label: string }[] = [
+  { value: "INCORRECT_ANSWER", label: "Incorrect answer" },
+  { value: "MULTIPLE_CORRECT", label: "Multiple correct answers" },
+  { value: "UNCLEAR", label: "Unclear" },
+  { value: "TYPO", label: "Typo" },
+  { value: "OUTDATED", label: "Outdated" },
+  { value: "DUPLICATE", label: "Duplicate" },
+  { value: "OTHER", label: "Other" },
+];
+
+function ReportIssue({ questionId }: { questionId: string }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState<ReportReason>("UNCLEAR");
+  const [details, setDetails] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const inFlight = useRef(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (inFlight.current) return;
+    if (reason === "OTHER" && !details.trim()) { setError("Details are required for Other."); return; }
+    inFlight.current = true; setBusy(true); setError(""); setNotice("");
+    try {
+      await api.reportQuestion(questionId, { reason, details: details.trim() || null });
+      setOpen(false); setReason("UNCLEAR"); setDetails("");
+      setNotice("Report submitted for faculty review.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not submit report. Try again."); }
+    finally { inFlight.current = false; setBusy(false); }
+  }
+
+  return <section className="space-y-3 border-t border-line pt-4" aria-label="Report issue">
+    {notice && <p role="status">{notice}</p>}
+    {error && <Alert>{error}</Alert>}
+    {!open && <Button type="button" variant="secondary" onClick={() => { setOpen(true); setError(""); }}>Report issue</Button>}
+    {open && <form aria-label="Report question issue" onSubmit={event => void submit(event)} className="space-y-3">
+      <label className="block text-sm font-medium">Reason
+        <Select value={reason} onChange={event => setReason(event.target.value as ReportReason)} disabled={busy} className="mt-2">
+          {reportReasons.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </Select>
+      </label>
+      <label className="block text-sm font-medium">Details
+        <textarea className={textareaClass + " mt-2"} value={details} maxLength={1000} required={reason === "OTHER"} disabled={busy} onChange={event => setDetails(event.target.value)} />
+      </label>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={busy || (reason === "OTHER" && !details.trim())}>{busy ? "Submitting…" : "Submit report"}</Button>
+        <Button type="button" variant="secondary" disabled={busy} onClick={() => { setOpen(false); setError(""); }}>Cancel</Button>
+      </div>
+    </form>}
+  </section>;
 }
 
 function OwnerReview({ question: q, creator, moderator, concepts, busy, mutate }: { creator: boolean; moderator: boolean; question: OwnerQuestion; concepts: Concept[]; busy: boolean; mutate: (operation: () => Promise<OwnerQuestion>) => Promise<void> }) {
