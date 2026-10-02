@@ -4,7 +4,10 @@ The Chromium suite proves one real, two-session journey: a seeded faculty modera
 logs in and creates a course; a separate student joins it, uploads a tiny PDF,
 authors and submits an MCQ; the moderator approves it; the student reports the
 approved question as UNCLEAR with fixed details and the moderator dismisses it in
-Reports; the student then practices, receives deterministic grading and progress,
+Reports; the student proposes difficulty 3 with a fixed note; the moderator compares
+base version 3 and the proposed value in Suggestions and applies it; the student
+reloads the approved question and sees the new difficulty. The answer key is unchanged.
+The student then practices, receives deterministic grading and progress,
 and opens adaptive review without starting another attempt. The spec uses the
 frontend and FastAPI normally, with no
 API mocks or direct data mutation after setup. AI, embeddings, model downloads and

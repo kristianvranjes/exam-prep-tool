@@ -1,10 +1,11 @@
 # ExamPrep
 
-ExamPrep is a local-first university exam preparation platform. Through Phase 11D,
+ExamPrep is a local-first university exam preparation platform. Through Phase 12C,
 students can [discover and join faculty courses](docs/FRONTEND.md#my-courses-and-browse-courses),
 upload and browse PDF materials, write and submit private Question Bank drafts,
 and practice in Study or Exam mode with deterministic grading, learning progress
-and adaptive review. Faculty moderators review contributions across courses; course
+and adaptive review. Students report approved questions and suggest reviewed corrections.
+Faculty moderators review contributions, reports and edit suggestions across courses; course
 owners can update or delete their courses. See [frontend journeys](docs/FRONTEND.md),
 [community moderation](docs/COMMUNITY.md) and [practice rules](docs/PRACTICE.md).
 
@@ -234,7 +235,12 @@ without the local embedding model.
 Choose a draft to inspect its answer, concepts, material/chunk references and history.
 Creators edit and **Submit for review**; a different faculty moderator approves
 or rejects with a reason. Editing rejected content returns it to DRAFT. Approved
-content can only be archived; archived content cannot be reopened. AI never approves.
+content accepts moderated edit suggestions or archival; archived content cannot be
+reopened. Suggest edit sends sparse replacements without revealing hidden current
+answers/explanations. Another faculty moderator compares base/proposed content and
+rejects or applies atomically, preserving APPROVED and adding one EDITED version.
+Reports remain unchanged by apply; archive closes open reports and suggestions.
+Current Alembic head is **0013**. AI never approves.
 Members see their own private questions and answer-free approved questions from others. Quiz-taking
 and deterministic grading are available separately through Phase 7 practice quizzes.
 

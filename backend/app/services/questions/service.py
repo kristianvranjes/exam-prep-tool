@@ -19,6 +19,7 @@ from app.models.question import (
     QuestionOption,
     QuestionVersion,
 )
+from app.models.question_edit_suggestion import QuestionEditSuggestion
 from app.models.question_report import QuestionReport
 from app.schemas.question import (
     MCQ,
@@ -365,6 +366,7 @@ def transition(
         question.rejection_reason = reason.strip() if action == "reject" and reason else None
     try:
         if action == "archive":
+            archive_time = datetime.now(UTC)
             db.execute(
                 update(QuestionReport)
                 .where(QuestionReport.question_id == question.id, QuestionReport.status == "OPEN")
@@ -372,7 +374,20 @@ def transition(
                     status="RESOLVED",
                     resolution="QUESTION_ARCHIVED",
                     resolved_by_user_id=user.id,
-                    resolved_at=datetime.now(UTC),
+                    resolved_at=archive_time,
+                )
+            )
+            db.execute(
+                update(QuestionEditSuggestion)
+                .where(
+                    QuestionEditSuggestion.question_id == question.id,
+                    QuestionEditSuggestion.status == "OPEN",
+                )
+                .values(
+                    status="RESOLVED",
+                    resolution="QUESTION_ARCHIVED",
+                    resolved_by_user_id=user.id,
+                    resolved_at=archive_time,
                 )
             )
         add_version(db, question, user, version_reason)

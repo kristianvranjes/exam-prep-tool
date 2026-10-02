@@ -31,8 +31,34 @@ Manual create / JSON import / AI generation → DRAFT → submit → PENDING_REV
 ```
 
 These are the only transitions. The creator can edit their own DRAFT/REJECTED; a rejected edit
-clears reviewer, timestamp and reason. APPROVED content is immutable except
-archival. ARCHIVED is terminal. Submit/approve revalidate answer and provenance.
+clears reviewer, timestamp and reason. APPROVED content changes only through a
+moderated edit suggestion or archival. ARCHIVED is terminal. Submit/approve
+revalidate answer and provenance.
+
+## Moderated corrections (Phase 12C)
+
+Joined users propose sparse content replacements for APPROVED questions; the live
+question stays unchanged until another faculty moderator applies them. Only stem,
+explanation, difficulty, existing MCQ option texts/correct position, TRUE_FALSE answer
+and SHORT_ANSWER reference can change. Type, option count/order and provenance are
+fixed. Server-side merging uses the locked question; students receive only a safe
+receipt. Valid proposals equal to a hidden answer receive the same result as other
+valid proposals. Only moderators receive full base/current/proposed content.
+
+Approval locks question then suggestion, checks OPEN/APPROVED and the exact latest
+base version, revalidates content/provenance, and commits content/options, moderator
+review metadata, one EDITED snapshot, APPLIED with its new version number and all
+sibling OPEN resolutions SUPERSEDED together. Approved-stem conflict is safe 409;
+any failure rolls everything back. Question identity, source/AI job, concepts/chunks
+and reports are preserved. Reject requires a bounded reason and changes only its
+suggestion. Moderators cannot review their own proposal.
+
+The existing archive transaction now resolves OPEN reports and suggestions with
+the same actor/timestamp and one ARCHIVED version. Concurrent create/apply/reject/
+archive requests serialize under question-first locks and database constraints;
+archival leaves no OPEN suggestions. Historical quiz snapshots and attempts are
+never rewritten. Migration 0013 adds only suggestion infrastructure; downgrade to
+0012 preserves applied question content, EDITED history and reports.
 
 ## Permissions and UI
 

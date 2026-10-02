@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { api, Concept, OwnerQuestion, Question, QuestionAction, QuestionCreate, QuestionEdit, QuestionStatus, QuestionType, QuestionVersion, type ReportReason } from "../lib/api";
 
 import { QuizImport } from "./quiz-import";
+import { SuggestQuestionEdit } from "./suggest-question-edit";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
 
 const types: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
@@ -205,6 +206,7 @@ function BankContents({ courseId }: { courseId: string }) {
       <ul className="list-inside list-disc space-y-1 text-sm">{selected.options.map((option) => <li key={option.position} className="break-words [overflow-wrap:anywhere]">{option.text}{selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (correct)" : ""}</li>)}</ul>
       {selected.visibility === "OWNER" && <OwnerReview key={selected.id + ":" + selected.updated_at} question={selected} creator={selected.created_by_user_id === userId} moderator={moderator} concepts={concepts} busy={busy} mutate={mutate} />}
       {joined && selected.status === "APPROVED" && <ReportIssue key={selected.id} questionId={selected.id} />}
+      {joined && selected.status === "APPROVED" && <SuggestQuestionEdit key={selected.id} question={{ id: selected.id, type: selected.type, stem: selected.stem, difficulty: selected.difficulty, options: selected.options.map(({ position, text }) => ({ position, text })) }} />}
     </article>}
   </div>;
 }

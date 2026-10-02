@@ -62,12 +62,22 @@ backend authorization and course-creation request are unchanged.
 
 ## Faculty moderation
 
-The moderation area has Question review and Reports modes. Reports shows the OPEN
-quality queue across a moderated faculty, with the existing faculty/course filters,
+The moderation area has Question review, Reports and Suggestions modes. Reports
+shows the OPEN quality queue across a moderated faculty, with the existing faculty/course filters,
 pages and retry controls. Cards show the full moderator-only answer and explanation,
 reason, details and report time. Dismiss resolves one report; Archive question uses
 the existing archive action and clears all OPEN cards for that question. Failures
 leave the queue usable.
+
+Suggestions reuses faculty/course selection, 20-row pagination, loading/error/retry
+and manual refresh. Cards compare each base-version field with its proposed value,
+mark changed fields and show the note/current question status. Full explanation and
+answer content is moderator-only. Approve & apply removes the applied card and
+visible sibling OPEN suggestions for that question; reject requires a trimmed,
+bounded reason and removes only its card. A moderator's own suggestion says another
+moderator must review it and exposes no decision controls. Pending actions disable
+the question's cards; failures preserve entered reasons for retry. Late responses
+cannot replace another faculty/course/page or reinsert resolved/superseded cards.
 
 Only users recognized as faculty moderators see the Moderation navigation link and
 cross-course queue. A moderator's first faculty loads automatically; moderators of
@@ -127,6 +137,15 @@ control remains an optional, experimental OWNER feature.
 The list and details refresh on user actions rather than polling or realtime
 updates. The backend remains authoritative for visibility, editing, moderation,
 validation and lifecycle transitions.
+
+Joined users see Suggest edit only on a selected APPROVED question, including their
+own full question. Its sparse proposal form uses public stem/option text placeholders
+and blank explanation/answer/reference controls; even for an owner it receives only
+public fields. Existing option positions are fixed; type-specific controls collect
+proposed replacements without disclosing the current key. Submission leaves the
+selected question unchanged and announces “Suggestion submitted for faculty review.”
+Success clears the form; failure (including duplicate 409) keeps input for retry.
+Pending submits deduplicate; selecting another question/course ignores late results.
 
 ## Study and Exam quizzes
 

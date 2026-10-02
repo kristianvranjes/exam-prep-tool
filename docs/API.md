@@ -189,6 +189,48 @@ See [community permissions](COMMUNITY.md) for the creator/moderator action matri
 | POST `/question-reports/{report_id}/dismiss` | Correct faculty moderator resolves an OPEN report as DISMISSED with resolver and UTC time. Already resolved is 409; question and versions are unchanged. |
 | GET `/questions/{question_id}/versions` | Creator or faculty moderator, version ascending; `limit` default 50/max 100, `offset` max 10000. |
 
+### Moderated edit suggestions (Phase 12C)
+
+- `POST /questions/{question_id}/suggestions`: joined MEMBER/OWNER, including the
+  creator, proposes changes to an APPROVED question. Strict body `{changes, note?}`;
+  `changes` must contain at least one allowed field. Returns 201 with only `id`,
+  `question_id`, `base_version_number`, `status`, `created_at`. No base snapshot,
+  merged candidate, answer, explanation or suggester identity is returned.
+- `GET /faculties/{faculty_id}/question-suggestions`: faculty moderator only,
+  without course enrollment. Optional `course_id`, `status=OPEN|RESOLVED` (default
+  OPEN), `limit` 1–50 (default 20), `offset` 0–10000. OPEN ordering is oldest
+  `created_at` then ID; RESOLVED ordering is newest `resolved_at` then ID. Unknown
+  faculty or foreign course filter returns 404. Moderator data includes suggester
+  UUID, exact base snapshot, full proposed candidate, current question and decision
+  metadata, with no email/password.
+- `POST /question-suggestions/{suggestion_id}/approve`: another faculty moderator
+  atomically applies an OPEN proposal to its still-APPROVED, unchanged base version.
+  Returns the full moderator representation, including `applied_version_number`.
+  Question remains APPROVED; one EDITED version is appended; sibling OPEN suggestions
+  become SUPERSEDED; reports are unchanged.
+- `POST /question-suggestions/{suggestion_id}/reject`: another faculty moderator,
+  `{reason}` (trimmed, nonblank, at most 1000 characters), resolves only this OPEN
+  suggestion as REJECTED and returns its moderator representation.
+
+Allowed sparse fields: `stem` (nonblank, max 400), `explanation` (max 2000, nullable),
+`difficulty` (strict integer 1–5, nullable), MCQ `options: [{position, text}]` for
+existing positions only and `correct_option_position`, TRUE_FALSE `correct_answer`
+(strict boolean), SHORT_ANSWER `reference_answer` (nonblank, max 2000). MCQ positions
+are zero-based, unique and bounded by the existing option count. Omitted fields are
+merged internally with current content and validated using the existing full content
+schema. Type, option count/order, concepts, provenance, source, creator, status and
+timestamps cannot be proposed. Optional note is trimmed, nonblank and at most 1000.
+
+Anonymous requests return 401; nonmembers/hidden questions 404; nonmoderator and
+self-review decisions 403. Visible non-approved questions, duplicate OPEN suggestions,
+resolved decisions, stale bases and approved-stem conflicts return safe 409.
+Invalid merged content returns generic 422; schema errors describe only supplied
+fields, without hidden validation details. Equal and
+different valid proposed answers receive the same safe receipt contract; no equality
+check exposes current correctness. Unexpected persistence failures return safe 503
+with complete rollback. Existing archive atomically closes OPEN reports and suggestions
+as QUESTION_ARCHIVED with the same actor/time and one ARCHIVED version.
+
 Supported types: MULTIPLE_CHOICE (2–6 options, one correct), TRUE_FALSE (strict
 boolean `correct_answer` in write payloads), SHORT_ANSWER (nonblank reference).
 Stems/option texts max 400 characters; explanation/reference max 2000; optional

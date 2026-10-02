@@ -158,7 +158,10 @@ python -m alembic upgrade head
 python -m alembic current
 ```
 
-Expected head is 0011 (community moderation). Provision faculty moderators using
+Expected head is 0013 (moderated question edit suggestions). Revision 0013 follows
+0012 and adds only suggestion infrastructure. Its downgrade removes suggestions,
+preserving question content, versions (including applied EDITED history) and reports.
+Verify rollback only on a disposable copy. Provision faculty moderators using
 the trusted [operator procedure](COMMUNITY.md#operator-only-provisioning). Practice grading needs no AI
 provider or embeddings; `AI_PROVIDER=disabled` remains supported. Verify both an
 exact-reference short answer and a different answer show Ungraded after submission
@@ -222,6 +225,11 @@ cookies. It does not replace these hosted cookie, CORS and persistence checks.
 4. Inspect question bank. Only if AI/embedding capability and usage are explicitly
    authorized, extract/approve concepts, embed the material, then generate/review
    one draft. AI must never auto-approve. This is not part of automated CI.
+   For a non-AI quality smoke check, submit/approve a manual question using two
+   distinct accounts, report/dismiss it, then suggest difficulty with a note.
+   Confirm the live question stays unchanged before a different moderator applies
+   it through Suggestions; reload and verify APPROVED, the new difficulty and one
+   EDITED version. Verify student forms/receipts reveal no current answer/explanation.
 5. Check an untrusted Origin gets no CORS allow-origin response and a POST with
    that Origin returns 403. In-browser `/docs` remains readable, but its mutation
    UI originates at the backend and is intentionally blocked; use the frontend

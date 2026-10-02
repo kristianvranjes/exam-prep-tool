@@ -38,6 +38,14 @@ export const api = {
   },
   reportQuestion: (id: string, body: { reason: ReportReason; details: string | null }) => request<ReportReceipt>(`/questions/${id}/reports`, { method: "POST", body: JSON.stringify(body) }),
   dismissQuestionReport: (id: string) => request<ModeratorReport>(`/question-reports/${id}/dismiss`, { method: "POST" }),
+  suggestQuestionEdit: (id: string, body: SuggestionCreate) => request<SuggestionReceipt>(`/questions/${id}/suggestions`, { method: "POST", body: JSON.stringify(body) }),
+  questionSuggestions: (facultyId: string, options: { course_id?: string; status?: "OPEN" | "RESOLVED"; limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(options).forEach(([key, value]) => { if (value !== undefined) params.set(key, String(value)); });
+    return request<ModeratorSuggestion[]>(`/faculties/${facultyId}/question-suggestions?${params}`);
+  },
+  approveQuestionSuggestion: (id: string) => request<ModeratorSuggestion>(`/question-suggestions/${id}/approve`, { method: "POST" }),
+  rejectQuestionSuggestion: (id: string, reason: string) => request<ModeratorSuggestion>(`/question-suggestions/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
   joinCourse: (courseId: string) => request<CourseMembership>(`/courses/${courseId}/join`, { method: "POST" }),
   reviewProgress: (courseId: string, offset = 0) => request<ReviewProgress[]>(`/courses/${courseId}/review-progress?limit=20&offset=${offset}`),
   reviewProgressSummary: (courseId: string) => request<ReviewProgressSummary>(`/courses/${courseId}/review-progress/summary`),
@@ -110,11 +118,26 @@ export type OwnerQuestion = QuestionBase & {
 export type Question = PublicQuestion | OwnerQuestion;
 export type QuestionGeneration = { concept_ids: string[]; question_types: QuestionType[]; count: number; retrieval_top_k: number };
 type QuestionCreateBase = { stem: string; explanation: string | null; difficulty: number | null; concept_ids: string[] };
-export type QuestionCreate = QuestionCreateBase & (
+export type QuestionContent = Omit<QuestionCreateBase, "concept_ids"> & (
   | { type: "MULTIPLE_CHOICE"; options: { text: string; is_correct: boolean }[] }
   | { type: "TRUE_FALSE"; correct_answer: boolean }
   | { type: "SHORT_ANSWER"; reference_answer: string }
 );
+export type QuestionCreate = QuestionContent & { concept_ids: string[] };
+export type SuggestionChanges = {
+  stem?: string; explanation?: string | null; difficulty?: number | null;
+  options?: { position: number; text: string }[]; correct_option_position?: number;
+  correct_answer?: boolean; reference_answer?: string;
+};
+export type SuggestionCreate = { changes: SuggestionChanges; note: string | null };
+export type SuggestionReceipt = { id: string; question_id: string; base_version_number: number; status: "OPEN" | "RESOLVED"; created_at: string };
+export type ModeratorSuggestion = SuggestionReceipt & {
+  suggested_by_user_id: string; note: string | null;
+  resolution: "APPLIED" | "REJECTED" | "SUPERSEDED" | "QUESTION_ARCHIVED" | null;
+  resolution_reason: string | null; resolved_by_user_id: string | null; resolved_at: string | null;
+  applied_version_number: number | null; base_snapshot: OwnerQuestion;
+  proposed_content: QuestionContent; question: OwnerQuestion;
+};
 export type QuestionEdit = { stem: string; explanation: string | null; difficulty: number | null; concept_ids: string[]; options?: { text: string; is_correct: boolean }[]; correct_answer?: boolean; reference_answer?: string };
 export type QuestionVersion = { version_number: number; reason: string; snapshot: OwnerQuestion; changed_by_user_id: string; created_at: string };
 

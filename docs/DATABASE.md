@@ -1,5 +1,25 @@
 # Database infrastructure
 
+Current Alembic head is **0013** (`down_revision = 0012`). It creates
+`question_edit_suggestions`: UUID identity/question/suggester/resolver, positive base
+version, JSON-object proposed content, optional trimmed note, OPEN/RESOLVED status,
+resolution/reason/time, optional applied version and creation time. Notes/reasons
+are nonblank when supplied and at most 1000 characters. OPEN has no decision metadata;
+RESOLVED requires resolution/time. APPLIED requires a positive version and no reason;
+REJECTED requires a reason and no version; SUPERSEDED/QUESTION_ARCHIVED have neither.
+Resolver may become null after deletion. Question FK CASCADE, suggester RESTRICT,
+resolver SET NULL and matching ORM checks/indexes are verified against PostgreSQL.
+
+The partial unique `(question_id, suggested_by_user_id) WHERE status = 'OPEN'`
+index prevents concurrent duplicates. Question/suggester indexes and a status/time/ID
+index support the bounded queue. Question-first locks serialize create/apply/reject/
+archive; applying a suggestion keeps APPROVED and appends one existing EDITED reason.
+No question/version schema or reason enum changes. Downgrade 0013 to 0012 drops only
+the suggestion table/indexes, preserving already-applied content/history and reports.
+Focused tests cover upgrade/downgrade/re-upgrade, checks/FKs/indexes and data preservation.
+The existing latest CI roundtrip now targets 0012 -> head with suggestion/community
+regressions; the existing base -> head gate remains.
+
 Revision **0012** adds `question_reports` with a question cascade FK, reporter
 RESTRICT FK and nullable resolver SET NULL FK. Checks constrain the reason, trimmed
 details (at most 1000 characters), OTHER details, and OPEN/RESOLVED metadata.
@@ -168,7 +188,7 @@ faculty if desired; there is no implicit database/API default for faculty_id.
 faculty table, **without deleting courses or any child data**. Faculty assignments,
 faculty metadata and course active flags are lost on downgrade; upgrading again
 places all retained courses under the deterministic legacy faculty as active.
-Use migration roundtrips only on disposable PostgreSQL. The latest CI roundtrip is
-0009 -> 0010 -> 0009 -> 0010 with preservation checks; base -> head remains in CI.
-Membership/material/question/quiz/answer/progress records and course IDs survive
-this latest roundtrip unchanged.
+Use migration roundtrips only on disposable PostgreSQL. The faculty migration tests
+cover 0009 -> 0010 -> 0009 -> 0010 with preservation checks; base -> head remains
+in CI. Membership/material/question/quiz/answer/progress records and course IDs
+survive the faculty migration roundtrip unchanged.
