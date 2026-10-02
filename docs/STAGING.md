@@ -158,9 +158,12 @@ python -m alembic upgrade head
 python -m alembic current
 ```
 
-Expected head is 0013 (moderated question edit suggestions). Revision 0013 follows
-0012 and adds only suggestion infrastructure. Its downgrade removes suggestions,
-preserving question content, versions (including applied EDITED history) and reports.
+Expected head is 0014 (durable material-source cleanup), following 0013. It adds
+only `material_storage_cleanups`, with no domain foreign keys. Its downgrade drops
+only cleanup infrastructure and loses pending intents; it never recreates deleted
+rows/files or changes question/report/suggestion/practice history. Drain/inspect
+pending intents before intentional downgrade. Revision 0013 still preserves applied
+EDITED history when its suggestion infrastructure is intentionally downgraded.
 Verify rollback only on a disposable copy. Provision faculty moderators using
 the trusted [operator procedure](COMMUNITY.md#operator-only-provisioning). Practice grading needs no AI
 provider or embeddings; `AI_PROVIDER=disabled` remains supported. Verify both an
@@ -246,6 +249,37 @@ curl -i -X POST https://api.example.com/auth/logout -H 'Origin: https://untruste
 ```
 
 ## Recovery and rollback
+
+Course and FAILED-material deletion is DB-first: domain deletion and cleanup
+intents commit together. Rollback leaves all PDFs intact; after commit, HTTP 204
+means logical deletion succeeded even if physical removal is pending. A persistent
+material volume remains required for both uploads and cleanup. From a trusted
+backend maintenance shell with existing Settings and the mounted volume available:
+
+```sh
+python -m app.storage_cleanup --batch-size 100
+```
+
+The command processes committed intents oldest-first (`created_at, id`), defaults
+to 100 rows (allowed 1-1000), and prints safe cleaned/failed/pending counts. Nonzero
+exit means failure or pending work; investigate volume/DB availability and rerun
+until empty. Missing sources count as success, making crash recovery and repeated
+or concurrent execution safe. It does not scan directories or touch unqueued files.
+There is no scheduled worker or cleanup API.
+
+Before intentional 0014 -> 0013 downgrade, or coordinated backup/restore, inspect
+pending counts in a trusted database shell:
+
+```sql
+SELECT count(*) AS pending, coalesce(sum(attempt_count), 0) AS attempts
+FROM material_storage_cleanups;
+```
+
+Drain the queue before dropping its infrastructure. Back up/restore the DB and
+material volume together; if a backup includes pending intents, retain them and
+run the retry command against the matching restored volume. A crash after physical
+removal but before intent removal is recovered by missing-safe retry. Downgrade
+loses authorization to retry pending deleted sources and does not restore them.
 
 Keep the previous image/commit and a matching DB/volume backup. Prefer rolling back
 application code only when the schema remains compatible. Never run `alembic

@@ -18,6 +18,7 @@ from app.models import (  # noqa: E402,F401
     material,
     material_chunk,
     material_section,
+    material_storage_cleanup,
     question,
     question_edit_suggestion,
     question_report,

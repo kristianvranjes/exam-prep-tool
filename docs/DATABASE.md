@@ -1,6 +1,27 @@
 # Database infrastructure
 
-Current Alembic head is **0013** (`down_revision = 0012`). It creates
+Current Alembic head is **0014** (`down_revision = 0013`). It adds only
+`material_storage_cleanups`: UUID primary key, unique non-null `storage_key`
+VARCHAR(100), non-null INTEGER `attempt_count` default 0 with `attempt_count >= 0`,
+nullable TIMESTAMPTZ `last_attempt_at`, and non-null TIMESTAMPTZ `created_at` default
+`now()`. The `(created_at, id)` queue index supports deterministic oldest-first
+bounded processing. There is no Material/Course FK: intents survive committed
+domain deletion. Row presence means pending cleanup; no raw error/path/secret is
+persisted. Matching ORM constraints/defaults/indexes are verified against PostgreSQL.
+
+Course/FAILED-material deletion commits intents atomically with domain deletion.
+Fresh cleanup sessions read only committed intents and lock each during physical
+deletion and outcome persistence. Storage failure retains the intent with a bounded
+attempt counter/timestamp; success removes it. See [MATERIALS.md](MATERIALS.md) for
+the idempotent operator command. Downgrade **0014 -> 0013** drops only cleanup
+infrastructure and loses pending intents; it never restores deleted domain rows or
+PDFs, touches storage, or alters reports/suggestions/questions/practice history.
+Drain/inspect pending intents before intentionally downgrading. Migration tests
+cover 0013 -> 0014 -> 0013 -> 0014 and existing data preservation. The existing
+latest CI roundtrip targets 0013 -> head with material/cleanup regressions; the
+base -> head gate remains.
+
+Revision **0013** (`down_revision = 0012`) creates
 `question_edit_suggestions`: UUID identity/question/suggester/resolver, positive base
 version, JSON-object proposed content, optional trimmed note, OPEN/RESOLVED status,
 resolution/reason/time, optional applied version and creation time. Notes/reasons
@@ -17,8 +38,6 @@ archive; applying a suggestion keeps APPROVED and appends one existing EDITED re
 No question/version schema or reason enum changes. Downgrade 0013 to 0012 drops only
 the suggestion table/indexes, preserving already-applied content/history and reports.
 Focused tests cover upgrade/downgrade/re-upgrade, checks/FKs/indexes and data preservation.
-The existing latest CI roundtrip now targets 0012 -> head with suggestion/community
-regressions; the existing base -> head gate remains.
 
 Revision **0012** adds `question_reports` with a question cascade FK, reporter
 RESTRICT FK and nullable resolver SET NULL FK. Checks constrain the reason, trimmed

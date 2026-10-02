@@ -15,7 +15,9 @@ from app.models import Course, CourseMembership
 from app.models.material import Material
 from app.models.material_chunk import MaterialChunk
 from app.models.material_section import MaterialSection
+from app.models.material_storage_cleanup import MaterialStorageCleanup
 from app.services.materials import extraction, service
+from app.services.materials.cleanup import cleanup_sources
 from app.services.materials.storage import LocalMaterialStorage
 
 pytestmark = pytest.mark.skipif(os.getenv("RUN_DB_TESTS") != "1", reason="Requires PostgreSQL")
@@ -25,7 +27,9 @@ pytestmark = pytest.mark.skipif(os.getenv("RUN_DB_TESTS") != "1", reason="Requir
 def clients(tmp_path, monkeypatch):
     monkeypatch.setenv("MATERIAL_STORAGE_DIR", str(tmp_path))
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE course_memberships, courses, users CASCADE"))
+        connection.execute(
+            text("TRUNCATE material_storage_cleanups, course_memberships, courses, users CASCADE")
+        )
     with TestClient(app) as owner, TestClient(app) as member, TestClient(app) as stranger:
         for client, name in ((owner, "owner"), (member, "member"), (stranger, "stranger")):
             response = client.post(
@@ -93,9 +97,10 @@ def test_course_delete_removes_all_sources_and_leaves_other_course(clients, tmp_
         assert all(db.get(Material, material_id) is None for material_id, _ in sources)
         assert db.get(Course, UUID(other)) is not None
         assert db.get(Material, unrelated[0][0]) is not None
+        assert db.scalar(select(func.count()).select_from(MaterialStorageCleanup)) == 0
 
 
-def test_course_delete_storage_failure_rolls_back_and_retries(clients, monkeypatch, tmp_path):
+def test_course_delete_storage_failure_commits_and_retries(clients, monkeypatch, tmp_path):
     owner, _, _, course_id = clients
     assert upload(owner, course_id).status_code == 201
     assert upload(owner, course_id).status_code == 201
@@ -112,38 +117,48 @@ def test_course_delete_storage_failure_rolls_back_and_retries(clients, monkeypat
 
     monkeypatch.setattr(LocalMaterialStorage, "delete", fail_second)
     response = owner.delete(f"/courses/{course_id}")
-    assert response.status_code == 503
+    assert response.status_code == 204 and response.content == b""
     assert "private" not in response.text and "secret" not in response.text
     assert all(path.name not in response.text for _, path in sources)
-    assert not sources[0][1].exists() and sources[1][1].is_file()
+    assert sum(path.is_file() for _, path in sources) == 1
     with SessionLocal() as db:
-        assert db.get(Course, UUID(course_id)) is not None
-        assert all(db.get(Material, material_id) is not None for material_id, _ in sources)
+        assert db.get(Course, UUID(course_id)) is None
+        assert all(db.get(Material, material_id) is None for material_id, _ in sources)
+        pending = db.scalars(select(MaterialStorageCleanup)).all()
+        assert len(pending) == 1
+        assert pending[0].attempt_count == 1 and pending[0].last_attempt_at is not None
+        assert LocalMaterialStorage(tmp_path).path(pending[0].storage_key).is_file()
     monkeypatch.setattr(LocalMaterialStorage, "delete", original_delete)
-    assert owner.delete(f"/courses/{course_id}").status_code == 204
+    assert cleanup_sources(SessionLocal, LocalMaterialStorage(tmp_path)).cleaned == 1
     assert all(not path.exists() for _, path in sources)
+    with SessionLocal() as db:
+        assert db.scalar(select(func.count()).select_from(MaterialStorageCleanup)) == 0
 
 
 def test_course_delete_commit_failure_rolls_back_and_retries(clients, monkeypatch, tmp_path):
     owner, _, _, course_id = clients
     assert upload(owner, course_id).status_code == 201
+    assert upload(owner, course_id).status_code == 201
     sources = source_paths(course_id, tmp_path)
     original_commit = Session.commit
 
     def fail_commit(self):
+        self.flush()
         raise RuntimeError("private database failure")
 
     monkeypatch.setattr(Session, "commit", fail_commit)
     response = owner.delete(f"/courses/{course_id}")
     monkeypatch.setattr(Session, "commit", original_commit)
     assert response.status_code == 503 and "private" not in response.text
-    assert all(not path.exists() for _, path in sources)
+    assert len(sources) == 2 and all(path.is_file() for _, path in sources)
     with SessionLocal() as db:
         assert db.get(Course, UUID(course_id)) is not None
         assert all(db.get(Material, material_id) is not None for material_id, _ in sources)
+        assert db.scalar(select(func.count()).select_from(MaterialStorageCleanup)) == 0
     assert owner.delete(f"/courses/{course_id}").status_code == 204
     with SessionLocal() as db:
         assert db.get(Course, UUID(course_id)) is None
+    assert all(not path.exists() for _, path in sources)
 
 
 def test_member_pdf_and_non_member_access(clients, tmp_path):
@@ -283,6 +298,7 @@ def test_failed_material_delete_by_uploader(clients, monkeypatch, tmp_path):
 
     with SessionLocal() as db:
         assert db.get(Material, material_id) is None
+        assert db.scalar(select(func.count()).select_from(MaterialStorageCleanup)) == 0
     assert not list(tmp_path.iterdir())
 
 
@@ -321,7 +337,7 @@ def test_failed_material_delete_rejects_ready_material(clients, tmp_path):
         assert db.get(Material, UUID(material["id"])) is not None
 
 
-def test_failed_material_delete_storage_failure_keeps_row(clients, monkeypatch, tmp_path):
+def test_failed_material_delete_storage_failure_commits_and_retries(clients, monkeypatch, tmp_path):
     _, member, _, course_id = clients
 
     def fail(path):
@@ -334,17 +350,26 @@ def test_failed_material_delete_storage_failure_keeps_row(clients, monkeypatch, 
     assert response.status_code == 201
 
     def fail_delete(self, key):
-        raise OSError("disk full")
+        raise OSError("disk full /private/path secret")
 
+    original_delete = LocalMaterialStorage.delete
     monkeypatch.setattr(LocalMaterialStorage, "delete", fail_delete)
     delete_response = member.delete(f"/materials/{material_id}")
-    assert delete_response.status_code == 503
+    assert delete_response.status_code == 204 and delete_response.content == b""
     assert "disk full" not in delete_response.text
     assert "private" not in delete_response.text
 
     with SessionLocal() as db:
-        assert db.get(Material, material_id) is not None
+        assert db.get(Material, material_id) is None
+        pending = db.scalars(select(MaterialStorageCleanup)).all()
+        assert len(pending) == 1
+        assert pending[0].attempt_count == 1 and pending[0].last_attempt_at is not None
     assert len(list(tmp_path.iterdir())) == 1
+    monkeypatch.setattr(LocalMaterialStorage, "delete", original_delete)
+    assert cleanup_sources(SessionLocal, LocalMaterialStorage(tmp_path)).cleaned == 1
+    assert not list(tmp_path.iterdir())
+    with SessionLocal() as db:
+        assert db.scalar(select(func.count()).select_from(MaterialStorageCleanup)) == 0
 
 
 def test_failed_material_delete_anonymous_requires_auth(clients, monkeypatch):
@@ -401,6 +426,7 @@ def test_failed_material_delete_db_failure_rolls_back_and_retry_is_safe(
     original_commit = Session.commit
 
     def fail_commit(self, *args, **kwargs):
+        self.flush()
         raise RuntimeError("db commit blew up")
 
     monkeypatch.setattr(Session, "commit", fail_commit)
@@ -412,7 +438,8 @@ def test_failed_material_delete_db_failure_rolls_back_and_retry_is_safe(
         row = db.get(Material, material_id)
         assert row is not None
         storage = LocalMaterialStorage(tmp_path)
-        storage.delete(row.storage_key)
+        assert storage.path(row.storage_key).is_file()
+        assert db.scalar(select(func.count()).select_from(MaterialStorageCleanup)) == 0
 
     monkeypatch.setattr(Session, "commit", original_commit)
     retry_response = member.delete(f"/materials/{material_id}")

@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
 from app.models import User
@@ -13,6 +13,7 @@ from app.schemas.material import MaterialDetail, MaterialResponse, SectionRespon
 from app.services.courses import get_member_course
 from app.services.materials import extraction
 from app.services.materials.chunking import chunk_sections, detect_sections
+from app.services.materials.cleanup import cleanup_sources, queue_sources
 from app.services.materials.storage import MaterialStorage, validate_filename
 
 
@@ -67,24 +68,31 @@ def list_chunks(db: Session, user: User, material_id: UUID) -> list[MaterialChun
 
 
 def delete_material(db: Session, user: User, material_id: UUID, storage: MaterialStorage) -> None:
-    material = db.scalar(select(Material).where(Material.id == material_id).with_for_update())
-    if material is None:
-        raise HTTPException(404, "Material not found")
-    get_member_course(db, user, material.course_id)
-    if material.uploaded_by_user_id != user.id:
-        raise HTTPException(403, "You can only delete your own failed upload")
-    if material.status != MaterialStatus.FAILED.value:
-        raise HTTPException(409, "Only failed uploads can be deleted")
     try:
-        storage.delete(material.storage_key)
-    except (OSError, ValueError) as exc:
-        raise HTTPException(503, "Could not remove failed upload") from exc
-    try:
+        material = db.scalar(
+            select(Material)
+            .where(Material.id == material_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if material is None:
+            raise HTTPException(404, "Material not found")
+        get_member_course(db, user, material.course_id)
+        if material.uploaded_by_user_id != user.id:
+            raise HTTPException(403, "You can only delete your own failed upload")
+        if material.status != MaterialStatus.FAILED.value:
+            raise HTTPException(409, "Only failed uploads can be deleted")
+        cleanup_ids = queue_sources(db, [material.storage_key])
         db.delete(material)
         db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception:
         db.rollback()
         raise HTTPException(503, "Could not remove failed upload") from None
+
+    cleanup_sources(sessionmaker(bind=db.get_bind()), storage, cleanup_ids=cleanup_ids)
 
 
 def process_material(
