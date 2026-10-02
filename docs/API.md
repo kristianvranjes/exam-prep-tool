@@ -41,13 +41,14 @@ and are never returned.
 - `PATCH /courses/{course_id}` updates `name` (1–150 characters), `code` (nullable,
   at most 50) or `description` (nullable, at most 2000) for an OWNER; joined
   non-owners receive `403`.
-- `DELETE /courses/{course_id}` returns `204` for an OWNER after deleting every
-  original material source PDF through private storage and committing the course
-  deletion. Existing database cascades remove memberships, materials, questions,
+- `DELETE /courses/{course_id}` returns `204` for an OWNER after committing the
+  course deletion together with durable cleanup intents for every source PDF.
+  Existing database cascades remove memberships, materials, questions,
   attempts, progress and other course children. Joined non-owners receive `403`;
-  inaccessible or already deleted courses receive `404`. Storage or DB cleanup
-  failure returns safe `503` and rolls back DB deletion. Some source files may
-  already be absent; retry is safe because source deletion is missing-safe.
+  inaccessible or already deleted courses receive `404`. Pre-commit DB failure
+  returns safe `503`, retaining all domain rows and PDFs and committing no cleanup
+  intents. After commit, best-effort storage cleanup may be deferred: `204` remains
+  success, deleted rows stay deleted, and durable cleanup is retryable by operators.
 
 All course endpoints require the session cookie. Validation errors return `422`.
 
@@ -102,11 +103,13 @@ detail/chunk access by non-members. Missing material IDs return 404.
 Metadata includes id, course_id, uploaded_by_user_id, original_filename, media_type,
 file_size_bytes, status, processing_error and timestamps; private storage keys and
 paths are not returned. Sections contain id, ordinal, title, level and content.
-The delete path is uploader-owned and FAILED-only: it deletes the source from the
-private storage and then deletes the DB row. If storage or DB deletion fails, it
-returns safe 503 without exposing internal details. The DB transaction is rolled back
-on failure so the row remains; the source may already be absent because storage delete
-is missing-safe, and a retry is safe to reattempt.
+The delete path is uploader-owned and FAILED-only: it commits a durable cleanup
+intent together with deleting the locked/revalidated Material row, then attempts
+physical cleanup. Pre-commit DB failure returns safe 503, retaining the row and PDF
+with no committed intent. After commit, 204 remains successful logical deletion
+even if physical cleanup fails or is interrupted. Pending cleanup is idempotently
+retried with `python -m app.storage_cleanup`; no public cleanup endpoint exists.
+Responses never expose cleanup metadata, storage keys, private paths or raw errors.
 400 means empty file/invalid filename length, 415 unsupported extension/MIME/signature,
 413 size exceeded, 422 malformed multipart fields, and 503 unavailable storage or
 initial metadata persistence. Failed extraction has a fixed safe message and no

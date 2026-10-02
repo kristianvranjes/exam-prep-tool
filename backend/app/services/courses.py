@@ -3,13 +3,14 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.models import Course, CourseMembership, MembershipRole, User
 from app.models.faculty import Faculty
 from app.models.material import Material
 from app.schemas.course import CourseCreate, CourseUpdate
 from app.services.faculties import active_faculty
+from app.services.materials.cleanup import cleanup_sources, queue_sources
 from app.services.materials.storage import MaterialStorage
 from app.services.moderation import require_moderator
 
@@ -74,8 +75,8 @@ def update_course(db: Session, user: User, course_id: UUID, data: CourseUpdate) 
 
 
 def delete_course(db: Session, user: User, course_id: UUID, storage: MaterialStorage) -> None:
-    get_owner_course(db, user, course_id)
     try:
+        get_owner_course(db, user, course_id)
         # Serialize deletes and keep new child rows from appearing during cleanup.
         course = db.scalar(
             select(Course)
@@ -83,13 +84,8 @@ def delete_course(db: Session, user: User, course_id: UUID, storage: MaterialSto
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-    except Exception:
-        db.rollback()
-        raise HTTPException(503, "Could not delete course") from None
-    if course is None:
-        db.rollback()
-        raise HTTPException(404, "Course not found")
-    try:
+        if course is None:
+            raise HTTPException(404, "Course not found")
         materials = db.scalars(
             select(Material)
             .where(Material.course_id == course_id)
@@ -97,13 +93,17 @@ def delete_course(db: Session, user: User, course_id: UUID, storage: MaterialSto
             .with_for_update()
         )
         keys = [material.storage_key for material in materials]
-        for key in keys:
-            storage.delete(key)
+        cleanup_ids = queue_sources(db, keys)
         db.delete(course)
         db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception:
         db.rollback()
         raise HTTPException(503, "Could not delete course") from None
+
+    cleanup_sources(sessionmaker(bind=db.get_bind()), storage, cleanup_ids=cleanup_ids)
 
 
 def join_course(db: Session, user: User, course_id: UUID) -> CourseMembership:

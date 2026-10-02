@@ -64,17 +64,39 @@ row currently in FAILED status. A non-member or missing material returns 404; a
 member who did not upload it returns 403; and READY, UPLOADED or PROCESSING rows
 return 409. READY deletion remains intentionally out of scope.
 
-The request first removes the file from the private storage and then deletes the DB
-row. If storage deletion or the DB delete/commit fails, the API returns a safe 503
-without exposing internal details, and the DB transaction is rolled back so the row
-remains. Because storage deletion is missing-safe, a retry is safe even if the
-source file is already gone.
+Deletion is DB-first: the request locks/revalidates the material, inserts a durable
+`material_storage_cleanups` intent for its source key, deletes the Material, and
+commits all database changes together. A pre-commit DB failure rolls back the
+deletion and intent, returns safe 503, and leaves both the row and PDF intact.
+No filesystem deletion occurs before this commit.
 
-Deleting the entire course is a separate OWNER-only lifecycle action. It removes
-every original course material source PDF through private storage, regardless of
-material processing status, then commits the course deletion and its database child
-cascades. A failed storage or DB step returns safe 503 with DB rows retained; retry
-continues safely when some source PDFs are already missing.
+Deleting the entire course is a separate OWNER-only lifecycle action. It locks the
+course and its materials in deterministic order, queues every source regardless of
+processing status, then commits course deletion and existing database cascades in
+the same transaction. On rollback, every source PDF and domain row remains.
+
+After either deletion commits, the API attempts physical cleanup and returns 204
+for successful logical deletion even if storage cleanup fails. Deleted sources
+cannot be accessed through domain APIs. Failed or interrupted cleanup remains
+durable for retry; it does not resurrect deleted rows or return a misleading 503.
+Failures record only a bounded attempt count and last-attempt timestamp, never raw
+errors. Normal API responses expose neither cleanup state nor storage keys/paths.
+
+From `backend/`, with the existing DB settings and the same private material volume:
+
+```sh
+python -m app.storage_cleanup
+python -m app.storage_cleanup --batch-size 100
+```
+
+Each run processes at most the batch size (default 100, allowed 1-1000), ordered by
+`created_at, id`. Only committed intents authorize deletion; concurrent processors
+skip locked intents. Missing PDFs count as success. Successful cleanup removes its
+intent only after storage deletion succeeds. If the process stops or that DB commit
+fails after physical deletion, a later missing-safe retry clears the stale intent.
+Repeated runs are idempotent and never scan or remove unrelated files. Output
+contains counts/status only; exit status is nonzero on failure or remaining work.
+Run again until the queue is empty. There is no automatic worker or public cleanup API.
 
 ## Limits
 
