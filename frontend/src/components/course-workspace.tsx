@@ -55,7 +55,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
     <div id="course-practice" hidden={destination !== "practice"}>
       <div id="practice" tabIndex={-1}><PracticeQuiz courseId={course.id} currentUserId={currentUserId} active={visible && destination === "practice"}
         adaptiveReviewRequest={adaptiveReviewRequest} setupRequest={setupRequest} resumeAttemptId={knownAttemptId} resumeRequest={resumeRequest} onResumableAttemptChange={onResumableAttemptChange} onActiveSessionChange={onActiveSessionChange}
-        onOpenMaterials={() => navigate("materials")} onOpenQuestions={() => { setMoreDestination("questions"); navigate("more"); }} /></div>
+        onOpenMaterials={() => navigate("materials")} onOpenQuestions={() => { setMoreDestination("questions"); navigate("more"); }}
+        onOpenProgress={() => navigate("progress")} onBackToCourse={() => navigate("overview")} /></div>
     </div>
     {focused && <details className="mt-6 border-t border-line pt-3">
       <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">Course navigation</summary>

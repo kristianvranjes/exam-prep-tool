@@ -129,18 +129,39 @@ it("removes the resume entry after submission and retains the existing result", 
   await screen.findByText("1 of 1 answered and saved");
   fireEvent.click(screen.getByRole("button", { name: "Finish practice" }));
   fireEvent.click(await screen.findByRole("button", { name: "Confirm final submission" }));
-  await screen.findByRole("region", { name: "Quiz results" });
+  await screen.findByRole("region", { name: "Practice results" });
   fireEvent.click(screen.getByRole("button", { name: "Back to Home" }));
   expect(screen.queryByRole("heading", { name: "Continue studying" })).not.toBeInTheDocument();
   await enterCourse(); navigate("Practice");
-  expect(screen.getByRole("region", { name: "Quiz results" })).toBeVisible();
+  expect(screen.getByRole("region", { name: "Practice results" })).toBeVisible();
   mock.questions.mockResolvedValue(Array.from({ length: 50 }, (_, id) => ({ id: String(id), status: "APPROVED", type: "TRUE_FALSE" })));
   mock.history.mockResolvedValue([submitted]);
   navigate("Overview");
   fireEvent.click(await screen.findByRole("button", { name: "Start recommended practice" }));
   await waitFor(() => expect(screen.getByRole("radio", { name: "Recommended practice" })).toBeChecked());
-  expect(screen.queryByRole("region", { name: "Quiz results" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Practice results" })).not.toBeInTheDocument();
   expect(mock.start).not.toHaveBeenCalled();
+});
+
+it("opens existing Progress and Course Overview directly from submitted results and preserves the review", async () => {
+  const submitted: Attempt = { ...activeAttempt, status: "SUBMITTED", submitted_at: "2026-10-01T10:10:00Z", questions: [{ ...activeAttempt.questions[0], options: [], answer: { type: "SHORT_ANSWER", text: "Answer" }, grading_status: "PENDING", reference_answer: "Reference", explanation: null, correct_boolean: null }] };
+  mock.history.mockResolvedValue([submitted]); mock.read.mockResolvedValue(submitted);
+  render(<AppShell />); await enterCourse(); navigate("Practice");
+  fireEvent.click(await screen.findByText("Practice history"));
+  fireEvent.click(await screen.findByRole("button", { name: /Review quiz/ }));
+  const results = await screen.findByRole("region", { name: "Practice results" });
+  fireEvent.click(within(results).getByRole("button", { name: "View progress" }));
+  expect(screen.getByRole("region", { name: "Progress" })).toBeVisible();
+  expect(results).not.toBeVisible();
+  navigate("Practice");
+  expect(results).toBeVisible();
+  expect(within(results).getByRole("button", { name: "Self-review" })).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(within(results).getByRole("button", { name: "Back to course" }));
+  expect(screen.getByRole("heading", { name: "Overview" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Algorithms" })).toHaveFocus();
+  navigate("Practice"); expect(results).toBeVisible();
+  expect(mock.read).toHaveBeenCalledOnce();
+  expect(mock.start).not.toHaveBeenCalled(); expect(mock.submit).not.toHaveBeenCalled();
 });
 
 it("opens Recommended and Standard setup from Overview without starting an attempt or resetting settings", async () => {
@@ -202,11 +223,11 @@ it("returns completed results to setup from Progress without creating or changin
   render(<AppShell />); await enterCourse(); navigate("Practice");
   fireEvent.click(await screen.findByText("Practice history"));
   fireEvent.click(await screen.findByRole("button", { name: /Review quiz/ }));
-  await screen.findByRole("region", { name: "Quiz results" });
+  await screen.findByRole("region", { name: "Practice results" });
   navigate("Progress");
   fireEvent.click(within(screen.getByRole("region", { name: "Progress" })).getByRole("button", { name: "Start recommended practice" }));
   await waitFor(() => expect(screen.getByRole("radio", { name: "Recommended practice" })).toBeChecked());
-  expect(screen.queryByRole("region", { name: "Quiz results" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Practice results" })).not.toBeInTheDocument();
   expect(mock.start).not.toHaveBeenCalled(); expect(mock.submit).not.toHaveBeenCalled();
 });
 

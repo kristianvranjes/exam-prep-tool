@@ -33,6 +33,8 @@ test("moderator and student complete the core exam-preparation journey", async (
   try {
     const moderator = await moderatorContext.newPage();
     const student = await studentContext.newPage();
+    const pageErrors: string[] = [];
+    student.on("pageerror", error => pageErrors.push(error.message));
 
     await login(moderator, "owner-e2e@example.com");
     await moderator.getByRole("button", { name: "Faculty tools", exact: true }).click();
@@ -223,16 +225,30 @@ test("moderator and student complete the core exam-preparation journey", async (
     await student.getByRole("button", { name: "Confirm final submission" }).click();
     const result = student.getByRole("article", { name: "Question 1 result" });
     await expect(result.getByText("Correct", { exact: true })).toBeVisible();
-    await expect(student.getByRole("region", { name: "Quiz results" })).toContainText("Self-review required0");
+    const results = student.getByRole("region", { name: "Practice results" });
+    await expect(results.getByRole("heading", { name: "Practice complete" })).toBeFocused();
+    await expect(results.getByLabel("Results summary")).toContainText("Correct1Incorrect0Self-review required0");
+    await expect(results.getByRole("button", { name: "Practice again" })).toHaveClass(/bg-accent/);
+    await expect(results.getByRole("button", { name: "All answers" })).toHaveAttribute("aria-pressed", "true");
+    await expect(results.getByRole("button", { name: "Mistakes", exact: true })).toBeDisabled();
+    for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+      await student.setViewportSize(viewport);
+      await student.screenshot({ path: test.info().outputPath(`results-correct-${viewport.width}.png`), fullPage: true });
+      const answerDetails = result.getByText("View answer and explanation", { exact: true });
+      await answerDetails.focus(); await answerDetails.press("Enter");
+      await expect(result.getByText("Paris is the French capital.", { exact: true })).toBeVisible();
+      await expect.poll(() => student.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await answerDetails.press("Enter");
+    }
 
-    await studentNavigation.getByRole("button", { name: "Progress", exact: true }).click();
+    await results.getByRole("button", { name: "View progress" }).click();
     await expectMetricAtLeast(student, "Questions reviewed", 1);
     const progress = student.getByRole("region", { name: "Progress", exact: true });
     await expect(progress.getByText("Automatically graded accuracy", { exact: true }).locator("..")).toContainText("100.0%");
     await expect(progress.getByText("1 correct out of 1 automatically graded answers")).toBeVisible();
     await progress.getByRole("button", { name: "Start recommended practice" }).click();
     await expect(student.locator("#practice")).toBeFocused();
-    await expect(student.getByRole("region", { name: "Quiz results" })).toHaveCount(0);
+    await expect(student.getByRole("region", { name: "Practice results" })).toHaveCount(0);
     await expect(student.getByRole("radio", { name: "Recommended practice" })).toBeChecked();
     await expect(student.getByRole("button", { name: "Start practice", exact: true })).toBeVisible();
     await expect(student.getByRole("heading", { name: "Question 1 of 1" })).toHaveCount(0);
@@ -271,6 +287,76 @@ test("moderator and student complete the core exam-preparation journey", async (
       await expect(student.getByRole("button", { name: "Start practice", exact: true })).toBeVisible();
       await expect(student.getByRole("heading", { name: "Question 1 of 1" })).toHaveCount(0);
     }
+
+    // A second real session combines an objective mistake with an ungraded short answer.
+    await studentNavigation.getByRole("button", { name: "More", exact: true }).click();
+    await student.getByRole("button", { name: "Question bank", exact: true }).click();
+    const openBank = student.getByRole("button", { name: "Open question bank" });
+    if (await openBank.isVisible()) await openBank.click();
+    await student.getByRole("button", { name: "Create question", exact: true }).click();
+    await questionForm.getByLabel("Question type").selectOption("SHORT_ANSWER");
+    await questionForm.getByLabel("Question text").fill("Explain why regular practice helps learning.");
+    await questionForm.getByLabel("Reference answer").fill("Regular practice helps recall and identifies gaps in understanding.");
+    await questionForm.getByRole("button", { name: "Save draft" }).click();
+    await expect(selectedQuestion).toContainText("Explain why regular practice helps learning.");
+    await studentNavigation.getByRole("button", { name: "Practice", exact: true }).click();
+    await student.getByRole("radio", { name: "Course questions", exact: true }).check();
+    await student.getByRole("spinbutton", { name: "Custom question count" }).fill("2");
+    await moreOptions.click();
+    await student.getByRole("checkbox", { name: "Short answer" }).check();
+    await student.getByRole("button", { name: "Start practice", exact: true }).click();
+    const rawShortAnswer = "  Practice helps me recall.\n" + "A long explanation with an unbroken word: " + "learning".repeat(40) + "  ";
+    for (let index = 0; index < 2; index++) {
+      await expect(student.getByRole("heading", { name: `Question ${index + 1} of 2` })).toBeVisible();
+      const shortAnswer = student.getByRole("textbox", { name: "Your short answer" });
+      if (await shortAnswer.isVisible()) await shortAnswer.fill(rawShortAnswer);
+      else await student.getByRole("radio", { name: "Lyon", exact: true }).check();
+      await student.getByRole("button", { name: index === 0 ? "Save and next" : "Save and review", exact: true }).click();
+    }
+    await student.getByRole("button", { name: "Finish practice", exact: true }).click();
+    await student.getByRole("button", { name: "Confirm final submission" }).click();
+    await expect(results.getByLabel("Results summary")).toContainText("Correct0Incorrect1Self-review required1");
+    for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+      await student.setViewportSize(viewport);
+      const reviewMistakes = results.getByRole("button", { name: "Review mistakes", exact: true });
+      await reviewMistakes.focus(); await reviewMistakes.press("Enter");
+      await expect(results.getByRole("heading", { name: "Mistakes", exact: true })).toBeFocused();
+      await expect(results.getByRole("article")).toHaveCount(1);
+      await expect(results.getByRole("article")).toContainText("Lyon");
+      await expect(results.getByRole("article")).toContainText("Paris is the French capital.");
+      await student.screenshot({ path: test.info().outputPath(`results-mistakes-${viewport.width}.png`), fullPage: true });
+      const selfReview = results.getByRole("button", { name: "Self-review", exact: true });
+      await selfReview.focus(); await selfReview.press("Enter");
+      await expect(selfReview).toBeFocused();
+      await expect(selfReview).toHaveAttribute("aria-pressed", "true");
+      const shortResult = results.getByRole("article");
+      await expect(shortResult).toHaveCount(1);
+      await expect(shortResult.getByText("Self-review required", { exact: true })).toBeVisible();
+      await expect.poll(() => shortResult.locator("dd").first().textContent()).toBe(rawShortAnswer);
+      await expect(shortResult.getByText("Reference answer", { exact: true })).toBeVisible();
+      await expect.poll(() => student.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await student.screenshot({ path: test.info().outputPath(`results-self-review-${viewport.width}.png`), fullPage: true });
+      await results.getByRole("button", { name: "All answers", exact: true }).click();
+      await expect(results.getByRole("article")).toHaveCount(2);
+    }
+    await results.getByRole("button", { name: "Practice again", exact: true }).click();
+    await expect(results).toHaveCount(0);
+    await expect(student.getByRole("form", { name: "Practice setup" })).toBeVisible();
+    await expect(student.getByRole("spinbutton", { name: "Custom question count" })).toHaveValue("2");
+    await expect(student.getByRole("radio", { name: "Course questions", exact: true })).toBeChecked();
+    await expect(student.getByRole("heading", { name: "Question 1 of 2" })).toHaveCount(0);
+    await student.getByText("Practice history", { exact: true }).click();
+    const historyResults = student.getByRole("button", { name: /Review quiz/ });
+    await expect(historyResults).toHaveCount(2);
+    await historyResults.first().click();
+    await expect(results.getByRole("button", { name: "Mistakes", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await results.getByRole("button", { name: "Back to course" }).click();
+    await expect(student.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+    await studentNavigation.getByRole("button", { name: "Practice", exact: true }).click();
+    await results.getByRole("button", { name: "View progress" }).click();
+    await expect(progress).toBeVisible();
+    await expect(progress.getByText("1 correct out of 2 automatically graded answers")).toBeVisible();
+    expect(pageErrors).toEqual([]);
   } finally {
     await studentContext.close();
     await moderatorContext.close();

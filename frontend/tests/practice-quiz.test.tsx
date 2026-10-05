@@ -67,10 +67,11 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
   expect(mock.submit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Finish practice" }));
   fireEvent.click(await screen.findByRole("button", { name: "Confirm final submission" }));
-  await screen.findByText("Quiz results");
+  await screen.findByText("Practice complete");
+  fireEvent.click(screen.getByRole("button", { name: "All answers" }));
   expect(screen.getAllByRole("article").filter(article => within(article).queryByText("Correct"))).toHaveLength(2);
   expect(within(screen.getByRole("article", { name: "Question 3 result" })).getByText("Self-review required")).toBeInTheDocument();
-  expect(screen.getByText("Reference answer: Mass attracts mass")).toBeInTheDocument();
+  expect(screen.getByText("Mass attracts mass", { exact: true })).toBeInTheDocument();
 });
 
 it.each(["Only 0 eligible approved questions available", "Only 2 eligible approved questions available", "Course not found", "Network failed"])("shows start errors: %s", async error => {
@@ -97,7 +98,7 @@ it("keeps failed saves unsaved and allows reloading an already submitted attempt
   expect(mock.read).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Reload saved answers" }));
   fireEvent.click(screen.getByRole("button", { name: "Discard changes and continue" }));
-  await screen.findByText("Quiz results");
+  await screen.findByText("Practice complete");
 });
 
 it("supports type filters and refuses an empty selection", async () => {
@@ -159,16 +160,17 @@ it.each(["  MASS\n attracts  mass  ", "  My different\n explanation  "])("review
   const view = render(<PracticeQuiz currentUserId="student" courseId="course" />);
   fireEvent.click(await screen.findByText("Practice history"));
   fireEvent.click(await screen.findByRole("button", { name: /Review quiz/ }));
-  await screen.findByText("Quiz results");
+  await screen.findByText("Practice complete");
   view.unmount();
   render(<PracticeQuiz currentUserId="student" courseId="course" />);
   fireEvent.click(await screen.findByText("Practice history"));
   fireEvent.click(await screen.findByRole("button", { name: /Review quiz/ }));
-  await screen.findByText("Quiz results");
-  expect(screen.getByText(/^Your answer:/).textContent).toBe(`Your answer: ${raw}`);
-  expect(screen.getByText(/^Your answer:/)).toHaveClass("whitespace-pre-wrap");
+  await screen.findByText("Practice complete");
+  const savedAnswer = screen.getByText("Your answer", { exact: true }).nextElementSibling;
+  expect(savedAnswer?.textContent).toBe(raw);
+  expect(savedAnswer).toHaveClass("whitespace-pre-wrap");
   const result = screen.getByRole("article", { name: "Question 1 result" });
-  expect(within(result).getByText("Reference answer: Mass attracts mass")).toBeInTheDocument();
+  expect(within(result).getByText("Mass attracts mass", { exact: true })).toBeInTheDocument();
   expect(within(result).getByText("Self-review required")).toBeInTheDocument();
   expect(within(result).getByText("Short answers are not graded automatically. Compare your answer with the reference answer.")).toBeInTheDocument();
   expect(within(result).queryByRole("button")).not.toBeInTheDocument();
@@ -178,6 +180,66 @@ it.each(["  MASS\n attracts  mass  ", "  My different\n explanation  "])("review
   expect(screen.queryByText(/score|%/i)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Save answer" })).not.toBeInTheDocument();
   expect(mock.submit).not.toHaveBeenCalled();
+});
+
+it("returns submitted history to setup with preferences intact, keeping results on failure and preventing duplicate requests", async () => {
+  const result = await mock.submit(); mock.submit.mockClear();
+  mock.history.mockResolvedValue([result]);
+  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  await open();
+  fireEvent.click(screen.getByLabelText("Course questions"));
+  fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+  fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value: "3" } });
+  fireEvent.click(screen.getByLabelText("True / false"));
+  fireEvent.click(screen.getByLabelText("Exam practice"));
+  fireEvent.click(screen.getByText("Practice history"));
+  fireEvent.click(screen.getByRole("button", { name: /Review quiz/ }));
+  await screen.findByRole("heading", { name: "Practice complete" });
+  mock.history.mockRejectedValueOnce(new Error("History unavailable"));
+  fireEvent.click(screen.getByRole("button", { name: "Practice again" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("History unavailable");
+  expect(screen.getByRole("heading", { name: "Practice complete" })).toBeVisible();
+  let resolve!: (rows: Attempt[]) => void;
+  mock.history.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  fireEvent.click(screen.getByRole("button", { name: "Practice again" }));
+  expect(screen.getByRole("button", { name: "Practice again" })).toBeDisabled();
+  expect(screen.getByText("Loading practice history…")).toHaveAttribute("role", "status");
+  fireEvent.click(screen.getByRole("button", { name: "Practice again" }));
+  expect(mock.history).toHaveBeenCalledTimes(3);
+  await act(async () => resolve([result]));
+  expect(screen.getByRole("form", { name: "Practice setup" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Practice" })).toHaveFocus();
+  expect(screen.getByLabelText("Custom question count")).toHaveValue(3);
+  expect(screen.getByLabelText("Course questions")).toBeChecked();
+  fireEvent.click(screen.getByText("More options"));
+  expect(screen.getByLabelText("Exam practice")).toBeChecked();
+  expect(screen.getByLabelText("True / false")).not.toBeChecked();
+  expect(screen.getByLabelText("Multiple choice")).toBeChecked();
+  expect(screen.getByLabelText("Short answer")).toBeChecked();
+  expect(screen.getByText("Practice history").closest("details")).not.toHaveAttribute("open");
+  expect(mock.start).not.toHaveBeenCalled(); expect(mock.submit).not.toHaveBeenCalled();
+  expect(mock.history.mock.calls.every(([course]) => course === "course")).toBe(true);
+});
+
+it("keeps historical results loading neutral and allows retrying a failed read within the course", async () => {
+  const result = await mock.submit(); mock.submit.mockClear();
+  mock.history.mockResolvedValue([result]);
+  mock.read.mockRejectedValueOnce(new Error("Result unavailable"));
+  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  fireEvent.click(await screen.findByText("Practice history"));
+  fireEvent.click(await screen.findByRole("button", { name: /Review quiz/ }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Result unavailable");
+  let resolve!: (attempt: Attempt) => void;
+  mock.read.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  fireEvent.click(screen.getByRole("button", { name: /Review quiz/ }));
+  expect(screen.getByText("Loading quiz…").closest('[role="status"]')).toBeVisible();
+  expect(screen.queryByRole("heading", { name: "Practice complete" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Results unavailable" })).not.toBeInTheDocument();
+  await act(async () => resolve(result));
+  expect(screen.getByRole("heading", { name: "Practice complete" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Self-review" })).toHaveAttribute("aria-pressed", "true");
+  expect(mock.read).toHaveBeenLastCalledWith("course", "attempt");
+  expect(mock.start).not.toHaveBeenCalled(); expect(mock.submit).not.toHaveBeenCalled();
 });
 
 it("launches adaptive review with the existing count and type controls", async () => {
@@ -334,19 +396,21 @@ it("preserves answers on submit failure, retries, and derives result counts from
   fireEvent.click(screen.getByRole("button", { name: "Review and finish" }));
   fireEvent.click(await screen.findByRole("button", { name: "Finish practice" }));
   fireEvent.click(await screen.findByRole("button", { name: "Confirm final submission" }));
-  await screen.findByText("Quiz results");
+  await screen.findByText("Practice complete");
   const summary = screen.getByLabelText("Results summary");
-  expect(summary).toHaveTextContent("Total3");
-  const results = screen.getByRole("region", { name: "Quiz results" });
+  expect(summary).toHaveTextContent("Correct1Incorrect1Self-review required1");
+  fireEvent.click(screen.getByRole("button", { name: "All answers" }));
+  const results = screen.getByRole("region", { name: "Practice results" });
   expect(results).toHaveTextContent("Correct1");
   expect(results).toHaveTextContent("Incorrect1");
   expect(results).toHaveTextContent("Self-review required1");
   expect(within(screen.getByRole("article", { name: "Question 1 result" })).getByText("Incorrect")).toBeInTheDocument();
   expect(within(screen.getByRole("article", { name: "Question 2 result" })).getByText("Correct")).toBeInTheDocument();
   expect(within(screen.getByRole("article", { name: "Question 3 result" })).getByText("Self-review required")).toBeInTheDocument();
-  expect(within(screen.getByRole("article", { name: "Question 1 result" })).getByText("Your answer: Two")).toBeInTheDocument();
-  expect(screen.getByText("Correct answer: One")).toBeInTheDocument();
-  expect(screen.getByText("Correct answer: false")).toBeInTheDocument();
+  expect(within(screen.getByRole("article", { name: "Question 1 result" })).getByText("Two", { exact: true })).toBeInTheDocument();
+  expect(screen.getByText("One", { exact: true })).toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole("article", { name: "Question 2 result" })).getByText("View answer and explanation"));
+  expect(within(screen.getByRole("article", { name: "Question 2 result" })).getAllByText("False", { exact: true })).toHaveLength(2);
   expect(screen.getAllByText("Reviewed explanation")).toHaveLength(3);
 });
 
