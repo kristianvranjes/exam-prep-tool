@@ -13,3 +13,9 @@ it("defaults existing callers to STANDARD and sends explicit ADAPTIVE", async ()
     method: "POST", body: JSON.stringify({ count: 3, question_types: ["SHORT_ANSWER"], selection_mode: "ADAPTIVE" }),
   });
 });
+
+
+it("abandons only the addressed course attempt through the authenticated request client", async () => {
+  await practiceApi.abandon("course", "attempt");
+  expect(mock).toHaveBeenCalledWith("/courses/course/attempts/attempt/abandon", { method: "POST" });
+});

@@ -7,7 +7,7 @@ export type PracticeAnswer =
   | { type: "TRUE_FALSE"; value: boolean }
   | { type: "SHORT_ANSWER"; text: string };
 export type AttemptSummary = {
-  id: string; course_id: string; status: "ACTIVE" | "SUBMITTED";
+  id: string; course_id: string; status: "ACTIVE" | "SUBMITTED" | "ABANDONED";
   started_at: string; submitted_at: string | null;
 };
 export type ActiveQuestion = {
@@ -22,6 +22,7 @@ export type ResultQuestion = Omit<ActiveQuestion, "options"> & {
 export type Attempt = AttemptSummary & (
   | { status: "ACTIVE"; questions: ActiveQuestion[] }
   | { status: "SUBMITTED"; questions: ResultQuestion[] }
+  | { status: "ABANDONED"; abandoned_at: string; questions: ActiveQuestion[] }
 );
 const path = (course: string) => `/courses/${course}/attempts`;
 export const practiceApi = {
@@ -29,5 +30,6 @@ export const practiceApi = {
   start: (course: string, count: number, question_types: QuestionType[], selection_mode: SelectionMode = "STANDARD") => request<Attempt>(path(course), { method: "POST", body: JSON.stringify({ count, question_types, selection_mode }) }),
   read: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}`),
   save: (course: string, id: string, question: string, answer: PracticeAnswer) => request<Attempt>(`${path(course)}/${id}/answers/${question}`, { method: "PATCH", body: JSON.stringify(answer) }),
+  abandon: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/abandon`, { method: "POST" }),
   submit: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/submit`, { method: "POST" }),
 };

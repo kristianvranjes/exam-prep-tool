@@ -6,7 +6,7 @@ import { Alert, Badge, Button, Surface } from "./ui";
 import { QuizAnswerEditor } from "./quiz-answer-editor";
 import { ExperiencePicker, QuizNavigator, type QuizExperience } from "./quiz-navigation";
 
-type Confirmation = "submit" | "reload" | "back";
+type Confirmation = "submit" | "reload" | "back" | "abandon";
 export function ActiveQuiz({ attempt, experience, setExperience, update, back }: {
   attempt: Extract<Attempt, { status: "ACTIVE" }>; experience: QuizExperience;
   setExperience: (value: QuizExperience) => void; update: (attempt: Attempt) => void; back: () => Promise<void>;
@@ -79,13 +79,20 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
   return <div className="flex min-w-0 flex-col gap-5">
     <div role="status"><p>{answered} / {attempt.questions.length} answered and saved</p><p className="text-sm text-muted">{unanswered} unanswered · {flags.size} flagged</p></div>
     {error && <Alert>{error}</Alert>}
-    {confirmation && <section aria-label={confirmation === "submit" ? "Confirm submission" : "Unsaved answer"} className="rounded-xl border border-line bg-surface p-5">
-      <h4 ref={confirmationHeading} tabIndex={-1} className="text-lg font-semibold">{confirmation === "submit" ? "Submit this quiz?" : "Keep your unsaved answer?"}</h4>
+    {confirmation && <section aria-label={confirmation === "submit" ? "Confirm submission" : confirmation === "abandon" ? "Confirm abandonment" : "Unsaved answer"} className="rounded-xl border border-line bg-surface p-5">
+      <h4 ref={confirmationHeading} tabIndex={-1} className="text-lg font-semibold">{confirmation === "submit" ? "Submit this quiz?" : confirmation === "abandon" ? "Abandon this attempt?" : "Keep your unsaved answer?"}</h4>
       {confirmation === "submit" ? <>
         <p className="mt-3">Answered: {answered} · Unanswered: {unanswered} · Flagged: {flags.size}</p>
         <p className="mt-3">Submission is final and freezes your answers. You cannot edit them afterward.</p>
         {unanswered > 0 && <p className="mt-3">Save an answer for every question before submitting.</p>}
         <div className="mt-4 flex flex-wrap gap-2"><Button variant="secondary" disabled={busy} onClick={() => { setConfirmation(null); setError(""); }}>Keep reviewing</Button><Button disabled={busy || unanswered > 0} onClick={() => void run(async () => { update(await practiceApi.submit(attempt.course_id, attempt.id)); })}>{busy ? "Submitting…" : "Confirm final submission"}</Button></div>
+      </> : confirmation === "abandon" ? <>
+        <p className="mt-3">This attempt cannot be resumed. Saved answers stay in your history. No grades or review progress will be recorded.</p>
+        {dirty && <p className="mt-3">Your unsaved answer changes will be discarded.</p>}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button variant="secondary" disabled={busy} onClick={() => { setConfirmation(null); setError(""); }}>Keep practicing</Button>
+          <Button variant="secondary" disabled={busy} onClick={() => void run(async () => { update(await practiceApi.abandon(attempt.course_id, attempt.id)); })}>{busy ? "Abandoning…" : "Confirm abandon"}</Button>
+        </div>
       </> : <>
         <p className="mt-3">Save this answer before continuing, or explicitly discard your changes.</p>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -107,7 +114,10 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
         </Surface>
         <div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={busy || index === 0} onClick={() => navigate(index - 1)}>Previous question</Button><Button variant="secondary" disabled={busy || index === attempt.questions.length - 1} onClick={() => navigate(index + 1)}>Next question</Button></div>
         <p className="text-sm text-muted">Edited answers are saved before moving to another question. Correctness is shown only after final submission.</p>
-        <Button disabled={busy} className="self-start" onClick={() => void run(async () => { const saved = await persist(); if (saved.status === "ACTIVE") setConfirmation("submit"); })}>Submit quiz — final</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={busy} onClick={() => void run(async () => { const saved = await persist(); if (saved.status === "ACTIVE") setConfirmation("submit"); })}>Submit quiz — final</Button>
+          <Button variant="secondary" disabled={busy} onClick={() => { setError(""); setConfirmation("abandon"); }}>Abandon attempt</Button>
+        </div>
       </div>
     </div>
   </div>;

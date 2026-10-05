@@ -59,7 +59,7 @@ Grade = Literal["PENDING", "CORRECT", "INCORRECT"]
 class AttemptSummary(BaseModel):
     id: UUID
     course_id: UUID
-    status: Literal["ACTIVE", "SUBMITTED"]
+    status: Literal["ACTIVE", "SUBMITTED", "ABANDONED"]
     started_at: datetime
     submitted_at: datetime | None
 
@@ -92,4 +92,12 @@ class SubmittedAttempt(AttemptSummary):
     questions: list[ResultQuestion]
 
 
-AttemptResponse = Annotated[ActiveAttempt | SubmittedAttempt, Field(discriminator="status")]
+class AbandonedAttempt(AttemptSummary):
+    status: Literal["ABANDONED"] = "ABANDONED"
+    abandoned_at: datetime
+    questions: list[ActiveQuestion]
+
+
+AttemptResponse = Annotated[
+    ActiveAttempt | SubmittedAttempt | AbandonedAttempt, Field(discriminator="status")
+]

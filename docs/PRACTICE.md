@@ -28,9 +28,10 @@ requests return 401. Payload ownership, status, timestamp and score fields are f
 | --- | --- |
 | `POST /courses/{course_id}/attempts` | `{ "count": 5, "question_types": ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"] }`; 201 ACTIVE attempt. Omitted types means all three. |
 | `GET /courses/{course_id}/attempts?limit=20&offset=0` | Own attempt summaries, newest first; limit 1–50, offset 0–10000. |
-| `GET /courses/{course_id}/attempts/{id}` | Saved ACTIVE attempt or frozen SUBMITTED result. |
+| `GET /courses/{course_id}/attempts/{id}` | Saved ACTIVE attempt, frozen SUBMITTED result, or read-only ABANDONED history. |
 | `PATCH /courses/{course_id}/attempts/{id}/answers/{quiz_question_id}` | Upsert a typed answer while ACTIVE, return the saved attempt. |
 | `POST /courses/{course_id}/attempts/{id}/submit` | Atomically freeze and grade all saved answers. Repeat returns the same result. |
+| `POST /courses/{course_id}/attempts/{id}/abandon` | Close an ACTIVE attempt without grading, preserve saved answers, and return read-only history. Repeat returns the same timestamp/state. |
 
 Answer payloads (strict types; unknown fields rejected):
 
@@ -48,13 +49,14 @@ changing it replaces the previous payload. Unsaved input is not persisted.
 
 ## Lifecycle, integrity and grading
 
-`ACTIVE -> SUBMITTED` is the only transition. All questions must have a saved answer
-before final submission (otherwise 409, with no state or grade changes). Submission
+`ACTIVE -> SUBMITTED` and `ACTIVE -> ABANDONED` are the final transitions. Submission
+requires a saved answer for every question (otherwise 409, with no state or grade
+changes). Submission
 marks MCQ/TRUE_FALSE answers CORRECT or INCORRECT using exact option/boolean comparison.
 SHORT_ANSWER always remains PENDING, even when its text exactly matches the
 snapshotted reference after normalization. Submitted results show the original
 student answer and frozen Reference answer for self-review. No aggregate score
-treats ungraded answers as wrong. Answer mutations after submission return 409.
+treats ungraded answers as wrong. Answer mutations after submission or abandonment return 409.
 
 Quiz creation locks selected Question Bank rows using the same locking convention as
 bank edits/transitions. It copies the existing owner-view content into an independent
@@ -77,6 +79,25 @@ Concurrent submissions serialize and return the original frozen result. A racing
 either commits before submission and is included, or is rejected after submission.
 Detail reads also lock that row to avoid mixing an ACTIVE status with submitted data.
 UUIDs and timestamps are assigned server-side.
+
+## Abandoning unfinished attempts
+
+**Abandon attempt** requires explicit confirmation. It closes the active session,
+keeps saved answers and private snapshots in history, and does not grade or update
+review progress. Missing answers are allowed. Unsaved local edits are discarded
+only after the confirmation warns about them; they are not implicitly saved.
+Cancellation or failure retains the session and draft for retry.
+
+ABANDONED is final: it cannot be resumed, saved into, or submitted. A read-only
+history view shows only the student's saved answers and public question content,
+with no answer keys or grading fields. It records `abandoned_at` once while leaving
+`submitted_at` null; repeat requests preserve that timestamp. A submitted result
+cannot be abandoned. Reads and abandonment use existing ownership/membership
+checks and attempt locking. The transition also shares the user lock used by
+starts/submissions, so an adaptive start after committed abandonment can reuse the
+eligible source questions. Abandoned sources remain seen, rather than becoming
+unseen; other active attempts still exclude their sources. STANDARD selection and
+ADAPTIVE ranking are unchanged. There is no automatic expiry, reopening or deletion.
 
 ## Phase 8 grading and provenance
 

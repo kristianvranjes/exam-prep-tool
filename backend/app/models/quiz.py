@@ -36,10 +36,11 @@ class QuizQuestion(Base):
 class QuizAttempt(Base):
     __tablename__ = "quiz_attempts"
     __table_args__ = (
-        CheckConstraint("status IN ('ACTIVE','SUBMITTED')", name="ck_attempt_status"),
+        CheckConstraint("status IN ('ACTIVE','SUBMITTED','ABANDONED')", name="ck_attempt_status"),
         CheckConstraint(
-            "(status = 'ACTIVE' AND submitted_at IS NULL) OR "
-            "(status = 'SUBMITTED' AND submitted_at IS NOT NULL)",
+            "(status = 'ACTIVE' AND submitted_at IS NULL AND abandoned_at IS NULL) OR "
+            "(status = 'SUBMITTED' AND submitted_at IS NOT NULL AND abandoned_at IS NULL) OR "
+            "(status = 'ABANDONED' AND submitted_at IS NULL AND abandoned_at IS NOT NULL)",
             name="ck_attempt_submission",
         ),
     )
@@ -48,6 +49,7 @@ class QuizAttempt(Base):
     status: Mapped[str] = mapped_column(String(20), default="ACTIVE")
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    abandoned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Answer(Base):

@@ -1,6 +1,15 @@
 # Database infrastructure
 
-Current Alembic head is **0014** (`down_revision = 0013`). It adds only
+Current Alembic head is **0015** (`down_revision = 0014`). It adds nullable
+TIMESTAMPTZ `quiz_attempts.abandoned_at` and expands the status/timestamp constraints:
+ACTIVE has neither terminal timestamp, SUBMITTED has only submitted_at, and
+ABANDONED has only abandoned_at. Existing rows and saved answers/snapshots/progress
+are preserved with no backfill. Downgrade to 0014 refuses while abandoned attempts
+exist, preserving history rather than deleting/relabeling it. Restore a coordinated
+pre-upgrade backup when rollback is required after abandonment has been used.
+Focused PostgreSQL tests cover roundtrip preservation, constraints and refusal.
+
+Revision **0014** (`down_revision = 0013`) adds only
 `material_storage_cleanups`: UUID primary key, unique non-null `storage_key`
 VARCHAR(100), non-null INTEGER `attempt_count` default 0 with `attempt_count >= 0`,
 nullable TIMESTAMPTZ `last_attempt_at`, and non-null TIMESTAMPTZ `created_at` default
