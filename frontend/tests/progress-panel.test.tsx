@@ -15,7 +15,7 @@ const summary = (changes: Partial<ReviewProgressSummary> = {}): ReviewProgressSu
   last_reviewed_at: null, next_due_at: null, stage_counts: stages(), ...changes,
 });
 const row = (changes: Partial<ReviewProgress> = {}): ReviewProgress => ({
-  question_id: "question-1", review_stage: 0, resolved_review_count: 3,
+  question_id: "question-1", is_actionable: true, review_stage: 0, resolved_review_count: 3,
   correct_review_count: 2, incorrect_review_count: 1, last_result: "INCORRECT",
   last_reviewed_at: "2030-01-01T10:00:00Z", due_at: "2030-01-01T11:00:00Z", ...changes,
 });
@@ -95,6 +95,48 @@ it("renders exact resolved metrics, timestamps, rows, and server-as-of due label
   expect(within(rows[0]).getByText("Next review:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-01T11:00:00Z");
   expect(screen.getByText("Due status as of", { exact: false }).querySelector("time")).toHaveAttribute("datetime", asOf);
   expect(screen.getByText("Stage 5: 0")).toBeInTheDocument();
+});
+
+it("shows past and future non-actionable rows as history while keeping cumulative metrics and adaptive review", async () => {
+  const openAdaptive = vi.fn();
+  mock.reviewProgressSummary.mockResolvedValue(summary({
+    reviewed_questions: 2, due_now: 0, upcoming: 0, next_due_at: null,
+    resolved_review_count: 6, correct_review_count: 4, incorrect_review_count: 2,
+    last_reviewed_at: "2030-01-01T10:00:00Z", stage_counts: stages([1, 0, 0, 1, 0, 0]),
+  }));
+  mock.reviewProgress.mockResolvedValue([
+    row({ is_actionable: false }),
+    row({ question_id: "history-future", is_actionable: false, review_stage: 3, due_at: "2030-01-03T11:00:00Z" }),
+  ]);
+  render(<ProgressPanel courseId="course" onOpenAdaptiveReview={openAdaptive} />);
+  await open();
+  for (const [name, value] of [
+    ["Reviewed questions", "2"], ["Due now", "0"], ["Upcoming", "0"],
+    ["Resolved reviews", "6"], ["Correct reviews", "4"], ["Incorrect reviews", "2"], ["Accuracy", "66.7%"],
+  ]) expect(metric(name)).toHaveTextContent(value);
+  expect(screen.getByText("No review scheduled")).toBeInTheDocument();
+  expect(screen.queryByText("No reviewed questions yet")).not.toBeInTheDocument();
+  expect(screen.getByText("Stage 0: 1")).toBeInTheDocument();
+  expect(screen.getByText("Stage 3: 1")).toBeInTheDocument();
+  const schedule = screen.getByRole("region", { name: "Question review schedule" });
+  const historyRows = within(schedule).getAllByRole("listitem");
+  expect(historyRows).toHaveLength(2);
+  for (const historyRow of historyRows) {
+    expect(within(historyRow).getByText("History only")).toBeInTheDocument();
+    expect(within(historyRow).getByText("This question is no longer available for practice.")).toBeInTheDocument();
+    expect(within(historyRow).queryByText("Due now")).not.toBeInTheDocument();
+    expect(within(historyRow).queryByText("Upcoming")).not.toBeInTheDocument();
+    expect(within(historyRow).queryByText("Next review:", { exact: false })).not.toBeInTheDocument();
+    expect(within(historyRow).getByText("Resolved 3 · Correct 2 · Incorrect 1")).toBeInTheDocument();
+    expect(within(historyRow).getByText("Last result: Incorrect")).toBeInTheDocument();
+    expect(within(historyRow).getByText("Last reviewed:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-01T10:00:00Z");
+  }
+  expect(within(historyRows[0]).getByText("Stage 0")).toBeInTheDocument();
+  expect(within(historyRows[1]).getByText("Stage 3")).toBeInTheDocument();
+  expect(screen.getByText(/Review totals, accuracy and stages include all retained learning history/)).toHaveTextContent("only questions currently available for practice");
+  expect(screen.getByRole("button", { name: "Open adaptive review" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "Open adaptive review" }));
+  expect(openAdaptive).toHaveBeenCalledTimes(1);
 });
 
 it("retries an initial failure without showing an empty success state", async () => {
@@ -181,15 +223,24 @@ it("preserves the current page when next-page loading fails and retries only tha
 });
 
 it("stops at offset 10000", async () => {
-  mock.reviewProgress.mockImplementation(async () => Array.from({ length: 20 }, (_, index) => row({ question_id: `question-${index}` })));
-  render(<ProgressPanel courseId="course" />);
-  await open();
-  for (let page = 1; page <= 500; page++) {
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Next" })); });
+  // Locale formatting is covered above; avoid repeating it across 500 full pages.
+  const localeString = vi.spyOn(Date.prototype, "toLocaleString").mockImplementation(function (this: Date) {
+    return this.toISOString();
+  });
+  try {
+    mock.reviewProgress.mockImplementation(async () => Array.from({ length: 20 }, (_, index) => row({ question_id: `question-${index}` })));
+    render(<ProgressPanel courseId="course" />);
+    await open();
+    const next = screen.getByRole("button", { name: "Next" });
+    for (let page = 1; page <= 500; page++) {
+      await act(async () => { fireEvent.click(next); });
+    }
+    expect(mock.reviewProgress).toHaveBeenLastCalledWith("course", 10000);
+    expect(screen.getByText("Page 501")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+  } finally {
+    localeString.mockRestore();
   }
-  expect(mock.reviewProgress).toHaveBeenLastCalledWith("course", 10000);
-  expect(screen.getByText("Page 501")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
 }, 30000);
 
 it("ignores a response from an old course after switching courses", async () => {

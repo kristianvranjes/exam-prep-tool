@@ -3,13 +3,14 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, case, or_, select
+from sqlalchemy import and_, case, select
 from sqlalchemy.orm import Session
 
 from app.models.question import Question
 from app.models.quiz import Quiz, QuizAttempt, QuizQuestion
 from app.models.user_question_progress import UserQuestionProgress
 from app.schemas.quiz import StartQuiz
+from app.services.practice_eligibility import practice_eligible
 
 
 def select_questions(
@@ -17,13 +18,7 @@ def select_questions(
 ) -> list[Question]:
     query = select(Question).where(
         Question.course_id == course_id,
-        or_(
-            Question.status == "APPROVED",
-            and_(
-                Question.created_by_user_id == user_id,
-                Question.status.in_(["DRAFT", "PENDING_REVIEW"]),
-            ),
-        ),
+        practice_eligible(user_id),
         Question.type.in_(data.question_types),
     )
     if data.selection_mode == "ADAPTIVE":

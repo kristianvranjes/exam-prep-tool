@@ -143,6 +143,7 @@ export type QuestionVersion = { version_number: number; reason: string; snapshot
 
 export type ReviewProgress = {
   question_id: string;
+  is_actionable: boolean;
   review_stage: number;
   resolved_review_count: number;
   correct_review_count: number;

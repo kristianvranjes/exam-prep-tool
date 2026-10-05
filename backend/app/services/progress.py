@@ -7,9 +7,10 @@ from sqlalchemy.orm import Session
 from app.models import User
 from app.models.question import Question
 from app.models.user_question_progress import UserQuestionProgress
-from app.schemas.progress import ProgressSummary, StageCount
+from app.schemas.progress import ProgressResponse, ProgressSummary, StageCount
 from app.schemas.quiz import Grade
 from app.services.courses import get_member_course
+from app.services.practice_eligibility import practice_eligible
 from app.services.scheduling import schedule
 
 
@@ -71,21 +72,29 @@ def apply_reviews(
 
 def list_progress(
     db: Session, user: User, course_id: UUID, limit: int, offset: int
-) -> list[UserQuestionProgress]:
+) -> list[ProgressResponse]:
     get_member_course(db, user, course_id)
-    return list(
-        db.scalars(
-            select(UserQuestionProgress)
-            .join(Question)
-            .where(
-                UserQuestionProgress.user_id == user.id,
-                Question.course_id == course_id,
-            )
-            .order_by(UserQuestionProgress.due_at, UserQuestionProgress.question_id)
-            .limit(limit)
-            .offset(offset)
+    progress = UserQuestionProgress
+    actionable = practice_eligible(user.id).label("is_actionable")
+    rows = db.execute(
+        select(
+            progress.question_id,
+            actionable,
+            progress.review_stage,
+            progress.resolved_review_count,
+            progress.correct_review_count,
+            progress.incorrect_review_count,
+            progress.last_result,
+            progress.last_reviewed_at,
+            progress.due_at,
         )
-    )
+        .join(Question)
+        .where(progress.user_id == user.id, Question.course_id == course_id)
+        .order_by(actionable.desc(), progress.due_at, progress.question_id)
+        .limit(limit)
+        .offset(offset)
+    ).mappings()
+    return [ProgressResponse.model_validate(row) for row in rows]
 
 
 def summarize_progress(db: Session, user: User, course_id: UUID) -> ProgressSummary:
@@ -93,16 +102,17 @@ def summarize_progress(db: Session, user: User, course_id: UUID) -> ProgressSumm
     as_of = datetime.now(UTC)
     progress = UserQuestionProgress
     scope = (progress.user_id == user.id, Question.course_id == course_id)
+    actionable = practice_eligible(user.id)
     totals = db.execute(
         select(
             func.count(progress.id),
-            func.coalesce(func.sum(case((progress.due_at <= as_of, 1), else_=0)), 0),
-            func.coalesce(func.sum(case((progress.due_at > as_of, 1), else_=0)), 0),
+            func.coalesce(func.sum(case((actionable & (progress.due_at <= as_of), 1), else_=0)), 0),
+            func.coalesce(func.sum(case((actionable & (progress.due_at > as_of), 1), else_=0)), 0),
             func.coalesce(func.sum(progress.resolved_review_count), 0),
             func.coalesce(func.sum(progress.correct_review_count), 0),
             func.coalesce(func.sum(progress.incorrect_review_count), 0),
             func.max(progress.last_reviewed_at),
-            func.min(progress.due_at),
+            func.min(case((actionable, progress.due_at), else_=None)),
         )
         .select_from(progress)
         .join(Question)

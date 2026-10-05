@@ -159,7 +159,11 @@ the frozen result without scheduling again. Live source correctness is never rea
 
 `GET /courses/{course_id}/review-progress?limit=20&offset=0` returns the signed-in
 member's question_id, review_stage, resolved/correct/incorrect_review_count,
-last_result, last_reviewed_at and due_at, ordered by due_at then question_id.
+last_result, last_reviewed_at, due_at and caller-derived is_actionable. The list
+retains history and orders by is_actionable DESC, due_at ASC, question_id ASC.
+The same SQL eligibility predicate used by both selection modes derives the flag:
+APPROVED or the caller's own DRAFT/PENDING_REVIEW. Archived/rejected sources and
+another creator's unapproved sources retain progress with is_actionable=false.
 Limit is 1–100; offset is 0–10000. Authentication/membership follow existing
 401/404 conventions. **Learning progress** reads this list in pages of 20 and
 uses the server summary timestamp for due labels. No schedule is reconstructed
@@ -236,16 +240,25 @@ and verify the normal resolved/PENDING scheduling behavior and repeat-submit sta
 ## Course learning summary and adaptive handoff (Phase 11A)
 
 `GET /courses/{course_id}/review-progress/summary` aggregates the signed-in
-member's current source-question progress, including archived questions and
-excluding deleted questions. One server UTC `as_of` distinguishes due now from
-upcoming; it also returns resolved/correct/incorrect totals, latest review,
-earliest due time and counts for every stage 0–5. Dashboard accuracy is
+member's retained source-question history, including archived/rejected questions
+and excluding deleted questions. Historical `reviewed_questions`,
+resolved/correct/incorrect totals, latest `last_reviewed_at` and `stage_counts`
+for every stage 0–5 include all surviving progress rows. Only `due_now`, `upcoming`
+and `next_due_at` use currently practice-eligible sources under the shared
+selection predicate. One server UTC `as_of` counts actionable due_at <= as_of as
+due now and due_at > as_of as upcoming; next_due_at is the minimum actionable
+due_at or null. Thus `reviewed_questions` may exceed `due_now + upcoming`.
+Archiving/rejection never deletes or reschedules history. A course with only
+history-only rows has zero due/upcoming and no next scheduled review.
+Dashboard accuracy is
 `correct_review_count / resolved_review_count * 100`; when no resolved reviews
 exist, it shows no data. PENDING answers create no progress and are never counted
 as incorrect. Stage 5 is a schedule stage, not permanent mastery.
 
 **Open adaptive review** focuses and opens the existing Practice Quiz launcher
-with ADAPTIVE selected. It does not start an attempt or change count, type or
+with ADAPTIVE selected. It remains available when due_now is zero: ADAPTIVE is
+due-first, not due-only, ranking due, unseen, then other eligible questions.
+It does not start an attempt or change count, type or
 Study/Exam controls. Due now is not used as the requested quiz count because
 adaptive eligibility also excludes active-attempt sources and other ineligible
 questions. Phase 9A scheduling, transaction and idempotency rules and Phase 9B

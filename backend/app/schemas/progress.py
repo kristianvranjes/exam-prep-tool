@@ -9,6 +9,7 @@ class ProgressResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     question_id: UUID
+    is_actionable: bool
     review_stage: int
     resolved_review_count: int
     correct_review_count: int

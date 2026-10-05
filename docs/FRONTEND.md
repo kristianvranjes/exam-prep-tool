@@ -189,15 +189,26 @@ entries resume; submitted entries open results.
 The selected course's Learning progress dashboard loads only when opened. First
 open fetches the server summary and page 0 together. It shows resolved review
 totals, resolved-only accuracy, due/upcoming counts, last and next review times,
-all six stages, and 20-row question schedule pages. Due labels use the summary's
-server `as_of`, never the browser clock. Loading, empty and retryable error states
-stay in the dashboard; failed refresh or page navigation keeps the last good data.
+all six stages, and 20-row question schedule pages. Review totals, accuracy,
+last-reviewed time and stages include all retained learning history. Due now,
+Upcoming and Next scheduled review include only currently practiceable questions,
+so reviewed_questions may exceed due_now + upcoming. Rows use the API's
+`is_actionable`: actionable rows show Stage and Due now/Upcoming using the summary's
+server `as_of`, never the browser clock. Non-actionable rows show Stage,
+**History only**, historical counters/results and “This question is no longer
+available for practice.” They show neither a due label nor a next-review date.
+Actionable rows come first in deterministic server pagination. When every row is
+history-only, the dashboard keeps historical metrics and shows zero due/upcoming
+with the neutral “No review scheduled” state for null next_due_at. Loading, empty
+and retryable error states stay in the dashboard; failed refresh or page navigation keeps the last good data.
 Page navigation fetches rows only; Refresh progress fetches summary and the
 current page. There is no polling or realtime update.
 
 Open adaptive review focuses `#practice`, opens Practice Quiz and selects
 ADAPTIVE without starting an attempt or changing count, types, Study/Exam mode,
-history or active attempts. The handoff is scoped to the selected course and
+history or active attempts. It remains available when due_now is zero: adaptive
+selection is due-first, not due-only, and also selects unseen and other eligible
+questions. The handoff is scoped to the selected course and
 clears on a course change. The backend remains authoritative for review times,
 membership, scheduling and adaptive question eligibility.
 
