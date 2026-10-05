@@ -158,8 +158,11 @@ python -m alembic upgrade head
 python -m alembic current
 ```
 
-Expected head is 0014 (durable material-source cleanup), following 0013. It adds
-only `material_storage_cleanups`, with no domain foreign keys. Its downgrade drops
+Expected head is 0015 (abandoned practice history), following 0014. It adds
+nullable abandoned_at and widens attempt status/timestamp constraints without
+changing saved answers, grades, snapshots or review progress. Downgrade to 0014
+refuses while abandoned attempts exist; use a coordinated pre-upgrade backup
+rather than deleting/relabeling history. Revision 0014 adds only `material_storage_cleanups`, with no domain foreign keys. Its downgrade drops
 only cleanup infrastructure and loses pending intents; it never recreates deleted
 rows/files or changes question/report/suggestion/practice history. Drain/inspect
 pending intents before intentional downgrade. Revision 0013 still preserves applied

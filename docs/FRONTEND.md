@@ -182,7 +182,23 @@ the frozen student's answer, the frozen Reference answer and guidance to compare
 them; even exact text equality is not graded. The total/correct/incorrect/ungraded
 summary comes solely from the frozen attempt. Ungraded answers do not affect
 progress or scheduling; semantic/manual grading is future work only. Active history
-entries resume; submitted entries open results.
+entries resume; submitted entries open results; abandoned entries open read-only saved-answer history.
+
+## Abandoned practice attempts
+
+Active Study/Exam sessions expose **Abandon attempt** with a focused confirmation
+heading. It explains the final state, retained saved answers and absence of grading
+or progress updates. Unsaved edits receive an explicit discard warning. **Keep
+practicing** preserves the draft; confirming never implicitly saves it. Controls
+are disabled while the request is pending, duplicate requests are prevented, and
+failure keeps the confirmation/answers available for retry.
+
+Success shows **Attempt abandoned**, its server timestamp and read-only saved
+answers (including original short-answer whitespace). There are no grade, key,
+reference-answer, edit, resume or submit controls. **Back to saved attempts**
+refreshes history; **View abandoned quiz** reopens this safe view. Reloading a
+session abandoned in another tab also opens it. Existing Study/Exam navigation,
+save/reload and submitted-result behavior remain unchanged.
 
 ## Learning progress
 

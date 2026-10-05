@@ -12,6 +12,7 @@ from app.models.question import QuestionVersion
 from app.models.quiz import Answer, Quiz, QuizAttempt, QuizQuestion
 from app.schemas.question import OwnerQuestion, PublicOption
 from app.schemas.quiz import (
+    AbandonedAttempt,
     ActiveAttempt,
     ActiveQuestion,
     AnswerPayload,
@@ -51,7 +52,7 @@ def summary(attempt: QuizAttempt, course_id: UUID) -> AttemptSummary:
     return AttemptSummary(
         id=attempt.id,
         course_id=course_id,
-        status=cast(Literal["ACTIVE", "SUBMITTED"], attempt.status),
+        status=cast(Literal["ACTIVE", "SUBMITTED", "ABANDONED"], attempt.status),
         started_at=attempt.started_at,
         submitted_at=attempt.submitted_at,
     )
@@ -101,6 +102,9 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
     fields = summary(attempt, course_id).model_dump(exclude={"status"})
     if attempt.status == "SUBMITTED":
         return SubmittedAttempt(**fields, questions=results)
+    if attempt.status == "ABANDONED":
+        assert attempt.abandoned_at is not None
+        return AbandonedAttempt(**fields, abandoned_at=attempt.abandoned_at, questions=active)
     return ActiveAttempt(**fields, questions=active)
 
 
@@ -167,6 +171,8 @@ def list_attempts(
 
 
 def require_active(attempt: QuizAttempt) -> None:
+    if attempt.status == "ABANDONED":
+        raise HTTPException(409, "Quiz abandoned; answers are frozen")
     if attempt.status != "ACTIVE":
         raise HTTPException(409, "Quiz already submitted; answers are frozen")
 
@@ -217,6 +223,7 @@ def submit(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> Attemp
     attempt = load_attempt(db, user, course_id, attempt_id)
     if attempt.status == "SUBMITTED":
         return representation(db, attempt, course_id)
+    require_active(attempt)
     try:
         answers = {
             a.quiz_question_id: a
@@ -243,6 +250,25 @@ def submit(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> Attemp
         attempt.status = "SUBMITTED"
         attempt.submitted_at = submitted_at
         apply_reviews(db, user.id, review_results, submitted_at)
+        db.flush()
+        result = representation(db, attempt, course_id)
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
+
+
+def abandon(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> AttemptResponse:
+    attempt = load_attempt(db, user, course_id, attempt_id)
+    if attempt.status == "ABANDONED":
+        return representation(db, attempt, course_id)
+    require_active(attempt)
+    try:
+        # Share the start/submission boundary so adaptive starts see committed closure.
+        db.execute(select(User.id).where(User.id == user.id).with_for_update(key_share=True))
+        attempt.status = "ABANDONED"
+        attempt.abandoned_at = datetime.now(UTC)
         db.flush()
         result = representation(db, attempt, course_id)
         db.commit()

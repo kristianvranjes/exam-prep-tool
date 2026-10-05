@@ -63,3 +63,13 @@ def submit(
     db: Session = Depends(get_db),
 ) -> AttemptResponse:
     return quizzes.submit(db, user, course_id, attempt_id)
+
+
+@router.post("/{attempt_id}/abandon", response_model=AttemptResponse)
+def abandon(
+    course_id: UUID,
+    attempt_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AttemptResponse:
+    return quizzes.abandon(db, user, course_id, attempt_id)

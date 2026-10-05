@@ -113,7 +113,12 @@ def test_phase7_backfill_and_roundtrip_preserve_history(bank, monkeypatch):
                         "FROM answers ORDER BY id"
                     )
                 ).all(),
-                "attempts": conn.execute(text("SELECT * FROM quiz_attempts ORDER BY id")).all(),
+                "attempts": conn.execute(
+                    text(
+                        "SELECT id, quiz_id, status, started_at, submitted_at "
+                        "FROM quiz_attempts ORDER BY id"
+                    )
+                ).all(),
                 "snapshots": conn.execute(text("SELECT * FROM quiz_questions ORDER BY id")).all(),
             }
 

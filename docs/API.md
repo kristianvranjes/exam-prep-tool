@@ -64,6 +64,26 @@ textual match. They include the original submitted `answer.text` and frozen
 not update review progress or scheduling. The UI labels it Ungraded. Semantic and
 manual grading are future work only. See [practice](PRACTICE.md) for the lifecycle.
 
+## Abandoning unfinished practice
+
+`POST /courses/{course_id}/attempts/{attempt_id}/abandon` closes the caller's
+ACTIVE attempt as ABANDONED, even with missing answers. The response includes the
+existing attempt fields, server UTC `abandoned_at`, and public question fields with
+only saved answers. It contains no keys, explanations, reference answers, grades
+or internal snapshots. `submitted_at` stays null. Existing ACTIVE/SUBMITTED
+response fields are unchanged. History lists ABANDONED alongside other statuses.
+
+Repeated abandonment returns the same representation and timestamp. Abandoning a
+SUBMITTED attempt returns 409; saving or submitting an ABANDONED attempt also
+returns 409. Anonymous requests return 401; inaccessible courses, non-owners and
+cross-course attempts return 404. Current membership is required for every read.
+
+Abandonment locks the attempt and uses the start/submission per-user boundary. It
+preserves saved answers, snapshots, grading provenance and all review progress.
+Only status and abandoned_at change. Grading and scheduling are never invoked.
+Its questions stop being excluded as active sources from adaptive selection, but
+remain seen history; eligibility and ranking are otherwise unchanged.
+
 ## Learning progress history and actionable schedule
 
 `GET /courses/{course_id}/review-progress?limit=20&offset=0` returns the

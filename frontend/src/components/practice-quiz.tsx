@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { QuestionType } from "../lib/api";
 import { practiceApi, type Attempt, type AttemptSummary, type SelectionMode } from "../lib/practice-api";
 import { ActiveQuiz } from "./active-quiz";
+import { AbandonedQuiz } from "./abandoned-quiz";
 import { ExperiencePicker, type QuizExperience } from "./quiz-navigation";
 import { QuizResults } from "./quiz-results";
 import { Alert, Button, Input, LoadingState } from "./ui";
@@ -78,13 +79,16 @@ export function PracticeQuiz({ courseId, adaptiveReviewRequest = 0 }: { courseId
         <div className="border-t border-line pt-5"><h4 className="text-lg font-semibold">Your saved attempts</h4>
           {busy ? <LoadingState>Loading quiz…</LoadingState> : <>
             {!history.length && <p className="mt-3 text-muted">No saved attempts yet. Start with shared approved questions or your own drafts from this course.</p>}
-            <ul className="mt-3 flex flex-col gap-2">{history.map(row => <li key={row.id}><Button variant="secondary" onClick={() => void run(async () => { setAttempt(await practiceApi.read(courseId, row.id)); })}>{row.status === "ACTIVE" ? "Resume" : "Review"} quiz · {new Date(row.started_at).toLocaleString()}</Button></li>)}</ul>
+            <ul className="mt-3 flex flex-col gap-2">{history.map(row => <li key={row.id}><Button variant="secondary" onClick={() => void run(async () => { setAttempt(await practiceApi.read(courseId, row.id)); })}>{row.status === "ACTIVE" ? "Resume quiz" : row.status === "SUBMITTED" ? "Review quiz" : "View abandoned quiz"} · {new Date(row.started_at).toLocaleString()}</Button></li>)}</ul>
           </>}
           <div className="mt-4 flex flex-wrap gap-2"><Button variant="secondary" disabled={busy || offset === 0} onClick={() => void run(() => loadHistory(offset - 20))}>Newer attempts</Button><Button variant="secondary" disabled={busy || history.length < 20} onClick={() => void run(() => loadHistory(offset + 20))}>Older attempts</Button><Button variant="ghost" disabled={busy} onClick={() => void run(() => loadHistory(offset))}>Refresh saved attempts</Button></div>
         </div>
       </>}
       {attempt?.status === "ACTIVE" && <ActiveQuiz key={attempt.id} attempt={attempt} experience={experience} setExperience={setExperience} update={setAttempt} back={back} />}
-      {attempt?.status === "SUBMITTED" && <><Button variant="secondary" className="self-start" disabled={busy} onClick={() => void run(back)}>Back to saved attempts</Button><QuizResults attempt={attempt} /></>}
+      {attempt && attempt.status !== "ACTIVE" && <>
+        <Button variant="secondary" className="self-start" disabled={busy} onClick={() => void run(back)}>Back to saved attempts</Button>
+        {attempt.status === "SUBMITTED" ? <QuizResults attempt={attempt} /> : <AbandonedQuiz attempt={attempt} />}
+      </>}
     </>}
   </section>;
 }

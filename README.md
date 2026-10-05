@@ -240,7 +240,7 @@ reopened. Suggest edit sends sparse replacements without revealing hidden curren
 answers/explanations. Another faculty moderator compares base/proposed content and
 rejects or applies atomically, preserving APPROVED and adding one EDITED version.
 Reports remain unchanged by apply; archive closes open reports and suggestions.
-Current Alembic head is **0013**. AI never approves.
+Current Alembic head is **0015**. AI never approves.
 Members see their own private questions and answer-free approved questions from others. Quiz-taking
 and deterministic grading are available separately through Phase 7 practice quizzes.
 
