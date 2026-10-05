@@ -66,7 +66,7 @@ export function SuggestQuestionEdit({ question }: { question: SuggestableQuestio
       <fieldset disabled={busy} className="space-y-4">
         <legend className="font-semibold">Propose a correction</legend>
         <p className="text-sm text-muted">Leave fields blank to keep them unchanged. Your proposal is reviewed by faculty moderators before it changes the question.</p>
-        <label className="block text-sm font-medium">Proposed stem
+        <label className="block text-sm font-medium">Proposed question text
           <textarea name="stem" maxLength={400} className={textareaClass} placeholder={question.stem} />
         </label>
         <label className="block text-sm font-medium">Proposed explanation

@@ -12,16 +12,24 @@ function choose(text = '{"version":"quiz-import-v1","questions":[]}', name = "qu
   Object.defineProperty(file, "text", { value: async () => text });
   fireEvent.change(screen.getByLabelText("Quiz JSON file"), { target: { files: [file] } });
 }
-function open() { render(<QuizImport courseId="course" disabled={false} onImported={onImported} />); }
+function open() {
+  render(<QuizImport courseId="course" disabled={false} onImported={onImported} />);
+  fireEvent.click(screen.getByText("Import question drafts"));
+}
 it("shows the selected filename before import", () => {
   open(); choose("{}", "lecture-quiz.json");
   expect(screen.getByRole("status")).toHaveTextContent("Selected file: lecture-quiz.json");
   expect(screen.getByRole("button", { name: "Import drafts" })).toBeEnabled();
+  fireEvent.click(screen.getByText("Import question drafts"));
+  expect(screen.getByLabelText("Quiz JSON file")).not.toBeVisible();
+  fireEvent.click(screen.getByText("Import question drafts"));
+  expect(screen.getByRole("status")).toHaveTextContent("Selected file: lecture-quiz.json");
+  expect(mock.importQuestions).not.toHaveBeenCalled();
 });
 it("imports the file, refreshes the bank, and explains draft review", async () => {
   open(); choose(); fireEvent.click(screen.getByRole("button", { name: "Import drafts" }));
-  await screen.findByText(/Imported 1 DRAFT/);
-  expect(screen.getByRole("status")).toHaveTextContent("Imported 1 DRAFT questions. Review each before approval.");
+  await screen.findByText(/Imported 1 private draft/);
+  expect(screen.getByRole("status")).toHaveTextContent("Imported 1 private draft question. Check each draft, then submit it for faculty review when ready.");
   expect(onImported).toHaveBeenCalledWith(imported);
   expect(mock.importQuestions).toHaveBeenCalledWith("course", expect.stringContaining("quiz-import-v1"));
   expect(screen.getByRole("button", { name: "Import drafts" })).toBeDisabled();
@@ -41,7 +49,7 @@ it("shows backend validation errors and permits retry", async () => {
   expect(screen.getByLabelText("Quiz JSON file")).toHaveAttribute("aria-invalid", "true");
   expect(onImported).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Import drafts" }));
-  await screen.findByText(/Imported 1 DRAFT/);
+  await screen.findByText(/Imported 1 private draft/);
   expect(mock.importQuestions).toHaveBeenCalledTimes(2);
 });
 it("rejects wrong extensions and oversize files", async () => {
@@ -58,7 +66,7 @@ it("blocks duplicate submits while pending", async () => {
   fireEvent.submit(button.closest("form")!); fireEvent.submit(button.closest("form")!);
   await waitFor(() => expect(mock.importQuestions).toHaveBeenCalledTimes(1));
   expect(screen.getByRole("button", { name: /^Importing/ })).toBeDisabled();
-  finish(imported); await screen.findByText(/Imported 1 DRAFT/);
+  finish(imported); await screen.findByText(/Imported 1 private draft/);
 });
 it("provides a copyable prompt and downloadable example", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);

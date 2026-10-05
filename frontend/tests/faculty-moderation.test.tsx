@@ -206,7 +206,7 @@ describe("FacultyModeration", () => {
 
     apiMock.questionReview.mockResolvedValueOnce([]);
     fireEvent.click(screen.getByRole("button", { name: "Refresh queue" }));
-    expect(await screen.findByText("No pending review")).toBeInTheDocument();
+    expect(await screen.findByText("No questions awaiting faculty review")).toBeInTheDocument();
 
     apiMock.questionReview.mockRejectedValueOnce(new Error("Queue unavailable"));
     fireEvent.click(screen.getByRole("button", { name: "Refresh queue" }));
@@ -287,6 +287,9 @@ describe("FacultyModeration", () => {
     expect(within(mcq).getByText("Explanation: Because four is correct.")).toBeInTheDocument();
     expect(within(mcq).getByText("Concepts: concept-a, concept-b")).toBeInTheDocument();
     expect(within(mcq).getByText("Sources: material-7 / chunk-7 (chunk 3)")).toBeInTheDocument();
+    expect(within(mcq).getByText("Sources: material-7 / chunk-7 (chunk 3)")).not.toBeVisible();
+    fireEvent.click(within(mcq).getByText("Source details"));
+    expect(within(mcq).getByText("Sources: material-7 / chunk-7 (chunk 3)")).toBeVisible();
     const self = screen.getByRole("article", { name: "The answer is true" });
     expect(within(self).getByText("Answer: True")).toBeInTheDocument();
     expect(within(self).getByText("Another faculty moderator must review this question.")).toBeInTheDocument();
@@ -423,7 +426,7 @@ describe("FacultyModeration", () => {
     await act(async () => decision.resolve(item));
     await act(async () => refresh.resolve([item]));
     expect(screen.queryByRole("article", { name: "Review during refresh" })).not.toBeInTheDocument();
-    expect(screen.getByText("No pending review")).toBeInTheDocument();
+    expect(screen.getByText("No questions awaiting faculty review")).toBeInTheDocument();
   });
 
   it("keeps Previous available when the last page is empty", async () => {
@@ -432,7 +435,7 @@ describe("FacultyModeration", () => {
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties} />);
     await screen.findByText("Full 0");
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(await screen.findByText("No pending review")).toBeInTheDocument();
+    expect(await screen.findByText("No questions awaiting faculty review")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
   });
@@ -482,7 +485,7 @@ describe("FacultyModeration suggestions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reports" }));
     expect(await screen.findByText("No open reports")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Question review" }));
-    expect(await screen.findByText("No pending review")).toBeInTheDocument();
+    expect(await screen.findByText("No questions awaiting faculty review")).toBeInTheDocument();
   });
 
   it.each(["TRUE_FALSE", "SHORT_ANSWER"] as const)("renders moderator-only %s answer changes", async type => {

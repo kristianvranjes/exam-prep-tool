@@ -48,8 +48,11 @@ function QuestionReviewCard({
       {question.type === "SHORT_ANSWER" && <p className="text-sm text-muted">Reference answer: {question.reference_answer || "No reference answer"}</p>}
     </div>
     {question.explanation && <p className="text-sm text-muted">Explanation: {question.explanation}</p>}
-    {question.concept_ids.length > 0 && <p className="text-sm text-muted">Concepts: {question.concept_ids.join(", ")}</p>}
-    {question.source_chunks.length > 0 && <p className="break-words text-sm text-muted">Sources: {question.source_chunks.map(chunk => `${chunk.material_id} / ${chunk.chunk_id} (chunk ${chunk.ordinal + 1})`).join(", ")}</p>}
+    {(question.concept_ids.length > 0 || question.source_chunks.length > 0) && <details className="rounded-lg border border-line p-3">
+      <summary className="text-sm font-medium">Source details</summary>
+      {question.concept_ids.length > 0 && <p className="mt-2 text-sm text-muted">Concepts: {question.concept_ids.join(", ")}</p>}
+      {question.source_chunks.length > 0 && <p className="mt-2 break-words text-sm text-muted">Sources: {question.source_chunks.map(chunk => `${chunk.material_id} / ${chunk.chunk_id} (chunk ${chunk.ordinal + 1})`).join(", ")}</p>}
+    </details>}
     {selfReview ? <Alert>Another faculty moderator must review this question.</Alert> : <>
       <div className="flex flex-wrap gap-2">
         <Button type="button" onClick={onApprove} disabled={busy}>{busyAction === "approve" ? "Approving…" : "Approve"}</Button>
@@ -190,7 +193,7 @@ export function FacultyModeration({ currentUserId, moderatedFaculties }: { curre
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <h2 id="moderation-heading" className="text-2xl font-semibold tracking-tight">Moderation queue</h2>
-        <p className="mt-2 text-muted">Review pending faculty submissions across your moderated courses.</p>
+        <p className="mt-2 text-muted">Review submitted questions across your moderated courses.</p>
       </div>
       {mode === "review" && <Button variant="secondary" type="button" onClick={() => { setLoadingQueue(true); setQueueError(""); setSuccessNotice(""); setQueueRevision(value => value + 1); }} disabled={loadingQueue}>Refresh queue</Button>}
     </div>
@@ -222,7 +225,7 @@ export function FacultyModeration({ currentUserId, moderatedFaculties }: { curre
     {successNotice && <p role="status" className="mt-4 rounded-lg border border-line bg-subtle p-3 text-sm text-foreground">{successNotice}</p>}
     {loadingCourses ? <LoadingState>Loading faculty courses…</LoadingState> : null}
     {loadingQueue ? <LoadingState>Loading moderation queue…</LoadingState> : null}
-    {!loadingQueue && !queueError && !queue.length && <EmptyState title="No pending review">There are no pending questions on this page.</EmptyState>}
+    {!loadingQueue && !queueError && !queue.length && <EmptyState title="No questions awaiting faculty review">There are no submitted questions awaiting review on this page.</EmptyState>}
 
     {!loadingQueue && queue.length > 0 && (
       <div className="mt-5 space-y-4">

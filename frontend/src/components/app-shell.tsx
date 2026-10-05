@@ -1,17 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { api, Course, Faculty, User, type CourseMembership } from "../lib/api";
-import { ProgressPanel } from "./progress-panel";
-import { PracticeQuiz } from "./practice-quiz";
-import { QuestionBank } from "./question-bank";
-import { CourseMaterials } from "./course-materials";
-import { CourseBrowser } from "./course-browser";
-import { CourseSettings } from "./course-settings";
+import { CourseWorkspace, type CourseDestination } from "./course-workspace";
+import { StudentHome } from "./student-home";
+import { FacultyWorkspace } from "./faculty-workspace";
 import { ApplicationFrame, Brand } from "./application-frame";
-import { FacultyModeration } from "./faculty-moderation";
 import { AuthScreen, type AuthMode } from "./auth-screen";
-import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
+import { Alert, Button, LoadingState } from "./ui";
 
 export function AppShell() {
   const [user, setUser] = useState<User | null>(null);
@@ -30,7 +26,23 @@ export function AppShell() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [loadingCourses, setLoadingCourses] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [view, setView] = useState<"home" | "course" | "management">("home");
+  const [destination, setDestination] = useState<CourseDestination>("overview");
+  const [knownAttemptId, setKnownAttemptId] = useState<string | null>(null);
+  const [resumeRequest, setResumeRequest] = useState(0);
+  const [activePractice, setActivePractice] = useState(false);
+  const [managementVisited, setManagementVisited] = useState(false);
+  const workspaceEdited = useRef(false);
+  const managementEdited = useRef(false);
   const selectedId = selected?.id;
+
+  useEffect(() => {
+    if (!user || checkingSession) return;
+    const id = view === "course" ? destination === "practice" ? "practice" : "selected-course-heading" : view === "management" ? "management-heading" : "home-heading";
+    const heading = document.getElementById(id);
+    heading?.focus({ preventScroll: true });
+    if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+  }, [view, destination, selectedId, user, checkingSession]);
 
   useEffect(() => {
     let active = true;
@@ -83,18 +95,29 @@ export function AppShell() {
   }
 
   async function logout() {
+    if ((workspaceEdited.current || managementEdited.current) && !window.confirm("Log out and close your workspaces? Any unsaved answers or edits will be lost.")) return;
     setLoggingOut(true); setError("");
-    try { await api.logout(); setUser(null); setCourses([]); setFaculties([]); setSelected(null); setSelectedRole(null); setMembershipError(""); setDeletedNotice(""); setAdaptiveReviewRequest(0); setMode("login"); }
+    try { await api.logout(); setUser(null); setCourses([]); setFaculties([]); setSelected(null); setSelectedRole(null); setMembershipError(""); setDeletedNotice(""); setAdaptiveReviewRequest(0); setKnownAttemptId(null); setResumeRequest(0); setView("home"); setDestination("overview"); setManagementVisited(false); workspaceEdited.current = false; managementEdited.current = false; setMode("login"); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not log out. Try again."); }
     finally { setLoggingOut(false); }
   }
 
   function selectCourse(course: Course) {
+    if (selected?.id === course.id) { setView("course"); setDestination("overview"); return; }
+    // Forms have no shared saved/dirty signal. Confirm conservatively after any field edit;
+    // a submission event alone is not evidence that the save succeeded.
+    if (workspaceEdited.current && !window.confirm("Switch courses and close the current workspace? Any unsaved answers or edits will be lost. Cancel to return and save your work.")) return;
+    workspaceEdited.current = false;
+    setActivePractice(false);
     setSelected(course);
     setSelectedRole(null);
     setMembershipError("");
     setDeletedNotice("");
     setAdaptiveReviewRequest(0);
+    setKnownAttemptId(null);
+    setResumeRequest(0);
+    setDestination("overview");
+    setView("course");
   }
 
   function courseUpdated(updated: Course) {
@@ -104,60 +127,60 @@ export function AppShell() {
   }
 
   function courseDeleted(deleted: Course) {
+    setActivePractice(false);
     setCourses(current => current.filter(course => course.id !== deleted.id));
     setSelected(null);
     setSelectedRole(null);
     setMembershipError("");
     setAdaptiveReviewRequest(0);
+    setKnownAttemptId(null);
+    setResumeRequest(0);
+    workspaceEdited.current = false;
+    setView("home");
+    setDestination("overview");
     setCatalogRevision(value => value + 1);
     setDeletedNotice(`${deleted.name} was permanently deleted.`);
   }
 
   function openAdaptiveReview() {
     setAdaptiveReviewRequest(value => value + 1);
-    const practice = document.getElementById("practice");
-    practice?.focus();
-    practice?.scrollIntoView?.();
+    setDestination("practice");
+    setView("course");
+  }
+
+  function resumeSession() {
+    setResumeRequest(value => value + 1);
+    setDestination("practice");
+    setView("course");
   }
 
   if (checkingSession) return <main className="mx-auto max-w-6xl px-6 py-8"><Brand /><LoadingState>Loading your study space…</LoadingState></main>;
   if (!user) return <AuthScreen mode={mode} busy={busy} error={error} submit={submitAuth} changeMode={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }} />;
 
   const isOwner = !!selected && selectedRole?.courseId === selected.id && selectedRole.role === "OWNER";
-  return <ApplicationFrame user={user} courseName={selected?.name} logout={() => void logout()} busy={loggingOut} moderationLink={faculties.length > 0} ownerSettingsLink={isOwner}>
-    <section id="courses" tabIndex={-1} aria-labelledby="courses-heading">
-      <h1 id="courses-heading" className="text-3xl font-semibold tracking-tight">Your courses</h1>
-      <p className="mt-2 text-muted">Choose a course and pick up where you left off.</p>
-      {error && <Alert className="mt-5">{error}</Alert>}
-      {deletedNotice && <p role="status" className="mt-5 rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{deletedNotice}</p>}
-      <div className="mt-6">
-        {loadingCourses ? <LoadingState>Loading courses…</LoadingState> : courses.length === 0 ? <EmptyState title="No courses yet">Find your faculty in <a href="#browse-courses" className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-foreground">Browse courses</a> and join a course to start studying.</EmptyState> :
-          <ul className="grid gap-3 sm:grid-cols-2">{courses.map(course => <li key={course.id}>
-            <button type="button" aria-pressed={selected?.id === course.id} className="h-full w-full rounded-xl border border-line bg-surface p-5 text-left hover:border-accent aria-pressed:border-accent aria-pressed:bg-accent-surface" onClick={() => selectCourse(course)}>
-              <span className="block text-lg font-semibold">{course.name}</span>{course.code && <Badge className="mt-2">{course.code}</Badge>}<span className="mt-3 block text-sm text-muted">{course.description || "No description"}</span>
-            </button>
-          </li>)}</ul>}
-      </div>
-    </section>
-    <CourseBrowser joinedCourses={courses} loadingMembership={loadingCourses} onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])} onOpen={selectCourse} refreshRevision={catalogRevision} />
-    {faculties.length > 0 && <FacultyModeration currentUserId={user.id} moderatedFaculties={faculties} />}
-    {selected && <section id="selected-course" tabIndex={-1} className="mt-10" aria-labelledby="selected-course-heading">
-      <div className="border-t border-line pt-8"><h2 id="selected-course-heading" className="text-2xl font-semibold tracking-tight">{selected.name}</h2>{selected.code && <p className="mt-1 text-sm text-muted">{selected.code}</p>}<p className="mt-3 text-muted">{selected.description || "No description"}</p></div>
-      {membershipError && <div className="mt-4"><Alert>{membershipError}</Alert><Button variant="secondary" className="mt-3" onClick={() => { setMembershipError(""); setMembershipRetry(value => value + 1); }}>Retry course permissions</Button></div>}
-      <div id="materials" tabIndex={-1}><CourseMaterials key={selected.id} courseId={selected.id} currentUserId={user.id} /></div>
-      <div id="practice" tabIndex={-1}><PracticeQuiz key={`practice-${selected.id}`} courseId={selected.id} adaptiveReviewRequest={adaptiveReviewRequest} /></div>
-      <div id="progress" tabIndex={-1}><ProgressPanel key={`progress-${selected.id}`} courseId={selected.id} onOpenAdaptiveReview={openAdaptiveReview} /></div>
-      <div id="questions" tabIndex={-1}><QuestionBank key={`questions-${selected.id}`} courseId={selected.id} /></div>
-      {isOwner && <CourseSettings key={selected.id} course={selected} onUpdated={courseUpdated} onDeleted={courseDeleted} />}
-    </section>}
-    {faculties.length > 0 && <Surface className="mt-10">
-      <form onSubmit={createCourse} className="space-y-4" aria-label="Create a course">
-        <div><h2 className="text-lg font-semibold">Create a course</h2><p className="mt-1 text-sm text-muted">Only faculty moderators can create shared courses.</p></div>
-        <label className="block text-sm font-medium">Faculty<Select name="faculty_id" required defaultValue="" className="mt-2"><option value="" disabled>Select a faculty</option>{faculties.map(faculty => <option key={faculty.id} value={faculty.id}>{faculty.name}</option>)}</Select></label>
-        <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium">Course name<Input name="name" required maxLength={150} placeholder="Course name" className="mt-2" /></label><label className="block text-sm font-medium">Code (optional)<Input name="code" maxLength={50} className="mt-2" /></label></div>
-        <label className="block text-sm font-medium">Description (optional)<textarea name="description" maxLength={2000} rows={3} className="mt-2 w-full rounded-lg border border-line bg-surface p-3 text-base" /></label>
-        <Button type="submit" disabled={busy || faculties.length === 0}>{busy ? "Creating…" : "Create course"}</Button>
-      </form>
-    </Surface>}
+  return <ApplicationFrame user={user} courseName={view === "course" ? selected?.name : undefined} logout={() => void logout()} busy={loggingOut}
+    focusedPractice={view === "course" && destination === "practice" && activePractice}
+    onHome={() => setView("home")} homeActive={view === "home"} managementActive={view === "management"}
+    onManagement={faculties.length > 0 ? () => { setManagementVisited(true); setView("management"); } : undefined}>
+    {error && <Alert className="mb-5">{error}</Alert>}
+    {deletedNotice && <p role="status" className="mb-5 rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{deletedNotice}</p>}
+    <div hidden={view !== "home"}>
+      <StudentHome courses={courses} loading={loadingCourses} onOpen={selectCourse}
+        onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])}
+        catalogRevision={catalogRevision} resumableCourse={knownAttemptId ? selected : null} onResume={resumeSession} />
+    </div>
+    <div hidden={view !== "course"}>
+      {selected && <>
+        {membershipError && <div className="mb-4"><Alert>{membershipError}</Alert><Button variant="secondary" className="mt-3" onClick={() => { setMembershipError(""); setMembershipRetry(value => value + 1); }}>Retry course permissions</Button></div>}
+        <CourseWorkspace key={selected.id} course={selected} currentUserId={user.id} isOwner={isOwner} visible={view === "course"}
+          destination={destination} navigate={setDestination} goHome={() => setView("home")} onEdited={() => { workspaceEdited.current = true; }}
+          adaptiveReviewRequest={adaptiveReviewRequest} onOpenAdaptiveReview={openAdaptiveReview}
+          knownAttemptId={knownAttemptId} resumeRequest={resumeRequest} onResume={resumeSession} onResumableAttemptChange={setKnownAttemptId} activeSession={activePractice} onActiveSessionChange={setActivePractice}
+          onUpdated={courseUpdated} onDeleted={courseDeleted} />
+      </>}
+    </div>
+    <div hidden={view !== "management"} onChangeCapture={() => { managementEdited.current = true; }}>
+      {managementVisited && faculties.length > 0 && <FacultyWorkspace faculties={faculties} currentUserId={user.id} busy={busy} createCourse={createCourse} goHome={() => setView("home")} />}
+    </div>
   </ApplicationFrame>;
 }

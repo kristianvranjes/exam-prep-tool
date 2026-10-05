@@ -48,7 +48,7 @@ function CourseProgressPanel({ courseId, onOpenAdaptiveReview }: { courseId: str
       });
     }).catch(() => {
       if (id !== requestId.current) return;
-      setError(action === "page" ? "Could not load this progress page. Try again." : "Could not load learning progress. Try again.");
+      setError(action === "page" ? "Could not load this progress page. Try again." : "Could not load progress. Try again.");
       setFailed({ action, offset: nextOffset });
     }).finally(() => {
       if (id !== requestId.current) return;
@@ -69,23 +69,24 @@ function CourseProgressPanel({ courseId, onOpenAdaptiveReview }: { courseId: str
     : "No data yet";
   const metrics = summary ? [
     ["Reviewed questions", summary.reviewed_questions], ["Due now", summary.due_now],
-    ["Upcoming", summary.upcoming], ["Resolved reviews", summary.resolved_review_count],
-    ["Correct reviews", summary.correct_review_count], ["Incorrect reviews", summary.incorrect_review_count],
+    ["Upcoming", summary.upcoming], ["Graded answers", summary.resolved_review_count],
+    ["Correct answers", summary.correct_review_count], ["Incorrect answers", summary.incorrect_review_count],
     ["Accuracy", accuracy],
   ] as const : [];
 
-  return <section className="mt-6 min-w-0 space-y-5 border-t border-line pt-6" aria-label="Learning progress">
+  return <section className="mt-6 min-w-0 space-y-5 border-t border-line pt-6" aria-label="Progress">
     <div>
-      <h3 className="text-xl font-semibold">Learning progress</h3>
-      <p className="mt-2 text-sm text-muted">Your learning history reflects resolved submissions. Pending answers do not change it.</p>
+      <h3 className="text-xl font-semibold">Progress</h3>
+      <p className="mt-2 text-sm text-muted">Automatically graded answers from submitted quizzes update your review schedule. Accuracy counts graded answers across sessions, including repeated questions. Short answers require self-review and do not change these totals or the schedule.</p>
     </div>
-    {!open && <Button variant="secondary" onClick={openDashboard}>Open learning progress</Button>}
+    {!open && <Button variant="secondary" onClick={openDashboard}>Open progress</Button>}
     {open && <>
       <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" disabled={busy !== null} onClick={() => load("refresh", dashboard?.offset ?? 0)}>Refresh progress</Button>
-        {onOpenAdaptiveReview && <Button disabled={busy !== null} onClick={onOpenAdaptiveReview}>Open adaptive review</Button>}
+        {onOpenAdaptiveReview && <Button disabled={busy !== null} onClick={onOpenAdaptiveReview}>Open recommended practice</Button>}
+        <Button variant="ghost" disabled={busy !== null} onClick={() => load("refresh", dashboard?.offset ?? 0)}>Refresh progress</Button>
       </div>
-      {busy === "initial" && <LoadingState>Loading learning progress…</LoadingState>}
+      {onOpenAdaptiveReview && <p className="text-sm text-muted">Prioritizes questions due for review. It can also include new and other available questions. Opens practice setup without starting a quiz.</p>}
+      {busy === "initial" && <LoadingState>Loading progress…</LoadingState>}
       {busy === "refresh" && <p role="status" className="text-sm text-muted">Refreshing progress…</p>}
       {busy === "page" && <p role="status" className="text-sm text-muted">Loading progress page…</p>}
       {error && <div className="space-y-3"><Alert>{error}</Alert>
@@ -100,20 +101,28 @@ function CourseProgressPanel({ courseId, onOpenAdaptiveReview }: { courseId: str
             <div><dt className="text-sm text-muted">Last reviewed</dt><dd>{summary.last_reviewed_at ? <time dateTime={summary.last_reviewed_at}>{dateTime(summary.last_reviewed_at)}</time> : "Not reviewed yet"}</dd></div>
             <div><dt className="text-sm text-muted">Next scheduled review</dt><dd>{summary.next_due_at ? <time dateTime={summary.next_due_at}>{dateTime(summary.next_due_at)}</time> : "No review scheduled"}</dd></div>
           </dl>
-          <div><h5 className="font-semibold">Review stages</h5><ul className="mt-2 flex flex-wrap gap-2">{summary.stage_counts.map(stage => <li key={stage.review_stage}><Badge>Stage {stage.review_stage}: {stage.question_count}</Badge></li>)}</ul></div>
+          <details className="rounded-lg border border-line p-3">
+            <summary className="text-sm font-medium">Scheduling details</summary>
+            <p className="mt-2 text-sm text-muted">Stages determine when available questions are scheduled again; they do not measure mastery. Archived questions remain in learning history but are excluded from actionable due counts.</p>
+            <h5 className="mt-3 font-semibold">Review stages</h5><ul className="mt-2 flex flex-wrap gap-2">{summary.stage_counts.map(stage => <li key={stage.review_stage}><Badge>Stage {stage.review_stage}: {stage.question_count}</Badge></li>)}</ul>
+          </details>
         </Surface>
         <section className="min-w-0 space-y-3" aria-label="Question review schedule">
           <div><h4 className="text-lg font-semibold">Question schedule</h4><p className="text-sm text-muted">Page {dashboard.offset / 20 + 1}</p></div>
-          {dashboard.rows.length === 0 && <EmptyState title={dashboard.offset === 0 ? "No reviewed questions yet" : "No questions on this page"}>Submit a practice quiz with resolved answers to build your schedule.</EmptyState>}
+          {dashboard.rows.length === 0 && <EmptyState title={dashboard.offset === 0 ? "No reviewed questions yet" : "No questions on this page"}>Submit a practice quiz with multiple-choice or true/false answers to build your review schedule.</EmptyState>}
           {dashboard.rows.length > 0 && <ul className="space-y-3">{dashboard.rows.map(row => <li key={row.question_id} className="min-w-0"><Surface className="min-w-0 space-y-2 p-4 sm:p-5">
-            <p className="break-words text-sm font-medium [overflow-wrap:anywhere]">Question {row.question_id}</p>
-            <div className="flex flex-wrap gap-2"><Badge>Stage {row.review_stage}</Badge><Badge>{row.is_actionable ? (new Date(row.due_at).getTime() <= new Date(summary.as_of).getTime() ? "Due now" : "Upcoming") : "History only"}</Badge></div>
-            <p className="text-sm">Resolved {row.resolved_review_count} · Correct {row.correct_review_count} · Incorrect {row.incorrect_review_count}</p>
+            <div><Badge>{row.is_actionable ? (new Date(row.due_at).getTime() <= new Date(summary.as_of).getTime() ? "Due now" : "Upcoming") : "History only"}</Badge></div>
+            <p className="text-sm">Graded answers {row.resolved_review_count} · Correct {row.correct_review_count} · Incorrect {row.incorrect_review_count}</p>
             <p className="text-sm">Last result: {row.last_result === "CORRECT" ? "Correct" : "Incorrect"}</p>
             <p className="text-sm">Last reviewed: <time dateTime={row.last_reviewed_at}>{dateTime(row.last_reviewed_at)}</time></p>
             {row.is_actionable
               ? <p className="text-sm">Next review: <time dateTime={row.due_at}>{dateTime(row.due_at)}</time></p>
               : <p className="text-sm text-muted">This question is no longer available for practice.</p>}
+            <details className="rounded-lg border border-line p-3">
+              <summary className="text-sm font-medium">Question details</summary>
+              <p className="mt-2 break-words text-sm [overflow-wrap:anywhere]">Question ID: {row.question_id}</p>
+              <Badge>Stage {row.review_stage}</Badge>
+            </details>
           </Surface></li>)}</ul>}
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" disabled={busy !== null || dashboard.offset === 0} onClick={() => load("page", dashboard.offset - 20)}>Previous</Button>

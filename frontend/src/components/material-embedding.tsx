@@ -75,7 +75,9 @@ function EmbeddingPanel({ materialId }: { materialId: string }) {
   const label = !status || status.total_chunks === 0 ? "Not prepared"
     : status.is_current ? "Current" : "Needs refresh or partially stale";
 
-  return <Surface className="mt-5 min-w-0 space-y-3 bg-subtle/30" role="region" aria-label="Semantic sources">
+  return <details className="mt-5 min-w-0 rounded-lg border border-line p-3">
+    <summary className="text-sm font-medium">Advanced: AI source preparation</summary>
+    <Surface className="mt-3 min-w-0 space-y-3 bg-subtle/30" role="region" aria-label="Semantic sources">
     <div>
       <h5 className="font-semibold">Semantic sources</h5>
       <p className="mt-1 text-sm text-muted">Optional preparation for internal AI question generation. Manual question creation and JSON import still work without it.</p>
@@ -88,6 +90,7 @@ function EmbeddingPanel({ materialId }: { materialId: string }) {
     {result && <p role="status" className="text-sm text-muted">Prepared {result.embedded} chunks; skipped {result.skipped} already current chunks.</p>}
     {statusError && <><Alert>{statusError}</Alert><Button variant="secondary" disabled={loading || preparing} onClick={() => void loadStatus(false)}>Retry status</Button></>}
     {prepareError && <Alert>{prepareError} Semantic preparation needs the optional local embedding model; manual question creation and JSON import remain available.</Alert>}
-    {status && !status.is_current && !statusUncertain && <Button disabled={loading || preparing} onClick={() => void prepare()}>{preparing ? "Preparing…" : status.current_chunks > 0 ? "Refresh semantic sources" : "Prepare semantic sources"}</Button>}
-  </Surface>;
+    {status && !status.is_current && !statusUncertain && <Button variant="secondary" disabled={loading || preparing} onClick={() => void prepare()}>{preparing ? "Preparing…" : status.current_chunks > 0 ? "Refresh semantic sources" : "Prepare semantic sources"}</Button>}
+    </Surface>
+  </details>;
 }

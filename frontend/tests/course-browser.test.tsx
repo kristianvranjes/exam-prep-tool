@@ -113,7 +113,7 @@ it("opens the existing joined course without posting another join", async () => 
   const joined = { ...course, description: "Joined course details" };
   render(view([joined]));
   await selectFaculty();
-  fireEvent.click(await screen.findByRole("link", { name: "Open course: Algorithms" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open course: Algorithms" }));
   expect(screen.getByText("Joined")).toBeInTheDocument();
   expect(onOpen).toHaveBeenCalledWith(joined);
   expect(mock.joinCourse).not.toHaveBeenCalled();
@@ -135,7 +135,7 @@ it("disables joining while membership is loading and while that join is pending"
   expect(screen.getByRole("status")).toHaveTextContent("Algorithms added to My courses.");
   expect(mock.joinCourse).toHaveBeenCalledTimes(1);
   rendered.rerender(view([course]));
-  expect(screen.getByRole("link", { name: "Open course: Algorithms" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Open course: Algorithms" })).toBeInTheDocument();
 });
 
 it("allows retrying a failed join and keeps the faculty selected", async () => {

@@ -38,6 +38,7 @@ async function ready(rows: Concept[] = [draft], role: "OWNER" | "MEMBER" = "MEMB
   mock.concepts.mockResolvedValueOnce(rows);
   mock.membership.mockResolvedValue({ role });
   render(<ConceptReview courseId="course1" materialId="m1" />);
+  fireEvent.click(screen.getByText("Advanced: concept extraction and review"));
   await waitFor(() => expect(screen.queryByText("Loading concepts…")).not.toBeInTheDocument());
 }
 
@@ -51,6 +52,8 @@ it("loads material-scoped concepts and membership with an explicit pending state
   const pending = deferred<Concept[]>();
   mock.concepts.mockReturnValueOnce(pending.promise);
   render(<ConceptReview courseId="course1" materialId="m1" />);
+  expect(screen.getByText("Loading concepts…")).not.toBeVisible();
+  fireEvent.click(screen.getByText("Advanced: concept extraction and review"));
   expect(screen.getByText("Loading concepts…")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Extract concepts" })).toBeDisabled();
   await act(async () => pending.resolve([draft]));
@@ -59,11 +62,16 @@ it("loads material-scoped concepts and membership with an explicit pending state
   expect(within(card("Matrica")).getByText("Aliases: Matrix")).toBeInTheDocument();
   expect(mock.concepts).toHaveBeenCalledWith("course1", "m1");
   expect(mock.membership).toHaveBeenCalledWith("course1");
+  fireEvent.click(screen.getByText("Advanced: concept extraction and review"));
+  fireEvent.click(screen.getByText("Advanced: concept extraction and review"));
+  expect(mock.concepts).toHaveBeenCalledTimes(1);
+  expect(mock.membership).toHaveBeenCalledTimes(1);
 });
 
 it("keeps initial failure local and retries the combined list and permission load", async () => {
   mock.concepts.mockRejectedValueOnce(new Error("list unavailable")).mockResolvedValueOnce([draft]);
   render(<ConceptReview courseId="course1" materialId="m1" />);
+  fireEvent.click(screen.getByText("Advanced: concept extraction and review"));
   expect(await screen.findByRole("alert")).toHaveTextContent("Could not load concepts and review permissions.");
   expect(screen.queryByText("No concept proposals yet.")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Extract concepts" })).toBeDisabled();
@@ -77,10 +85,11 @@ it("lets a MEMBER extract and inspect escaped source text without review control
   await ready();
   expect(screen.queryByRole("button", { name: /^(Approve|Reject)/ })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Extract concepts" }));
-  expect(await screen.findByText(/Extraction SUCCEEDED · model fake/)).toBeInTheDocument();
+  expect(await screen.findByText(/Extraction succeeded · model fake/)).toBeInTheDocument();
   expect(mock.extractConcepts).toHaveBeenCalledWith("m1");
   await waitFor(() => expect(mock.concepts).toHaveBeenCalledTimes(2));
   fireEvent.click(screen.getByRole("button", { name: "Inspect sources for Matrica" }));
+  fireEvent.click(await screen.findByText("Source excerpt 1"));
   const text = await screen.findByRole("region", { name: "Source text for chunk chunk1" });
   expect(text).toHaveTextContent("<script>source text</script>");
   expect(text.innerHTML).toContain("&lt;script&gt;");
@@ -156,14 +165,14 @@ it("shows extraction pending state and blocks duplicate submissions", async () =
   fireEvent.click(extract);
   expect(mock.extractConcepts).toHaveBeenCalledTimes(1);
   await act(async () => pending.resolve(job));
-  expect(await screen.findByText(/Extraction SUCCEEDED · model fake/)).toBeInTheDocument();
+  expect(await screen.findByText(/Extraction succeeded · model fake/)).toBeInTheDocument();
 });
 
 it("refreshes material-scoped concepts after successful extraction", async () => {
   await ready();
   mock.concepts.mockResolvedValueOnce([draft, other]);
   fireEvent.click(screen.getByRole("button", { name: "Extract concepts" }));
-  expect(await screen.findByText(/Extraction SUCCEEDED · model fake/)).toBeInTheDocument();
+  expect(await screen.findByText(/Extraction succeeded · model fake/)).toBeInTheDocument();
   expect(await screen.findByRole("heading", { name: "Vectors" })).toBeInTheDocument();
   expect(mock.concepts).toHaveBeenLastCalledWith("course1", "m1");
 });
@@ -173,10 +182,10 @@ it("shows a FAILED job's safe error and allows an explicit extraction retry", as
   await ready();
   fireEvent.click(screen.getByRole("button", { name: "Extract concepts" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Local AI unavailable.");
-  expect(screen.getByText(/Extraction FAILED · model fake/)).toBeInTheDocument();
+  expect(screen.getByText(/Extraction failed · model fake/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Extract concepts" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "Extract concepts" }));
-  expect(await screen.findByText(/Extraction SUCCEEDED · model fake/)).toBeInTheDocument();
+  expect(await screen.findByText(/Extraction succeeded · model fake/)).toBeInTheDocument();
   expect(mock.extractConcepts).toHaveBeenCalledTimes(2);
 });
 
@@ -250,8 +259,10 @@ it("keeps long concept and source content in flexible wrapping containers", asyn
   expect(card(longName)).toHaveClass("min-w-0");
   expect(screen.getByText(longConcept.aliases[0], { exact: false })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Inspect sources for " + longName }));
-  const summary = await screen.findByText(new RegExp("Chunk 12 · material " + longId));
+  const summary = await screen.findByText("Source excerpt 13");
   expect(summary).toHaveClass("break-words");
+  fireEvent.click(summary);
+  expect(screen.getByText("Material ID: " + longId)).toBeVisible();
   const sourceText = screen.getByRole("region", { name: /Source text for chunk chunk-/ });
   expect(sourceText).toHaveClass("max-w-full");
   expect(sourceText).toHaveTextContent("<b>plain text</b>");

@@ -15,6 +15,12 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+function renderEmbedding() {
+  const view = render(<MaterialEmbedding materialId="m1" />);
+  fireEvent.click(screen.getByText("Advanced: AI source preparation"));
+  return view;
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   mock.materialEmbeddingStatus.mockResolvedValue(stale);
@@ -23,11 +29,16 @@ beforeEach(() => {
 
 it("reads status once and prepares only after an explicit click", async () => {
   mock.materialEmbeddingStatus.mockResolvedValueOnce(stale).mockResolvedValueOnce(current);
-  render(<MaterialEmbedding materialId="m1" />);
+  renderEmbedding();
   expect(await screen.findByText("Needs refresh or partially stale")).toBeInTheDocument();
   expect(screen.getByText("1 current · 2 stale · 3 total chunks")).toBeInTheDocument();
   expect(mock.materialEmbeddingStatus).toHaveBeenCalledTimes(1);
   expect(mock.embedMaterial).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("Advanced: AI source preparation"));
+  expect(screen.getByText("1 current · 2 stale · 3 total chunks")).not.toBeVisible();
+  fireEvent.click(screen.getByText("Advanced: AI source preparation"));
+  expect(screen.getByText("1 current · 2 stale · 3 total chunks")).toBeVisible();
+  expect(mock.materialEmbeddingStatus).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByRole("button", { name: "Refresh semantic sources" }));
   expect(await screen.findByText("Current")).toBeInTheDocument();
   expect(screen.getByText("Prepared 2 chunks; skipped 1 already current chunks.")).toBeInTheDocument();
@@ -39,7 +50,7 @@ it("reads status once and prepares only after an explicit click", async () => {
 it("guards duplicate preparation and preserves status after POST failure for explicit retry", async () => {
   const pending = deferred<never>();
   mock.embedMaterial.mockReturnValueOnce(pending.promise);
-  render(<MaterialEmbedding materialId="m1" />);
+  renderEmbedding();
   await screen.findByText("Needs refresh or partially stale");
   const button = screen.getByRole("button", { name: "Refresh semantic sources" });
   fireEvent.click(button);
@@ -56,7 +67,7 @@ it("guards duplicate preparation and preserves status after POST failure for exp
 
 it("retries only the status read after a successful POST and failed follow-up GET", async () => {
   mock.materialEmbeddingStatus.mockResolvedValueOnce(stale).mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(current);
-  render(<MaterialEmbedding materialId="m1" />);
+  renderEmbedding();
   await screen.findByText("Needs refresh or partially stale");
   fireEvent.click(screen.getByRole("button", { name: "Refresh semantic sources" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Preparation finished");
@@ -71,7 +82,7 @@ it("retries only the status read after a successful POST and failed follow-up GE
 it("ignores a late status from a previously selected material", async () => {
   const old = deferred<MaterialEmbeddingStatus>();
   mock.materialEmbeddingStatus.mockReturnValueOnce(old.promise).mockResolvedValueOnce({ ...current, material_id: "m2" });
-  const view = render(<MaterialEmbedding materialId="m1" />);
+  const view = renderEmbedding();
   view.rerender(<MaterialEmbedding materialId="m2" />);
   expect(await screen.findByText("Current")).toBeInTheDocument();
   old.resolve(stale);
@@ -82,14 +93,14 @@ it("ignores a late status from a previously selected material", async () => {
 
 it("reports an empty READY material as not prepared", async () => {
   mock.materialEmbeddingStatus.mockResolvedValue({ material_id: "m1", total_chunks: 0, current_chunks: 0, stale_chunks: 0, is_current: false });
-  render(<MaterialEmbedding materialId="m1" />);
+  renderEmbedding();
   expect(await screen.findByText("Not prepared")).toBeInTheDocument();
   expect(screen.getByText("0 current · 0 stale · 0 total chunks")).toBeInTheDocument();
 });
 
 it("retries an initial status failure without starting preparation", async () => {
   mock.materialEmbeddingStatus.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(stale);
-  render(<MaterialEmbedding materialId="m1" />);
+  renderEmbedding();
   expect(await screen.findByRole("alert")).toHaveTextContent("Could not load semantic source status");
   fireEvent.click(screen.getByRole("button", { name: "Retry status" }));
   expect(await screen.findByText("Needs refresh or partially stale")).toBeInTheDocument();
@@ -101,7 +112,7 @@ it("does not show an old preparation result after switching materials", async ()
   const pending = deferred<{ material_id: string; embedded: number; skipped: number; signature: string }>();
   mock.embedMaterial.mockReturnValueOnce(pending.promise);
   mock.materialEmbeddingStatus.mockResolvedValueOnce(stale).mockResolvedValueOnce({ ...current, material_id: "m2" });
-  const view = render(<MaterialEmbedding materialId="m1" />);
+  const view = renderEmbedding();
   fireEvent.click(await screen.findByRole("button", { name: "Refresh semantic sources" }));
   view.rerender(<MaterialEmbedding materialId="m2" />);
   expect(await screen.findByText("Current")).toBeInTheDocument();

@@ -96,7 +96,7 @@ export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOp
                 {course.description && <p className="text-sm text-muted">{course.description}</p>}
                 <div><Badge>{loadingMembership ? "Checking membership…" : joined ? "Joined" : "Not joined"}</Badge></div>
                 {joinErrors[course.id] && <Alert>{joinErrors[course.id]}</Alert>}
-                <div className="mt-auto pt-1">{joined ? <a href="#selected-course" className="inline-flex min-h-11 items-center rounded-lg border border-line px-4 py-2 text-sm font-semibold hover:bg-subtle" aria-label={`Open course: ${course.name}`} onClick={() => onOpen(joined)}>Open course</a> :
+                <div className="mt-auto pt-1">{joined ? <Button variant="secondary" aria-label={`Open course: ${course.name}`} onClick={() => onOpen(joined)}>Open course</Button> :
                   <Button disabled={isJoining || loadingMembership} aria-label={`${isJoining ? "Joining course" : "Join course"}: ${course.name}`} onClick={() => void join(course)}>{isJoining ? "Joining…" : "Join course"}</Button>}</div>
               </Surface></li>;
             })}

@@ -55,6 +55,6 @@ export function MaterialUpload({ disabled, busy, upload }: {
     </div>
     {file && <p id={`${id}-selected`} role="status" className="break-words text-sm">Selected: <span className="font-medium">{file.name}</span> · {formatFileSize(file.size)}</p>}
     {error && <Alert id={`${id}-error`}>{error}</Alert>}
-    <div className="flex flex-wrap items-center gap-3"><Button type="submit" disabled={locked || !file}>{busy ? "Uploading and processing…" : "Upload PDF"}</Button><p role="status" className="text-sm text-muted">{busy ? "Uploading and processing your PDF. Please wait…" : notice}</p></div>
+    <div className="flex flex-wrap items-center gap-3"><Button type="submit" variant="secondary" disabled={locked || !file}>{busy ? "Uploading and processing…" : "Upload PDF"}</Button><p role="status" className="text-sm text-muted">{busy ? "Uploading and processing your PDF. Please wait…" : notice}</p></div>
   </form>;
 }

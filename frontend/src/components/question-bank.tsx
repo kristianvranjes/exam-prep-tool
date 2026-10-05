@@ -9,10 +9,10 @@ import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface 
 
 const types: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
 const statuses: QuestionStatus[] = ["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED", "ARCHIVED"];
-const label = (value: string) => value.toLowerCase().replaceAll("_", " ");
+const label = (value: string) => value === "PENDING_REVIEW" ? "Awaiting faculty review" : value.toLowerCase().replaceAll("_", " ");
 const textareaClass = "min-h-28 w-full rounded-lg border border-line bg-surface px-3 py-2 text-foreground";
 
-export function QuestionBank({ courseId }: { courseId: string }) {
+export function QuestionBank({ courseId, onOpenMaterials }: { courseId: string; onOpenMaterials?: () => void }) {
   const [open, setOpen] = useState(false);
   return <section className="mt-8 min-w-0 border-t border-line pt-6" aria-label="Question bank">
     <div className="flex flex-wrap items-start justify-between gap-4">
@@ -22,11 +22,11 @@ export function QuestionBank({ courseId }: { courseId: string }) {
       </div>
       <Button type="button" variant="secondary" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Close question bank" : "Open question bank"}</Button>
     </div>
-    {open && <BankContents key={courseId} courseId={courseId} />}
+    {open && <BankContents key={courseId} courseId={courseId} onOpenMaterials={onOpenMaterials} />}
   </section>;
 }
 
-function BankContents({ courseId }: { courseId: string }) {
+function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenMaterials?: () => void }) {
   const [joined, setJoined] = useState(false);
   const [owner, setOwner] = useState(false);
   const [userId, setUserId] = useState("");
@@ -119,7 +119,7 @@ function BankContents({ courseId }: { courseId: string }) {
         <h4 className="text-lg font-semibold">Create a question</h4>
         <p className="mt-1 text-sm text-muted">Write a private draft here. You can edit it and submit it for faculty review when ready.</p>
       </div>
-      {!creating && <Button type="button" disabled={busy} onClick={() => { setCreating(true); setCreateError(""); setCreateNotice(""); }}>Create question</Button>}
+      {!creating && <Button type="button" variant="secondary" disabled={busy} onClick={() => { setCreating(true); setCreateError(""); setCreateNotice(""); }}>Create question</Button>}
       {creating && <QuestionForm concepts={concepts} busy={createBusy} save={createQuestion} cancel={() => setCreating(false)} />}
       {createError && <Alert>{createError}</Alert>}
       {createNotice && <p role="status" className="rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{createNotice}</p>}
@@ -129,11 +129,13 @@ function BankContents({ courseId }: { courseId: string }) {
       setStatus("DRAFT"); setType(""); setOffset(0); setSelected(imported[0] ?? null); refresh();
     }} />
 
-    {owner && <Surface className="space-y-4 border-dashed">
+    {owner && <details className="rounded-lg border border-line p-3">
+      <summary className="text-sm font-medium">Advanced: AI question generation</summary>
+      <Surface className="mt-3 space-y-4 border-dashed">
       <div>
         <h4 className="text-lg font-semibold">Generate draft questions (experimental internal AI)</h4>
         <p className="mt-1 text-sm text-muted">Optional generation from approved concepts. Review every draft before sharing it.</p>
-        <p className="mt-1 text-sm text-muted">Generation needs approved concepts and current semantic sources. <a className="font-medium text-accent underline" href="#materials">Open a Ready material in Materials</a> to prepare or refresh its sources first.</p>
+        <p className="mt-1 text-sm text-muted">Generation needs approved concepts and current semantic sources. {onOpenMaterials ? <button type="button" className="min-h-11 font-medium text-accent underline" onClick={onOpenMaterials}>Open a Ready material in Materials</button> : <a className="font-medium text-accent underline" href="#materials">Open a Ready material in Materials</a>} to prepare or refresh its sources first.</p>
       </div>
       <form onSubmit={generate} className="space-y-4">
         <fieldset disabled={busy || loading} className="space-y-4">
@@ -154,13 +156,14 @@ function BankContents({ courseId }: { courseId: string }) {
             <label className="block text-sm font-medium">Question count<Input className="mt-1" name="count" type="number" min={1} max={10} defaultValue={3} required /></label>
             <label className="block text-sm font-medium">Sources per concept<Input className="mt-1" name="topK" type="number" min={1} max={10} defaultValue={3} required /></label>
           </div>
-          <Button type="submit" disabled={busy}>{busy ? "Working…" : "Generate drafts"}</Button>
+          <Button type="submit" variant="secondary" disabled={busy}>{busy ? "Working…" : "Generate drafts"}</Button>
         </fieldset>
       </form>
-    </Surface>}
+      {notice && <p role="status" className="rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{notice}</p>}
+      </Surface>
+    </details>}
 
     {error && <Alert>{error}</Alert>}
-    {notice && <p role="status" className="rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{notice}</p>}
 
     <Surface className="min-w-0 space-y-4" role="region" aria-label="Browse questions">
       <div>
@@ -288,12 +291,12 @@ function OwnerReview({ question: q, creator, moderator, concepts, busy, mutate }
       {q.reviewed_at && <p className="text-muted">Reviewed {new Date(q.reviewed_at).toLocaleString()}</p>}
     </div>
 
-    <div className="min-w-0 rounded-lg bg-subtle p-4">
-      <h5 className="font-semibold">Provenance</h5>
+    <details className="min-w-0 rounded-lg bg-subtle p-4">
+      <summary className="font-semibold">Source details</summary>
       <p className="mt-2 break-words [overflow-wrap:anywhere]">Concepts: {q.concept_ids.map((id) => concepts.find((c) => c.id === id)?.name || id).join(", ")}</p>
       <ul className="mt-2 space-y-1">{q.source_chunks.map((s) => <li key={s.chunk_id} className="break-words [overflow-wrap:anywhere]">Material {s.material_id} · chunk {s.ordinal + 1} ({s.chunk_id})</li>)}</ul>
       <p className="mt-2 break-words [overflow-wrap:anywhere]">Source: {q.source}{q.ai_job_id && " · Generation job " + q.ai_job_id}</p>
-    </div>
+    </details>
 
     <div className="flex flex-wrap gap-2">
       {creator && ["DRAFT", "REJECTED"].includes(q.status) && <Button type="button" variant="secondary" disabled={busy} onClick={() => setEditing(!editing)}>{editing ? "Cancel edit" : "Edit question"}</Button>}
@@ -380,7 +383,7 @@ function QuestionForm({ question: q, concepts, busy, save, cancel }: { question?
           {types.map((value) => <option key={value} value={value}>{label(value)}</option>)}
         </Select>
       </label>}
-      <label className="block font-medium">Question stem
+      <label className="block font-medium">Question text
         <textarea className={textareaClass + " mt-1"} name="stem" defaultValue={q?.stem ?? ""} required maxLength={400} />
       </label>
       <label className="block font-medium">Explanation

@@ -29,7 +29,7 @@ function metric(name: string) {
   return screen.getByText(name, { selector: "dt" }).parentElement?.querySelector("dd");
 }
 async function open() {
-  fireEvent.click(screen.getByRole("button", { name: "Open learning progress" }));
+  fireEvent.click(screen.getByRole("button", { name: "Open progress" }));
   await screen.findByRole("heading", { name: "Course summary" });
 }
 
@@ -47,10 +47,10 @@ it("makes no requests before open, then concurrently loads summary and page zero
   render(<ProgressPanel courseId="course" />);
   expect(mock.reviewProgressSummary).not.toHaveBeenCalled();
   expect(mock.reviewProgress).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Open learning progress" }));
+  fireEvent.click(screen.getByRole("button", { name: "Open progress" }));
   expect(mock.reviewProgressSummary).toHaveBeenCalledWith("course");
   expect(mock.reviewProgress).toHaveBeenCalledWith("course", 0);
-  expect(screen.getByText("Loading learning progress…")).toBeInTheDocument();
+  expect(screen.getByText("Loading progress…")).toBeInTheDocument();
   await act(async () => { pendingSummary.resolve(summary()); pendingPage.resolve([]); });
   expect(screen.getByRole("heading", { name: "Course summary" })).toBeInTheDocument();
 });
@@ -63,6 +63,9 @@ it("shows an empty dashboard with neutral accuracy, null dates, and all six stag
   expect(screen.getByText("Not reviewed yet")).toBeInTheDocument();
   expect(screen.getByText("No review scheduled")).toBeInTheDocument();
   expect(screen.getByText("No reviewed questions yet")).toBeInTheDocument();
+  expect(screen.getByText("Stage 0: 0")).not.toBeVisible();
+  fireEvent.click(screen.getByText("Scheduling details"));
+  expect(screen.getByText("Stage 0: 0")).toBeVisible();
   for (let stage = 0; stage <= 5; stage++) expect(screen.getByText(`Stage ${stage}: 0`)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
@@ -79,18 +82,23 @@ it("renders exact resolved metrics, timestamps, rows, and server-as-of due label
   await open();
   for (const [name, value] of [
     ["Reviewed questions", "2"], ["Due now", "1"], ["Upcoming", "1"],
-    ["Resolved reviews", "4"], ["Correct reviews", "3"], ["Incorrect reviews", "1"], ["Accuracy", "75.0%"],
+    ["Graded answers", "4"], ["Correct answers", "3"], ["Incorrect answers", "1"], ["Accuracy", "75.0%"],
   ]) expect(metric(name)).toHaveTextContent(value);
   const schedule = screen.getByRole("region", { name: "Question review schedule" });
   const rows = within(schedule).getAllByRole("listitem");
   expect(rows).toHaveLength(2);
   expect(within(rows[0]).getByText("Due now")).toBeInTheDocument();
   expect(within(rows[1]).getByText("Upcoming")).toBeInTheDocument();
-  expect(within(rows[0]).getByText("Resolved 3 · Correct 2 · Incorrect 1")).toBeInTheDocument();
+  expect(within(rows[0]).getByText("Graded answers 3 · Correct 2 · Incorrect 1")).toBeInTheDocument();
   expect(within(rows[0]).getByText("Last result: Incorrect")).toBeInTheDocument();
   expect(within(rows[1]).getByText("Last result: Correct")).toBeInTheDocument();
   expect(within(rows[0]).getByText("Stage 0")).toBeInTheDocument();
   expect(within(rows[1]).getByText("Stage 3")).toBeInTheDocument();
+  expect(within(rows[0]).getByText("Stage 0")).not.toBeVisible();
+  expect(within(rows[0]).getByText("Question ID: question-1")).not.toBeVisible();
+  fireEvent.click(within(rows[0]).getByText("Question details"));
+  expect(within(rows[0]).getByText("Stage 0")).toBeVisible();
+  expect(within(rows[0]).getByText("Question ID: question-1")).toBeVisible();
   expect(within(rows[0]).getByText("Last reviewed:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-01T10:00:00Z");
   expect(within(rows[0]).getByText("Next review:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-01T11:00:00Z");
   expect(screen.getByText("Due status as of", { exact: false }).querySelector("time")).toHaveAttribute("datetime", asOf);
@@ -112,7 +120,7 @@ it("shows past and future non-actionable rows as history while keeping cumulativ
   await open();
   for (const [name, value] of [
     ["Reviewed questions", "2"], ["Due now", "0"], ["Upcoming", "0"],
-    ["Resolved reviews", "6"], ["Correct reviews", "4"], ["Incorrect reviews", "2"], ["Accuracy", "66.7%"],
+    ["Graded answers", "6"], ["Correct answers", "4"], ["Incorrect answers", "2"], ["Accuracy", "66.7%"],
   ]) expect(metric(name)).toHaveTextContent(value);
   expect(screen.getByText("No review scheduled")).toBeInTheDocument();
   expect(screen.queryByText("No reviewed questions yet")).not.toBeInTheDocument();
@@ -127,23 +135,23 @@ it("shows past and future non-actionable rows as history while keeping cumulativ
     expect(within(historyRow).queryByText("Due now")).not.toBeInTheDocument();
     expect(within(historyRow).queryByText("Upcoming")).not.toBeInTheDocument();
     expect(within(historyRow).queryByText("Next review:", { exact: false })).not.toBeInTheDocument();
-    expect(within(historyRow).getByText("Resolved 3 · Correct 2 · Incorrect 1")).toBeInTheDocument();
+    expect(within(historyRow).getByText("Graded answers 3 · Correct 2 · Incorrect 1")).toBeInTheDocument();
     expect(within(historyRow).getByText("Last result: Incorrect")).toBeInTheDocument();
     expect(within(historyRow).getByText("Last reviewed:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-01T10:00:00Z");
   }
   expect(within(historyRows[0]).getByText("Stage 0")).toBeInTheDocument();
   expect(within(historyRows[1]).getByText("Stage 3")).toBeInTheDocument();
   expect(screen.getByText(/Review totals, accuracy and stages include all retained learning history/)).toHaveTextContent("only questions currently available for practice");
-  expect(screen.getByRole("button", { name: "Open adaptive review" })).toBeEnabled();
-  fireEvent.click(screen.getByRole("button", { name: "Open adaptive review" }));
+  expect(screen.getByRole("button", { name: "Open recommended practice" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "Open recommended practice" }));
   expect(openAdaptive).toHaveBeenCalledTimes(1);
 });
 
 it("retries an initial failure without showing an empty success state", async () => {
   mock.reviewProgressSummary.mockRejectedValueOnce(new Error("unavailable"));
   render(<ProgressPanel courseId="course" />);
-  fireEvent.click(screen.getByRole("button", { name: "Open learning progress" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load learning progress");
+  fireEvent.click(screen.getByRole("button", { name: "Open progress" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load progress");
   expect(screen.queryByText("No reviewed questions yet")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Retry progress" }));
   await screen.findByRole("heading", { name: "Course summary" });
@@ -157,11 +165,11 @@ it("preserves the last successful summary and page when refresh fails, then retr
   render(<ProgressPanel courseId="course" />);
   await open();
   fireEvent.click(screen.getByRole("button", { name: "Refresh progress" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load learning progress");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load progress");
   expect(metric("Reviewed questions")).toHaveTextContent("1");
-  expect(screen.getByText("Question question-1")).toBeInTheDocument();
+  expect(screen.getByText("Question ID: question-1")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Retry progress" }));
-  expect(await screen.findByText("Question new")).toBeInTheDocument();
+  expect(await screen.findByText("Question ID: new")).toBeInTheDocument();
   expect(mock.reviewProgressSummary).toHaveBeenCalledTimes(3);
 });
 
@@ -185,7 +193,7 @@ it("navigates 20-row pages without refetching summary and respects lower and sho
   await open();
   expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
-  expect(await screen.findByText("Question page-two")).toBeInTheDocument();
+  expect(await screen.findByText("Question ID: page-two")).toBeInTheDocument();
   expect(screen.getByText("Page 2")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Previous" }));
@@ -201,9 +209,9 @@ it("refreshes summary and the current page", async () => {
   render(<ProgressPanel courseId="course" />);
   await open();
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
-  await screen.findByText("Question page-two");
+  await screen.findByText("Question ID: page-two");
   fireEvent.click(screen.getByRole("button", { name: "Refresh progress" }));
-  expect(await screen.findByText("Question updated")).toBeInTheDocument();
+  expect(await screen.findByText("Question ID: updated")).toBeInTheDocument();
   expect(mock.reviewProgress).toHaveBeenLastCalledWith("course", 20);
   expect(mock.reviewProgressSummary).toHaveBeenCalledTimes(2);
 });
@@ -216,9 +224,9 @@ it("preserves the current page when next-page loading fails and retries only tha
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Could not load this progress page");
   expect(screen.getByText("Page 1")).toBeInTheDocument();
-  expect(screen.getByText("Question question-0")).toBeInTheDocument();
+  expect(screen.getByText("Question ID: question-0")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Retry progress" }));
-  expect(await screen.findByText("Question page-two")).toBeInTheDocument();
+  expect(await screen.findByText("Question ID: page-two")).toBeInTheDocument();
   expect(mock.reviewProgressSummary).toHaveBeenCalledTimes(1);
 });
 
@@ -247,10 +255,10 @@ it("ignores a response from an old course after switching courses", async () => 
   const old = deferred<ReviewProgressSummary>();
   mock.reviewProgressSummary.mockReturnValueOnce(old.promise).mockResolvedValueOnce(summary({ reviewed_questions: 2 }));
   const view = render(<ProgressPanel courseId="old" />);
-  fireEvent.click(screen.getByRole("button", { name: "Open learning progress" }));
+  fireEvent.click(screen.getByRole("button", { name: "Open progress" }));
   view.rerender(<ProgressPanel courseId="new" />);
-  expect(screen.getByRole("button", { name: "Open learning progress" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Open learning progress" }));
+  expect(screen.getByRole("button", { name: "Open progress" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Open progress" }));
   await screen.findByRole("heading", { name: "Course summary" });
   await act(async () => old.resolve(summary({ reviewed_questions: 99 })));
   expect(metric("Reviewed questions")).toHaveTextContent("2");
@@ -262,6 +270,6 @@ it("wraps long question IDs without fixed legacy color classes", async () => {
   mock.reviewProgress.mockResolvedValueOnce([row({ question_id: longId })]);
   render(<ProgressPanel courseId="course" />);
   await open();
-  expect(screen.getByText(`Question ${longId}`)).toHaveClass("break-words");
+  expect(screen.getByText(`Question ID: ${longId}`)).toHaveClass("break-words");
   expect(document.querySelector('[class*="text-red-"], [class*="text-neutral-"]')).toBeNull();
 });

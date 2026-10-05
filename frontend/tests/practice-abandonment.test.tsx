@@ -3,8 +3,9 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { PracticeQuiz } from "../src/components/practice-quiz";
 import type { Attempt } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), abandon: vi.fn() }));
+const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), abandon: vi.fn(), questions: vi.fn() }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
+vi.mock("../src/lib/api", () => ({ api: mock }));
 let current: Extract<Attempt, { status: "ACTIVE" }>;
 const abandoned = (): Extract<Attempt, { status: "ABANDONED" }> => ({
   ...structuredClone(current), status: "ABANDONED", abandoned_at: "2030-01-01T12:00:00Z",
@@ -19,21 +20,24 @@ beforeEach(() => {
       { id: "sa", position: 2, type: "SHORT_ANSWER", stem: "Explain gravity", difficulty: null, options: [], answer: null },
     ],
   };
+  mock.questions.mockResolvedValue(Array.from({ length: 30 }, (_, id) => ({ id: String(id), status: "APPROVED", type: "TRUE_FALSE" })));
   mock.history.mockResolvedValue([]);
   mock.start.mockImplementation(async () => structuredClone(current));
   mock.abandon.mockImplementation(async () => abandoned());
   mock.read.mockImplementation(async () => abandoned());
 });
-async function start(mode = "Study") {
-  render(<PracticeQuiz courseId="course" />);
-  fireEvent.click(screen.getByRole("button", { name: "Open practice quizzes" }));
-  await screen.findByText("No saved attempts yet. Start with shared approved questions or your own drafts from this course.");
+async function start(mode = "Guided practice") {
+  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
+  fireEvent.click(screen.getByText("More options"));
   fireEvent.click(screen.getByLabelText(mode));
-  fireEvent.click(screen.getByRole("button", { name: "Start practice quiz" }));
+  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByLabelText("One");
+  expect(screen.getByRole("button", { name: "Abandon attempt" })).not.toBeVisible();
+  fireEvent.click(screen.getByText("Session options"));
 }
 
-it.each(["Study", "Exam"])("requires confirmation, warns about unsaved edits, and cancels without mutation in %s", async mode => {
+it.each(["Guided practice", "Exam practice"])("requires confirmation, warns about unsaved edits, and cancels without mutation in %s", async mode => {
   await start(mode);
   fireEvent.click(screen.getByLabelText("Two"));
   fireEvent.click(screen.getByRole("button", { name: "Abandon attempt" }));
@@ -70,7 +74,7 @@ it("abandons without saving local edits and retains only saved answers in a read
   expect(screen.queryByRole("button", { name: "Submit quiz — final" })).not.toBeInTheDocument();
   expect(screen.queryByText(/Correct answer:|Reference answer:|Quiz results/)).not.toBeInTheDocument();
   mock.history.mockResolvedValue([abandoned()]);
-  fireEvent.click(screen.getByRole("button", { name: "Back to saved attempts" }));
+  fireEvent.click(screen.getByRole("button", { name: "Back to practice history" }));
   fireEvent.click(await screen.findByRole("button", { name: /View abandoned quiz/ }));
   await screen.findByRole("region", { name: "Abandoned attempt" });
   expect(mock.read).toHaveBeenCalledWith("course", "attempt");
@@ -114,8 +118,8 @@ it("reopens abandoned history with exact saved short answers and no grading cont
   current.questions[1].answer = { type: "TRUE_FALSE", value: false };
   current.questions[2].answer = { type: "SHORT_ANSWER", text: "  My answer\n stays here  " };
   mock.history.mockResolvedValue([abandoned()]);
-  render(<PracticeQuiz courseId="course" />);
-  fireEvent.click(screen.getByRole("button", { name: "Open practice quizzes" }));
+  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  fireEvent.click(await screen.findByText("Practice history"));
   fireEvent.click(await screen.findByRole("button", { name: /View abandoned quiz/ }));
   const view = await screen.findByRole("region", { name: "Abandoned attempt" });
   expect(within(view).getByText("Your saved answer: false")).toBeInTheDocument();
@@ -128,7 +132,8 @@ it("reopens abandoned history with exact saved short answers and no grading cont
 
 it("handles a saved-attempt reload after abandonment in another tab", async () => {
   await start();
-  fireEvent.click(screen.getByRole("button", { name: "Reload saved attempt" }));
+  fireEvent.click(screen.getByText("Recovery options"));
+  fireEvent.click(screen.getByRole("button", { name: "Reload saved answers" }));
   await waitFor(() => expect(screen.getByText("Attempt abandoned")).toBeInTheDocument());
   expect(screen.queryByRole("button", { name: "Abandon attempt" })).not.toBeInTheDocument();
   expect(mock.abandon).not.toHaveBeenCalled();

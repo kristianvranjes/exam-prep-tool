@@ -33,6 +33,28 @@ beforeEach(() => {
   mock.embedMaterial.mockResolvedValue({ material_id: "m1", embedded: 2, skipped: 0, signature: "private" });
 });
 
+it("shares the existing list and local upload/removal changes with Overview without extra list requests", async () => {
+  const onSummaryChange = vi.fn();
+  const failed = { ...material, status: "FAILED" as const };
+  mock.uploadMaterial.mockResolvedValue(failed); mock.deleteMaterial.mockResolvedValue(undefined);
+  render(<CourseMaterials courseId="course-1" currentUserId="user" onSummaryChange={onSummaryChange} />);
+  await waitFor(() => expect(onSummaryChange).toHaveBeenLastCalledWith({ materials: [], loading: false, error: false }));
+  choose(); fireEvent.click(screen.getByRole("button", { name: "Upload PDF" }));
+  await waitFor(() => expect(onSummaryChange).toHaveBeenLastCalledWith({ materials: [failed], loading: false, error: false }));
+  fireEvent.click(screen.getByRole("button", { name: "Remove failed upload" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
+  await waitFor(() => expect(onSummaryChange).toHaveBeenLastCalledWith({ materials: [], loading: false, error: false }));
+  expect(mock.materials).toHaveBeenCalledOnce();
+});
+
+it("reports a failed materials load as an error rather than an empty summary", async () => {
+  mock.materials.mockRejectedValue(new Error("Offline"));
+  const onSummaryChange = vi.fn();
+  render(<CourseMaterials courseId="course-1" onSummaryChange={onSummaryChange} />);
+  expect(onSummaryChange).toHaveBeenCalledWith({ materials: [], loading: true, error: false });
+  await waitFor(() => expect(onSummaryChange).toHaveBeenLastCalledWith({ materials: [], loading: false, error: true }));
+});
+
 it("uploads a chosen PDF, resets selection and opens safe extracted text with concepts", async () => {
   await ready();
   expect(screen.getByText("No materials yet.")).toBeInTheDocument();
@@ -47,6 +69,9 @@ it("uploads a chosen PDF, resets selection and opens safe extracted text with co
   expect(screen.getByRole("button", { name: "Upload PDF" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "View details: notes.pdf" }));
   expect(await screen.findByText(/2 chunks/)).toHaveTextContent("1.4 KB · 0 sections · 2 chunks");
+  expect(screen.getByText(/2 chunks/)).not.toBeVisible();
+  fireEvent.click(screen.getByText("Processing details"));
+  expect(screen.getByText(/2 chunks/)).toBeVisible();
   expect(mock.material).toHaveBeenCalledWith("m1");
   fireEvent.click(screen.getByText("Extracted text"));
   const text = screen.getByRole("region", { name: "Extracted material text" });
@@ -56,6 +81,7 @@ it("uploads a chosen PDF, resets selection and opens safe extracted text with co
   expect(document.querySelector("script")).toBeNull();
   expect(screen.getByRole("region", { name: "Concept review" })).toHaveTextContent("m1");
   expect(await screen.findByText("0 current · 2 stale · 2 total chunks")).toBeInTheDocument();
+  expect(screen.getByText("0 current · 2 stale · 2 total chunks")).not.toBeVisible();
   expect(mock.embedMaterial).not.toHaveBeenCalled();
 });
 
@@ -81,6 +107,7 @@ it("prepares a READY material without remounting concept review or reloading det
   await ready();
   fireEvent.click(screen.getByRole("button", { name: "View details: notes.pdf" }));
   const concepts = await screen.findByRole("region", { name: "Concept review" });
+  fireEvent.click(screen.getByText("Advanced: AI source preparation"));
   fireEvent.click(await screen.findByRole("button", { name: "Prepare semantic sources" }));
   expect(await screen.findByText("Current")).toBeInTheDocument();
   expect(screen.getByRole("region", { name: "Concept review" })).toBe(concepts);
@@ -185,7 +212,14 @@ it.each(["UPLOADED", "PROCESSING", "READY", "FAILED"] as const)("renders readabl
   fireEvent.click(screen.getByRole("button", { name: "View details: notes.pdf" }));
   await screen.findByRole("article", { name: "Material details: notes.pdf" });
   expect(!!screen.queryByRole("region", { name: "Concept review" })).toBe(status === "READY");
-  expect(!!screen.queryByRole("region", { name: "Semantic sources" })).toBe(status === "READY");
+  if (status === "READY") {
+    expect(screen.getByRole("region", { name: "Semantic sources" })).not.toBeVisible();
+    fireEvent.click(screen.getByText("Advanced: AI source preparation"));
+    expect(screen.getByRole("region", { name: "Semantic sources" })).toBeVisible();
+  } else {
+    expect(screen.queryByRole("region", { name: "Semantic sources" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Advanced: AI source preparation")).not.toBeInTheDocument();
+  }
 });
 
 it("keeps the previous detail and list while a new detail loads or fails, then retries", async () => {
