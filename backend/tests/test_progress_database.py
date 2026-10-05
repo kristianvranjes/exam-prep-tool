@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from test_materials import clients as clients
 from test_practice_database import bank as bank
 from test_practice_database import save_all, start
+from test_quiz_import import document
 
 from alembic import command
 from app.database import Base, SessionLocal, engine
@@ -22,7 +23,10 @@ from app.main import app
 from app.models import User
 from app.models.question import Question
 from app.models.user_question_progress import UserQuestionProgress
+from app.schemas.quiz import StartQuiz
+from app.services import progress as progress_service
 from app.services import quizzes
+from app.services.quiz_selection import select_questions
 
 pytestmark = pytest.mark.skipif(os.getenv("RUN_DB_TESTS") != "1", reason="Requires PostgreSQL")
 
@@ -256,7 +260,17 @@ def test_private_course_scoped_api_and_pagination(bank):
     assert rows == sorted(rows, key=lambda r: (r["due_at"], r["question_id"]))
     assert member.get(path + "?limit=1&offset=1").json() == rows[1:2]
     assert member.get(path + "?limit=0").status_code == 422
-    assert not {"snapshot", "correct_boolean", "scheduling_version", "user_id"} & rows[0].keys()
+    assert set(rows[0]) == {
+        "question_id",
+        "is_actionable",
+        "review_stage",
+        "resolved_review_count",
+        "correct_review_count",
+        "incorrect_review_count",
+        "last_result",
+        "last_reviewed_at",
+        "due_at",
+    }
     assert owner.post(save_all(owner, course, start(owner, course)) + "/submit").status_code == 200
     assert all(r["resolved_review_count"] == 1 for r in progress(owner, course))
     assert progress(member, course) == rows
@@ -301,6 +315,150 @@ def test_summary_aggregates_current_member_rows_with_server_clock(bank):
     )
 
 
+@pytest.mark.parametrize("delay", [timedelta(days=-1), timedelta(days=1)])
+def test_archived_progress_retains_history_without_actionable_schedule(bank, delay):
+    owner, member, _, course, rows = bank
+    source = next(q for q in rows if q["type"] == "TRUE_FALSE")
+    for correct in [True, False]:
+        path = saved_boolean(member, course, source["correct_boolean"] == correct)
+        assert member.post(path + "/submit").status_code == 200
+    with SessionLocal() as db:
+        db.execute(update(UserQuestionProgress).values(due_at=datetime.now(UTC) + delay))
+        db.commit()
+    before_rows = progress(member, course)
+    before_summary = summary(member, course)
+    assert before_rows[0]["is_actionable"] is True
+    before_read = stored()
+    assert review_question(owner, f"/questions/{source['id']}/archive").status_code == 200
+    assert stored() == before_read
+    assert progress(member, course) == [before_rows[0] | {"is_actionable": False}]
+    after_summary = summary(member, course)
+    assert after_summary == before_summary | {
+        "as_of": after_summary["as_of"],
+        "due_now": 0,
+        "upcoming": 0,
+        "next_due_at": None,
+    }
+    assert after_summary["reviewed_questions"] == 1
+    assert after_summary["resolved_review_count"] == 2
+    assert after_summary["correct_review_count"] == after_summary["incorrect_review_count"] == 1
+    assert stored() == before_read
+
+
+def test_mixed_actionable_schedule_preserves_all_history_and_orders_pages(bank, monkeypatch):
+    owner, member, _, course, _ = bank
+    body = document()
+    boolean = next(q for q in body["questions"] if q["type"] == "TRUE_FALSE")
+    body["questions"] = [dict(boolean, stem="Another objective question")]
+    response = owner.post(f"/courses/{course}/questions/import", json=body)
+    assert response.status_code == 201, response.text
+    extra = response.json()[0]
+    assert owner.post(f"/questions/{extra['id']}/submit").status_code == 200
+    assert review_question(owner, f"/questions/{extra['id']}/approve").status_code == 200
+    assert (
+        member.post(save_all(member, course, start(member, course, 4)) + "/submit").status_code
+        == 200
+    )
+    rows = progress(member, course)
+    assert len(rows) == 3
+    now = datetime(2030, 1, 2, 12, tzinfo=UTC)
+    dates = [now, now - timedelta(days=1), now + timedelta(days=1)]
+    with SessionLocal() as db:
+        for row, due in zip(rows, dates, strict=True):
+            db.execute(
+                update(UserQuestionProgress)
+                .where(UserQuestionProgress.question_id == UUID(row["question_id"]))
+                .values(due_at=due)
+            )
+        db.commit()
+    before_summary = summary(member, course)
+    assert review_question(owner, f"/questions/{rows[1]['question_id']}/archive").status_code == 200
+
+    class Clock:
+        calls = 0
+
+        @classmethod
+        def now(cls, tz):
+            assert tz == UTC
+            cls.calls += 1
+            return now
+
+    monkeypatch.setattr(progress_service, "datetime", Clock)
+    before_read = stored()
+    data = summary(member, course)
+    assert Clock.calls == 1
+    assert datetime.fromisoformat(data["as_of"]) == now
+    assert data["reviewed_questions"] == 3
+    assert data["due_now"] == data["upcoming"] == 1
+    assert datetime.fromisoformat(data["next_due_at"]) == now
+    for key in (
+        "resolved_review_count",
+        "correct_review_count",
+        "incorrect_review_count",
+        "last_reviewed_at",
+        "stage_counts",
+    ):
+        assert data[key] == before_summary[key]
+    ordered = progress(member, course)
+    assert [row["question_id"] for row in ordered] == [rows[i]["question_id"] for i in [0, 2, 1]]
+    assert [row["is_actionable"] for row in ordered] == [True, True, False]
+    path = f"/courses/{course}/review-progress"
+    for offset in range(3):
+        assert member.get(path + f"?limit=1&offset={offset}").json() == ordered[offset : offset + 1]
+    assert stored() == before_read
+    # Equal due times still paginate deterministically by source ID within availability.
+    with SessionLocal() as db:
+        db.execute(update(UserQuestionProgress).values(due_at=now))
+        db.commit()
+    tied = progress(member, course)
+    assert [row["question_id"] for row in tied[:2]] == sorted(
+        rows[i]["question_id"] for i in [0, 2]
+    )
+    assert tied[-1]["question_id"] == rows[1]["question_id"]
+    assert all(row["is_actionable"] for row in tied[:2])
+
+
+@pytest.mark.parametrize("mode", ["STANDARD", "ADAPTIVE"])
+@pytest.mark.parametrize("own", [True, False])
+@pytest.mark.parametrize("status", ["APPROVED", "DRAFT", "PENDING_REVIEW", "REJECTED", "ARCHIVED"])
+def test_selection_and_progress_share_caller_lifecycle_eligibility(bank, mode, own, status):
+    owner, member, _, course, rows = bank
+    source = next(q for q in rows if q["type"] == "TRUE_FALSE")
+    assert (
+        member.post(
+            saved_boolean(member, course, source["correct_boolean"]) + "/submit"
+        ).status_code
+        == 200
+    )
+    creator = member if own else owner
+    with SessionLocal() as db:
+        question = db.get(Question, UUID(source["id"]))
+        question.created_by_user_id = UUID(creator.get("/auth/me").json()["id"])
+        question.status = status
+        db.commit()
+    before_read = stored()
+    actionable = status == "APPROVED" or (own and status in {"DRAFT", "PENDING_REVIEW"})
+    (row,) = progress(member, course)
+    assert row["is_actionable"] is actionable
+    data = summary(member, course)
+    assert data["reviewed_questions"] == data["resolved_review_count"] == 1
+    assert data["correct_review_count"] == 1 and data["incorrect_review_count"] == 0
+    assert data["due_now"] == 0
+    assert data["upcoming"] == int(actionable)
+    assert data["next_due_at"] == (row["due_at"] if actionable else None)
+    user_id = UUID(member.get("/auth/me").json()["id"])
+    with SessionLocal() as db:
+        selected = select_questions(
+            db,
+            user_id,
+            UUID(course),
+            StartQuiz(count=1, question_types=["TRUE_FALSE"], selection_mode=mode),
+            datetime.now(UTC),
+        )
+        assert [str(q.id) for q in selected] == ([source["id"]] if actionable else [])
+    assert stored() == before_read
+
+
 def test_snapshot_archive_and_deleted_source(bank):
     owner, member, _, course, rows = bank
     source = next(q for q in rows if q["type"] == "TRUE_FALSE")
@@ -313,6 +471,7 @@ def test_snapshot_archive_and_deleted_source(bank):
     result = member.post(path + "/submit").json()
     assert result["questions"][0]["grading_status"] == "CORRECT"
     assert progress(member, course)[0]["last_result"] == "CORRECT"
+    assert progress(member, course)[0]["is_actionable"] is False
     assert summary(member, course)["reviewed_questions"] == 1
     with SessionLocal() as db:
         db.execute(delete(Question).where(Question.id == UUID(source["id"])))

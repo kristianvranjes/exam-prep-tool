@@ -64,22 +64,41 @@ textual match. They include the original submitted `answer.text` and frozen
 not update review progress or scheduling. The UI labels it Ungraded. Semantic and
 manual grading are future work only. See [practice](PRACTICE.md) for the lifecycle.
 
-## Learning progress summary
+## Learning progress history and actionable schedule
 
-`GET /courses/{course_id}/review-progress/summary` returns the authenticated
-member's current course review summary. It uses the same user and source-question
-scope as the paginated review-progress list: archived questions remain, while
-deleted questions no longer contribute. Missing or inaccessible courses return
-404; unauthenticated requests return 401.
+`GET /courses/{course_id}/review-progress?limit=20&offset=0` returns the
+signed-in member's retained review history, including archived/non-actionable
+source questions while they exist. Each row contains `question_id`, `is_actionable`,
+`review_stage`, resolved/correct/incorrect review counts, `last_result`,
+`last_reviewed_at` and `due_at`. `is_actionable` is true exactly when the source is
+APPROVED or is the caller's own DRAFT/PENDING_REVIEW question. REJECTED, ARCHIVED
+and another creator's unapproved questions are non-actionable. This flag reveals
+availability only, never question content, status or creator identity. Rows are
+ordered by `is_actionable DESC`, `due_at ASC`, `question_id ASC`, so actionable
+rows appear first with deterministic pagination. Limit remains 1–100 and offset
+0–10000. Deleting a source removes its progress through the existing DB contract;
+frozen submitted attempts remain readable.
 
-The response contains one server UTC `as_of` timestamp, `reviewed_questions`,
-`due_now` (`due_at <= as_of`), `upcoming` (`due_at > as_of`), exact sums of
-`resolved_review_count`, `correct_review_count` and `incorrect_review_count`,
-nullable latest `last_reviewed_at`, nullable earliest `next_due_at`, and six
-ascending `stage_counts` entries for stages 0–5 (including zeros). Each stage
-entry has `review_stage` and `question_count`. Empty summaries have zero counts
-and null dates. The read does not change scheduling state and exposes no user ID,
-scheduling version, snapshots or grading data.
+`GET /courses/{course_id}/review-progress/summary` keeps its existing fields.
+Historical `reviewed_questions`, sums of `resolved_review_count`,
+`correct_review_count` and `incorrect_review_count`, latest `last_reviewed_at`,
+and all six ascending `stage_counts` entries (stages 0–5, including zeros) cover
+every surviving progress row for this member/course. Each stage entry has
+`review_stage` and `question_count`.
+
+Only the actionable schedule uses the shared practice-eligibility predicate:
+`due_now` counts actionable rows with `due_at <= as_of`, `upcoming` counts
+those with `due_at > as_of`, and `next_due_at` is their earliest due time or null.
+Comparisons use one server UTC `as_of` timestamp. `reviewed_questions` may exceed
+`due_now + upcoming`. When all retained history is non-actionable, historical
+metrics remain populated while due/upcoming are zero and `next_due_at` is null.
+Empty summaries have zero counts and null dates.
+
+Both endpoints return 404 for missing/inaccessible courses and 401 without
+authentication, and return only the caller's own progress. Reads never delete,
+reschedule or otherwise change persisted progress and expose no user ID,
+scheduling version, snapshots or answer keys. ADAPTIVE remains due-first, not
+due-only: it can select unseen and other eligible questions when `due_now` is zero.
 
 ## Materials
 

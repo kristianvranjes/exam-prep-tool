@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_db
 from app.models import User
-from app.models.user_question_progress import UserQuestionProgress
 from app.schemas.progress import ProgressResponse, ProgressSummary
 from app.services.progress import list_progress, summarize_progress
 
@@ -19,7 +18,7 @@ def get_course_progress(
     offset: int = Query(0, ge=0, le=10000),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[UserQuestionProgress]:
+) -> list[ProgressResponse]:
     return list_progress(db, user, course_id, limit, offset)
 
 
