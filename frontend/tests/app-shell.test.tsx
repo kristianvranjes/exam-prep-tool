@@ -27,7 +27,7 @@ const apiMock = vi.hoisted(() => ({
 vi.mock("../src/lib/api", () => ({ api: apiMock }));
 vi.mock("../src/components/course-materials", () => ({ CourseMaterials: ({ courseId }: { courseId: string }) => <section aria-label="Course materials">Materials for {courseId}</section> }));
 vi.mock("../src/components/practice-quiz", () => ({ PracticeQuiz: ({ courseId, adaptiveReviewRequest }: { courseId: string; adaptiveReviewRequest: number }) => <section aria-label="Practice quiz">Practice for {courseId} · handoff {adaptiveReviewRequest}</section> }));
-vi.mock("../src/components/progress-panel", () => ({ ProgressPanel: ({ courseId, onOpenAdaptiveReview }: { courseId: string; onOpenAdaptiveReview: () => void }) => <section aria-label="Progress">Progress for {courseId}<button onClick={onOpenAdaptiveReview}>Open recommended practice</button></section> }));
+vi.mock("../src/components/progress-panel", () => ({ ProgressPanel: ({ courseId, onOpenAdaptiveReview }: { courseId: string; onOpenAdaptiveReview: () => void }) => <section aria-label="Progress">Progress for {courseId}<button onClick={onOpenAdaptiveReview}>Start recommended practice</button></section> }));
 vi.mock("../src/components/question-bank", () => ({ QuestionBank: ({ courseId }: { courseId: string }) => <section aria-label="Question bank">Questions for {courseId}</section> }));
 
 import { AppShell } from "../src/components/app-shell";
@@ -286,7 +286,7 @@ it("deletes the selected course, returns Home and clears its tools and practice 
   apiMock.membership.mockResolvedValue({ ...membership, role: "OWNER" });
   render(<AppShell />);
   await screen.findByRole("region", { name: "Your courses" }); await openCourse();
-  navigate("Progress"); fireEvent.click(screen.getByRole("button", { name: "Open recommended practice" }));
+  navigate("Progress"); fireEvent.click(screen.getByRole("button", { name: "Start recommended practice" }));
   expect(screen.getByRole("region", { name: "Practice quiz" })).toHaveTextContent("handoff 1");
   const settings = await openSettings();
   fireEvent.change(within(settings).getByLabelText("Type the exact course name to confirm"), { target: { value: "Algorithms" } });
@@ -422,10 +422,10 @@ it("joins immediately, opens the course from discovery and avoids repeated joins
 it("focuses Practice on recommended handoff and clears the intent when courses change", async () => {
   apiMock.me.mockResolvedValue(user); apiMock.courses.mockResolvedValue([course, { ...course, id: "course-2", name: "Statistics" }]); render(<AppShell />);
   await screen.findByRole("region", { name: "Your courses" }); await openCourse();
-  navigate("Progress"); fireEvent.click(screen.getByRole("button", { name: "Open recommended practice" }));
+  navigate("Progress"); fireEvent.click(screen.getByRole("button", { name: "Start recommended practice" }));
   expect(document.getElementById("practice")).toHaveFocus();
   expect(screen.getByRole("region", { name: "Practice quiz" })).toHaveTextContent("handoff 1");
-  navigate("Progress"); fireEvent.click(screen.getByRole("button", { name: "Open recommended practice" }));
+  navigate("Progress"); fireEvent.click(screen.getByRole("button", { name: "Start recommended practice" }));
   expect(screen.getByRole("region", { name: "Practice quiz" })).toHaveTextContent("handoff 2");
   goHome(); await openCourse("Statistics"); navigate("Practice");
   expect(screen.getByRole("region", { name: "Practice quiz" })).toHaveTextContent("course-2 · handoff 0");

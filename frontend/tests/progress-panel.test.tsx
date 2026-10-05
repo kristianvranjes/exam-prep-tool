@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProgressPanel } from "../src/components/progress-panel";
 import type { ReviewProgress, ReviewProgressSummary } from "../src/lib/api";
@@ -29,61 +29,76 @@ function metric(name: string) {
   return screen.getByText(name, { selector: "dt" }).parentElement?.querySelector("dd");
 }
 async function open() {
-  fireEvent.click(screen.getByRole("button", { name: "Open progress" }));
-  await screen.findByRole("heading", { name: "Course summary" });
+  await screen.findByRole("heading", { name: "What needs attention" });
+}
+function details() {
+  fireEvent.click(screen.getByText("Scheduling details"));
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
-  mock.reviewProgressSummary.mockResolvedValue(summary());
+  mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 1 }));
   mock.reviewProgress.mockResolvedValue([]);
 });
 
-it("makes no requests before open, then concurrently loads summary and page zero with loading feedback", async () => {
+it("loads only when Progress becomes active and does not flash empty metrics", async () => {
   const pendingSummary = deferred<ReviewProgressSummary>();
   const pendingPage = deferred<ReviewProgress[]>();
   mock.reviewProgressSummary.mockReturnValueOnce(pendingSummary.promise);
   mock.reviewProgress.mockReturnValueOnce(pendingPage.promise);
-  render(<ProgressPanel courseId="course" />);
+  const view = render(<ProgressPanel courseId="course" active={false} />);
   expect(mock.reviewProgressSummary).not.toHaveBeenCalled();
   expect(mock.reviewProgress).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Open progress" }));
+  view.rerender(<ProgressPanel courseId="course" active />);
+  await waitFor(() => expect(mock.reviewProgressSummary).toHaveBeenCalledWith("course"));
   expect(mock.reviewProgressSummary).toHaveBeenCalledWith("course");
   expect(mock.reviewProgress).toHaveBeenCalledWith("course", 0);
   expect(screen.getByText("Loading progress…")).toBeInTheDocument();
+  expect(screen.queryByText(/Your progress will appear/)).not.toBeInTheDocument();
+  expect(screen.queryByRole("definition")).not.toBeInTheDocument();
   await act(async () => { pendingSummary.resolve(summary()); pendingPage.resolve([]); });
-  expect(screen.getByRole("heading", { name: "Course summary" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "What needs attention" })).toBeInTheDocument();
+  view.rerender(<ProgressPanel courseId="course" active={false} />);
+  view.rerender(<ProgressPanel courseId="course" active />);
+  await waitFor(() => expect(mock.reviewProgressSummary).toHaveBeenCalledTimes(2));
 });
 
-it("shows an empty dashboard with neutral accuracy, null dates, and all six stages", async () => {
-  render(<ProgressPanel courseId="course" />);
+it("shows a first-practice empty state without zero metrics, stages or history rows", async () => {
+  mock.reviewProgressSummary.mockResolvedValue(summary());
+  const start = vi.fn();
+  render(<ProgressPanel courseId="course" onOpenAdaptiveReview={start} />);
   await open();
-  expect(metric("Reviewed questions")).toHaveTextContent("0");
-  expect(metric("Accuracy")).toHaveTextContent("No data yet");
-  expect(screen.getByText("Not reviewed yet")).toBeInTheDocument();
-  expect(screen.getByText("No review scheduled")).toBeInTheDocument();
-  expect(screen.getByText("No reviewed questions yet")).toBeInTheDocument();
-  expect(screen.getByText("Stage 0: 0")).not.toBeVisible();
-  fireEvent.click(screen.getByText("Scheduling details"));
-  expect(screen.getByText("Stage 0: 0")).toBeVisible();
-  for (let stage = 0; stage <= 5; stage++) expect(screen.getByText(`Stage ${stage}: 0`)).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+  expect(screen.getByText("Your progress will appear after you complete automatically graded practice.")).toBeVisible();
+  expect(screen.queryByRole("region", { name: "Your practice" })).not.toBeInTheDocument();
+  expect(screen.queryByText("Scheduling details")).not.toBeInTheDocument();
+  expect(screen.queryByText(/Stage 0|No graded accuracy yet/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  expect(start).toHaveBeenCalledOnce();
 });
 
-it("renders exact resolved metrics, timestamps, rows, and server-as-of due labels", async () => {
+it("prioritizes due reviews, shows historical accuracy with its denominator, and hides scheduling details", async () => {
   mock.reviewProgressSummary.mockResolvedValue(summary({
     reviewed_questions: 2, due_now: 1, upcoming: 1, resolved_review_count: 4,
     correct_review_count: 3, incorrect_review_count: 1, last_reviewed_at: "2030-01-01T10:00:00Z",
     next_due_at: "2030-01-01T11:00:00Z", stage_counts: stages([1, 0, 0, 1, 0, 0]),
   }));
   mock.reviewProgress.mockResolvedValue([row(), row({ question_id: "question-2", review_stage: 3, last_result: "CORRECT", due_at: "2030-01-03T11:00:00Z" })]);
-  render(<ProgressPanel courseId="course" />);
+  const start = vi.fn();
+  render(<ProgressPanel courseId="course" onOpenAdaptiveReview={start} />);
   await open();
-  for (const [name, value] of [
-    ["Reviewed questions", "2"], ["Due now", "1"], ["Upcoming", "1"],
-    ["Graded answers", "4"], ["Correct answers", "3"], ["Incorrect answers", "1"], ["Accuracy", "75.0%"],
-  ]) expect(metric(name)).toHaveTextContent(value);
+  expect(screen.getByText("1 question is due for review")).toBeVisible();
+  expect(screen.getByText("1 question is scheduled for later.")).toBeVisible();
+  expect(metric("Questions reviewed")).toHaveTextContent("2");
+  expect(metric("Automatically graded accuracy")).toHaveTextContent("75.0%");
+  expect(screen.getByText("3 correct out of 4 automatically graded answers")).toBeVisible();
+  expect(metric("Last practiced")?.querySelector("time")).toHaveAttribute("datetime", "2030-01-01T10:00:00Z");
+  expect(screen.getByRole("button", { name: "Start recommended practice" })).toHaveClass("bg-accent");
+  expect(screen.getByText(/Prioritizes questions due for review and may include other available questions/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Start recommended practice" }));
+  expect(start).toHaveBeenCalledOnce();
+  expect(screen.getByText("Scheduling details").closest("details")).not.toHaveAttribute("open");
+  expect(screen.getByText("Stage 5: 0")).not.toBeVisible();
+  details();
   const schedule = screen.getByRole("region", { name: "Question review schedule" });
   const rows = within(schedule).getAllByRole("listitem");
   expect(rows).toHaveLength(2);
@@ -96,13 +111,15 @@ it("renders exact resolved metrics, timestamps, rows, and server-as-of due label
   expect(within(rows[1]).getByText("Stage 3")).toBeInTheDocument();
   expect(within(rows[0]).getByText("Stage 0")).not.toBeVisible();
   expect(within(rows[0]).getByText("Question ID: question-1")).not.toBeVisible();
-  fireEvent.click(within(rows[0]).getByText("Question details"));
+  expect(within(rows[0]).getByText("Reviewed question 1")).toBeVisible();
+  fireEvent.click(within(rows[0]).getByText("Technical details"));
   expect(within(rows[0]).getByText("Stage 0")).toBeVisible();
   expect(within(rows[0]).getByText("Question ID: question-1")).toBeVisible();
   expect(within(rows[0]).getByText("Last reviewed:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-01T10:00:00Z");
   expect(within(rows[0]).getByText("Next review:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-01T11:00:00Z");
   expect(screen.getByText("Due status as of", { exact: false }).querySelector("time")).toHaveAttribute("datetime", asOf);
   expect(screen.getByText("Stage 5: 0")).toBeInTheDocument();
+  expect(screen.getByText(/they are not measures of mastery/)).toBeVisible();
 });
 
 it("shows past and future non-actionable rows as history while keeping cumulative metrics and adaptive review", async () => {
@@ -118,12 +135,14 @@ it("shows past and future non-actionable rows as history while keeping cumulativ
   ]);
   render(<ProgressPanel courseId="course" onOpenAdaptiveReview={openAdaptive} />);
   await open();
-  for (const [name, value] of [
-    ["Reviewed questions", "2"], ["Due now", "0"], ["Upcoming", "0"],
-    ["Graded answers", "6"], ["Correct answers", "4"], ["Incorrect answers", "2"], ["Accuracy", "66.7%"],
-  ]) expect(metric(name)).toHaveTextContent(value);
-  expect(screen.getByText("No review scheduled")).toBeInTheDocument();
-  expect(screen.queryByText("No reviewed questions yet")).not.toBeInTheDocument();
+  expect(metric("Questions reviewed")).toHaveTextContent("2");
+  expect(metric("Automatically graded accuracy")).toHaveTextContent("66.7%");
+  expect(screen.getByText("4 correct out of 6 automatically graded answers")).toBeVisible();
+  expect(screen.getByText("No scheduled reviews are currently available for practice.")).toBeVisible();
+  expect(screen.queryByText(/Your progress will appear/)).not.toBeInTheDocument();
+  expect(screen.getByText(/Your practice history includes previously reviewed questions/)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Start recommended practice" })).not.toHaveClass("bg-accent");
+  details();
   expect(screen.getByText("Stage 0: 1")).toBeInTheDocument();
   expect(screen.getByText("Stage 3: 1")).toBeInTheDocument();
   const schedule = screen.getByRole("region", { name: "Question review schedule" });
@@ -141,20 +160,56 @@ it("shows past and future non-actionable rows as history while keeping cumulativ
   }
   expect(within(historyRows[0]).getByText("Stage 0")).toBeInTheDocument();
   expect(within(historyRows[1]).getByText("Stage 3")).toBeInTheDocument();
-  expect(screen.getByText(/Review totals, accuracy and stages include all retained learning history/)).toHaveTextContent("only questions currently available for practice");
-  expect(screen.getByRole("button", { name: "Open recommended practice" })).toBeEnabled();
-  fireEvent.click(screen.getByRole("button", { name: "Open recommended practice" }));
+  expect(screen.getByRole("button", { name: "Start recommended practice" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "Start recommended practice" }));
   expect(openAdaptive).toHaveBeenCalledTimes(1);
+});
+
+it("shows an upcoming review quietly when nothing is due, with a secondary practice action", async () => {
+  mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 1, upcoming: 1, next_due_at: "2030-01-03T11:00:00Z" }));
+  render(<ProgressPanel courseId="course" onOpenAdaptiveReview={vi.fn()} />);
+  await open();
+  expect(screen.getByText("Nothing is due right now")).toBeVisible();
+  expect(screen.getByText("Next review:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-03T11:00:00Z");
+  expect(screen.getByRole("button", { name: "Start recommended practice" })).not.toHaveClass("bg-accent");
+});
+
+it("keeps the due workload independent of cumulative historical reviewed questions", async () => {
+  mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 12, due_now: 4, resolved_review_count: 41, correct_review_count: 32, incorrect_review_count: 9 }));
+  render(<ProgressPanel courseId="course" />);
+  await open();
+  expect(screen.getByText("4 questions are due for review")).toBeVisible();
+  expect(metric("Questions reviewed")).toHaveTextContent("12");
+  expect(metric("Automatically graded accuracy")).toHaveTextContent("78.0%");
+  expect(screen.getByText("32 correct out of 41 automatically graded answers")).toBeVisible();
+});
+
+it("does not invent accuracy or treat short-answer self-review as incorrect when there are no graded answers", async () => {
+  mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 1 }));
+  render(<ProgressPanel courseId="course" />);
+  await open();
+  expect(metric("Automatically graded accuracy")).toHaveTextContent("No graded accuracy yet");
+  expect(screen.getByText("Short-answer self-review does not contribute to graded accuracy.")).toBeVisible();
+  expect(screen.queryByText(/\d+(\.\d+)?%/)).not.toBeInTheDocument();
+  expect(metric("Last practiced")).toHaveTextContent("No graded practice yet");
+});
+
+it("explains that short answers do not contribute even when graded accuracy is available", async () => {
+  mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 1, resolved_review_count: 2, correct_review_count: 1, incorrect_review_count: 1 }));
+  render(<ProgressPanel courseId="course" />);
+  await open();
+  expect(metric("Automatically graded accuracy")).toHaveTextContent("50.0%");
+  expect(screen.getByText("1 correct out of 2 automatically graded answers")).toBeVisible();
+  expect(screen.getByText(/Short answers require self-review and do not change accuracy or the review schedule/)).toBeVisible();
 });
 
 it("retries an initial failure without showing an empty success state", async () => {
   mock.reviewProgressSummary.mockRejectedValueOnce(new Error("unavailable"));
   render(<ProgressPanel courseId="course" />);
-  fireEvent.click(screen.getByRole("button", { name: "Open progress" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Could not load progress");
-  expect(screen.queryByText("No reviewed questions yet")).not.toBeInTheDocument();
+  expect(screen.queryByText(/Your progress will appear/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Retry progress" }));
-  await screen.findByRole("heading", { name: "Course summary" });
+  await screen.findByRole("heading", { name: "What needs attention" });
   expect(mock.reviewProgressSummary).toHaveBeenCalledTimes(2);
   expect(mock.reviewProgress).toHaveBeenCalledTimes(2);
 });
@@ -166,7 +221,7 @@ it("preserves the last successful summary and page when refresh fails, then retr
   await open();
   fireEvent.click(screen.getByRole("button", { name: "Refresh progress" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Could not load progress");
-  expect(metric("Reviewed questions")).toHaveTextContent("1");
+  expect(metric("Questions reviewed")).toHaveTextContent("1");
   expect(screen.getByText("Question ID: question-1")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Retry progress" }));
   expect(await screen.findByText("Question ID: new")).toBeInTheDocument();
@@ -191,6 +246,7 @@ it("navigates 20-row pages without refetching summary and respects lower and sho
   mock.reviewProgress.mockResolvedValueOnce(first).mockResolvedValueOnce([row({ question_id: "page-two" })]).mockResolvedValueOnce(first);
   render(<ProgressPanel courseId="course" />);
   await open();
+  details();
   expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
   expect(await screen.findByText("Question ID: page-two")).toBeInTheDocument();
@@ -208,6 +264,7 @@ it("refreshes summary and the current page", async () => {
   mock.reviewProgress.mockResolvedValueOnce(full).mockResolvedValueOnce([row({ question_id: "page-two" })]).mockResolvedValueOnce([row({ question_id: "updated" })]);
   render(<ProgressPanel courseId="course" />);
   await open();
+  details();
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
   await screen.findByText("Question ID: page-two");
   fireEvent.click(screen.getByRole("button", { name: "Refresh progress" }));
@@ -221,6 +278,7 @@ it("preserves the current page when next-page loading fails and retries only tha
   mock.reviewProgress.mockResolvedValueOnce(full).mockRejectedValueOnce(new Error("page error")).mockResolvedValueOnce([row({ question_id: "page-two" })]);
   render(<ProgressPanel courseId="course" />);
   await open();
+  details();
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Could not load this progress page");
   expect(screen.getByText("Page 1")).toBeInTheDocument();
@@ -239,6 +297,7 @@ it("stops at offset 10000", async () => {
     mock.reviewProgress.mockImplementation(async () => Array.from({ length: 20 }, (_, index) => row({ question_id: `question-${index}` })));
     render(<ProgressPanel courseId="course" />);
     await open();
+    details();
     const next = screen.getByRole("button", { name: "Next" });
     for (let page = 1; page <= 500; page++) {
       await act(async () => { fireEvent.click(next); });
@@ -255,13 +314,12 @@ it("ignores a response from an old course after switching courses", async () => 
   const old = deferred<ReviewProgressSummary>();
   mock.reviewProgressSummary.mockReturnValueOnce(old.promise).mockResolvedValueOnce(summary({ reviewed_questions: 2 }));
   const view = render(<ProgressPanel courseId="old" />);
-  fireEvent.click(screen.getByRole("button", { name: "Open progress" }));
+  await waitFor(() => expect(mock.reviewProgressSummary).toHaveBeenCalledWith("old"));
   view.rerender(<ProgressPanel courseId="new" />);
-  expect(screen.getByRole("button", { name: "Open progress" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Open progress" }));
-  await screen.findByRole("heading", { name: "Course summary" });
+  expect(screen.getByText("Loading progress…")).toBeInTheDocument();
+  await screen.findByRole("heading", { name: "What needs attention" });
   await act(async () => old.resolve(summary({ reviewed_questions: 99 })));
-  expect(metric("Reviewed questions")).toHaveTextContent("2");
+  expect(metric("Questions reviewed")).toHaveTextContent("2");
   expect(mock.reviewProgressSummary).toHaveBeenLastCalledWith("new");
 });
 

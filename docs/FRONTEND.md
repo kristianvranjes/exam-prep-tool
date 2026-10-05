@@ -200,33 +200,48 @@ refreshes history; **View abandoned quiz** reopens this safe view. Reloading a
 session abandoned in another tab also opens it. Existing Study/Exam navigation,
 save/reload and submitted-result behavior remain unchanged.
 
-## Learning progress
+## Progress
 
-The selected course's Learning progress dashboard loads only when opened. First
-open fetches the server summary and page 0 together. It shows resolved review
-totals, resolved-only accuracy, due/upcoming counts, last and next review times,
-all six stages, and 20-row question schedule pages. Review totals, accuracy,
-last-reviewed time and stages include all retained learning history. Due now,
-Upcoming and Next scheduled review include only currently practiceable questions,
-so reviewed_questions may exceed due_now + upcoming. Rows use the API's
-`is_actionable`: actionable rows show Stage and Due now/Upcoming using the summary's
-server `as_of`, never the browser clock. Non-actionable rows show Stage,
-**History only**, historical counters/results and “This question is no longer
-available for practice.” They show neither a due label nor a next-review date.
-Actionable rows come first in deterministic server pagination. When every row is
-history-only, the dashboard keeps historical metrics and shows zero due/upcoming
-with the neutral “No review scheduled” state for null next_due_at. Loading, empty
-and retryable error states stay in the dashboard; failed refresh or page navigation keeps the last good data.
-Page navigation fetches rows only; Refresh progress fetches summary and the
-current page. There is no polling or realtime update.
+Selecting Progress loads the summary and the first 20 historical rows concurrently.
+Returning to Progress refreshes the summary and current page, so completed practice
+is reflected without an extra Open progress step. Hidden course destinations do
+not initiate progress reads. There is no polling or realtime update.
 
-Open adaptive review focuses `#practice`, opens Practice Quiz and selects
-ADAPTIVE without starting an attempt or changing count, types, Study/Exam mode,
-history or active attempts. It remains available when due_now is zero: adaptive
-selection is due-first, not due-only, and also selects unseen and other eligible
-questions. The handoff is scoped to the selected course and
-clears on a course change. The backend remains authoritative for review times,
-membership, scheduling and adaptive question eligibility.
+The default hierarchy is **What needs attention**, **Your practice**, then a
+collapsed **Scheduling details** disclosure. Attention uses only `due_now`,
+`upcoming` and `next_due_at`, which describe currently practice-eligible questions.
+Due reviews have the primary Start recommended practice action. When nothing is
+due, the next review date is shown and the practice action is secondary. Retained
+history with no actionable schedule is explicitly described as having no reviews
+currently available for practice, rather than having no history.
+
+Your practice shows historical Questions reviewed, Automatically graded accuracy
+and Last practiced. Accuracy is `correct_review_count / resolved_review_count`
+with the correct-answer count and denominator beside the percentage. Repeated
+questions count as separate graded answers. Short-answer self-review contributes
+to neither accuracy nor scheduling. Last practiced uses `last_reviewed_at` and is
+explicitly qualified as the last automatically graded practice. Empty progress
+shows a Start practice action without zero-heavy metrics or scheduling details.
+
+Scheduling details retains six stage counts, cumulative grading counters, the
+server `as_of`, historical rows and pagination. Stages describe repetition
+scheduling, not mastery. Rows use neutral Reviewed question labels because the
+current API provides no question text; there are no per-row question requests.
+Raw IDs and individual stages remain behind nested Technical details. Actionable
+rows show Due now or Upcoming based on the server `as_of`, plus a next-review
+date. Non-actionable rows show History only and the existing unavailability copy,
+with no due label or next-review date. Backend ordering and pagination are unchanged.
+Page navigation fetches rows only. Failed refreshes or page requests retain the
+last successful data and allow retry; initial loading, failure and empty states
+remain distinct.
+
+Start recommended practice focuses `#practice` and uses the existing workspace
+setup handoff with ADAPTIVE selected. It creates no attempt and preserves count,
+question types and Guided/Exam practice settings. A completed or abandoned view
+returns to setup through the existing history refresh; an active session and its
+unsaved answer remain mounted. Recommended practice is due-first, not due-only,
+and may include other eligible questions. The backend remains authoritative for
+membership, grading, scheduling and eligibility.
 
 ## Materials upload and browsing
 

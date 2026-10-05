@@ -11,7 +11,7 @@ const mock = vi.hoisted(() => ({
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 vi.mock("../src/components/course-materials", () => ({ CourseMaterials: () => <section aria-label="Course materials">Materials</section> }));
-vi.mock("../src/components/progress-panel", () => ({ ProgressPanel: () => <section aria-label="Progress">Progress</section> }));
+vi.mock("../src/components/progress-panel", () => ({ ProgressPanel: ({ onOpenAdaptiveReview }: { onOpenAdaptiveReview: () => void }) => <section aria-label="Progress">Progress<button onClick={onOpenAdaptiveReview}>Start recommended practice</button></section> }));
 
 const user = { id: "student", display_name: "Student", email: "student@example.com" };
 const course = { id: "course", faculty_id: "faculty", name: "Algorithms", code: "ALG", description: "Core course" };
@@ -179,6 +179,45 @@ it("keeps an unsaved mounted answer when Overview requests another practice mode
   expect(mock.start).toHaveBeenCalledOnce(); expect(mock.read).not.toHaveBeenCalled();
 });
 
+it("opens Recommended setup from Progress with ADAPTIVE selected, preserving setup choices and not starting an attempt", async () => {
+  render(<AppShell />); await enterCourse(); navigate("Practice");
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("radio", { name: "Course questions" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+  fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value: "2" } });
+  navigate("Progress");
+  fireEvent.click(within(screen.getByRole("region", { name: "Progress" })).getByRole("button", { name: "Start recommended practice" }));
+  await waitFor(() => expect(screen.getByRole("radio", { name: "Recommended practice" })).toBeChecked());
+  expect(screen.getByLabelText("Custom question count")).toHaveValue(2);
+  expect(document.getElementById("practice")).toHaveFocus();
+  expect(mock.start).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  await screen.findByLabelText("Your short answer");
+  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE");
+});
+
+it("returns completed results to setup from Progress without creating or changing an attempt", async () => {
+  const submitted: Attempt = { ...activeAttempt, status: "SUBMITTED", submitted_at: "2030-01-01T12:00:00Z", questions: [] };
+  mock.history.mockResolvedValue([submitted]); mock.read.mockResolvedValue(submitted);
+  render(<AppShell />); await enterCourse(); navigate("Practice");
+  fireEvent.click(await screen.findByText("Practice history"));
+  fireEvent.click(await screen.findByRole("button", { name: /Review quiz/ }));
+  await screen.findByRole("region", { name: "Quiz results" });
+  navigate("Progress");
+  fireEvent.click(within(screen.getByRole("region", { name: "Progress" })).getByRole("button", { name: "Start recommended practice" }));
+  await waitFor(() => expect(screen.getByRole("radio", { name: "Recommended practice" })).toBeChecked());
+  expect(screen.queryByRole("region", { name: "Quiz results" })).not.toBeInTheDocument();
+  expect(mock.start).not.toHaveBeenCalled(); expect(mock.submit).not.toHaveBeenCalled();
+});
+
+it("keeps the active unsaved answer when Recommended practice is requested from Progress", async () => {
+  render(<AppShell />); fireEvent.change(await startPractice(), { target: { value: "Keep my unsaved answer" } });
+  navigate("Progress");
+  fireEvent.click(within(screen.getByRole("region", { name: "Progress" })).getByRole("button", { name: "Start recommended practice" }));
+  expect(await screen.findByLabelText("Your short answer")).toHaveValue("Keep my unsaved answer");
+  expect(mock.start).toHaveBeenCalledOnce(); expect(mock.read).not.toHaveBeenCalled(); expect(mock.save).not.toHaveBeenCalled();
+});
+
 it("opens progress and materials from summaries and keeps contribution behind More", async () => {
   mock.questions.mockResolvedValue([]);
   render(<AppShell />); await enterCourse();
@@ -214,5 +253,5 @@ it("minimizes application navigation during answering and restores it after Save
   expect(mock.save).toHaveBeenCalledWith("course", "attempt", "question", { type: "SHORT_ANSWER", text: "My answer" });
   fireEvent.click(screen.getByRole("button", { name: "Resume session" }));
   await screen.findByLabelText("Your short answer");
-  expect(screen.getByRole("button", { name: "Progress" })).not.toBeVisible();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Progress" })).not.toBeVisible());
 });
