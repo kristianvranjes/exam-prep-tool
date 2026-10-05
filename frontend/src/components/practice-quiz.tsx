@@ -14,11 +14,12 @@ const types: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
 
 export type PracticeSetupRequest = { id: number; mode: SelectionMode };
 
-export function PracticeQuiz({ courseId, currentUserId, active = true, adaptiveReviewRequest = 0, setupRequest, resumeAttemptId, resumeRequest = 0, onResumableAttemptChange, onActiveSessionChange, onOpenMaterials, onOpenQuestions }: {
+export function PracticeQuiz({ courseId, currentUserId, active = true, adaptiveReviewRequest = 0, setupRequest, resumeAttemptId, resumeRequest = 0, onResumableAttemptChange, onActiveSessionChange, onOpenMaterials, onOpenQuestions, onOpenProgress, onBackToCourse }: {
   courseId: string; currentUserId: string; active?: boolean; adaptiveReviewRequest?: number; setupRequest?: PracticeSetupRequest | null; resumeAttemptId?: string | null;
   resumeRequest?: number; onResumableAttemptChange?: (id: string | null) => void;
   onActiveSessionChange?: (active: boolean) => void;
   onOpenMaterials?: () => void; onOpenQuestions?: () => void;
+  onOpenProgress?: () => void; onBackToCourse?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [history, setHistory] = useState<AttemptSummary[]>([]);
@@ -34,6 +35,7 @@ export function PracticeQuiz({ courseId, currentUserId, active = true, adaptiveR
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef(false);
+  const heading = useRef<HTMLHeadingElement>(null);
   const handledRequest = useRef(0);
   const handledSetupRequest = useRef(0);
   const handledResumeRequest = useRef(0);
@@ -110,8 +112,8 @@ export function PracticeQuiz({ courseId, currentUserId, active = true, adaptiveR
     return () => { active = false; };
   }, [setupRequest, attemptStatus, back, busy, loadHistory, open, run]);
 
-  return <section className={`mt-6 flex min-w-0 flex-col gap-5${attempt && !activeSession ? " border-t border-line pt-6" : ""}`} aria-label="Practice quiz">
-    <h3 className={activeSession ? "sr-only" : "text-xl font-semibold"}>Practice</h3>
+  return <section className={`mt-6 flex min-w-0 flex-col gap-5${attempt?.status === "ABANDONED" ? " border-t border-line pt-6" : ""}`} aria-label="Practice quiz">
+    <h3 ref={heading} tabIndex={-1} className={activeSession || attempt?.status === "SUBMITTED" ? "sr-only" : "text-xl font-semibold"}>Practice</h3>
     {!open && <LoadingState>Preparing practice…</LoadingState>}
     {open && <>
       {error && <Alert>{error}</Alert>}
@@ -140,7 +142,9 @@ export function PracticeQuiz({ courseId, currentUserId, active = true, adaptiveR
         </details>
       </>}
       {attempt?.status === "ACTIVE" && <ActiveQuiz key={attempt.id} attempt={attempt} experience={experience} setExperience={setExperience} update={setAttempt} back={back} />}
-      {attempt?.status === "SUBMITTED" && <><Button variant="secondary" className="self-start" disabled={busy} onClick={() => void run(back)}>Back to practice history</Button><QuizResults attempt={attempt} /></>}
+      {attempt?.status === "SUBMITTED" && <QuizResults key={attempt.id} attempt={attempt} busy={busy}
+        onPracticeAgain={() => void run(async () => { await back(); setHistoryOpen(false); heading.current?.focus(); })}
+        onViewProgress={onOpenProgress} onBackToCourse={onBackToCourse} onBackToHistory={() => void run(back)} />}
       {attempt?.status === "ABANDONED" && <><Button variant="secondary" className="self-start" disabled={busy} onClick={() => void run(back)}>Back to practice history</Button><AbandonedQuiz attempt={attempt} /></>}
     </>}
   </section>;

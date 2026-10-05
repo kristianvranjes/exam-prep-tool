@@ -72,7 +72,8 @@ it("abandons without saving local edits and retains only saved answers in a read
   expect(within(view).queryByRole("button")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Save answer" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Submit quiz — final" })).not.toBeInTheDocument();
-  expect(screen.queryByText(/Correct answer:|Reference answer:|Quiz results/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Correct answer|Reference answer|Practice complete/)).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Practice results" })).not.toBeInTheDocument();
   mock.history.mockResolvedValue([abandoned()]);
   fireEvent.click(screen.getByRole("button", { name: "Back to practice history" }));
   fireEvent.click(await screen.findByRole("button", { name: /View abandoned quiz/ }));

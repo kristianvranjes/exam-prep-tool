@@ -176,13 +176,35 @@ Final submission uses an inline named confirmation region with predictable headi
 focus, answered/unanswered/flagged counts and an explicit irreversible warning.
 Confirmation is disabled until every answer is saved. Submission failure preserves
 the attempt and permits retry or return to editing. No correctness appears before
-submission. MCQ/TRUE_FALSE results show the backend's automatic Correct/Incorrect
-decision and available answer keys/explanations. SHORT_ANSWER results show Ungraded,
-the frozen student's answer, the frozen Reference answer and guidance to compare
-them; even exact text equality is not graded. The total/correct/incorrect/ungraded
-summary comes solely from the frozen attempt. Ungraded answers do not affect
-progress or scheduling; semantic/manual grading is future work only. Active history
-entries resume; submitted entries open results; abandoned entries open read-only saved-answer history.
+submission. Active history entries resume; submitted entries open the same Results
+experience as a newly finished session; abandoned entries open read-only saved-answer history.
+
+### Submitted Results / Review
+
+**Practice complete** shows compact Correct / Incorrect / Self-review required
+counts from the frozen grading statuses, without percentages. Client-side review
+defaults to Mistakes when incorrect answers exist, otherwise Self-review when
+PENDING answers exist, otherwise All answers. Empty categories are disabled.
+
+The primary action is **Review mistakes**, **Review short answers**, or **Practice
+again**, respectively. Review actions select and focus the relevant review heading;
+filter buttons retain keyboard focus and expose `aria-pressed` state. Mistakes show
+question text, Your answer, Correct answer and any existing Explanation together.
+Correct answers have quieter headers and native answer disclosures under All answers.
+True/false answers display readable True / False labels. Missing explanations are omitted.
+
+SHORT_ANSWER remains **Self-review required**, with the original submitted text,
+Reference answer and comparison guidance. Even exact text equality is not graded;
+PENDING is never counted as incorrect. These answers do not affect Progress or scheduling.
+There is no student self-score, AI grading or generated explanation.
+
+**Practice again** refreshes history and returns to the existing setup with the
+mounted course's count, types, selection mode and presentation preferences intact.
+It never starts an attempt automatically. Failure retains Results and permits retry.
+**View progress** opens the existing Progress destination and its normal refresh;
+**Back to course** opens Overview. A quieter **Back to practice history** action
+remains available. Empty submitted results show neutral recovery without invented
+counts or success. No APIs, permissions, selection or grading rules change.
 
 ## Abandoned practice attempts
 

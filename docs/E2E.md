@@ -8,7 +8,11 @@ Reports; the student proposes difficulty 3 with a fixed note; the moderator comp
 base version 3 and the proposed value in Suggestions and applies it; the student
 reloads the approved question and sees the new difficulty. The answer key is unchanged.
 The student then practices, receives deterministic grading and progress,
-and opens adaptive review without starting another attempt. The spec uses the
+and opens adaptive review without starting another attempt. A second session pairs
+an incorrect MCQ with the student's own draft short answer, checks Results filters,
+answer/reference rendering, and summary counts, then returns to setup, reopens the
+historical result, and opens Course Overview and Progress. Desktop/mobile screenshots,
+keyboard review actions and native disclosures verify the Results experience. The spec uses the
 frontend and FastAPI normally, with no
 API mocks or direct data mutation after setup. AI, embeddings, model downloads and
 external network services are not needed.
