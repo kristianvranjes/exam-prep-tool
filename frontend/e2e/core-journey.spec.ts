@@ -18,7 +18,7 @@ async function login(page: Page, email: string) {
 }
 
 async function expectMetricAtLeast(page: Page, label: string, minimum: number) {
-  const metric = page.getByRole("region", { name: "Learning progress" })
+  const metric = page.getByRole("region", { name: "Progress" })
     .getByText(label, { exact: true }).locator("..");
   await expect.poll(async () => {
     const text = await metric.textContent();
@@ -35,6 +35,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     const student = await studentContext.newPage();
 
     await login(moderator, "owner-e2e@example.com");
+    await moderator.getByRole("button", { name: "Faculty tools", exact: true }).click();
     const createCourse = moderator.getByRole("form", { name: "Create a course" });
     await expect(createCourse).toBeVisible();
     await createCourse.getByLabel("Faculty").selectOption({ label: facultyName });
@@ -42,23 +43,40 @@ test("moderator and student complete the core exam-preparation journey", async (
     await createCourse.getByLabel("Code (optional)").fill("E2E-101");
     await createCourse.getByRole("button", { name: "Create course" }).click();
     const moderatorCourses = moderator.getByRole("region", { name: "Your courses" });
+    await expect(moderator.getByRole("heading", { name: courseName, exact: true })).toBeVisible();
+    await expect(moderatorCourses).toBeHidden();
+    await moderator.getByRole("button", { name: "Back to Home" }).click();
     await expect(moderatorCourses.getByRole("button", { name: new RegExp(courseName) })).toHaveCount(1);
-    await expect(moderator.getByRole("heading", { name: courseName })).toBeVisible();
+    await moderator.getByRole("button", { name: "Faculty tools", exact: true }).click();
 
     await login(student, "student-e2e@example.com");
     const studentCourses = student.getByRole("region", { name: "Your courses" });
     await expect(studentCourses.getByRole("heading", { name: "No courses yet" })).toBeVisible();
+    await expect(student.getByLabel("Browse by faculty")).toHaveCount(0);
+    await student.getByRole("button", { name: "Join a course", exact: true }).click();
     await student.getByLabel("Browse by faculty").selectOption({ label: "E2E Faculty — Example Test University" });
     await expect(student.getByRole("button", { name: `Join course: ${courseName}` })).toBeVisible();
     await student.getByRole("button", { name: `Join course: ${courseName}` }).click();
     await expect(studentCourses.getByRole("button", { name: new RegExp(courseName) })).toHaveCount(1);
     await studentCourses.getByRole("button", { name: new RegExp(courseName) }).click();
-    await expect(student.getByRole("region", { name: "Course materials" })).toBeVisible();
-    await expect(student.getByRole("region", { name: "Practice quiz" })).toBeVisible();
-    await expect(student.getByRole("region", { name: "Learning progress" })).toBeVisible();
-    await expect(student.getByRole("region", { name: "Question bank" })).toBeVisible();
-    await expect(student.getByRole("link", { name: "Course settings" })).toHaveCount(0);
+    await expect(student.getByRole("heading", { name: courseName, exact: true })).toBeVisible();
+    await expect(student.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+    await expect(student.getByText("No practice questions are available for this course yet.")).toBeVisible();
+    await expect(student.getByText("No study materials have been added yet.")).toBeVisible();
+    await expect(student.getByText(/Progress appears after completing automatically graded practice/)).toBeVisible();
+    await expect(student.getByRole("button", { name: "Resume session" })).toHaveCount(0);
+    await test.info().attach("overview-empty", { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
+    await expect(studentCourses).toBeHidden();
+    await expect(student.getByLabel("Browse by faculty")).toBeHidden();
+    for (const name of ["Course materials", "Practice quiz", "Progress", "Question bank"]) await expect(student.getByRole("region", { name, exact: true })).toBeHidden();
+    await expect(student.getByRole("button", { name: "Course settings", exact: true })).toHaveCount(0);
     await expect(student.getByRole("heading", { name: "Course settings" })).toHaveCount(0);
+    const studentNavigation = student.getByRole("navigation", { name: "Course navigation" });
+    await studentNavigation.getByRole("button", { name: "Practice", exact: true }).click();
+    await expect(student.locator("#course-practice").getByText("No practice questions are available for this course yet.")).toBeVisible();
+    await expect(student.getByRole("button", { name: "Start practice", exact: true })).toHaveCount(0);
+    await student.getByRole("button", { name: "View materials", exact: true }).click();
+    await expect(studentNavigation.getByRole("button", { name: "Materials" })).toHaveAttribute("aria-current", "page");
 
     const uploadForm = student.getByRole("form", { name: "Upload study material" });
     await uploadForm.getByLabel("PDF file").setInputFiles({
@@ -77,11 +95,13 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(materialDetail.getByRole("region", { name: "Extracted material text" }))
       .toContainText("Deterministic study notes.");
 
+    await studentNavigation.getByRole("button", { name: "More", exact: true }).click();
+    await student.getByRole("button", { name: "Question bank", exact: true }).click();
     await student.getByRole("button", { name: "Open question bank" }).click();
     await student.getByRole("button", { name: "Create question", exact: true }).click();
     const questionForm = student.getByRole("form", { name: "Create question form" });
     await questionForm.getByLabel("Question type").selectOption("MULTIPLE_CHOICE");
-    await questionForm.getByLabel("Question stem").fill(questionStem);
+    await questionForm.getByLabel("Question text").fill(questionStem);
     await questionForm.getByLabel("Explanation").fill("Paris is the French capital.");
     await expect(questionForm.getByLabel("Correct option 1")).toBeChecked();
     await questionForm.getByLabel("Option 1", { exact: true }).fill(correctOption);
@@ -93,7 +113,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(selectedQuestion).toContainText("draft");
     await expect(selectedQuestion).toContainText("Source: USER");
     await selectedQuestion.getByRole("button", { name: "Submit for review" }).click();
-    await expect(selectedQuestion).toContainText("pending review");
+    await expect(selectedQuestion).toContainText("Awaiting faculty review");
 
     await moderator.getByRole("button", { name: "Refresh queue" }).click();
     const reviewCard = moderator.getByRole("article", { name: questionStem });
@@ -152,34 +172,87 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(selectedQuestion).toContainText("Difficulty 3/5");
     await expect(selectedQuestion).toContainText("approved");
 
-    await student.getByRole("button", { name: "Open practice quizzes" }).click();
-    await student.getByRole("radio", { name: "Standard practice" }).check();
-    await student.getByRole("radio", { name: "Study" }).check();
-    await student.getByRole("spinbutton", { name: "Practice question count" }).fill("1");
+    await studentNavigation.getByRole("button", { name: "Overview", exact: true }).click();
+    await expect(student.getByRole("region", { name: "Materials", exact: true })).toContainText("1 study material");
+    await student.getByRole("button", { name: "Start recommended practice" }).click();
+    await expect(student.getByRole("radio", { name: "Recommended practice" })).toBeChecked();
+    await expect(student.getByRole("heading", { name: "Question 1 of 1" })).toHaveCount(0);
+    await studentNavigation.getByRole("button", { name: "Overview", exact: true }).click();
+    await student.getByRole("button", { name: "Practice course questions", exact: true }).click();
+    await expect(student.getByRole("radio", { name: "Course questions", exact: true })).toBeChecked();
+    await expect(student.getByLabel("Guided practice", { exact: true })).toBeHidden();
+    await expect(student.getByRole("radio", { name: "5 questions", exact: true })).toBeChecked();
+    await expect(student.getByRole("button", { name: "Start practice", exact: true })).toBeDisabled();
+    await student.getByRole("radio", { name: "Custom", exact: true }).check();
+    await student.getByRole("spinbutton", { name: "Custom question count" }).fill("1");
+    const moreOptions = student.getByText("More options", { exact: true });
+    await moreOptions.focus(); await moreOptions.press("Enter");
+    await expect(student.getByRole("radio", { name: "Guided practice", exact: true })).toBeVisible();
+    await student.getByRole("radio", { name: "Guided practice" }).check();
     await student.getByRole("checkbox", { name: "True / false" }).uncheck();
     await student.getByRole("checkbox", { name: "Short answer" }).uncheck();
-    await student.getByRole("button", { name: "Start practice quiz" }).click();
+    await student.getByRole("button", { name: "Start practice", exact: true }).click();
     await expect(student.getByRole("heading", { name: "Question 1 of 1" })).toBeVisible();
     await student.getByRole("radio", { name: correctOption }).check();
-    await student.getByRole("button", { name: "Save answer" }).click();
-    await expect(student.getByText("1 / 1 answered and saved")).toBeVisible();
-    await student.getByRole("button", { name: "Submit quiz — final" }).click();
+    await expect(studentNavigation).toBeHidden();
+    await expect(student.getByRole("navigation", { name: "Main navigation" })).toBeHidden();
+    await student.getByText("Course navigation", { exact: true }).click();
+    await studentNavigation.getByRole("button", { name: "Overview", exact: true }).click();
+    await expect(student.getByRole("heading", { name: "Continue studying" })).toBeVisible();
+    await expect(student.getByRole("button", { name: "Resume session" })).toHaveClass(/bg-accent/);
+    await expect(student.getByRole("button", { name: "Start recommended practice" })).not.toHaveClass(/bg-accent/);
+    await test.info().attach("overview-resume", { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
+    await student.getByRole("button", { name: "Resume session" }).click();
+    await expect(student.getByRole("radio", { name: correctOption })).toBeChecked();
+    await student.getByText("Course navigation", { exact: true }).click();
+    await student.getByRole("button", { name: "Back to Home" }).click();
+    await expect(student.getByRole("heading", { name: "Home", exact: true })).toBeVisible();
+    await expect(student.getByRole("heading", { name: "Continue studying" })).toBeVisible();
+    await student.getByRole("button", { name: "Resume session" }).click();
+    await expect(student.getByRole("radio", { name: correctOption })).toBeChecked();
+    await student.getByRole("button", { name: "Save and review" }).click();
+    await expect(student.getByRole("heading", { name: "Review practice" })).toBeFocused();
+    await expect(student.getByText("1 of 1 answered and saved", { exact: true })).toBeVisible();
+    await student.getByRole("button", { name: "Finish practice", exact: true }).click();
     await student.getByRole("button", { name: "Confirm final submission" }).click();
     const result = student.getByRole("article", { name: "Question 1 result" });
     await expect(result.getByText("Correct", { exact: true })).toBeVisible();
-    await expect(student.getByRole("region", { name: "Quiz results" })).toContainText("Ungraded0");
+    await expect(student.getByRole("region", { name: "Quiz results" })).toContainText("Self-review required0");
 
-    await student.getByRole("button", { name: "Open learning progress" }).click();
+    await studentNavigation.getByRole("button", { name: "Progress", exact: true }).click();
+    await student.getByRole("button", { name: "Open progress" }).click();
     await expectMetricAtLeast(student, "Reviewed questions", 1);
-    await expectMetricAtLeast(student, "Resolved reviews", 1);
-    await expectMetricAtLeast(student, "Correct reviews", 1);
-    await student.getByRole("button", { name: "Open adaptive review" }).click();
+    await expectMetricAtLeast(student, "Graded answers", 1);
+    await expectMetricAtLeast(student, "Correct answers", 1);
+    await student.getByRole("button", { name: "Open recommended practice" }).click();
     await expect(student.locator("#practice")).toBeFocused();
     await expect(student.getByRole("region", { name: "Quiz results" })).toBeVisible();
-    await student.getByRole("button", { name: "Back to saved attempts" }).click();
-    await expect(student.getByRole("radio", { name: "Adaptive review" })).toBeChecked();
-    await expect(student.getByRole("button", { name: "Start practice quiz" })).toBeVisible();
+    await student.getByRole("button", { name: "Back to practice history" }).click();
+    await expect(student.getByRole("radio", { name: "Recommended practice" })).toBeChecked();
+    await expect(student.getByRole("button", { name: "Start practice", exact: true })).toBeVisible();
     await expect(student.getByRole("heading", { name: "Question 1 of 1" })).toHaveCount(0);
+    for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+      await student.setViewportSize(viewport);
+      await studentNavigation.getByRole("button", { name: "Overview", exact: true }).click();
+      const overview = student.locator("#course-overview");
+      await expect(overview.getByRole("heading", { name: "What to study next" })).toBeVisible();
+      await expect(overview.getByRole("button", { name: "Resume session" })).toHaveCount(0);
+      await expect(overview.getByRole("button", { name: "Start recommended practice" })).toHaveClass(/bg-accent/);
+      await expect(overview.getByRole("region", { name: "Progress summary" })).toContainText("100.0%");
+      await expect(overview.getByRole("list", { name: "Recent materials" })).toContainText("e2e-notes.pdf");
+      await expect.poll(() => student.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await test.info().attach(`overview-${viewport.width}`, { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
+      await overview.getByRole("button", { name: "View progress" }).click();
+      await expect(student.getByRole("region", { name: "Progress", exact: true })).toBeVisible();
+      await studentNavigation.getByRole("button", { name: "Overview", exact: true }).click();
+      await overview.getByRole("button", { name: "View materials" }).click();
+      await expect(student.getByRole("region", { name: "Course materials" })).toBeVisible();
+      await studentNavigation.getByRole("button", { name: "Overview", exact: true }).click();
+      await overview.getByRole("button", { name: "Start recommended practice" }).click();
+      await expect(student.getByRole("radio", { name: "Recommended practice" })).toBeChecked();
+      await expect(student.getByRole("button", { name: "Start practice", exact: true })).toBeVisible();
+      await expect(student.getByRole("heading", { name: "Question 1 of 1" })).toHaveCount(0);
+    }
   } finally {
     await studentContext.close();
     await moderatorContext.close();

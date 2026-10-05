@@ -88,6 +88,17 @@ async function openCreate() {
   return screen.getByRole("form", { name: "Create question form" });
 }
 
+it("uses workspace navigation to reach Materials from AI preparation guidance", async () => {
+  const onOpenMaterials = vi.fn();
+  render(<QuestionBank courseId="course" onOpenMaterials={onOpenMaterials} />);
+  fireEvent.click(screen.getByRole("button", { name: "Open question bank" }));
+  await screen.findByRole("button", { name: /What is a matrix/ });
+  fireEvent.click(screen.getByText("Advanced: AI question generation"));
+  fireEvent.click(screen.getByRole("button", { name: "Open a Ready material in Materials" }));
+  expect(onOpenMaterials).toHaveBeenCalledOnce();
+  expect(mock.generateQuestions).not.toHaveBeenCalled();
+});
+
 it("loads only after opening and shows an explicit loading state", async () => {
   let resolve!: (rows: OwnerQuestion[]) => void;
   mock.questions.mockReturnValue(new Promise<OwnerQuestion[]>((finish) => { resolve = finish; }));
@@ -117,6 +128,7 @@ it("shows an empty view and retries a failed list without losing the bank", asyn
 
 it("generates with selected approved concepts and bounded controls", async () => {
   await open();
+  fireEvent.click(screen.getByText("Advanced: AI question generation"));
   expect(screen.getByRole("link", { name: "Open a Ready material in Materials" })).toHaveAttribute("href", "#materials");
   expect(screen.getByText(/Generation needs approved concepts and current semantic sources/)).toBeInTheDocument();
   await screen.findByLabelText("Matrices");
@@ -135,14 +147,18 @@ it("lets a creator edit and submit without granting OWNER moderation", async () 
   await open();
   fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
   expect(await screen.findByText(/Material material1 · chunk 1/)).toBeInTheDocument();
+  expect(screen.getByText(/Material material1 · chunk 1/)).not.toBeVisible();
+  fireEvent.click(screen.getByText("Source details"));
+  expect(screen.getByText(/Material material1 · chunk 1/)).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Edit question" }));
-  fireEvent.change(screen.getByLabelText("Question stem"), { target: { value: "Revised matrix question?" } });
+  fireEvent.change(screen.getByLabelText("Question text"), { target: { value: "Revised matrix question?" } });
   fireEvent.change(screen.getByLabelText("Option 2"), { target: { value: "Revised option" } });
   fireEvent.click(screen.getByLabelText("Correct option 2"));
   fireEvent.click(screen.getByRole("button", { name: "Save question" }));
   await waitFor(() => expect(mock.editQuestion).toHaveBeenCalledWith("q1", expect.objectContaining({ stem: "Revised matrix question?", options: [{ text: "A table", is_correct: false }, { text: "Revised option", is_correct: true }] })));
   fireEvent.click(await screen.findByRole("button", { name: "Submit for review" }));
   await waitFor(() => expect(screen.queryByRole("button", { name: "Submit for review" })).not.toBeInTheDocument());
+  expect(screen.getByRole("article", { name: "Selected question" })).toHaveTextContent("Awaiting faculty review");
   expect(screen.queryByRole("button", { name: "Approve question" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Reject question" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "View versions" }));
@@ -154,8 +170,8 @@ it("sends the complete MCQ edit payload with one correct option and native bound
   await open();
   fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
   fireEvent.click(await screen.findByRole("button", { name: "Edit question" }));
-  expect(screen.getByLabelText("Question stem")).toHaveAttribute("required");
-  expect(screen.getByLabelText("Question stem")).toHaveAttribute("maxLength", "400");
+  expect(screen.getByLabelText("Question text")).toHaveAttribute("required");
+  expect(screen.getByLabelText("Question text")).toHaveAttribute("maxLength", "400");
   expect(screen.getByLabelText("Difficulty (optional)")).toHaveAttribute("min", "1");
   expect(screen.getByLabelText("Difficulty (optional)")).toHaveAttribute("max", "5");
   fireEvent.change(screen.getByLabelText("Explanation"), { target: { value: "Revised explanation" } });
@@ -205,6 +221,7 @@ it("shows failed generation, prevents overlapping clicks and allows retry", asyn
   let resolve!: (value: object) => void;
   mock.generateQuestions.mockReturnValue(new Promise((r) => { resolve = r; }));
   await open();
+  fireEvent.click(screen.getByText("Advanced: AI question generation"));
   fireEvent.click(await screen.findByLabelText("Matrices"));
   fireEvent.click(screen.getByRole("button", { name: "Generate drafts" }));
   expect(screen.getByRole("button", { name: "Working…" })).toBeDisabled();
@@ -230,6 +247,7 @@ it("keeps a rejected mutation visible and displays the API error", async () => {
 
 it("sends owner filters to the bounded listing API", async () => {
   await open();
+  expect(screen.getByRole("option", { name: "Awaiting faculty review" })).toHaveValue("PENDING_REVIEW");
   fireEvent.change(await screen.findByLabelText("Status"), { target: { value: "PENDING_REVIEW" } });
   fireEvent.change(screen.getByLabelText("Type"), { target: { value: "SHORT_ANSWER" } });
   await waitFor(() => expect(mock.questions).toHaveBeenLastCalledWith("course", { status: "PENDING_REVIEW", type: "SHORT_ANSWER", limit: 20, offset: 0 }));
@@ -274,6 +292,7 @@ it("imports without concepts and resets filters to drafts for review", async () 
   mock.concepts.mockRejectedValue(new Error("unavailable"));
   mock.importQuestions.mockResolvedValue([draft]);
   await open();
+  fireEvent.click(screen.getByText("Import question drafts"));
   fireEvent.change(await screen.findByLabelText("Status"), { target: { value: "APPROVED" } });
   fireEvent.change(screen.getByLabelText("Type"), { target: { value: "SHORT_ANSWER" } });
   const file = new File(["{}"], "quiz.json");
@@ -425,7 +444,7 @@ it.each(["MEMBER", "OWNER"] as const)("offers manual authoring and import to a j
 
 it("creates an MCQ with shared native bounds and exactly one correct option", async () => {
   const form = await openCreate();
-  expect(within(form).getByLabelText("Question stem")).toHaveAttribute("maxLength", "400");
+  expect(within(form).getByLabelText("Question text")).toHaveAttribute("maxLength", "400");
   expect(within(form).getByLabelText("Difficulty (optional)")).toHaveAttribute("min", "1");
   expect(within(form).getByLabelText("Difficulty (optional)")).toHaveAttribute("max", "5");
   expect(within(form).getByLabelText("Option 1")).toHaveAttribute("maxLength", "400");
@@ -434,7 +453,7 @@ it("creates an MCQ with shared native bounds and exactly one correct option", as
   expect(within(form).getByRole("button", { name: "Add option" })).toBeDisabled();
   for (let number = 6; number >= 3; number -= 1) fireEvent.click(within(form).getByRole("button", { name: `Remove option ${number}` }));
   expect(within(form).getByRole("button", { name: "Remove option 2" })).toBeDisabled();
-  fireEvent.change(within(form).getByLabelText("Question stem"), { target: { value: "New question?" } });
+  fireEvent.change(within(form).getByLabelText("Question text"), { target: { value: "New question?" } });
   fireEvent.change(within(form).getByLabelText("Explanation"), { target: { value: "A useful explanation" } });
   fireEvent.change(within(form).getByLabelText("Difficulty (optional)"), { target: { value: "3" } });
   fireEvent.change(within(form).getByLabelText("Option 1"), { target: { value: "A" } });
@@ -456,7 +475,7 @@ it.each([
 ] as const)("creates an exact $type payload", async ({ type, answer }) => {
   const form = await openCreate();
   fireEvent.change(within(form).getByLabelText("Question type"), { target: { value: type } });
-  fireEvent.change(within(form).getByLabelText("Question stem"), { target: { value: "New question?" } });
+  fireEvent.change(within(form).getByLabelText("Question text"), { target: { value: "New question?" } });
   if (type === "TRUE_FALSE") {
     expect(within(form).getByLabelText("Correct answer")).toBeRequired();
     fireEvent.change(within(form).getByLabelText("Correct answer"), { target: { value: "false" } });
@@ -480,7 +499,7 @@ it("offers only approved concepts and limits selection to five", async () => {
   expect(within(form).queryByLabelText("Unreviewed")).not.toBeInTheDocument();
   for (let i = 0; i < 5; i += 1) fireEvent.click(within(form).getByLabelText(`Approved ${i}`));
   expect(within(form).getByLabelText("Approved 5")).toBeDisabled();
-  fireEvent.change(within(form).getByLabelText("Question stem"), { target: { value: "New question?" } });
+  fireEvent.change(within(form).getByLabelText("Question text"), { target: { value: "New question?" } });
   fireEvent.change(within(form).getByLabelText("Option 1"), { target: { value: "A" } });
   fireEvent.change(within(form).getByLabelText("Option 2"), { target: { value: "B" } });
   fireEvent.click(within(form).getByRole("button", { name: "Save draft" }));
@@ -491,7 +510,7 @@ it("creates without concepts when concept loading fails", async () => {
   mock.concepts.mockRejectedValue(new Error("unavailable"));
   const form = await openCreate();
   expect(within(form).getByText("No approved concepts are available. You can save without them.")).toBeInTheDocument();
-  fireEvent.change(within(form).getByLabelText("Question stem"), { target: { value: "No concepts?" } });
+  fireEvent.change(within(form).getByLabelText("Question text"), { target: { value: "No concepts?" } });
   fireEvent.change(within(form).getByLabelText("Option 1"), { target: { value: "A" } });
   fireEvent.change(within(form).getByLabelText("Option 2"), { target: { value: "B" } });
   fireEvent.click(within(form).getByRole("button", { name: "Save draft" }));
@@ -514,7 +533,7 @@ it("keeps form and selected detail on failure, deduplicates pending save, and re
   fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
   fireEvent.click(await screen.findByRole("button", { name: "Create question" }));
   const form = screen.getByRole("form", { name: "Create question form" });
-  fireEvent.change(within(form).getByLabelText("Question stem"), { target: { value: "Keep this stem" } });
+  fireEvent.change(within(form).getByLabelText("Question text"), { target: { value: "Keep this stem" } });
   fireEvent.change(within(form).getByLabelText("Option 1"), { target: { value: "Keep A" } });
   fireEvent.change(within(form).getByLabelText("Option 2"), { target: { value: "Keep B" } });
   fireEvent.click(within(form).getByLabelText("Matrices"));
@@ -524,7 +543,7 @@ it("keeps form and selected detail on failure, deduplicates pending save, and re
   expect(mock.createQuestion).toHaveBeenCalledTimes(1);
   await act(async () => reject(new Error("Could not create question")));
   expect(await screen.findByRole("alert")).toHaveTextContent("Could not create question");
-  expect(within(form).getByLabelText("Question stem")).toHaveValue("Keep this stem");
+  expect(within(form).getByLabelText("Question text")).toHaveValue("Keep this stem");
   expect(within(form).getByLabelText("Option 1")).toHaveValue("Keep A");
   expect(within(form).getByLabelText("Matrices")).toBeChecked();
   expect(screen.getByRole("article", { name: "Selected question" })).toHaveTextContent("What is a matrix?");
@@ -544,7 +563,7 @@ it("selects the new draft and resets filters, page and form without transitionin
   fireEvent.change(screen.getByLabelText("Type"), { target: { value: "SHORT_ANSWER" } });
   fireEvent.click(await screen.findByRole("button", { name: "Create question" }));
   const form = screen.getByRole("form", { name: "Create question form" });
-  fireEvent.change(within(form).getByLabelText("Question stem"), { target: { value: "New question?" } });
+  fireEvent.change(within(form).getByLabelText("Question text"), { target: { value: "New question?" } });
   fireEvent.change(within(form).getByLabelText("Option 1"), { target: { value: "A" } });
   fireEvent.change(within(form).getByLabelText("Option 2"), { target: { value: "B" } });
   fireEvent.click(within(form).getByRole("button", { name: "Save draft" }));
@@ -562,7 +581,7 @@ it("clears an unfinished create form when the course changes", async () => {
   const view = render(<QuestionBank courseId="course" />);
   fireEvent.click(screen.getByRole("button", { name: "Open question bank" }));
   fireEvent.click(await screen.findByRole("button", { name: "Create question" }));
-  fireEvent.change(screen.getByLabelText("Question stem"), { target: { value: "Unsaved private question" } });
+  fireEvent.change(screen.getByLabelText("Question text"), { target: { value: "Unsaved private question" } });
   view.rerender(<QuestionBank courseId="another-course" />);
   expect(screen.queryByRole("form", { name: "Create question form" })).not.toBeInTheDocument();
   expect(screen.queryByDisplayValue("Unsaved private question")).not.toBeInTheDocument();
@@ -645,13 +664,13 @@ it("deduplicates pending suggestions and preserves input after a duplicate confl
   fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
   fireEvent.click(screen.getByRole("button", { name: "Suggest edit" }));
   const form = screen.getByRole("form", { name: "Suggest question edit" });
-  fireEvent.change(within(form).getByLabelText("Proposed stem"), { target: { value: "Keep this proposal" } });
+  fireEvent.change(within(form).getByLabelText("Proposed question text"), { target: { value: "Keep this proposal" } });
   fireEvent.submit(form); fireEvent.submit(form);
   expect(mock.suggestQuestionEdit).toHaveBeenCalledTimes(1);
   expect(within(form).getByRole("button", { name: "Submitting suggestion…" })).toBeDisabled();
   await act(async () => reject(new Error("You already have an open suggestion for this question")));
   expect(await screen.findByText("You already have an open suggestion for this question")).toBeInTheDocument();
-  expect(within(form).getByLabelText("Proposed stem")).toHaveValue("Keep this proposal");
+  expect(within(form).getByLabelText("Proposed question text")).toHaveValue("Keep this proposal");
   fireEvent.submit(form);
   expect(await screen.findByText("Suggestion submitted for faculty review.")).toBeInTheDocument();
   expect(mock.suggestQuestionEdit).toHaveBeenCalledTimes(2);

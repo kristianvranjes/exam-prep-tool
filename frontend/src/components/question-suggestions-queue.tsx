@@ -12,7 +12,7 @@ function baseContent(question: OwnerQuestion): QuestionContent {
 }
 
 function contentFields(content: QuestionContent): [string, string][] {
-  const fields: [string, string][] = [["Stem", content.stem], ["Difficulty", String(content.difficulty ?? "Not set")], ["Explanation", content.explanation ?? "Not set"]];
+  const fields: [string, string][] = [["Question text", content.stem], ["Difficulty", String(content.difficulty ?? "Not set")], ["Explanation", content.explanation ?? "Not set"]];
   if (content.type === "MULTIPLE_CHOICE") {
     content.options.forEach((option, position) => fields.push([`Option ${position + 1}`, option.text]));
     fields.push(["Correct option", String(content.options.findIndex(option => option.is_correct) + 1)]);
@@ -107,7 +107,7 @@ export function QuestionSuggestionsQueue({ facultyId, courseId, courses, current
       return <Surface key={suggestion.id} role="article" aria-label={`Suggestion: ${question.stem}`} className="space-y-4">
         <p className="text-sm text-muted">{courses.find(course => course.id === question.course_id)?.name ?? question.course_id} · Base version {suggestion.base_version_number}</p>
         <h3 className="break-words text-lg font-semibold">{question.stem}</h3>
-        <div className="flex flex-wrap gap-2"><Badge>{question.type}</Badge><Badge>{question.source}</Badge><Badge>{suggestion.question.status}</Badge></div>
+        <div className="flex flex-wrap gap-2"><Badge>{question.type}</Badge><Badge>{question.source}</Badge><Badge>{suggestion.question.status === "PENDING_REVIEW" ? "Awaiting faculty review" : suggestion.question.status.toLowerCase().replaceAll("_", " ")}</Badge></div>
         <p className="break-words text-sm text-muted">Current question: {suggestion.question.stem}</p>
         {suggestion.note && <p className="break-words">Note: {suggestion.note}</p>}
         <SuggestionComparison suggestion={suggestion} />

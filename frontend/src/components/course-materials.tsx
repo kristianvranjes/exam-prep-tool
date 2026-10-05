@@ -17,7 +17,11 @@ function ProcessingMessage({ material }: { material: Material }) {
   </>;
 }
 
-export function CourseMaterials({ courseId, currentUserId }: { courseId: string; currentUserId?: string }) {
+export type MaterialsSummary = { materials: Material[]; loading: boolean; error: boolean };
+
+export function CourseMaterials({ courseId, currentUserId, onSummaryChange }: {
+  courseId: string; currentUserId?: string; onSummaryChange?: (summary: MaterialsSummary) => void;
+}) {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [detail, setDetail] = useState<MaterialDetail | null>(null);
   const [selected, setSelected] = useState<Material | null>(null);
@@ -31,6 +35,10 @@ export function CourseMaterials({ courseId, currentUserId }: { courseId: string;
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [listRevision, setListRevision] = useState(0);
   const [detailRevision, setDetailRevision] = useState(0);
+
+  useEffect(() => {
+    onSummaryChange?.({ materials, loading, error: Boolean(listError) });
+  }, [materials, loading, listError, onSummaryChange]);
 
   useEffect(() => {
     let active = true;
@@ -87,7 +95,7 @@ export function CourseMaterials({ courseId, currentUserId }: { courseId: string;
   }
 
   return <section className="mt-6 flex min-w-0 flex-col gap-5 border-t border-line pt-6" aria-label="Course materials">
-    <div><h3 className="text-xl font-semibold">Study materials</h3><p className="mt-2 text-muted">Keep your course PDFs and extracted study text together.</p></div>
+    <div><h3 className="text-xl font-semibold">Study materials</h3><p className="mt-2 text-muted">Keep your course PDFs and extracted study text together. Uploading and processing a PDF does not create practice questions. Practice uses shared approved questions or your own drafts in the question bank.</p></div>
     <MaterialUpload disabled={loading} busy={uploading} upload={upload} />
     <div className="flex flex-wrap items-center justify-between gap-3"><h4 className="text-lg font-semibold">Your materials</h4><Button variant="secondary" disabled={loading || uploading} onClick={refresh}>{listError ? "Retry materials" : "Refresh materials"}</Button></div>
     {listError && <Alert>{listError}</Alert>}
@@ -117,7 +125,11 @@ export function CourseMaterials({ courseId, currentUserId }: { courseId: string;
     {detailError && <div><Alert>{detailError} {selected?.original_filename}</Alert><Button variant="secondary" className="mt-3" disabled={opening} onClick={() => selected && open(selected)}>Retry details</Button></div>}
     {detail && <article aria-label={`Material details: ${detail.original_filename}`} className="min-w-0 rounded-xl border border-line bg-surface p-5 sm:p-6">
       <h4 className="break-words text-lg font-semibold">{detail.original_filename}</h4>
-      <div className="mt-3 flex flex-wrap items-center gap-3"><Badge>{materialStatus[detail.status]}</Badge><p className="text-sm text-muted">{formatFileSize(detail.file_size_bytes)} · {detail.sections.length} sections · {detail.chunk_count} chunks</p></div>
+      <div className="mt-3 flex flex-wrap items-center gap-3"><Badge>{materialStatus[detail.status]}</Badge><p className="text-sm text-muted">{formatFileSize(detail.file_size_bytes)}</p></div>
+      <details className="mt-4">
+        <summary className="rounded-lg py-2 text-sm font-medium">Processing details</summary>
+        <p className="mt-2 text-sm text-muted">{formatFileSize(detail.file_size_bytes)} · {detail.sections.length} sections · {detail.chunk_count} chunks</p>
+      </details>
       <div className="mt-3 flex flex-col gap-2"><ProcessingMessage material={detail} /></div>
       <details className="mt-4">
         <summary className="rounded-lg py-2 font-medium">Extracted text</summary>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { practiceApi, type Attempt, type PracticeAnswer } from "../lib/practice-api";
-import { Alert, Badge, Button, Surface } from "./ui";
+import { Alert, Button } from "./ui";
 import { QuizAnswerEditor } from "./quiz-answer-editor";
 import { ExperiencePicker, QuizNavigator, type QuizExperience } from "./quiz-navigation";
 
@@ -18,17 +18,22 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
   const [error, setError] = useState("");
+  const [review, setReview] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const pending = useRef(false);
   const questionHeading = useRef<HTMLHeadingElement>(null);
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
   const confirmationHeading = useRef<HTMLHeadingElement>(null);
   const question = attempt.questions[index];
   const dirty = JSON.stringify(answer) !== JSON.stringify(question.answer);
   const valid = answer !== null && (answer.type !== "SHORT_ANSWER" || answer.text.trim().length > 0);
   const answered = attempt.questions.filter(item => item.answer !== null).length;
   const unanswered = attempt.questions.length - answered;
+  const finalQuestion = index === attempt.questions.length - 1;
+  const saveState = saving ? "Saving…" : saveFailed ? "Save failed" : dirty ? "Unsaved changes" : question.answer ? "Saved" : "No answer saved";
+  const sessionClosed = /already submitted|not active|frozen/i.test(error);
 
-  useEffect(() => { (confirmation ? confirmationHeading : questionHeading).current?.focus(); }, [confirmation, index]);
+  useEffect(() => { (confirmation ? confirmationHeading : review ? reviewHeading : questionHeading).current?.focus(); }, [confirmation, index, review]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -62,6 +67,19 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
       if (saved.status === "ACTIVE") { setIndex(next); setAnswer(saved.questions[next].answer); setSaveFailed(false); }
     });
   }
+  function openReview() {
+    void run(async () => { const saved = await persist(); if (saved.status === "ACTIVE") setReview(true); });
+  }
+  function forward() {
+    if (!valid) return;
+    if (finalQuestion) openReview();
+    else navigate(index + 1);
+  }
+  function reviewUnanswered() {
+    const next = attempt.questions.findIndex(item => item.answer === null);
+    if (next < 0) return;
+    setReview(false); navigate(next);
+  }
   async function leave(action: "back" | "reload") {
     if (action === "back") await back();
     else {
@@ -75,16 +93,23 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
     if (dirty) { setError(""); setConfirmation(action); }
     else void run(() => leave(action));
   }
+  function saveAndLeave() {
+    if (dirty && !valid) { requestLeave("back"); return; }
+    void run(async () => { const saved = await persist(); if (saved.status === "ACTIVE") await leave("back"); });
+  }
 
-  return <div className="flex min-w-0 flex-col gap-5">
-    <div role="status"><p>{answered} / {attempt.questions.length} answered and saved</p><p className="text-sm text-muted">{unanswered} unanswered · {flags.size} flagged</p></div>
+  return <div className="flex min-w-0 flex-col gap-6">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <p className="text-sm text-muted">{experience === "EXAM" ? "Exam practice" : "Guided practice"}</p>
+      <Button variant="secondary" disabled={busy} onClick={saveAndLeave}>Save and leave</Button>
+    </div>
     {error && <Alert>{error}</Alert>}
+    {sessionClosed && <p className="text-sm text-muted">This session can no longer be edited. Use Recovery options to view the saved session, or return to Practice history. Your local answer remains here until you choose to leave or reload.</p>}
     {confirmation && <section aria-label={confirmation === "submit" ? "Confirm submission" : confirmation === "abandon" ? "Confirm abandonment" : "Unsaved answer"} className="rounded-xl border border-line bg-surface p-5">
-      <h4 ref={confirmationHeading} tabIndex={-1} className="text-lg font-semibold">{confirmation === "submit" ? "Submit this quiz?" : confirmation === "abandon" ? "Abandon this attempt?" : "Keep your unsaved answer?"}</h4>
+      <h4 ref={confirmationHeading} tabIndex={-1} className="text-lg font-semibold">{confirmation === "submit" ? "Finish practice?" : confirmation === "abandon" ? "Abandon this attempt?" : "Keep your unsaved answer?"}</h4>
       {confirmation === "submit" ? <>
-        <p className="mt-3">Answered: {answered} · Unanswered: {unanswered} · Flagged: {flags.size}</p>
+        <p className="mt-3">{answered} of {attempt.questions.length} answered and saved · {flags.size} marked to revisit</p>
         <p className="mt-3">Submission is final and freezes your answers. You cannot edit them afterward.</p>
-        {unanswered > 0 && <p className="mt-3">Save an answer for every question before submitting.</p>}
         <div className="mt-4 flex flex-wrap gap-2"><Button variant="secondary" disabled={busy} onClick={() => { setConfirmation(null); setError(""); }}>Keep reviewing</Button><Button disabled={busy || unanswered > 0} onClick={() => void run(async () => { update(await practiceApi.submit(attempt.course_id, attempt.id)); })}>{busy ? "Submitting…" : "Confirm final submission"}</Button></div>
       </> : confirmation === "abandon" ? <>
         <p className="mt-3">This attempt cannot be resumed. Saved answers stay in your history. No grades or review progress will be recorded.</p>
@@ -102,23 +127,56 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
         </div>
       </>}
     </section>}
-    <div hidden={confirmation !== null}>
-      <div className="flex flex-col gap-5">
-        <div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={busy} onClick={() => requestLeave("back")}>Back to saved attempts</Button><Button variant="secondary" disabled={busy} onClick={() => requestLeave("reload")}>Reload saved attempt</Button></div>
-        <ExperiencePicker value={experience} onChange={setExperience} disabled={busy} />
-        {experience === "EXAM" && <QuizNavigator questions={attempt.questions} index={index} flags={flags} busy={busy} jump={navigate} />}
-        <Surface className="flex min-w-0 flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3"><h4 ref={questionHeading} tabIndex={-1} className="text-lg font-semibold">Question {index + 1} of {attempt.questions.length}</h4><Badge>{question.answer ? "Answered" : "Unanswered"}</Badge></div>
-          <Button variant="secondary" disabled={busy} aria-pressed={flags.has(question.id)} onClick={() => setFlags(current => { const next = new Set(current); if (next.has(question.id)) next.delete(question.id); else next.add(question.id); return next; })} className="self-start">{flags.has(question.id) ? "Unflag question" : "Flag for review"}</Button>
-          <QuizAnswerEditor question={question} answer={answer} change={value => { setAnswer(value); setSaveFailed(false); setError(""); }} disabled={busy} canSave={dirty && valid} save={() => void run(async () => { await persist(); })} saveState={saving ? "Saving…" : saveFailed ? "Save failed" : dirty ? "Unsaved changes" : question.answer ? "Saved" : "No answer saved"} />
-        </Surface>
-        <div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={busy || index === 0} onClick={() => navigate(index - 1)}>Previous question</Button><Button variant="secondary" disabled={busy || index === attempt.questions.length - 1} onClick={() => navigate(index + 1)}>Next question</Button></div>
-        <p className="text-sm text-muted">Edited answers are saved before moving to another question. Correctness is shown only after final submission.</p>
-        <div className="flex flex-wrap gap-2">
-          <Button disabled={busy} onClick={() => void run(async () => { const saved = await persist(); if (saved.status === "ACTIVE") setConfirmation("submit"); })}>Submit quiz — final</Button>
-          <Button variant="secondary" disabled={busy} onClick={() => { setError(""); setConfirmation("abandon"); }}>Abandon attempt</Button>
-        </div>
+    {review && !confirmation && <section aria-label="Review practice" className="space-y-4">
+      <h4 ref={reviewHeading} tabIndex={-1} className="text-xl font-semibold">Review practice</h4>
+      <p>{answered} of {attempt.questions.length} answered and saved</p>
+      {unanswered > 0 && <p>{unanswered} {unanswered === 1 ? "question still needs" : "questions still need"} an answer. Save an answer for every question before finishing.</p>}
+      {flags.size > 0 && <p className="text-sm text-muted">{flags.size} marked to revisit. You can return to your questions before finishing.</p>}
+      <div className="flex flex-wrap gap-2">
+        {unanswered > 0 && <Button disabled={busy} onClick={reviewUnanswered}>Review unanswered</Button>}
+        <Button variant="secondary" disabled={busy} onClick={() => setReview(false)}>Back to question</Button>
+        <Button variant={unanswered > 0 ? "secondary" : "primary"} disabled={busy || unanswered > 0} aria-describedby={unanswered > 0 ? "finish-help" : undefined} onClick={() => setConfirmation("submit")}>Finish practice</Button>
       </div>
+      {unanswered > 0 && <p id="finish-help" className="text-sm text-muted">Finish practice becomes available when every answer is saved.</p>}
+      <p className="text-sm text-muted">Results appear after final submission. Short answers require self-review.</p>
+    </section>}
+    <div hidden={confirmation !== null || review}>
+      <form className="flex min-w-0 flex-col gap-6" onSubmit={event => { event.preventDefault(); if (!busy) forward(); }}>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h4 ref={questionHeading} tabIndex={-1} className="text-base font-semibold">Question {index + 1} of {attempt.questions.length}</h4>
+          <p role="status" className="text-sm text-muted">{saveState}</p>
+        </div>
+        <QuizAnswerEditor question={question} answer={answer} change={value => { setAnswer(value); setSaveFailed(false); setError(""); }} disabled={busy} />
+        <div className="flex flex-col gap-3">
+          {!valid && <p id="answer-help" className="text-sm text-muted">{question.type === "SHORT_ANSWER" ? "Enter your answer to continue." : "Choose an answer to continue."}</p>}
+          <div className="flex flex-wrap justify-between gap-3">
+            <Button variant="secondary" disabled={busy || index === 0} onClick={() => navigate(index - 1)}>Previous</Button>
+            <Button type="submit" disabled={busy || !valid} aria-describedby={!valid ? "answer-help" : undefined}>{saving ? "Saving…" : finalQuestion ? "Save and review" : "Save and next"}</Button>
+          </div>
+        </div>
+      </form>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button variant="ghost" disabled={busy} aria-pressed={flags.has(question.id)} onClick={() => setFlags(current => { const next = new Set(current); if (next.has(question.id)) next.delete(question.id); else next.add(question.id); return next; })}>{flags.has(question.id) ? "Remove revisit mark" : "Mark to revisit"}</Button>
+        <Button variant="ghost" disabled={busy} onClick={openReview}>Review and finish</Button>
+      </div>
+      <p className="mt-3 text-sm text-muted">Edited answers are saved before moving to another question. Results appear after final submission.</p>
     </div>
+    {!confirmation && experience === "EXAM" && <details className="border-t border-line pt-3">
+      <summary className="min-h-11 cursor-pointer py-2 font-medium">Question navigator</summary>
+      <div className="mt-3"><QuizNavigator questions={attempt.questions} index={index} flags={flags} busy={busy} jump={next => { setReview(false); navigate(next); }} /></div>
+    </details>}
+    {!confirmation && <details className="border-t border-line pt-3">
+      <summary className="min-h-11 cursor-pointer py-2 font-medium">Session options</summary>
+      <div className="mt-3"><ExperiencePicker value={experience} onChange={setExperience} disabled={busy} /></div>
+      <Button variant="ghost" className="mt-4" disabled={busy} onClick={() => { setError(""); setConfirmation("abandon"); }}>Abandon attempt</Button>
+    </details>}
+    <details className="border-t border-line pt-3">
+      <summary className="min-h-11 cursor-pointer py-2 font-medium">Recovery options</summary>
+      <p className="mt-2 text-sm text-muted">Reload saved answers. If you have unsaved changes, choose whether to save or discard them first.</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button variant="ghost" disabled={busy} onClick={() => requestLeave("reload")}>Reload saved answers</Button>
+        {sessionClosed && <Button variant="ghost" disabled={busy} onClick={() => requestLeave("back")}>Return to Practice history</Button>}
+      </div>
+    </details>
   </div>;
 }

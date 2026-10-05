@@ -124,6 +124,9 @@ export function ConceptReview({ courseId, materialId }: { courseId: string; mate
   }
 
   return <section className="mt-6 min-w-0 space-y-5 border-t border-line pt-6" aria-label="Concept review">
+    <details>
+      <summary className="text-sm font-medium">Advanced: concept extraction and review</summary>
+      <div className="mt-4 min-w-0 space-y-5">
     <div>
       <h4 className="text-lg font-semibold">Concept proposals</h4>
       <p className="mt-2 max-w-prose text-sm text-muted">AI-assisted extraction creates draft suggestions that need human review.</p>
@@ -134,11 +137,11 @@ export function ConceptReview({ courseId, materialId }: { courseId: string; mate
         <h5 className="font-semibold">Extract concepts</h5>
         <p className="mt-1 text-sm text-muted">Run extraction for this ready material. Reruns can update drafts while reviewed concepts remain unchanged.</p>
       </div>
-      <Button type="button" disabled={loading || !!loadError || busy !== null} onClick={() => void extract()}>
+      <Button type="button" variant="secondary" disabled={loading || !!loadError || busy !== null} onClick={() => void extract()}>
         {busy === "extract" ? "Extracting concepts…" : "Extract concepts"}
       </Button>
       {busy === "extract" && <p role="status" className="text-sm text-muted">AI-assisted extraction is running…</p>}
-      {job && <p role="status" className="break-words text-sm text-muted [overflow-wrap:anywhere]">Extraction {job.status} · model {job.model}</p>}
+      {job && <p role="status" className="break-words text-sm text-muted [overflow-wrap:anywhere]">Extraction {label(job.status)} · model {job.model}</p>}
       {extractError && <Alert>{extractError}</Alert>}
       {refreshError && <div className="space-y-3">
         <Alert>{refreshError}</Alert>
@@ -186,13 +189,16 @@ export function ConceptReview({ courseId, materialId }: { courseId: string; mate
       {source && <div className="min-w-0 space-y-2">
         <p className="break-words font-medium [overflow-wrap:anywhere]">Sources for {source.name}</p>
         {source.source_chunks.map((chunk) => <details key={chunk.id} className="min-w-0 rounded-lg border border-line">
-          <summary className="break-words px-3 py-2 text-sm font-medium [overflow-wrap:anywhere]">Chunk {chunk.ordinal} · material {chunk.material_id}</summary>
+          <summary className="break-words px-3 py-2 text-sm font-medium [overflow-wrap:anywhere]">Source excerpt {chunk.ordinal + 1}</summary>
           <div className="min-w-0 space-y-2 border-t border-line p-3">
+            <p className="break-words text-xs text-muted [overflow-wrap:anywhere]">Material ID: {chunk.material_id}</p>
             <p className="break-words text-xs text-muted [overflow-wrap:anywhere]">Chunk ID: {chunk.id}</p>
             <pre role="region" aria-label={"Source text for chunk " + chunk.id} tabIndex={0} className="max-h-60 max-w-full overflow-auto whitespace-pre-wrap rounded-lg bg-subtle p-3 text-sm [overflow-wrap:anywhere]">{chunk.content}</pre>
           </div>
         </details>)}
       </div>}
     </Surface>}
+      </div>
+    </details>
   </section>;
 }
