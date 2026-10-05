@@ -63,7 +63,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
       <Button variant="ghost" className="mb-4" onClick={goHome}>Back to Home</Button>
       {navigation}
     </details>}
-    <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} onOpenAdaptiveReview={onOpenAdaptiveReview} /></div>
+    <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} /></div>
     <div id="course-materials" hidden={destination !== "materials"}><CourseMaterials courseId={course.id} currentUserId={currentUserId} onSummaryChange={setMaterials} /></div>
     <section id="course-more" hidden={destination !== "more"} aria-label="More course tools" className="mt-6">
       <h2 className="text-xl font-semibold">More</h2>
