@@ -5,10 +5,10 @@ import type { Course } from "../lib/api";
 import { CourseBrowser } from "./course-browser";
 import { Badge, Button, EmptyState, LoadingState, Surface } from "./ui";
 
-export function StudentHome({ courses, loading, onOpen, onJoined, catalogRevision, resumableCourse, onResume }: {
+export function StudentHome({ courses, loading, onOpen, onJoined, catalogRevision, resumableCourse, onResume, checkingSessions }: {
   courses: Course[]; loading: boolean; onOpen: (course: Course) => void;
   onJoined: (course: Course) => void; catalogRevision: number;
-  resumableCourse: Course | null; onResume: () => void;
+  resumableCourse: Course | null; onResume: () => void; checkingSessions?: boolean;
 }) {
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
   const [discoveryVisited, setDiscoveryVisited] = useState(false);
@@ -16,6 +16,7 @@ export function StudentHome({ courses, loading, onOpen, onJoined, catalogRevisio
 
   return <>
     <h1 id="home-heading" tabIndex={-1} className="text-3xl font-semibold tracking-tight">Home</h1>
+    {checkingSessions && !resumableCourse && <p role="status" className="mt-4 text-sm text-muted">Checking unfinished sessions…</p>}
     {resumableCourse && <Surface className="mt-6">
       <h2 className="text-xl font-semibold">Continue studying</h2>
       <p className="mt-2 font-medium">{resumableCourse.name}</p>

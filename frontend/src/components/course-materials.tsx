@@ -95,16 +95,16 @@ export function CourseMaterials({ courseId, currentUserId, onSummaryChange }: {
   }
 
   return <section className="mt-6 flex min-w-0 flex-col gap-5 border-t border-line pt-6" aria-label="Course materials">
-    <div><h3 className="text-xl font-semibold">Study materials</h3><p className="mt-2 text-muted">Keep your course PDFs and extracted study text together. Uploading and processing a PDF does not create practice questions. Practice uses shared approved questions or your own drafts in the question bank.</p></div>
+    <div><h2 className="text-xl font-semibold">Study materials</h2><p className="mt-2 text-muted">Keep your course PDFs and extracted study text together. Uploading and processing a PDF does not create practice questions. Practice uses shared approved questions or your own drafts in the question bank.</p></div>
     <MaterialUpload disabled={loading} busy={uploading} upload={upload} />
-    <div className="flex flex-wrap items-center justify-between gap-3"><h4 className="text-lg font-semibold">Your materials</h4><Button variant="secondary" disabled={loading || uploading} onClick={refresh}>{listError ? "Retry materials" : "Refresh materials"}</Button></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">Your materials</h2><Button variant="secondary" disabled={loading || uploading} onClick={refresh}>{listError ? "Retry materials" : "Refresh materials"}</Button></div>
     {listError && <Alert>{listError}</Alert>}
     {deleteError && <Alert>{deleteError}</Alert>}
     {loading && <LoadingState>Loading materials…</LoadingState>}
     {!loading && !listError && materials.length === 0 && <EmptyState title="No materials yet.">Choose a PDF above to add your first study material.</EmptyState>}
     <ul aria-label="Materials list" className="flex min-w-0 flex-col gap-3">{materials.map(material => <li key={material.id} className="min-w-0">
       <Surface className="flex min-w-0 flex-col gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-3"><h5 className="min-w-0 break-words font-semibold">{material.original_filename}</h5><Badge>{materialStatus[material.status]}</Badge></div>
+        <div className="flex flex-wrap items-start justify-between gap-3"><h3 className="min-w-0 break-words font-semibold">{material.original_filename}</h3><Badge>{materialStatus[material.status]}</Badge></div>
         <p className="text-sm text-muted">{formatFileSize(material.file_size_bytes)}</p>
         <ProcessingMessage material={material} />
         <div className="flex flex-wrap items-center gap-2">
@@ -124,7 +124,7 @@ export function CourseMaterials({ courseId, currentUserId, onSummaryChange }: {
     {opening && <LoadingState>Loading details for {selected?.original_filename}…</LoadingState>}
     {detailError && <div><Alert>{detailError} {selected?.original_filename}</Alert><Button variant="secondary" className="mt-3" disabled={opening} onClick={() => selected && open(selected)}>Retry details</Button></div>}
     {detail && <article aria-label={`Material details: ${detail.original_filename}`} className="min-w-0 rounded-xl border border-line bg-surface p-5 sm:p-6">
-      <h4 className="break-words text-lg font-semibold">{detail.original_filename}</h4>
+      <h2 className="break-words text-lg font-semibold">{detail.original_filename}</h2>
       <div className="mt-3 flex flex-wrap items-center gap-3"><Badge>{materialStatus[detail.status]}</Badge><p className="text-sm text-muted">{formatFileSize(detail.file_size_bytes)}</p></div>
       <details className="mt-4">
         <summary className="rounded-lg py-2 text-sm font-medium">Processing details</summary>

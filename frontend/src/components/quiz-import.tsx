@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useId, useRef, useState } from "react";
+import { useUnsavedChanges } from "./unsaved-changes";
 import { api, OwnerQuestion } from "../lib/api";
 import { quizImportPrompt } from "../lib/quiz-import-prompt";
 import { Alert, Button, Surface } from "./ui";
@@ -9,6 +10,7 @@ export function QuizImport({ courseId, disabled, onImported }: {
   courseId: string; disabled: boolean; onImported: (questions: OwnerQuestion[]) => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
+  useUnsavedChanges(file !== null);
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const input = useRef<HTMLInputElement>(null);

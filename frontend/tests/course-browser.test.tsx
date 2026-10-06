@@ -132,7 +132,7 @@ it("disables joining while membership is loading and while that join is pending"
   fireEvent.click(joining);
   pending.resolve(membership);
   await waitFor(() => expect(onJoined).toHaveBeenCalledWith(course));
-  expect(screen.getByRole("status")).toHaveTextContent("Algorithms added to My courses.");
+  expect(screen.getByRole("status")).toHaveTextContent("Algorithms added to Your courses.");
   expect(mock.joinCourse).toHaveBeenCalledTimes(1);
   rendered.rerender(view([course]));
   expect(screen.getByRole("button", { name: "Open course: Algorithms" })).toBeInTheDocument();

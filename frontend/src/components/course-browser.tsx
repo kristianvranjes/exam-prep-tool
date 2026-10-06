@@ -54,7 +54,7 @@ export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOp
       await api.joinCourse(course.id);
       if (mounted.current) {
         onJoined(course);
-        setNotice(`${course.name} added to My courses. Open it when you’re ready to study.`);
+        setNotice(`${course.name} added to Your courses. Open it when you’re ready to study.`);
       }
     } catch {
       if (mounted.current) setJoinErrors(current => ({ ...current, [course.id]: "Could not join this course. Try again, or choose another course if it is no longer available." }));

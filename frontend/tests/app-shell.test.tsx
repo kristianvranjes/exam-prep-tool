@@ -25,6 +25,7 @@ const apiMock = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/lib/api", () => ({ api: apiMock }));
+vi.mock("../src/lib/practice-api", () => ({ practiceApi: { history: vi.fn().mockResolvedValue([]) } }));
 vi.mock("../src/components/course-materials", () => ({ CourseMaterials: ({ courseId }: { courseId: string }) => <section aria-label="Course materials">Materials for {courseId}</section> }));
 vi.mock("../src/components/practice-quiz", () => ({ PracticeQuiz: ({ courseId, adaptiveReviewRequest }: { courseId: string; adaptiveReviewRequest: number }) => <section aria-label="Practice quiz">Practice for {courseId} · handoff {adaptiveReviewRequest}</section> }));
 vi.mock("../src/components/progress-panel", () => ({ ProgressPanel: ({ courseId, onOpenAdaptiveReview }: { courseId: string; onOpenAdaptiveReview: () => void }) => <section aria-label="Progress">Progress for {courseId}<button onClick={onOpenAdaptiveReview}>Start recommended practice</button></section> }));
@@ -410,7 +411,7 @@ it("joins immediately, opens the course from discovery and avoids repeated joins
   fireEvent.change(await openDiscovery(), { target: { value: "faculty-1" } });
   fireEvent.click(await screen.findByRole("button", { name: "Join course: Algorithms" }));
   expect(await within(screen.getByRole("region", { name: "Your courses" })).findByRole("button", { name: "Open course: Algorithms" })).toBeVisible();
-  expect(screen.getByText(/Algorithms added to My courses/)).toBeVisible();
+  expect(screen.getByText(/Algorithms added to Your courses/)).toBeVisible();
   fireEvent.click(within(screen.getByRole("region", { name: "Browse courses" })).getByRole("button", { name: "Open course: Algorithms" }));
   expect(screen.getByRole("heading", { name: "Algorithms" })).toBeVisible();
   expect(screen.queryByRole("region", { name: "Browse courses" })).not.toBeInTheDocument();

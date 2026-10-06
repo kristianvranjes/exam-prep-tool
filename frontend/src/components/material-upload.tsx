@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useUnsavedChanges } from "./unsaved-changes";
 import { Alert, Button } from "./ui";
 import { cn } from "../lib/utils";
 import { formatFileSize } from "./material-format";
@@ -9,6 +10,7 @@ export function MaterialUpload({ disabled, busy, upload }: {
   disabled: boolean; busy: boolean; upload: (file: File) => Promise<void>;
 }) {
   const [file, setFile] = useState<File | null>(null);
+  useUnsavedChanges(file !== null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [dragging, setDragging] = useState(false);

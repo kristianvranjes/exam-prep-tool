@@ -3,6 +3,7 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { api, type Course } from "../lib/api";
 import { Alert, Button, Input, Surface } from "./ui";
+import { DraftForm } from "./unsaved-changes";
 
 export function CourseSettings({ course, onUpdated, onDeleted }: {
   course: Course;
@@ -17,6 +18,7 @@ export function CourseSettings({ course, onUpdated, onDeleted }: {
   const [saveError, setSaveError] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const [notice, setNotice] = useState("");
+  const [savedRevision, setSavedRevision] = useState(0);
   const pending = useRef<"save" | "delete" | null>(null);
   const mounted = useRef(false);
 
@@ -43,6 +45,7 @@ export function CourseSettings({ course, onUpdated, onDeleted }: {
         setCode(updated.code ?? "");
         setDescription(updated.description ?? "");
         setConfirmation("");
+        setSavedRevision(value => value + 1);
         onUpdated(updated);
         setNotice("Course details saved.");
       }
@@ -72,7 +75,7 @@ export function CourseSettings({ course, onUpdated, onDeleted }: {
 
   return <section id="course-settings" aria-label="Course settings" className="mt-8 space-y-6 border-t border-line pt-8">
     <Surface>
-      <form aria-label="Edit course" onSubmit={event => void save(event)} className="space-y-4">
+      <DraftForm resetKey={JSON.stringify([course.name, course.code, course.description, savedRevision])} aria-label="Edit course" onSubmit={event => void save(event)} className="space-y-4">
         <div><h3 className="text-lg font-semibold">Course settings</h3><p className="mt-1 text-sm text-muted">Update the course details shown to members.</p></div>
         <fieldset disabled={busy !== null} className="space-y-4">
           <label className="block text-sm font-medium">Course name<Input className="mt-2" value={name} onChange={event => setName(event.target.value)} required maxLength={150} /></label>
@@ -82,16 +85,16 @@ export function CourseSettings({ course, onUpdated, onDeleted }: {
         </fieldset>
         {saveError && <Alert>{saveError}</Alert>}
         {notice && <p role="status" className="rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{notice}</p>}
-      </form>
+      </DraftForm>
     </Surface>
     <Surface className="border-danger/40">
-      <form aria-label="Delete course" onSubmit={event => void remove(event)} className="space-y-4">
+      <DraftForm resetKey={`${course.name}:${savedRevision}`} aria-label="Delete course" onSubmit={event => void remove(event)} className="space-y-4">
         <div><h3 className="text-lg font-semibold text-danger">Danger zone</h3><p className="mt-1 text-sm text-muted">Deleting this course permanently removes the course, uploaded source PDFs, questions, attempts, study history and other course data.</p></div>
         <label className="block text-sm font-medium">Type the exact course name to confirm<Input className="mt-2" value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off" aria-describedby="delete-course-name" /></label>
         <p id="delete-course-name" className="break-words text-sm text-muted">Current course name: {course.name}</p>
         <Button type="submit" disabled={busy !== null || confirmation !== course.name} className="bg-danger text-white hover:bg-danger/90">{busy === "delete" ? "Deleting…" : "Delete course permanently"}</Button>
         {deleteError && <Alert>{deleteError}</Alert>}
-      </form>
+      </DraftForm>
     </Surface>
   </section>;
 }

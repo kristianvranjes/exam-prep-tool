@@ -8,10 +8,10 @@ import { Button, Surface } from "./ui";
 type ProgressState = { loading: boolean; summary: ReviewProgressSummary | null; error: boolean };
 type Availability = "loading" | "available" | "empty" | "unknown";
 
-export function CourseOverview({ courseId, currentUserId, active, knownAttemptId, materials, onResume,
+export function CourseOverview({ courseId, currentUserId, active, knownAttemptId, checkingSession, activeSession, materials, onResume,
   onRecommendedPractice, onStandardPractice, onProgress, onMaterials, onQuestions }: {
   courseId: string; currentUserId: string; active: boolean; knownAttemptId: string | null;
-  materials: MaterialsSummary; onResume: () => void; onRecommendedPractice: () => void;
+  checkingSession?: boolean; activeSession?: boolean; materials: MaterialsSummary; onResume: () => void; onRecommendedPractice: () => void;
   onStandardPractice: () => void; onProgress: () => void; onMaterials: () => void; onQuestions: () => void;
 }) {
   const [progress, setProgress] = useState<ProgressState>({ loading: true, summary: null, error: false });
@@ -48,6 +48,7 @@ export function CourseOverview({ courseId, currentUserId, active, knownAttemptId
   const recentMaterials = [...materials.materials].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 2);
 
   return <div className="mt-6 flex min-w-0 flex-col gap-8">
+    {checkingSession && !knownAttemptId && <p role="status" className="text-sm text-muted">Checking unfinished sessions…</p>}
     {knownAttemptId && <Surface>
       <h3 className="text-xl font-semibold">Continue studying</h3>
       <p className="mt-2 text-muted">You have an unfinished practice session.</p>
@@ -69,8 +70,10 @@ export function CourseOverview({ courseId, currentUserId, active, knownAttemptId
         <p className="mt-2 max-w-prose text-sm text-muted">Choose your question count and types before starting. Questions in unfinished sessions are excluded.</p>
         {knownAttemptId && <p className="mt-2 max-w-prose text-sm text-muted">An open session is kept. Return to practice history to set up another if needed.</p>}
         <div className="mt-4 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-          <Button variant={knownAttemptId ? "secondary" : "primary"} onClick={onRecommendedPractice}>Start recommended practice</Button>
-          <Button variant="ghost" onClick={onStandardPractice}>Practice course questions</Button>
+          {activeSession ? <Button variant="secondary" onClick={onResume}>Return to session</Button> : <>
+            <Button variant={knownAttemptId ? "secondary" : "primary"} onClick={onRecommendedPractice}>Start recommended practice</Button>
+            <Button variant="ghost" onClick={onStandardPractice}>Practice course questions</Button>
+          </>}
         </div>
       </Surface>}
     </section>

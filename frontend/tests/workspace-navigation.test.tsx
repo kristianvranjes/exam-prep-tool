@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { AppShell } from "../src/components/app-shell";
 import type { Attempt } from "../src/lib/practice-api";
@@ -64,7 +64,7 @@ it("preserves an actual unsaved answer through destinations, Home, same-course r
   fireEvent.click(screen.getByRole("button", { name: "Resume session" }));
   expect(await screen.findByLabelText("Your short answer")).toHaveValue("My unsaved explanation");
   expect(mock.read).not.toHaveBeenCalled(); expect(mock.start).toHaveBeenCalledOnce(); expect(mock.save).not.toHaveBeenCalled();
-  expect(mock.history).toHaveBeenCalledOnce(); expect(confirm).not.toHaveBeenCalled(); confirm.mockRestore();
+  expect(mock.history).toHaveBeenCalledWith("course", 0); expect(confirm).not.toHaveBeenCalled(); confirm.mockRestore();
 });
 
 it("resumes a reliably known history entry directly from Home without starting a session", async () => {
@@ -148,7 +148,7 @@ it("opens existing Progress and Course Overview directly from submitted results 
   mock.history.mockResolvedValue([submitted]); mock.read.mockResolvedValue(submitted);
   render(<AppShell />); await enterCourse(); navigate("Practice");
   fireEvent.click(await screen.findByText("Practice history"));
-  fireEvent.click(await screen.findByRole("button", { name: /Review quiz/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /Review practice/ }));
   const results = await screen.findByRole("region", { name: "Practice results" });
   fireEvent.click(within(results).getByRole("button", { name: "View progress" }));
   expect(screen.getByRole("region", { name: "Progress" })).toBeVisible();
@@ -182,20 +182,21 @@ it("opens Recommended and Standard setup from Overview without starting an attem
   expect(screen.getByRole("checkbox", { name: "Short answer" })).not.toBeChecked();
   navigate("Overview"); fireEvent.click(screen.getByRole("button", { name: "Start recommended practice" }));
   await waitFor(() => expect(screen.getByRole("radio", { name: "Recommended practice" })).toBeChecked());
-  expect(mock.start).not.toHaveBeenCalled(); expect(mock.history).toHaveBeenCalledOnce();
+  expect(mock.start).not.toHaveBeenCalled(); expect(mock.history).toHaveBeenCalledWith("course", 0);
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByLabelText("Your short answer");
   expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE"], "ADAPTIVE");
 });
 
-it("keeps an unsaved mounted answer when Overview requests another practice mode", async () => {
+it("offers an honestly labelled return to the mounted session from Overview", async () => {
   mock.questions.mockResolvedValue(Array.from({ length: 50 }, (_, id) => ({ id: String(id), status: "APPROVED", type: "TRUE_FALSE" })));
   render(<AppShell />); fireEvent.change(await startPractice(), { target: { value: "Keep this answer" } });
   navigate("Overview");
   expect(screen.getByRole("button", { name: "Resume session" })).toHaveClass("bg-accent");
-  fireEvent.click(screen.getByRole("button", { name: "Start recommended practice" }));
+  expect(screen.queryByRole("button", { name: "Start recommended practice" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Return to session" }));
   expect(await screen.findByLabelText("Your short answer")).toHaveValue("Keep this answer");
-  navigate("Overview"); fireEvent.click(screen.getByRole("button", { name: "Practice course questions" }));
+  navigate("Overview"); fireEvent.click(screen.getByRole("button", { name: "Resume session" }));
   expect(await screen.findByLabelText("Your short answer")).toHaveValue("Keep this answer");
   expect(mock.start).toHaveBeenCalledOnce(); expect(mock.read).not.toHaveBeenCalled();
 });
@@ -222,7 +223,7 @@ it("returns completed results to setup from Progress without creating or changin
   mock.history.mockResolvedValue([submitted]); mock.read.mockResolvedValue(submitted);
   render(<AppShell />); await enterCourse(); navigate("Practice");
   fireEvent.click(await screen.findByText("Practice history"));
-  fireEvent.click(await screen.findByRole("button", { name: /Review quiz/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /Review practice/ }));
   await screen.findByRole("region", { name: "Practice results" });
   navigate("Progress");
   fireEvent.click(within(screen.getByRole("region", { name: "Progress" })).getByRole("button", { name: "Start recommended practice" }));
@@ -275,4 +276,57 @@ it("minimizes application navigation during answering and restores it after Save
   fireEvent.click(screen.getByRole("button", { name: "Resume session" }));
   await screen.findByLabelText("Your short answer");
   await waitFor(() => expect(screen.getByRole("button", { name: "Progress" })).not.toBeVisible());
+});
+
+
+it('discovers and resumes saved work from Home and first Overview, including an older history page', async () => {
+  mock.history.mockImplementation(async (id, offset = 0) => id !== 'course' ? [] : offset === 0
+    ? Array.from({ length: 20 }, (_, index) => ({ ...activeAttempt, id: 'submitted-' + index, status: 'SUBMITTED' }))
+    : [activeAttempt]);
+  render(<AppShell />);
+  await screen.findByRole('heading', { name: 'Continue studying' });
+  await enterCourse();
+  expect(screen.getByRole('button', { name: 'Resume session' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Resume session' }));
+  await waitFor(() => expect(mock.read).toHaveBeenCalledWith('course', 'attempt'));
+  await screen.findByLabelText('Your short answer');
+  expect(mock.read).toHaveBeenCalledWith('course', 'attempt');
+  expect(mock.start).not.toHaveBeenCalled();
+});
+
+it("keeps older-page discovery running when Practice loads a page with no active sessions", async () => {
+  let resolve!: (rows: Attempt[]) => void;
+  const older = new Promise<Attempt[]>(done => { resolve = done; });
+  mock.history.mockImplementation(async (id, offset = 0) => id !== "course" ? [] : offset === 0
+    ? Array.from({ length: 20 }, (_, index) => ({ ...activeAttempt, id: "submitted-" + index, status: "SUBMITTED" })) : older);
+  render(<AppShell />);
+  await waitFor(() => expect(mock.history).toHaveBeenCalledWith("course", 20));
+  await enterCourse(); navigate("Practice");
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
+  await act(async () => resolve([activeAttempt]));
+  fireEvent.click(screen.getByRole("button", { name: "Back to Home" }));
+  expect(await screen.findByRole("button", { name: "Resume session" })).toBeVisible();
+});
+
+it('does not warn for setup choices or successfully saved answers, but still guards a failed save', async () => {
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  render(<AppShell />);
+  await enterCourse(); navigate('Practice');
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Start practice' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('radio', { name: '10 questions' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back to Home' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open course: Statistics' }));
+  expect(confirm).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Back to Home' }));
+  await enterCourse(); navigate('Practice');
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Start practice' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Start practice' }));
+  fireEvent.change(await screen.findByLabelText('Your short answer'), { target: { value: 'Saved explanation' } });
+  mock.save.mockResolvedValue({ ...activeAttempt, questions: [{ ...activeAttempt.questions[0], answer: { type: 'SHORT_ANSWER', text: 'Saved explanation' } }] });
+  fireEvent.click(screen.getByRole('button', { name: 'Save and review' }));
+  await screen.findByText('1 of 1 answered and saved');
+  fireEvent.click(screen.getByRole('button', { name: 'Back to Home' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open course: Statistics' }));
+  expect(confirm).not.toHaveBeenCalled();
+  confirm.mockRestore();
 });

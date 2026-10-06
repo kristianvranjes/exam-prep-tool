@@ -32,6 +32,8 @@ async function start(mode = "Guided practice") {
   fireEvent.click(screen.getByText("More options"));
   fireEvent.click(screen.getByLabelText(mode));
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  await screen.findByRole("heading", { name: "Question 2 of 3" });
+  fireEvent.click(screen.getByRole("button", { name: "Previous" }));
   await screen.findByLabelText("One");
   expect(screen.getByRole("button", { name: "Abandon attempt" })).not.toBeVisible();
   fireEvent.click(screen.getByText("Session options"));
@@ -76,10 +78,10 @@ it("abandons without saving local edits and retains only saved answers in a read
   expect(screen.queryByRole("region", { name: "Practice results" })).not.toBeInTheDocument();
   mock.history.mockResolvedValue([abandoned()]);
   fireEvent.click(screen.getByRole("button", { name: "Back to practice history" }));
-  fireEvent.click(await screen.findByRole("button", { name: /View abandoned quiz/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /View abandoned practice/ }));
   await screen.findByRole("region", { name: "Abandoned attempt" });
   expect(mock.read).toHaveBeenCalledWith("course", "attempt");
-  expect(screen.queryByRole("button", { name: /Resume quiz/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Resume practice/ })).not.toBeInTheDocument();
 });
 
 it("prevents duplicate abandon requests and disables cancellation while pending", async () => {
@@ -121,7 +123,7 @@ it("reopens abandoned history with exact saved short answers and no grading cont
   mock.history.mockResolvedValue([abandoned()]);
   render(<PracticeQuiz currentUserId="student" courseId="course" />);
   fireEvent.click(await screen.findByText("Practice history"));
-  fireEvent.click(await screen.findByRole("button", { name: /View abandoned quiz/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /View abandoned practice/ }));
   const view = await screen.findByRole("region", { name: "Abandoned attempt" });
   expect(within(view).getByText("Your saved answer: false")).toBeInTheDocument();
   const answer = within(screen.getByRole("article", { name: "Question 3 saved answer" })).getByText(/^Your saved answer:/);

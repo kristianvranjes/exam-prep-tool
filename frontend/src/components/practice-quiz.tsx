@@ -39,9 +39,11 @@ export function PracticeQuiz({ courseId, currentUserId, active = true, adaptiveR
   const handledRequest = useRef(0);
   const handledSetupRequest = useRef(0);
   const handledResumeRequest = useRef(0);
-  const knownResumableId = attempt?.status === "ACTIVE" ? attempt.id : history.find(row => row.status === "ACTIVE" && row.id !== attempt?.id)?.id ?? null;
+  const knownResumableId = attempt?.status === "ACTIVE" ? attempt.id : history.find(row => row.status === "ACTIVE" && row.id !== attempt?.id)?.id
+    ?? (resumeAttemptId && resumeAttemptId !== attempt?.id ? resumeAttemptId : null);
 
-  useEffect(() => { onResumableAttemptChange?.(knownResumableId); }, [knownResumableId, onResumableAttemptChange]);
+  // An empty history page is not proof that no older active session exists.
+  useEffect(() => { if (knownResumableId || attempt) onResumableAttemptChange?.(knownResumableId); }, [attempt, knownResumableId, onResumableAttemptChange]);
   const activeSession = attempt?.status === "ACTIVE";
   const attemptStatus = attempt?.status;
   useEffect(() => { onActiveSessionChange?.(activeSession); }, [activeSession, onActiveSessionChange]);
@@ -80,7 +82,7 @@ export function PracticeQuiz({ courseId, currentUserId, active = true, adaptiveR
       if (attempt?.id !== resumeAttemptId) void run(async () => { setAttempt(await practiceApi.read(courseId, resumeAttemptId)); });
     });
     return () => { active = false; };
-  }, [attempt?.id, busy, courseId, resumeAttemptId, resumeRequest, run]);
+  }, [attempt?.id, busy, historyReady, courseId, resumeAttemptId, resumeRequest, run]);
 
   useEffect(() => {
     if (!adaptiveReviewRequest || handledRequest.current === adaptiveReviewRequest) return;
@@ -113,13 +115,13 @@ export function PracticeQuiz({ courseId, currentUserId, active = true, adaptiveR
   }, [setupRequest, attemptStatus, back, busy, loadHistory, open, run]);
 
   return <section className={`mt-6 flex min-w-0 flex-col gap-5${attempt?.status === "ABANDONED" ? " border-t border-line pt-6" : ""}`} aria-label="Practice quiz">
-    <h3 ref={heading} tabIndex={-1} className={activeSession || attempt?.status === "SUBMITTED" ? "sr-only" : "text-xl font-semibold"}>Practice</h3>
+    <h2 ref={heading} tabIndex={-1} className={activeSession || attempt?.status === "SUBMITTED" ? "sr-only" : "text-xl font-semibold"}>Practice</h2>
     {!open && <LoadingState>Preparing practice…</LoadingState>}
     {open && <>
       {error && <Alert>{error}</Alert>}
       {!attempt && <>
         {knownResumableId && <Surface className="max-w-2xl">
-          <h4 className="text-lg font-semibold">Continue studying</h4>
+          <h3 className="text-lg font-semibold">Continue studying</h3>
           <p className="mt-2 text-sm text-muted">You have an unfinished practice session.</p>
           <Button className="mt-4 w-full sm:w-auto" disabled={busy} onClick={() => void run(async () => { setAttempt(await practiceApi.read(courseId, knownResumableId)); })}>Resume session</Button>
         </Surface>}
@@ -134,9 +136,9 @@ export function PracticeQuiz({ courseId, currentUserId, active = true, adaptiveR
           })} onOpenMaterials={onOpenMaterials} onOpenQuestions={onOpenQuestions} />
         <details open={historyOpen} onToggle={event => setHistoryOpen(event.currentTarget.open)} className="max-w-2xl border-t border-line pt-3">
           <summary className="min-h-11 cursor-pointer py-2 font-medium">Practice history</summary>
-          {busy ? <LoadingState>Loading quiz…</LoadingState> : <>
+          {busy ? <LoadingState>Loading session…</LoadingState> : <>
             {!history.length && <p className="mt-3 text-muted">No practice history yet. Start with shared approved questions or your own drafts from this course.</p>}
-            <ul className="mt-3 flex flex-col gap-2">{history.map(row => <li key={row.id}><Button variant="secondary" onClick={() => void run(async () => { setAttempt(await practiceApi.read(courseId, row.id)); })}>{row.status === "ACTIVE" ? "Resume quiz" : row.status === "SUBMITTED" ? "Review quiz" : "View abandoned quiz"} · {new Date(row.started_at).toLocaleString()}</Button></li>)}</ul>
+            <ul className="mt-3 flex flex-col gap-2">{history.map(row => <li key={row.id}><Button variant="secondary" onClick={() => void run(async () => { setAttempt(await practiceApi.read(courseId, row.id)); })}>{row.status === "ACTIVE" ? "Resume practice" : row.status === "SUBMITTED" ? "Review practice" : "View abandoned practice"} · {new Date(row.started_at).toLocaleString()}</Button></li>)}</ul>
           </>}
           <div className="mt-4 flex flex-wrap gap-2"><Button variant="secondary" disabled={busy || offset === 0} onClick={() => void run(() => loadHistory(offset - 20))}>Newer sessions</Button><Button variant="secondary" disabled={busy || history.length < 20} onClick={() => void run(() => loadHistory(offset + 20))}>Older sessions</Button><Button variant="ghost" disabled={busy} onClick={() => void run(() => loadHistory(offset))}>Refresh practice history</Button></div>
         </details>

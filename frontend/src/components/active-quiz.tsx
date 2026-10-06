@@ -5,14 +5,15 @@ import { practiceApi, type Attempt, type PracticeAnswer } from "../lib/practice-
 import { Alert, Button } from "./ui";
 import { QuizAnswerEditor } from "./quiz-answer-editor";
 import { ExperiencePicker, QuizNavigator, type QuizExperience } from "./quiz-navigation";
+import { useUnsavedChanges } from "./unsaved-changes";
 
 type Confirmation = "submit" | "reload" | "back" | "abandon";
 export function ActiveQuiz({ attempt, experience, setExperience, update, back }: {
   attempt: Extract<Attempt, { status: "ACTIVE" }>; experience: QuizExperience;
   setExperience: (value: QuizExperience) => void; update: (attempt: Attempt) => void; back: () => Promise<void>;
 }) {
-  const [index, setIndex] = useState(0);
-  const [answer, setAnswer] = useState<PracticeAnswer | null>(attempt.questions[0].answer);
+  const [index, setIndex] = useState(() => Math.max(0, attempt.questions.findIndex(question => question.answer === null)));
+  const [answer, setAnswer] = useState<PracticeAnswer | null>(() => attempt.questions[Math.max(0, attempt.questions.findIndex(question => question.answer === null))].answer);
   const [flags, setFlags] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -32,14 +33,9 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
   const finalQuestion = index === attempt.questions.length - 1;
   const saveState = saving ? "Saving…" : saveFailed ? "Save failed" : dirty ? "Unsaved changes" : question.answer ? "Saved" : "No answer saved";
   const sessionClosed = /already submitted|not active|frozen/i.test(error);
+  useUnsavedChanges(dirty);
 
   useEffect(() => { (confirmation ? confirmationHeading : review ? reviewHeading : questionHeading).current?.focus(); }, [confirmation, index, review]);
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
 
   async function run(action: () => Promise<void>) {
     if (pending.current) return;
@@ -80,6 +76,11 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
     if (next < 0) return;
     setReview(false); navigate(next);
   }
+  function reviewMarked() {
+    const next = attempt.questions.findIndex(question => flags.has(question.id));
+    if (next < 0) return;
+    setReview(false); navigate(next);
+  }
   async function leave(action: "back" | "reload") {
     if (action === "back") await back();
     else {
@@ -106,7 +107,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
     {error && <Alert>{error}</Alert>}
     {sessionClosed && <p className="text-sm text-muted">This session can no longer be edited. Use Recovery options to view the saved session, or return to Practice history. Your local answer remains here until you choose to leave or reload.</p>}
     {confirmation && <section aria-label={confirmation === "submit" ? "Confirm submission" : confirmation === "abandon" ? "Confirm abandonment" : "Unsaved answer"} className="rounded-xl border border-line bg-surface p-5">
-      <h4 ref={confirmationHeading} tabIndex={-1} className="text-lg font-semibold">{confirmation === "submit" ? "Finish practice?" : confirmation === "abandon" ? "Abandon this attempt?" : "Keep your unsaved answer?"}</h4>
+      <h2 ref={confirmationHeading} tabIndex={-1} className="text-lg font-semibold">{confirmation === "submit" ? "Finish practice?" : confirmation === "abandon" ? "Abandon this attempt?" : "Keep your unsaved answer?"}</h2>
       {confirmation === "submit" ? <>
         <p className="mt-3">{answered} of {attempt.questions.length} answered and saved · {flags.size} marked to revisit</p>
         <p className="mt-3">Submission is final and freezes your answers. You cannot edit them afterward.</p>
@@ -128,12 +129,13 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
       </>}
     </section>}
     {review && !confirmation && <section aria-label="Review practice" className="space-y-4">
-      <h4 ref={reviewHeading} tabIndex={-1} className="text-xl font-semibold">Review practice</h4>
+      <h2 ref={reviewHeading} tabIndex={-1} className="text-xl font-semibold">Review practice</h2>
       <p>{answered} of {attempt.questions.length} answered and saved</p>
       {unanswered > 0 && <p>{unanswered} {unanswered === 1 ? "question still needs" : "questions still need"} an answer. Save an answer for every question before finishing.</p>}
       {flags.size > 0 && <p className="text-sm text-muted">{flags.size} marked to revisit. You can return to your questions before finishing.</p>}
       <div className="flex flex-wrap gap-2">
         {unanswered > 0 && <Button disabled={busy} onClick={reviewUnanswered}>Review unanswered</Button>}
+        {flags.size > 0 && <Button variant="secondary" disabled={busy} onClick={reviewMarked}>Review marked</Button>}
         <Button variant="secondary" disabled={busy} onClick={() => setReview(false)}>Back to question</Button>
         <Button variant={unanswered > 0 ? "secondary" : "primary"} disabled={busy || unanswered > 0} aria-describedby={unanswered > 0 ? "finish-help" : undefined} onClick={() => setConfirmation("submit")}>Finish practice</Button>
       </div>
@@ -143,7 +145,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
     <div hidden={confirmation !== null || review}>
       <form className="flex min-w-0 flex-col gap-6" onSubmit={event => { event.preventDefault(); if (!busy) forward(); }}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h4 ref={questionHeading} tabIndex={-1} className="text-base font-semibold">Question {index + 1} of {attempt.questions.length}</h4>
+          <h2 ref={questionHeading} tabIndex={-1} className="text-base font-semibold">Question {index + 1} of {attempt.questions.length}</h2>
           <p role="status" className="text-sm text-muted">{saveState}</p>
         </div>
         <QuizAnswerEditor question={question} answer={answer} change={value => { setAnswer(value); setSaveFailed(false); setError(""); }} disabled={busy} />
@@ -160,6 +162,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
         <Button variant="ghost" disabled={busy} onClick={openReview}>Review and finish</Button>
       </div>
       <p className="mt-3 text-sm text-muted">Edited answers are saved before moving to another question. Results appear after final submission.</p>
+      {flags.size > 0 && <p className="text-sm text-muted">Revisit marks last while this session stays open.</p>}
     </div>
     {!confirmation && experience === "EXAM" && <details className="border-t border-line pt-3">
       <summary className="min-h-11 cursor-pointer py-2 font-medium">Question navigator</summary>
