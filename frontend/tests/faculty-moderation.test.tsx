@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FacultyModeration } from "../src/components/faculty-moderation";
 import type { Course, Faculty, ModeratorReport, ModeratorSuggestion, OwnerQuestion } from "../src/lib/api";
+import { UnsavedChangesProvider } from "../src/components/unsaved-changes";
 
 const apiMock = vi.hoisted(() => ({
   facultyCourses: vi.fn(),
@@ -69,6 +70,20 @@ describe("FacultyModeration", () => {
     apiMock.questionReports.mockResolvedValue([]);
     apiMock.dismissQuestionReport.mockResolvedValue({});
     apiMock.transitionQuestion.mockResolvedValue(makeQuestion());
+  });
+
+  it("registers an unsaved rejection reason and clears it after rejecting", async () => {
+    const dirty = vi.fn();
+    apiMock.facultyCourses.mockResolvedValue([makeCourse("course-1")]);
+    apiMock.questionReview.mockResolvedValue([makeQuestion()]);
+    render(<UnsavedChangesProvider onDirtyChange={dirty}><FacultyModeration moderatedFaculties={faculties} currentUserId="user-1" /></UnsavedChangesProvider>);
+    fireEvent.change(await screen.findByLabelText("Rejection reason"), { target: { value: "Please check this answer" } });
+    await waitFor(() => expect(dirty).toHaveBeenLastCalledWith(true));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh queue" }));
+    expect(await screen.findByLabelText("Rejection reason")).toHaveValue("Please check this answer");
+    expect(dirty).toHaveBeenLastCalledWith(true);
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    await waitFor(() => expect(dirty).toHaveBeenLastCalledWith(false));
   });
 
   it("reviews reports and dismisses one while preserving the question review mode", async () => {

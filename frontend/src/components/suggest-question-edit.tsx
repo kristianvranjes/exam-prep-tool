@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, type PublicQuestion, type SuggestionChanges } from "../lib/api";
 import { Alert, Button, Input, Select } from "./ui";
+import { DraftForm } from "./unsaved-changes";
 
 const textareaClass = "mt-1 min-h-24 w-full rounded-lg border border-line bg-surface px-3 py-2 text-foreground";
 
@@ -62,7 +63,7 @@ export function SuggestQuestionEdit({ question }: { question: SuggestableQuestio
     {notice && <p role="status">{notice}</p>}
     {error && <Alert>{error}</Alert>}
     {!open && <Button type="button" variant="secondary" onClick={() => { setOpen(true); setError(""); setNotice(""); }}>Suggest edit</Button>}
-    {open && <form aria-label="Suggest question edit" onSubmit={event => void submit(event)}>
+    {open && <DraftForm aria-label="Suggest question edit" onSubmit={event => void submit(event)}>
       <fieldset disabled={busy} className="space-y-4">
         <legend className="font-semibold">Propose a correction</legend>
         <p className="text-sm text-muted">Leave fields blank to keep them unchanged. Your proposal is reviewed by faculty moderators before it changes the question.</p>
@@ -100,6 +101,6 @@ export function SuggestQuestionEdit({ question }: { question: SuggestableQuestio
           <Button type="button" variant="secondary" disabled={busy} onClick={() => { setOpen(false); setError(""); }}>Cancel suggestion</Button>
         </div>
       </fieldset>
-    </form>}
+    </DraftForm>}
   </section>;
 }

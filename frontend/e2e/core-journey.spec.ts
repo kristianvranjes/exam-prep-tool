@@ -208,7 +208,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await studentNavigation.getByRole("button", { name: "Overview", exact: true }).click();
     await expect(student.getByRole("heading", { name: "Continue studying" })).toBeVisible();
     await expect(student.getByRole("button", { name: "Resume session" })).toHaveClass(/bg-accent/);
-    await expect(student.getByRole("button", { name: "Start recommended practice" })).not.toHaveClass(/bg-accent/);
+    await expect(student.getByRole("button", { name: "Return to session" })).not.toHaveClass(/bg-accent/);
     await test.info().attach("overview-resume", { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
     await student.getByRole("button", { name: "Resume session" }).click();
     await expect(student.getByRole("radio", { name: correctOption })).toBeChecked();
@@ -346,7 +346,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(student.getByRole("radio", { name: "Course questions", exact: true })).toBeChecked();
     await expect(student.getByRole("heading", { name: "Question 1 of 2" })).toHaveCount(0);
     await student.getByText("Practice history", { exact: true }).click();
-    const historyResults = student.getByRole("button", { name: /Review quiz/ });
+    const historyResults = student.getByRole("button", { name: /Review practice/ });
     await expect(historyResults).toHaveCount(2);
     await historyResults.first().click();
     await expect(results.getByRole("button", { name: "Mistakes", exact: true })).toHaveAttribute("aria-pressed", "true");

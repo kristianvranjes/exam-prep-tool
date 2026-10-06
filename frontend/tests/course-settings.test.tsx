@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, expect, it, vi } from "vitest";
 import { CourseSettings } from "../src/components/course-settings";
 import type { Course } from "../src/lib/api";
+import { UnsavedChangesProvider } from "../src/components/unsaved-changes";
 
 const mock = vi.hoisted(() => ({ updateCourse: vi.fn(), deleteCourse: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
@@ -20,6 +21,18 @@ beforeEach(() => {
   vi.resetAllMocks();
   mock.updateCourse.mockResolvedValue({ ...course, name: "New name" });
   mock.deleteCourse.mockResolvedValue(undefined);
+});
+
+it("clears both drafts after a successful save normalized to the original values", async () => {
+  const dirty = vi.fn();
+  mock.updateCourse.mockResolvedValue(course);
+  render(<UnsavedChangesProvider onDirtyChange={dirty}><CourseSettings course={course} onUpdated={onUpdated} onDeleted={onDeleted} /></UnsavedChangesProvider>);
+  fireEvent.change(screen.getByLabelText("Course name"), { target: { value: " Algorithms " } });
+  fireEvent.change(screen.getByLabelText("Type the exact course name to confirm"), { target: { value: "Algorithms" } });
+  await waitFor(() => expect(dirty).toHaveBeenLastCalledWith(true));
+  fireEvent.click(screen.getByRole("button", { name: "Save course" }));
+  await screen.findByText("Course details saved.");
+  await waitFor(() => expect(dirty).toHaveBeenLastCalledWith(false));
 });
 
 it("shows bounded, prefilled fields and saves only on submit with nullable blank values", async () => {

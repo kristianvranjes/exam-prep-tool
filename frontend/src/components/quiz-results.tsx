@@ -46,7 +46,7 @@ export function QuizResults({ attempt, busy = false, onPracticeAgain, onViewProg
 
   return <section aria-label="Practice results" className="flex min-w-0 max-w-3xl flex-col gap-7 [overflow-wrap:anywhere]">
     <div>
-      <h4 ref={heading} tabIndex={-1} className="text-2xl font-semibold">{hasResults ? "Practice complete" : "Results unavailable"}</h4>
+      <h2 ref={heading} tabIndex={-1} className="text-2xl font-semibold">{hasResults ? "Practice complete" : "Results unavailable"}</h2>
       <p className="mt-2 max-w-prose text-sm text-muted">{hasResults ? "Your submitted answers are saved and can no longer be edited." : "No question results are available for this session. Return to practice setup or open another session from history."}</p>
     </div>
     {hasResults && <dl aria-label="Results summary" className="grid grid-cols-3 gap-3 border-y border-line py-4">
@@ -68,10 +68,10 @@ export function QuizResults({ attempt, busy = false, onPracticeAgain, onViewProg
           className={view === filter ? "bg-subtle underline underline-offset-4" : "text-muted"}
           disabled={filter !== "ALL" && counts[filter] === 0} onClick={() => setView(filter)}>{viewLabels[filter]}</Button>)}
       </div>
-      <div><h5 ref={reviewHeading} tabIndex={-1} className="text-lg font-semibold">{viewLabels[view]}</h5><p role="status" className="mt-1 text-sm text-muted">{visibleQuestions.length} {visibleQuestions.length === 1 ? "answer" : "answers"}</p></div>
+      <div><h3 ref={reviewHeading} tabIndex={-1} className="text-lg font-semibold">{viewLabels[view]}</h3><p role="status" className="mt-1 text-sm text-muted">{visibleQuestions.length} {visibleQuestions.length === 1 ? "answer" : "answers"}</p></div>
       <div className="space-y-5">{visibleQuestions.map(({ question, number }) => {
         const correct = question.grading_status === "CORRECT";
-        const header = <div className="space-y-2"><h6 className="text-lg font-semibold">{number}. {question.stem}</h6><p className="text-sm text-muted">{correct ? "Correct" : question.grading_status === "PENDING" ? "Self-review required" : "Incorrect"}</p></div>;
+        const header = <div className="space-y-2"><h4 className="text-lg font-semibold">{number}. {question.stem}</h4><p className="text-sm text-muted">{correct ? "Correct" : question.grading_status === "PENDING" ? "Self-review required" : "Incorrect"}</p></div>;
         return <article key={question.id} aria-label={`Question ${number} result`} className="min-w-0">
           {correct ? <div className="space-y-3 border-b border-line py-4">
             {header}

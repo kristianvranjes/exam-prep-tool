@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedChanges } from "./unsaved-changes";
 
 import { useEffect, useRef, useState } from "react";
 import { api, type Course, type ModeratorSuggestion, type OwnerQuestion, type QuestionContent } from "../lib/api";
@@ -45,6 +46,7 @@ export function QuestionSuggestionsQueue({ facultyId, courseId, courses, current
   const [notice, setNotice] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
+  useUnsavedChanges(Object.values(reasons).some(reason => reason.length > 0));
   const [busy, setBusy] = useState<Record<string, "approve" | "reject">>({});
   const pendingQuestions = useRef(new Set<string>());
   const resolved = useRef(new Set<string>());
@@ -83,6 +85,10 @@ export function QuestionSuggestionsQueue({ facultyId, courseId, courses, current
       const result = action === "approve" ? await api.approveQuestionSuggestion(suggestion.id) : await api.rejectQuestionSuggestion(suggestion.id, reason);
       if (!mounted.current) return;
       resolved.current.add(suggestion.id);
+      setReasons(current => Object.fromEntries(Object.entries(current).filter(([id]) => {
+        const row = rows.find(item => item.id === id);
+        return id !== suggestion.id && !(action === "approve" && row?.question_id === suggestion.question_id && row.base_version_number < (result.applied_version_number ?? Infinity));
+      })));
       if (action === "approve" && result.applied_version_number !== null) appliedVersions.current.set(suggestion.question_id, result.applied_version_number);
       setRows(current => current.filter(row => row.id !== suggestion.id && (action !== "approve" || row.question_id !== suggestion.question_id || row.base_version_number >= (result.applied_version_number ?? Infinity))));
       if (currentView === view.current) setNotice(action === "approve" ? "Suggestion applied. Other open suggestions for this question were superseded." : "Suggestion rejected.");

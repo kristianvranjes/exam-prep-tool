@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api, Course, Faculty, User, type CourseMembership } from "../lib/api";
 import { CourseWorkspace, type CourseDestination } from "./course-workspace";
 import { StudentHome } from "./student-home";
@@ -8,6 +8,8 @@ import { FacultyWorkspace } from "./faculty-workspace";
 import { ApplicationFrame, Brand } from "./application-frame";
 import { AuthScreen, type AuthMode } from "./auth-screen";
 import { Alert, Button, LoadingState } from "./ui";
+import { UnsavedChangesProvider } from "./unsaved-changes";
+import { useResumableSessions } from "./use-resumable-sessions";
 
 export function AppShell() {
   const [user, setUser] = useState<User | null>(null);
@@ -28,13 +30,18 @@ export function AppShell() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [view, setView] = useState<"home" | "course" | "management">("home");
   const [destination, setDestination] = useState<CourseDestination>("overview");
-  const [knownAttemptId, setKnownAttemptId] = useState<string | null>(null);
   const [resumeRequest, setResumeRequest] = useState(0);
   const [activePractice, setActivePractice] = useState(false);
   const [managementVisited, setManagementVisited] = useState(false);
-  const workspaceEdited = useRef(false);
-  const managementEdited = useRef(false);
+  const [workspaceEdited, setWorkspaceEdited] = useState(false);
+  const [managementEdited, setManagementEdited] = useState(false);
   const selectedId = selected?.id;
+  const { sessions, update: updateResumableSession } = useResumableSessions(courses.map(course => course.id), user?.id);
+  const knownAttemptId = selectedId ? sessions[selectedId]?.id ?? null : null;
+  const resumableCourse = (selected && sessions[selected.id]?.id ? selected : courses.find(course => sessions[course.id]?.id)) ?? null;
+  const onResumableAttemptChange = useCallback((id: string | null) => {
+    if (selectedId) updateResumableSession(selectedId, id);
+  }, [selectedId, updateResumableSession]);
 
   useEffect(() => {
     if (!user || checkingSession) return;
@@ -95,29 +102,27 @@ export function AppShell() {
   }
 
   async function logout() {
-    if ((workspaceEdited.current || managementEdited.current) && !window.confirm("Log out and close your workspaces? Any unsaved answers or edits will be lost.")) return;
+    if ((workspaceEdited || managementEdited) && !window.confirm("Log out and close your workspaces? Any unsaved answers or edits will be lost.")) return;
     setLoggingOut(true); setError("");
-    try { await api.logout(); setUser(null); setCourses([]); setFaculties([]); setSelected(null); setSelectedRole(null); setMembershipError(""); setDeletedNotice(""); setAdaptiveReviewRequest(0); setKnownAttemptId(null); setResumeRequest(0); setView("home"); setDestination("overview"); setManagementVisited(false); workspaceEdited.current = false; managementEdited.current = false; setMode("login"); }
+    try { await api.logout(); setUser(null); setCourses([]); setFaculties([]); setSelected(null); setSelectedRole(null); setMembershipError(""); setDeletedNotice(""); setAdaptiveReviewRequest(0); setResumeRequest(0); setView("home"); setDestination("overview"); setManagementVisited(false); setWorkspaceEdited(false); setManagementEdited(false); setMode("login"); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not log out. Try again."); }
     finally { setLoggingOut(false); }
   }
 
   function selectCourse(course: Course) {
-    if (selected?.id === course.id) { setView("course"); setDestination("overview"); return; }
-    // Forms have no shared saved/dirty signal. Confirm conservatively after any field edit;
-    // a submission event alone is not evidence that the save succeeded.
-    if (workspaceEdited.current && !window.confirm("Switch courses and close the current workspace? Any unsaved answers or edits will be lost. Cancel to return and save your work.")) return;
-    workspaceEdited.current = false;
+    if (selected?.id === course.id) { setView("course"); setDestination("overview"); return true; }
+    if (workspaceEdited && !window.confirm("Switch courses and close the current workspace? Any unsaved answers or edits will be lost. Cancel to return and save your work.")) return false;
+    setWorkspaceEdited(false);
     setActivePractice(false);
     setSelected(course);
     setSelectedRole(null);
     setMembershipError("");
     setDeletedNotice("");
     setAdaptiveReviewRequest(0);
-    setKnownAttemptId(null);
     setResumeRequest(0);
     setDestination("overview");
     setView("course");
+    return true;
   }
 
   function courseUpdated(updated: Course) {
@@ -133,9 +138,8 @@ export function AppShell() {
     setSelectedRole(null);
     setMembershipError("");
     setAdaptiveReviewRequest(0);
-    setKnownAttemptId(null);
     setResumeRequest(0);
-    workspaceEdited.current = false;
+    setWorkspaceEdited(false);
     setView("home");
     setDestination("overview");
     setCatalogRevision(value => value + 1);
@@ -148,7 +152,8 @@ export function AppShell() {
     setView("course");
   }
 
-  function resumeSession() {
+  function resumeSession(course = selected) {
+    if (!course || (selected?.id !== course.id && !selectCourse(course))) return;
     setResumeRequest(value => value + 1);
     setDestination("practice");
     setView("course");
@@ -167,20 +172,23 @@ export function AppShell() {
     <div hidden={view !== "home"}>
       <StudentHome courses={courses} loading={loadingCourses} onOpen={selectCourse}
         onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])}
-        catalogRevision={catalogRevision} resumableCourse={knownAttemptId ? selected : null} onResume={resumeSession} />
+        catalogRevision={catalogRevision} resumableCourse={resumableCourse} onResume={() => resumeSession(resumableCourse)}
+        checkingSessions={Object.values(sessions).some(session => session.status === "loading")} />
     </div>
     <div hidden={view !== "course"}>
       {selected && <>
         {membershipError && <div className="mb-4"><Alert>{membershipError}</Alert><Button variant="secondary" className="mt-3" onClick={() => { setMembershipError(""); setMembershipRetry(value => value + 1); }}>Retry course permissions</Button></div>}
-        <CourseWorkspace key={selected.id} course={selected} currentUserId={user.id} isOwner={isOwner} visible={view === "course"}
-          destination={destination} navigate={setDestination} goHome={() => setView("home")} onEdited={() => { workspaceEdited.current = true; }}
+        <UnsavedChangesProvider key={selected.id} onDirtyChange={setWorkspaceEdited}>
+        <CourseWorkspace course={selected} currentUserId={user.id} isOwner={isOwner} visible={view === "course"}
+          destination={destination} navigate={setDestination} goHome={() => setView("home")}
           adaptiveReviewRequest={adaptiveReviewRequest} onOpenAdaptiveReview={openAdaptiveReview}
-          knownAttemptId={knownAttemptId} resumeRequest={resumeRequest} onResume={resumeSession} onResumableAttemptChange={setKnownAttemptId} activeSession={activePractice} onActiveSessionChange={setActivePractice}
+          knownAttemptId={knownAttemptId} checkingSession={sessions[selected.id]?.status === "loading"} resumeRequest={resumeRequest} onResume={() => resumeSession()} onResumableAttemptChange={onResumableAttemptChange} activeSession={activePractice} onActiveSessionChange={setActivePractice}
           onUpdated={courseUpdated} onDeleted={courseDeleted} />
+        </UnsavedChangesProvider>
       </>}
     </div>
-    <div hidden={view !== "management"} onChangeCapture={() => { managementEdited.current = true; }}>
-      {managementVisited && faculties.length > 0 && <FacultyWorkspace faculties={faculties} currentUserId={user.id} busy={busy} createCourse={createCourse} goHome={() => setView("home")} />}
+    <div hidden={view !== "management"}>
+      {managementVisited && faculties.length > 0 && <UnsavedChangesProvider onDirtyChange={setManagementEdited}><FacultyWorkspace faculties={faculties} currentUserId={user.id} busy={busy} createCourse={createCourse} goHome={() => setView("home")} /></UnsavedChangesProvider>}
     </div>
   </ApplicationFrame>;
 }

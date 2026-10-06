@@ -5,6 +5,7 @@ import { api, Concept, OwnerQuestion, Question, QuestionAction, QuestionCreate, 
 
 import { QuizImport } from "./quiz-import";
 import { SuggestQuestionEdit } from "./suggest-question-edit";
+import { DraftForm } from "./unsaved-changes";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
 
 const types: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
@@ -250,7 +251,7 @@ function ReportIssue({ questionId }: { questionId: string }) {
     {notice && <p role="status">{notice}</p>}
     {error && <Alert>{error}</Alert>}
     {!open && <Button type="button" variant="secondary" onClick={() => { setOpen(true); setError(""); }}>Report issue</Button>}
-    {open && <form aria-label="Report question issue" onSubmit={event => void submit(event)} className="space-y-3">
+    {open && <DraftForm aria-label="Report question issue" onSubmit={event => void submit(event)} className="space-y-3">
       <label className="block text-sm font-medium">Reason
         <Select value={reason} onChange={event => setReason(event.target.value as ReportReason)} disabled={busy} className="mt-2">
           {reportReasons.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
@@ -263,7 +264,7 @@ function ReportIssue({ questionId }: { questionId: string }) {
         <Button type="submit" disabled={busy || (reason === "OTHER" && !details.trim())}>{busy ? "Submitting…" : "Submit report"}</Button>
         <Button type="button" variant="secondary" disabled={busy} onClick={() => { setOpen(false); setError(""); }}>Cancel</Button>
       </div>
-    </form>}
+    </DraftForm>}
   </section>;
 }
 
@@ -306,10 +307,10 @@ function OwnerReview({ question: q, creator, moderator, concepts, busy, mutate }
       {hasMore && <Button type="button" variant="secondary" disabled={busy || versionBusy} onClick={loadVersions}>{versions.length ? "Load more versions" : "View versions"}</Button>}
     </div>
 
-    {moderator && !creator && q.status === "PENDING_REVIEW" && <form onSubmit={(e) => { e.preventDefault(); const reason = String(new FormData(e.currentTarget).get("reason")); void transition("reject", reason); }} className="flex flex-col gap-2 sm:flex-row">
+    {moderator && !creator && q.status === "PENDING_REVIEW" && <DraftForm onSubmit={(e) => { e.preventDefault(); const reason = String(new FormData(e.currentTarget).get("reason")); void transition("reject", reason); }} className="flex flex-col gap-2 sm:flex-row">
       <Input aria-label="Rejection reason" className="min-w-0 flex-1" name="reason" required maxLength={1000} placeholder="Reason for rejection" disabled={busy} />
       <Button type="submit" variant="secondary" disabled={busy}>Reject question</Button>
-    </form>}
+    </DraftForm>}
     {editing && <QuestionForm question={q} concepts={concepts} busy={busy} save={(body) => mutate(() => api.editQuestion(q.id, toEdit(body)))} />}
 
     {(versions.length > 0 || versionBusy || versionError) && <section className="min-w-0 space-y-3 border-t border-line pt-4" aria-label="Question history">
@@ -375,7 +376,7 @@ function QuestionForm({ question: q, concepts, busy, save, cancel }: { question?
     void save(body);
   }
 
-  return <form onSubmit={submit} aria-label={q ? "Edit question form" : "Create question form"} className="min-w-0 rounded-lg border border-line bg-subtle p-4">
+  return <DraftForm onSubmit={submit} aria-label={q ? "Edit question form" : "Create question form"} className="min-w-0 rounded-lg border border-line bg-subtle p-4">
     <fieldset disabled={busy} className="space-y-4">
       <legend className="px-1 font-semibold">{q ? "Edit draft content" : "New private draft"}</legend>
       {!q && <label className="block font-medium">Question type
@@ -421,5 +422,5 @@ function QuestionForm({ question: q, concepts, busy, save, cancel }: { question?
         {cancel && <Button type="button" variant="secondary" disabled={busy} onClick={cancel}>Cancel create</Button>}
       </div>
     </fieldset>
-  </form>;
+  </DraftForm>;
 }

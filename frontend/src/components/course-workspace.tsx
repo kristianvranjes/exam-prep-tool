@@ -16,10 +16,10 @@ const destinations: { id: CourseDestination; label: string }[] = [
   { id: "progress", label: "Progress" }, { id: "materials", label: "Materials" }, { id: "more", label: "More" },
 ];
 
-export function CourseWorkspace({ course, currentUserId, isOwner, visible, destination, navigate, goHome, onEdited,
+export function CourseWorkspace({ course, currentUserId, isOwner, visible, destination, navigate, goHome, checkingSession,
   adaptiveReviewRequest, onOpenAdaptiveReview, knownAttemptId, resumeRequest, onResume, onResumableAttemptChange, activeSession, onActiveSessionChange, onUpdated, onDeleted }: {
   course: Course; currentUserId: string; isOwner: boolean; visible: boolean; destination: CourseDestination;
-  navigate: (destination: CourseDestination) => void; goHome: () => void; onEdited: () => void;
+  navigate: (destination: CourseDestination) => void; goHome: () => void; checkingSession?: boolean;
   adaptiveReviewRequest: number; onOpenAdaptiveReview: () => void; knownAttemptId: string | null;
   resumeRequest: number; onResume: () => void; onResumableAttemptChange: (id: string | null) => void;
   activeSession: boolean; onActiveSessionChange: (active: boolean) => void;
@@ -37,7 +37,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
       {destinations.map(item => <Button key={item.id} variant={destination === item.id ? "primary" : "ghost"} aria-current={destination === item.id ? "page" : undefined} aria-controls={`course-${item.id}`} onClick={() => navigate(item.id)}>{item.label}</Button>)}
     </nav>;
   // Hide destinations instead of unmounting: answers, drafts and uploads stay in memory.
-  return <section aria-labelledby="selected-course-heading" onChangeCapture={onEdited}>
+  return <section aria-labelledby="selected-course-heading">
     {!focused && <Button variant="ghost" className="mb-4" onClick={goHome}>Back to Home</Button>}
     <h1 id="selected-course-heading" tabIndex={-1} className={focused ? "break-words text-lg font-semibold" : "break-words text-3xl font-semibold tracking-tight"}>{course.name}{focused && " · Practice"}</h1>
     {!focused && course.code && <p className="mt-2 text-sm text-muted">{course.code}</p>}
@@ -46,7 +46,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
       <h2 id="overview-heading" className="text-xl font-semibold">Overview</h2>
       {course.description && <p className="mt-3 max-w-prose text-muted">{course.description}</p>}
       <CourseOverview courseId={course.id} currentUserId={currentUserId} active={visible && destination === "overview"}
-        knownAttemptId={knownAttemptId} materials={materials} onResume={onResume}
+        knownAttemptId={knownAttemptId} checkingSession={checkingSession} activeSession={activeSession} materials={materials} onResume={onResume}
         onRecommendedPractice={() => openPractice("ADAPTIVE")}
         onStandardPractice={() => openPractice("STANDARD")}
         onProgress={() => navigate("progress")} onMaterials={() => navigate("materials")}

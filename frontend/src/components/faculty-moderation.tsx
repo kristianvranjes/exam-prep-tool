@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedChanges } from "./unsaved-changes";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type Course, type Faculty, type ModeratorReport, type OwnerQuestion } from "../lib/api";
@@ -85,6 +86,7 @@ export function FacultyModeration({ currentUserId, moderatedFaculties }: { curre
   const [reviewBusy, setReviewBusy] = useState<Record<string, "approve" | "reject">>({});
   const [successNotice, setSuccessNotice] = useState("");
   const [pendingReason, setPendingReason] = useState<QuestionReasonMap>({});
+  useUnsavedChanges(Object.values(pendingReason).some(reason => reason.length > 0));
   const activeFaculty = moderatedFaculties.find(f => f.id === facultyId) ?? moderatedFaculties[0] ?? null;
   const activeFacultyId = activeFaculty?.id;
   const mounted = useRef(false);
@@ -171,6 +173,7 @@ export function FacultyModeration({ currentUserId, moderatedFaculties }: { curre
       }
       if (!mounted.current) return;
       decidedQuestions.current.add(question.id);
+      setPendingReason(current => { const next = { ...current }; delete next[question.id]; return next; });
       setQueue(current => current.filter(item => item.id !== question.id));
       if (decisionView === viewGeneration.current) setSuccessNotice(action === "approve" ? "Question approved." : "Question rejected.");
     } catch (error) {
