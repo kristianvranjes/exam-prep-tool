@@ -1,0 +1,130 @@
+import { expect, test } from "@playwright/test";
+
+const api = "http://localhost:8000";
+const password = "ExamPrepE2E!2026";
+
+for (const width of [1280, 390]) {
+  test(`deep links, refresh and protected Back/Forward at ${width}px`, async ({ browser }) => {
+    const owner = await browser.newContext({ extraHTTPHeaders: { Origin: "http://localhost:3000" } });
+    const student = await browser.newContext({ viewport: { width, height: 900 }, extraHTTPHeaders: { Origin: "http://localhost:3000" } });
+    const courseIds: string[] = [];
+    let failed = false;
+    try {
+      // Public APIs prepare isolated fixtures; all routing and study actions use the UI.
+      expect((await owner.request.post(`${api}/auth/login`, { data: { email: "owner-e2e@example.com", password } })).ok()).toBe(true);
+      expect((await student.request.post(`${api}/auth/login`, { data: { email: "student-e2e@example.com", password } })).ok()).toBe(true);
+      const faculties = await (await owner.request.get(`${api}/faculties`)).json();
+      for (const name of [`Routing ${width}`, `Other course ${width}`]) {
+        const response = await owner.request.post(`${api}/courses`, { data: { faculty_id: faculties[0].id, name } });
+        expect(response.ok()).toBe(true);
+        const course = await response.json(); courseIds.push(course.id);
+        expect((await student.request.post(`${api}/courses/${course.id}/join`)).ok()).toBe(true);
+      }
+      const [courseId, otherId] = courseIds;
+      expect((await student.request.post(`${api}/courses/${courseId}/questions`, { data: {
+        type: "SHORT_ANSWER", stem: "Explain spaced practice", reference_answer: "Review knowledge over time.",
+        explanation: null, difficulty: null, concept_ids: [],
+      } })).ok()).toBe(true);
+      const page = await student.newPage();
+      const errors: string[] = [];
+      page.on("pageerror", error => errors.push(error.message));
+      const base = `/courses/${courseId}`;
+      await page.goto(`http://localhost:3000${base}/progress`);
+      await expect(page.getByRole("region", { name: "Progress", exact: true })).toBeVisible();
+      await page.reload();
+      await expect(page.getByRole("region", { name: "Progress", exact: true })).toBeVisible();
+      const navigation = page.getByRole("navigation", { name: "Course navigation", exact: true });
+      await navigation.getByRole("button", { name: "Materials", exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`${base}/materials$`));
+      await page.goBack();
+      await expect(page).toHaveURL(new RegExp(`${base}/progress$`));
+      await expect(page.getByRole("region", { name: "Progress", exact: true })).toBeVisible();
+      await page.goForward();
+      await expect(page.getByRole("region", { name: "Course materials", exact: true })).toBeVisible();
+      await navigation.getByRole("button", { name: "Practice", exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`${base}/practice$`));
+      await page.getByRole("radio", { name: "Custom", exact: true }).check();
+      await page.getByRole("spinbutton", { name: "Custom question count" }).fill("1");
+      await page.getByRole("button", { name: "Start practice", exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`${base}/attempts/[^/]+$`));
+      const attemptUrl = page.url();
+      const answer = page.getByRole("textbox", { name: "Your short answer" });
+      await answer.fill("My unsaved explanation");
+      // Cancelling Back must restore the same history entry, answer and Next router state.
+      const backWarning = page.waitForEvent("dialog");
+      await page.evaluate(() => history.back());
+      const backDialog = await backWarning;
+      expect(backDialog.message()).toContain("unsaved answer");
+      await backDialog.dismiss();
+      await expect(page).toHaveURL(attemptUrl);
+      await expect(answer).toHaveValue("My unsaved explanation");
+      await page.getByRole("button", { name: "Save and leave" }).click();
+      await expect(page).toHaveURL(new RegExp(`${base}/practice$`));
+      await page.getByRole("button", { name: "Resume session", exact: true }).click();
+      await expect(page).toHaveURL(attemptUrl);
+      await expect(answer).toHaveValue("My unsaved explanation");
+      await page.reload();
+      await expect(answer).toHaveValue("My unsaved explanation");
+      await answer.fill("Changed answer after refresh");
+      await page.locator("summary").filter({ hasText: /^Course navigation$/ }).click();
+      await navigation.getByRole("button", { name: "Progress", exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`${base}/progress$`));
+      await expect(page.getByRole("region", { name: "Progress", exact: true })).toBeVisible();
+      await navigation.getByRole("button", { name: "Practice", exact: true }).click();
+      await expect(page).toHaveURL(attemptUrl);
+      await expect(answer).toHaveValue("Changed answer after refresh");
+      // Cancelling Forward is covered by returning to a dirty session from setup.
+      await page.getByRole("button", { name: "Save and leave" }).click();
+      await expect(page).toHaveURL(new RegExp(`${base}/practice$`));
+      await page.goBack();
+      await expect(answer).toHaveValue("Changed answer after refresh");
+      await answer.fill("Unsaved before forward");
+      const forwardWarning = page.waitForEvent("dialog");
+      await page.evaluate(() => history.forward());
+      const forwardDialog = await forwardWarning;
+      expect(forwardDialog.message()).toContain("unsaved answer");
+      await forwardDialog.dismiss();
+      await expect(page).toHaveURL(attemptUrl);
+      await expect(answer).toHaveValue("Unsaved before forward");
+      await page.getByRole("button", { name: "Save and review" }).click();
+      await page.getByRole("button", { name: "Finish practice", exact: true }).click();
+      await page.getByRole("button", { name: "Confirm final submission" }).click();
+      await expect(page).toHaveURL(`${attemptUrl}/results`);
+      await page.reload();
+      await expect(page.getByRole("region", { name: "Practice results" })).toBeVisible();
+      // A submitted attempt's old active URL resolves to its frozen results.
+      await page.goto(attemptUrl);
+      await expect(page).toHaveURL(`${attemptUrl}/results`);
+      await expect(page.getByRole("button", { name: "Save and next" })).toHaveCount(0);
+      const signedOut = await browser.newContext();
+      try {
+        const login = await signedOut.newPage();
+        await login.goto(`${attemptUrl}/results`);
+        await login.getByLabel("Email").fill("student-e2e@example.com");
+        await login.getByLabel("Password").fill(password);
+        await login.getByRole("button", { name: "Log in", exact: true }).click();
+        await expect(login.getByRole("region", { name: "Practice results" })).toBeVisible();
+        await expect(login).toHaveURL(`${attemptUrl}/results`);
+      } finally { await signedOut.close(); }
+      const ownerPage = await owner.newPage();
+      await ownerPage.goto(`${attemptUrl}/results`);
+      await expect(ownerPage.getByText("Could not open this practice session.", { exact: false })).toBeVisible();
+      await page.goto(`http://localhost:3000/courses/${otherId}/attempts/${attemptUrl.split("/").pop()}/results`);
+      await expect(page.getByRole("button", { name: "Back to practice", exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Back to practice", exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/courses/${otherId}/practice$`));
+      await page.goto("http://localhost:3000/courses/00000000-0000-0000-0000-000000000000");
+      await expect(page.getByRole("heading", { name: "Course unavailable" })).toBeVisible();
+      await page.getByRole("button", { name: "Back to Home", exact: true }).click();
+      await expect(page).toHaveURL("http://localhost:3000/");
+      expect(errors).toEqual([]);
+    } catch (error) { failed = true; throw error; }
+    finally {
+      for (const id of courseIds) {
+        try { await owner.request.delete(`${api}/courses/${id}`); }
+        catch (error) { if (!failed) throw error; } // Keep the original failure when Playwright closes a timed-out context.
+      }
+      await owner.close(); await student.close();
+    }
+  });
+}

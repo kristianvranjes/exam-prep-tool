@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import type { Course } from "../lib/api";
+import type { Attempt } from "../lib/practice-api";
+import type { CourseDestination } from "../lib/workspace-route";
 import { CourseMaterials, type MaterialsSummary } from "./course-materials";
 import { CourseOverview } from "./course-overview";
 import { CourseSettings } from "./course-settings";
@@ -10,19 +12,21 @@ import { ProgressPanel } from "./progress-panel";
 import { QuestionBank } from "./question-bank";
 import { Button } from "./ui";
 
-export type CourseDestination = "overview" | "practice" | "progress" | "materials" | "more";
+export type { CourseDestination } from "../lib/workspace-route";
 const destinations: { id: CourseDestination; label: string }[] = [
   { id: "overview", label: "Overview" }, { id: "practice", label: "Practice" },
   { id: "progress", label: "Progress" }, { id: "materials", label: "Materials" }, { id: "more", label: "More" },
 ];
 
 export function CourseWorkspace({ course, currentUserId, isOwner, visible, destination, navigate, goHome, checkingSession,
-  adaptiveReviewRequest, onOpenAdaptiveReview, knownAttemptId, resumeRequest, onResume, onResumableAttemptChange, activeSession, onActiveSessionChange, onUpdated, onDeleted }: {
+  adaptiveReviewRequest, onOpenAdaptiveReview, knownAttemptId, onResume, onResumableAttemptChange, activeSession, routeAttemptId, routeResults, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onUpdated, onDeleted }: {
   course: Course; currentUserId: string; isOwner: boolean; visible: boolean; destination: CourseDestination;
-  navigate: (destination: CourseDestination) => void; goHome: () => void; checkingSession?: boolean;
+  navigate: (destination: CourseDestination, setup?: boolean) => void; goHome: () => void; checkingSession?: boolean;
   adaptiveReviewRequest: number; onOpenAdaptiveReview: () => void; knownAttemptId: string | null;
-  resumeRequest: number; onResume: () => void; onResumableAttemptChange: (id: string | null) => void;
-  activeSession: boolean; onActiveSessionChange: (active: boolean) => void;
+  onResume: () => void; onResumableAttemptChange: (id: string | null) => void;
+  activeSession: boolean; routeAttemptId?: string | null; routeResults: boolean;
+  onAttemptRoute: (attempt: Attempt | null, replace?: boolean) => void; onAttemptChange: (attempt: Attempt | null) => void;
+  onAnswerDirtyChange: (dirty: boolean) => void;
   onUpdated: (course: Course) => void; onDeleted: (course: Course) => void;
 }) {
   const [moreDestination, setMoreDestination] = useState<"questions" | "settings" | null>(null);
@@ -31,7 +35,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
   const focused = destination === "practice" && activeSession;
   function openPractice(mode: PracticeSetupRequest["mode"]) {
     setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode }));
-    navigate("practice");
+    navigate("practice", true);
   }
   const navigation = <nav aria-label="Course navigation" className="flex flex-wrap gap-2 border-b border-line pb-4">
       {destinations.map(item => <Button key={item.id} variant={destination === item.id ? "primary" : "ghost"} aria-current={destination === item.id ? "page" : undefined} aria-controls={`course-${item.id}`} onClick={() => navigate(item.id)}>{item.label}</Button>)}
@@ -54,7 +58,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
     </section>
     <div id="course-practice" hidden={destination !== "practice"}>
       <div id="practice" tabIndex={-1}><PracticeQuiz courseId={course.id} currentUserId={currentUserId} active={visible && destination === "practice"}
-        adaptiveReviewRequest={adaptiveReviewRequest} setupRequest={setupRequest} resumeAttemptId={knownAttemptId} resumeRequest={resumeRequest} onResumableAttemptChange={onResumableAttemptChange} onActiveSessionChange={onActiveSessionChange}
+        adaptiveReviewRequest={adaptiveReviewRequest} setupRequest={setupRequest} resumeAttemptId={knownAttemptId} onResumableAttemptChange={onResumableAttemptChange}
+        routeAttemptId={routeAttemptId} routeResults={routeResults} onAttemptRoute={onAttemptRoute} onAttemptChange={onAttemptChange} onAnswerDirtyChange={onAnswerDirtyChange}
         onOpenMaterials={() => navigate("materials")} onOpenQuestions={() => { setMoreDestination("questions"); navigate("more"); }}
         onOpenProgress={() => navigate("progress")} onBackToCourse={() => navigate("overview")} /></div>
     </div>
