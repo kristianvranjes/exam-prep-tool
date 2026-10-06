@@ -2,7 +2,10 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api, Course, Faculty, User, type CourseMembership } from "../lib/api";
-import { CourseWorkspace, type CourseDestination } from "./course-workspace";
+import { CourseWorkspace } from "./course-workspace";
+import { attemptPath, coursePath, parseWorkspaceRoute, type CourseDestination } from "../lib/workspace-route";
+import type { AttemptSummary, Attempt } from "../lib/practice-api";
+import { useWorkspaceNavigation } from "./use-workspace-navigation";
 import { StudentHome } from "./student-home";
 import { FacultyWorkspace } from "./faculty-workspace";
 import { ApplicationFrame, Brand } from "./application-frame";
@@ -27,14 +30,27 @@ export function AppShell() {
   const [busy, setBusy] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [loadingCourses, setLoadingCourses] = useState(true);
+  const [courseRetry, setCourseRetry] = useState(0);
+  const [checkingFaculties, setCheckingFaculties] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [view, setView] = useState<"home" | "course" | "management">("home");
-  const [destination, setDestination] = useState<CourseDestination>("overview");
-  const [resumeRequest, setResumeRequest] = useState(0);
-  const [activePractice, setActivePractice] = useState(false);
+  const [mountedAttempt, setMountedAttempt] = useState<AttemptSummary | null>(null);
+  const [answerEdited, setAnswerEdited] = useState(false);
   const [managementVisited, setManagementVisited] = useState(false);
   const [workspaceEdited, setWorkspaceEdited] = useState(false);
   const [managementEdited, setManagementEdited] = useState(false);
+  const { route, navigate } = useWorkspaceNavigation(target => {
+    const next = parseWorkspaceRoute(target);
+    if (next?.view !== "course") return true; // Home and faculty keep the course mounted.
+    if (workspaceEdited && selected && next.courseId !== selected.id)
+      return window.confirm("Switch courses and close the current workspace? Any unsaved answers or edits will be lost. Cancel to return and save your work.");
+    if (answerEdited && mountedAttempt?.status === "ACTIVE" && next.courseId === mountedAttempt.course_id && next.destination === "practice" && next.attemptId !== mountedAttempt.id)
+      return window.confirm("Close this session? Your unsaved answer will be lost. Cancel to return and save your work.");
+    return true;
+  });
+  const view = route?.view ?? "unavailable";
+  const destination = route?.view === "course" ? route.destination : "overview";
+  const routeCourseId = route?.view === "course" ? route.courseId : null;
+  const activePractice = mountedAttempt?.status === "ACTIVE";
   const selectedId = selected?.id;
   const { sessions, update: updateResumableSession } = useResumableSessions(courses.map(course => course.id), user?.id);
   const knownAttemptId = selectedId ? sessions[selectedId]?.id ?? null : null;
@@ -42,10 +58,35 @@ export function AppShell() {
   const onResumableAttemptChange = useCallback((id: string | null) => {
     if (selectedId) updateResumableSession(selectedId, id);
   }, [selectedId, updateResumableSession]);
+  const onAttemptChange = useCallback((attempt: Attempt | null) => {
+    setMountedAttempt(current => current?.id === attempt?.id && current?.status === attempt?.status ? current : attempt);
+  }, []);
+  const onAttemptRoute = useCallback((attempt: Attempt | null, replace = false) => {
+    const current = parseWorkspaceRoute(window.location.pathname);
+    if (current?.view !== "course" || current.destination !== "practice") return;
+    if (attempt && attempt.course_id !== current.courseId) return;
+    navigate(attempt ? attemptPath(attempt.course_id, attempt.id, attempt.status === "SUBMITTED") : coursePath(current.courseId, "practice"), replace, true);
+  }, [navigate]);
+  const activateCourse = useCallback((course: Course) => {
+    setWorkspaceEdited(false); setAnswerEdited(false); setMountedAttempt(null);
+    setSelected(course); setSelectedRole(null); setMembershipError(""); setDeletedNotice("");
+    setAdaptiveReviewRequest(0);
+  }, []);
+  useEffect(() => {
+    if (!user || loadingCourses || !routeCourseId || routeCourseId === selectedId) return;
+    const course = courses.find(item => item.id === routeCourseId);
+    if (!course) return;
+    let current = true;
+    queueMicrotask(() => { if (current) activateCourse(course); });
+    return () => { current = false; };
+  }, [user, loadingCourses, routeCourseId, selectedId, courses, activateCourse]);
+  useEffect(() => {
+    if (view === "management") queueMicrotask(() => setManagementVisited(true));
+  }, [view]);
 
   useEffect(() => {
     if (!user || checkingSession) return;
-    const id = view === "course" ? destination === "practice" ? "practice" : "selected-course-heading" : view === "management" ? "management-heading" : "home-heading";
+    const id = view === "course" ? destination === "practice" ? "practice" : "selected-course-heading" : view === "management" ? "management-heading" : view === "home" ? "home-heading" : "unavailable-heading";
     const heading = document.getElementById(id);
     heading?.focus({ preventScroll: true });
     if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
@@ -64,7 +105,7 @@ export function AppShell() {
       .catch(() => { if (active) setError("Could not load courses"); })
       .finally(() => { if (active) setLoadingCourses(false); });
     return () => { active = false; };
-  }, [user]);
+  }, [user, courseRetry]);
   useEffect(() => {
     if (!user || !selectedId) return;
     let active = true;
@@ -79,7 +120,8 @@ export function AppShell() {
     api.faculties().then(async rows => {
       const permissions = await Promise.all(rows.map(row => api.moderatorStatus(row.id)));
       if (active) setFaculties(rows.filter((_, i) => permissions[i].is_moderator));
-    }).catch(() => { if (active) setError("Could not load faculties"); });
+    }).catch(() => { if (active) setError("Could not load faculties"); })
+      .finally(() => { if (active) setCheckingFaculties(false); });
     return () => { active = false; };
   }, [user]);
 
@@ -89,6 +131,7 @@ export function AppShell() {
     try {
       const nextUser = mode === "login" ? await api.login({ email: String(values.email), password: String(values.password) }) : await api.register({ email: String(values.email), password: String(values.password), display_name: String(values.display_name) });
       setLoadingCourses(true);
+      setCheckingFaculties(true);
       setUser(nextUser);
     } catch (e) { setError(e instanceof Error ? e.message : "Authentication failed"); } finally { setBusy(false); }
   }
@@ -104,24 +147,14 @@ export function AppShell() {
   async function logout() {
     if ((workspaceEdited || managementEdited) && !window.confirm("Log out and close your workspaces? Any unsaved answers or edits will be lost.")) return;
     setLoggingOut(true); setError("");
-    try { await api.logout(); setUser(null); setCourses([]); setFaculties([]); setSelected(null); setSelectedRole(null); setMembershipError(""); setDeletedNotice(""); setAdaptiveReviewRequest(0); setResumeRequest(0); setView("home"); setDestination("overview"); setManagementVisited(false); setWorkspaceEdited(false); setManagementEdited(false); setMode("login"); }
+    try { await api.logout(); setUser(null); setCourses([]); setFaculties([]); setSelected(null); setSelectedRole(null); setMembershipError(""); setDeletedNotice(""); setAdaptiveReviewRequest(0); setMountedAttempt(null); setAnswerEdited(false); setManagementVisited(false); setWorkspaceEdited(false); setManagementEdited(false); setMode("login"); navigate("/", true, true); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not log out. Try again."); }
     finally { setLoggingOut(false); }
   }
 
   function selectCourse(course: Course) {
-    if (selected?.id === course.id) { setView("course"); setDestination("overview"); return true; }
-    if (workspaceEdited && !window.confirm("Switch courses and close the current workspace? Any unsaved answers or edits will be lost. Cancel to return and save your work.")) return false;
-    setWorkspaceEdited(false);
-    setActivePractice(false);
-    setSelected(course);
-    setSelectedRole(null);
-    setMembershipError("");
-    setDeletedNotice("");
-    setAdaptiveReviewRequest(0);
-    setResumeRequest(0);
-    setDestination("overview");
-    setView("course");
+    if (!navigate(coursePath(course.id))) return false;
+    if (selected?.id !== course.id) activateCourse(course);
     return true;
   }
 
@@ -132,42 +165,46 @@ export function AppShell() {
   }
 
   function courseDeleted(deleted: Course) {
-    setActivePractice(false);
+    setMountedAttempt(null); setAnswerEdited(false);
     setCourses(current => current.filter(course => course.id !== deleted.id));
     setSelected(null);
     setSelectedRole(null);
     setMembershipError("");
     setAdaptiveReviewRequest(0);
-    setResumeRequest(0);
     setWorkspaceEdited(false);
-    setView("home");
-    setDestination("overview");
+    navigate("/", true, true);
     setCatalogRevision(value => value + 1);
     setDeletedNotice(`${deleted.name} was permanently deleted.`);
   }
 
   function openAdaptiveReview() {
     setAdaptiveReviewRequest(value => value + 1);
-    setDestination("practice");
-    setView("course");
+    navigateCourse("practice", true);
+  }
+
+  function navigateCourse(next: CourseDestination, setup = false) {
+    if (!selected) return;
+    navigate(next === "practice" && mountedAttempt?.course_id === selected.id && (!setup || mountedAttempt.status === "ACTIVE")
+      ? attemptPath(selected.id, mountedAttempt.id, mountedAttempt.status === "SUBMITTED") : coursePath(selected.id, next));
   }
 
   function resumeSession(course = selected) {
-    if (!course || (selected?.id !== course.id && !selectCourse(course))) return;
-    setResumeRequest(value => value + 1);
-    setDestination("practice");
-    setView("course");
+    if (!course) return;
+    const id = mountedAttempt?.course_id === course.id && mountedAttempt.status === "ACTIVE" ? mountedAttempt.id : sessions[course.id]?.id;
+    if (!navigate(id ? attemptPath(course.id, id) : coursePath(course.id, "practice"))) return;
+    if (selected?.id !== course.id) activateCourse(course);
   }
 
   if (checkingSession) return <main className="mx-auto max-w-6xl px-6 py-8"><Brand /><LoadingState>Loading your study space…</LoadingState></main>;
   if (!user) return <AuthScreen mode={mode} busy={busy} error={error} submit={submitAuth} changeMode={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }} />;
 
   const isOwner = !!selected && selectedRole?.courseId === selected.id && selectedRole.role === "OWNER";
-  return <ApplicationFrame user={user} courseName={view === "course" ? selected?.name : undefined} logout={() => void logout()} busy={loggingOut}
+  return <ApplicationFrame user={user} courseName={view === "course" && selectedId === routeCourseId ? selected?.name : undefined} logout={() => void logout()} busy={loggingOut}
     focusedPractice={view === "course" && destination === "practice" && activePractice}
-    onHome={() => setView("home")} homeActive={view === "home"} managementActive={view === "management"}
-    onManagement={faculties.length > 0 ? () => { setManagementVisited(true); setView("management"); } : undefined}>
+    onHome={() => navigate("/")} homeActive={view === "home"} managementActive={view === "management"}
+    onManagement={faculties.length > 0 ? () => { setManagementVisited(true); navigate("/faculty"); } : undefined}>
     {error && <Alert className="mb-5">{error}</Alert>}
+    {view === "unavailable" && <section><h1 id="unavailable-heading" tabIndex={-1} className="text-2xl font-semibold">Page unavailable</h1><Button className="mt-4" onClick={() => navigate("/")}>Back to Home</Button></section>}
     {deletedNotice && <p role="status" className="mb-5 rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{deletedNotice}</p>}
     <div hidden={view !== "home"}>
       <StudentHome courses={courses} loading={loadingCourses} onOpen={selectCourse}
@@ -175,20 +212,31 @@ export function AppShell() {
         catalogRevision={catalogRevision} resumableCourse={resumableCourse} onResume={() => resumeSession(resumableCourse)}
         checkingSessions={Object.values(sessions).some(session => session.status === "loading")} />
     </div>
-    <div hidden={view !== "course"}>
+    {view === "course" && (loadingCourses || !courses.some(course => course.id === routeCourseId) || selectedId !== routeCourseId) && <section>
+      {loadingCourses || courses.some(course => course.id === routeCourseId) ? <LoadingState>Loading course…</LoadingState> : <>
+        <h1 className="text-2xl font-semibold">Course unavailable</h1>
+        <p className="mt-3 text-muted">Open one of Your courses, or join the course from Home.</p>
+        <div className="mt-4 flex gap-3"><Button onClick={() => navigate("/")}>Back to Home</Button><Button variant="secondary" onClick={() => { setError(""); setLoadingCourses(true); setCourseRetry(value => value + 1); }}>Retry courses</Button></div>
+      </>}
+    </section>}
+    <div hidden={view !== "course" || selectedId !== routeCourseId}>
       {selected && <>
         {membershipError && <div className="mb-4"><Alert>{membershipError}</Alert><Button variant="secondary" className="mt-3" onClick={() => { setMembershipError(""); setMembershipRetry(value => value + 1); }}>Retry course permissions</Button></div>}
         <UnsavedChangesProvider key={selected.id} onDirtyChange={setWorkspaceEdited}>
-        <CourseWorkspace course={selected} currentUserId={user.id} isOwner={isOwner} visible={view === "course"}
-          destination={destination} navigate={setDestination} goHome={() => setView("home")}
+        <CourseWorkspace course={selected} currentUserId={user.id} isOwner={isOwner} visible={view === "course" && selectedId === routeCourseId}
+          destination={destination} navigate={navigateCourse} goHome={() => navigate("/")}
           adaptiveReviewRequest={adaptiveReviewRequest} onOpenAdaptiveReview={openAdaptiveReview}
-          knownAttemptId={knownAttemptId} checkingSession={sessions[selected.id]?.status === "loading"} resumeRequest={resumeRequest} onResume={() => resumeSession()} onResumableAttemptChange={onResumableAttemptChange} activeSession={activePractice} onActiveSessionChange={setActivePractice}
+          knownAttemptId={knownAttemptId} checkingSession={sessions[selected.id]?.status === "loading"} onResume={() => resumeSession()} onResumableAttemptChange={onResumableAttemptChange} activeSession={activePractice}
+          routeAttemptId={route?.view === "course" && selectedId === routeCourseId && destination === "practice" ? route.attemptId : undefined}
+          routeResults={route?.view === "course" && route.results}
+          onAttemptRoute={onAttemptRoute} onAttemptChange={onAttemptChange} onAnswerDirtyChange={setAnswerEdited}
           onUpdated={courseUpdated} onDeleted={courseDeleted} />
         </UnsavedChangesProvider>
       </>}
     </div>
     <div hidden={view !== "management"}>
-      {managementVisited && faculties.length > 0 && <UnsavedChangesProvider onDirtyChange={setManagementEdited}><FacultyWorkspace faculties={faculties} currentUserId={user.id} busy={busy} createCourse={createCourse} goHome={() => setView("home")} /></UnsavedChangesProvider>}
+      {view === "management" && (checkingFaculties ? <LoadingState>Checking faculty access…</LoadingState> : faculties.length === 0 && <><Alert>Faculty tools are available to faculty moderators.</Alert><Button className="mt-4" onClick={() => navigate("/")}>Back to Home</Button></>)}
+      {managementVisited && faculties.length > 0 && <UnsavedChangesProvider onDirtyChange={setManagementEdited}><FacultyWorkspace faculties={faculties} currentUserId={user.id} busy={busy} createCourse={createCourse} goHome={() => navigate("/")} /></UnsavedChangesProvider>}
     </div>
   </ApplicationFrame>;
 }

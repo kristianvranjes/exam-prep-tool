@@ -32,11 +32,12 @@ export function UnsavedChangesProvider({ children, onDirtyChange }: {
   return <UnsavedChanges.Provider value={report}>{children}</UnsavedChanges.Provider>;
 }
 
-export function useUnsavedChanges(dirty: boolean) {
+export function useUnsavedChanges(dirty: boolean, onDirtyChange?: (dirty: boolean) => void) {
   const report = useContext(UnsavedChanges);
   const id = useId();
   useBeforeUnload(dirty && !report);
   useEffect(() => { report?.(id, dirty); return () => report?.(id, false); }, [dirty, id, report]);
+  useEffect(() => { onDirtyChange?.(dirty); return () => onDirtyChange?.(false); }, [dirty, onDirtyChange]);
 }
 
 function snapshot(form: HTMLFormElement) {

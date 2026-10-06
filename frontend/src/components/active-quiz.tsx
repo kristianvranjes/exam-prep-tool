@@ -8,9 +8,10 @@ import { ExperiencePicker, QuizNavigator, type QuizExperience } from "./quiz-nav
 import { useUnsavedChanges } from "./unsaved-changes";
 
 type Confirmation = "submit" | "reload" | "back" | "abandon";
-export function ActiveQuiz({ attempt, experience, setExperience, update, back }: {
+export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdate, back: onBack, onDirtyChange }: {
   attempt: Extract<Attempt, { status: "ACTIVE" }>; experience: QuizExperience;
   setExperience: (value: QuizExperience) => void; update: (attempt: Attempt) => void; back: () => Promise<void>;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [index, setIndex] = useState(() => Math.max(0, attempt.questions.findIndex(question => question.answer === null)));
   const [answer, setAnswer] = useState<PracticeAnswer | null>(() => attempt.questions[Math.max(0, attempt.questions.findIndex(question => question.answer === null))].answer);
@@ -22,6 +23,9 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
   const [review, setReview] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const pending = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  function update(next: Attempt) { if (mounted.current) onUpdate(next); }
   const questionHeading = useRef<HTMLHeadingElement>(null);
   const reviewHeading = useRef<HTMLHeadingElement>(null);
   const confirmationHeading = useRef<HTMLHeadingElement>(null);
@@ -33,7 +37,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
   const finalQuestion = index === attempt.questions.length - 1;
   const saveState = saving ? "Saving…" : saveFailed ? "Save failed" : dirty ? "Unsaved changes" : question.answer ? "Saved" : "No answer saved";
   const sessionClosed = /already submitted|not active|frozen/i.test(error);
-  useUnsavedChanges(dirty);
+  useUnsavedChanges(dirty, onDirtyChange);
 
   useEffect(() => { (confirmation ? confirmationHeading : review ? reviewHeading : questionHeading).current?.focus(); }, [confirmation, index, review]);
 
@@ -82,7 +86,8 @@ export function ActiveQuiz({ attempt, experience, setExperience, update, back }:
     setReview(false); navigate(next);
   }
   async function leave(action: "back" | "reload") {
-    if (action === "back") await back();
+    if (!mounted.current) return;
+    if (action === "back") await onBack();
     else {
       const saved = await practiceApi.read(attempt.course_id, attempt.id);
       update(saved);

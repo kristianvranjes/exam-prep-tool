@@ -4,7 +4,7 @@ import { AppShell } from "../src/components/app-shell";
 import type { Attempt } from "../src/lib/practice-api";
 
 const mock = vi.hoisted(() => ({
-  me: vi.fn(), courses: vi.fn(), faculties: vi.fn(), membership: vi.fn(), course: vi.fn(),
+  me: vi.fn(), login: vi.fn(), courses: vi.fn(), faculties: vi.fn(), membership: vi.fn(), course: vi.fn(),
   reviewProgressSummary: vi.fn(), moderatorStatus: vi.fn(), concepts: vi.fn(), questions: vi.fn(), logout: vi.fn(),
   history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(),
 }));
@@ -22,6 +22,7 @@ const activeAttempt: Attempt = { id: "attempt", course_id: "course", status: "AC
 beforeEach(() => {
   vi.resetAllMocks();
   mock.me.mockResolvedValue(user);
+  mock.login.mockResolvedValue(user);
   mock.courses.mockResolvedValue([course, { ...course, id: "statistics", name: "Statistics" }]);
   mock.faculties.mockResolvedValue([]);
   mock.membership.mockResolvedValue({ role: "MEMBER" });
@@ -30,6 +31,101 @@ beforeEach(() => {
   mock.reviewProgressSummary.mockResolvedValue({ reviewed_questions: 0, resolved_review_count: 0 });
   mock.concepts.mockResolvedValue([]); mock.questions.mockResolvedValue(Array.from({ length: 50 }, (_, id) => ({ id: String(id), status: "APPROVED", type: "TRUE_FALSE" })));
   mock.history.mockResolvedValue([]); mock.start.mockResolvedValue(activeAttempt); mock.read.mockResolvedValue(activeAttempt);
+});
+
+it("opens a joined course's Progress directly from its URL", async () => {
+  window.history.replaceState(null, "", "/courses/course/progress");
+  render(<AppShell />);
+  expect(await screen.findByRole("heading", { name: "Algorithms" })).toBeVisible();
+  expect(screen.getByRole("region", { name: "Progress" })).toBeVisible();
+  expect(mock.start).not.toHaveBeenCalled();
+});
+
+it("keeps the requested deep link through authentication", async () => {
+  window.history.replaceState(null, "", "/courses/course/materials");
+  mock.me.mockRejectedValue(new Error("Signed out"));
+  render(<AppShell />);
+  fireEvent.change(await screen.findByLabelText("Email"), { target: { value: user.email } });
+  fireEvent.change(screen.getByLabelText("Password"), { target: { value: "test password" } });
+  fireEvent.submit(screen.getByRole("form", { name: "Login" }));
+  expect(await screen.findByRole("heading", { name: "Algorithms" })).toBeVisible();
+  expect(screen.getByRole("region", { name: "Course materials" })).toBeVisible();
+  expect(window.location.pathname).toBe("/courses/course/materials");
+});
+
+it("does not join or expose an unavailable course through a URL", async () => {
+  window.history.replaceState(null, "", "/courses/unknown/practice");
+  render(<AppShell />);
+  expect(await screen.findByRole("heading", { name: "Course unavailable" })).toBeVisible();
+  expect(mock.membership).not.toHaveBeenCalledWith("unknown");
+  expect(mock.start).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Back to Home" }));
+  expect(screen.getByRole("heading", { name: "Home" })).toBeVisible();
+});
+
+it("corrects an active session's results URL and offers retry for a failed deep-link read", async () => {
+  window.history.replaceState(null, "", "/courses/course/attempts/attempt/results");
+  mock.read.mockRejectedValueOnce(new Error("Offline"));
+  render(<AppShell />);
+  expect(await screen.findByRole("button", { name: "Retry session" })).toBeVisible();
+  expect(mock.start).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Retry session" }));
+  expect(await screen.findByLabelText("Your short answer")).toBeVisible();
+  expect(window.location.pathname).toBe("/courses/course/attempts/attempt");
+  expect(mock.read).toHaveBeenCalledTimes(2);
+});
+
+it("recovers from a failed session link to a usable Practice setup", async () => {
+  window.history.replaceState(null, "", "/courses/course/attempts/attempt");
+  mock.read.mockRejectedValue(new Error("Unavailable"));
+  render(<AppShell />);
+  fireEvent.click(await screen.findByRole("button", { name: /^Back to practice$/ }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
+  expect(window.location.pathname).toBe("/courses/course/practice");
+});
+
+it("opens an abandoned session as read-only and corrects a results link", async () => {
+  window.history.replaceState(null, "", "/courses/course/attempts/attempt/results");
+  mock.read.mockResolvedValue({ ...activeAttempt, status: "ABANDONED", abandoned_at: "2026-10-01T10:10:00Z" });
+  render(<AppShell />);
+  expect(await screen.findByRole("region", { name: "Abandoned attempt" })).toBeVisible();
+  expect(window.location.pathname).toBe("/courses/course/attempts/attempt");
+  expect(screen.queryByLabelText("Your short answer")).not.toBeInTheDocument();
+  expect(mock.start).not.toHaveBeenCalled();
+});
+
+it("does not let a late save for A overwrite the mounted answer for B", async () => {
+  let resolve!: (attempt: Attempt) => void;
+  mock.save.mockReturnValue(new Promise<Attempt>(done => { resolve = done; }));
+  const other: Attempt = { ...activeAttempt, id: "attempt-b" };
+  mock.read.mockImplementation(async (_course, id) => id === "attempt-b" ? other : activeAttempt);
+  window.history.replaceState(null, "", "/courses/course/attempts/attempt");
+  render(<AppShell />);
+  fireEvent.change(await screen.findByLabelText("Your short answer"), { target: { value: "Answer A" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save and review" }));
+  await act(async () => {
+    window.history.pushState(window.history.state, "", "/courses/course/attempts/attempt-b");
+    window.dispatchEvent(new Event("test-navigation"));
+  });
+  await waitFor(() => expect(mock.read).toHaveBeenCalledWith("course", "attempt-b"));
+  fireEvent.change(await screen.findByLabelText("Your short answer"), { target: { value: "Unsaved B" } });
+  await act(async () => resolve({ ...activeAttempt, questions: [{ ...activeAttempt.questions[0], answer: { type: "SHORT_ANSWER", text: "Answer A" } }] }));
+  expect(screen.getByLabelText("Your short answer")).toHaveValue("Unsaved B");
+  expect(window.location.pathname).toBe("/courses/course/attempts/attempt-b");
+});
+
+it("ignores a late attempt read after switching to another course", async () => {
+  let resolve!: (attempt: Attempt) => void;
+  mock.read.mockReturnValue(new Promise<Attempt>(done => { resolve = done; }));
+  window.history.replaceState(null, "", "/courses/course/attempts/attempt");
+  render(<AppShell />);
+  await waitFor(() => expect(mock.read).toHaveBeenCalled());
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Main navigation" })).getByRole("button", { name: "Home" }));
+  fireEvent.click(screen.getByRole("button", { name: "Open course: Statistics" }));
+  await act(async () => resolve(activeAttempt));
+  expect(screen.getByRole("heading", { name: "Statistics" })).toBeVisible();
+  expect(window.location.pathname).toBe("/courses/statistics");
+  expect(screen.queryByLabelText("Your short answer")).not.toBeInTheDocument();
 });
 
 function navigate(name: string) {
