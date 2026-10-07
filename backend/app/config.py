@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     session_cookie_name: str = "examprep_session"
     session_cookie_secure: bool = False
     session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    auth_rate_limit_mode: Literal["auto", "enabled", "disabled"] = "auto"
+    auth_login_max_attempts: int = Field(default=10, ge=1, le=1000)
+    auth_login_max_total_attempts: int = Field(default=100, ge=1, le=10000)
+    auth_login_window_seconds: int = Field(default=60, ge=1, le=3600)
+    auth_register_max_attempts: int = Field(default=5, ge=1, le=1000)
+    auth_register_max_total_attempts: int = Field(default=20, ge=1, le=10000)
+    auth_register_window_seconds: int = Field(default=600, ge=1, le=3600)
     material_storage_dir: Path = Path("data/materials")
     material_max_upload_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     material_chunk_target_chars: int = Field(default=2500, ge=2)

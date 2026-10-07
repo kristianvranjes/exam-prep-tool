@@ -108,6 +108,53 @@ commands committed to Git, or frontend environment variables. Startup rejects un
 hosted defaults. `.env.example` remains a **local development** template, not a
 staging configuration to copy unchanged.
 
+### Authentication throttling
+
+The backend enables authentication throttling automatically when `APP_ENV` is
+`staging` or `production`. The following optional settings need no extra service,
+database migration or credentials:
+
+| Variable | Default / meaning |
+| --- | --- |
+| AUTH_RATE_LIMIT_MODE | `auto`; `enabled` also applies locally, `disabled` explicitly disables limits |
+| AUTH_LOGIN_MAX_ATTEMPTS | `10` admitted login requests per client per window |
+| AUTH_LOGIN_MAX_TOTAL_ATTEMPTS | `100` admitted login requests across all clients per worker per window |
+| AUTH_LOGIN_WINDOW_SECONDS | `60` |
+| AUTH_REGISTER_MAX_ATTEMPTS | `5` admitted registration requests per client per window |
+| AUTH_REGISTER_MAX_TOTAL_ATTEMPTS | `20` admitted registration requests across all clients per worker per window |
+| AUTH_REGISTER_WINDOW_SECONDS | `600` |
+
+Each endpoint has a fixed window starting with its first request. All admitted
+attempts count regardless of outcome. Excess attempts receive `429`, a readable
+retry message and `Retry-After` seconds; rejected attempts do not extend the window.
+Foreign/missing Origin requests are rejected before consuming these budgets.
+Budgets reset at the window boundary, so short bursts around a boundary are possible.
+Configure positive values; per-client limits are capped at 1000, total limits at
+10000 and windows at 3600 seconds. Total limits also bound in-memory client entries.
+
+Client identity uses the ASGI server's resolved client address and ignores raw
+`X-Forwarded-For`/`Forwarded` headers. The start command retains Uvicorn's existing
+proxy trust policy. Verify effective trusted proxy settings before claiming limits
+are per student IP: an unresolved Railway proxy address or a campus NAT may group
+many students under one budget. Never enable wildcard proxy trust to fix this.
+Global budgets still apply if client addresses vary. Adjust shared-client limits
+for the supervised pilot only after verifying how the deployed server resolves
+clients; this change does not alter platform settings.
+
+State is process-local and resets on restart/deployment. Retain one worker and one
+replica for this pilot. More workers/replicas multiply the effective budget; a
+future scaling change must provide shared enforcement. This is a small pilot
+safeguard, not protection against distributed denial of service or persistent
+account-level lockout. No email, password or request body is kept in limiter state.
+
+Verify locally with `AUTH_RATE_LIMIT_MODE=enabled` and deliberately low limits on
+an isolated development instance. Confirm 429 and retry behavior, then recovery
+after the configured window. Do not load-test production. Before public promotion,
+verify the deployed revision, mode and resolved client behavior, and keep these
+results separate from repository test evidence.
+
+### Optional internal AI configuration
+
 The AI endpoint must implement `/v1/chat/completions`, Bearer auth, non-streaming
 JSON object mode, `temperature=0`, and `max_tokens`. The adapter reuses the existing
 tested OpenAI-compatible transport and shared Pydantic validation. Limits/usage

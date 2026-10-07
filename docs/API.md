@@ -28,6 +28,19 @@ in localStorage. Sessions expire after `SESSION_MAX_AGE_SECONDS`.
 Emails are trimmed and case-folded before storage. Passwords are hashed with Argon2id
 and are never returned.
 
+Login and registration can return `429` with a plain `detail` message and
+`Retry-After` in whole seconds (also exposed through CORS). The existing UI displays
+the message, including the wait time. Wait before retrying; do not automatically
+resubmit passwords. A throttled response has `Cache-Control: no-store`, creates no
+session, and rejects the request before body parsing, database queries or hashing.
+All admitted requests count, including successful authentication, invalid payloads,
+invalid credentials and duplicate registrations. Login and registration have separate
+budgets; logout, session reads, preflight and health endpoints remain available.
+
+`AUTH_RATE_LIMIT_MODE=auto` (default) enables throttling in staging/production and
+leaves development/test unchanged. `enabled` permits local verification; `disabled`
+is an explicit operator override. See [deployment settings and limits](STAGING.md#authentication-throttling).
+
 ## Courses
 
 - `POST /courses` requires a moderator of the selected faculty (otherwise 403) and creates an OWNER
