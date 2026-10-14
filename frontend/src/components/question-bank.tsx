@@ -234,8 +234,8 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
       <ul className="list-inside list-disc space-y-1 text-sm">{selected.options.map((option) => <li key={option.position} className="break-words [overflow-wrap:anywhere]">{option.text}{selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (correct)" : ""}</li>)}</ul>
       {selected.visibility === "OWNER" && <OwnerReview key={selected.id + ":" + selected.updated_at} question={selected} creator={selected.created_by_user_id === userId} moderator={moderator} concepts={concepts} units={units} busy={busy} mutate={mutate} />}
       {(owner || moderator) && selected.status !== "ARCHIVED" && units.some((u) => !u.is_archived) && <QuestionUnitsEditor key={selected.id + ":" + (selected.unit_ids ?? []).join(",")} question={selected} units={units} busy={busy} save={(ids) => saveUnits(selected.id, ids)} />}
-      {joined && selected.status === "APPROVED" && <ReportIssue key={selected.id} questionId={selected.id} />}
-      {joined && selected.status === "APPROVED" && <SuggestQuestionEdit key={selected.id} question={{ id: selected.id, type: selected.type, stem: selected.stem, difficulty: selected.difficulty, options: selected.options.map(({ position, text }) => ({ position, text })) }} />}
+      {joined && selected.status === "APPROVED" && <ReportIssue key={"report:" + selected.id} questionId={selected.id} />}
+      {joined && selected.status === "APPROVED" && <SuggestQuestionEdit key={"suggest:" + selected.id} question={{ id: selected.id, type: selected.type, stem: selected.stem, difficulty: selected.difficulty, options: selected.options.map(({ position, text }) => ({ position, text })) }} />}
     </article>}
   </div>;
 }

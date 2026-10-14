@@ -774,3 +774,14 @@ it("hides unit reorganization from ordinary members", async () => {
   await screen.findByText((_, node) => node?.tagName === "P" && node.textContent === "Units: None");
   expect(screen.queryByRole("button", { name: "Change units" })).not.toBeInTheDocument();
 });
+
+it("renders one report and one suggestion panel for an approved question", async () => {
+  const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+  current = { ...draft, status: "APPROVED" };
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  const selected = screen.getByRole("article", { name: "Selected question" });
+  expect(within(selected).getAllByRole("button", { name: "Report issue" })).toHaveLength(1);
+  expect(errors.mock.calls.flat().join(" ")).not.toContain("two children with the same key");
+  errors.mockRestore();
+});
