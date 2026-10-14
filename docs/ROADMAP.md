@@ -126,8 +126,9 @@ reviewed content and an operator recovery procedure.
   or submission.
 
 **Dependencies:** current hosting access and operator credentials. Live deployment
-inspection is future execution work. Use the existing [staging and recovery guide](STAGING.md)
-and [browser acceptance documentation](E2E.md) as starting points.
+inspection is future execution work. Use the existing [staging and recovery guide](STAGING.md),
+[browser acceptance documentation](E2E.md), and [R1 hosted checkpoint](R1_HOSTED_CHECKPOINT.md)
+as starting points.
 
 ### R2 — Course units and exam scopes
 
@@ -195,7 +196,9 @@ cycle (MI, ZI, or full exam term), and see progress per unit, without requiring 
   snapshots or submitted results.
 
 **Dependencies:** R1 baseline. Ship units, scopes, filtered practice/availability, and
-unit progress as separate coherent changes. Preserve the existing
+unit progress as separate coherent changes. Course units and question-unit links are
+implemented (see [course units](COURSE_UNITS.md)); bulk assignment beyond import and
+work packages 2–4 remain open. Preserve the existing
 [practice invariants](PRACTICE.md).
 
 ### R3 — Past exams and materials as practice sources
