@@ -1,0 +1,5 @@
+{
+  "chat.permissions.default": "default",
+  "chat.tools.global.autoApprove": false,
+  "chat.tools.terminal.enableAutoApprove": false
+}

@@ -15,3 +15,7 @@ pytest-cache-files-*/
 data/
 .vercel/
 /frontend/test-results/
+# Local agent and tool state (machine-specific paths, scratch output)
+.codex/
+.claude/settings.local.json
+.claude/launch.json
