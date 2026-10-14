@@ -174,6 +174,7 @@ security limits and exact test instructions.
 - `docs/DATABASE.md`: infrastructure and migrations.
 - `docs/API.md`: health, authentication and course endpoint contracts.
 - `docs/AI.md`: local provider architecture, concept review and optional smoke test.
+- [docs/COURSE_UNITS.md](docs/COURSE_UNITS.md): ordered course units (cjeline) and question-unit links.
 - `docs/PRODUCT_VISION.md`: original Croatian product vision, preserved as historical
   planning; its roadmap numbering and tentative stack do not define issue #1 scope.
 

@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { QuestionBank } from "../src/components/question-bank";
 import type { OwnerQuestion, PublicQuestion } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ me: vi.fn(), course: vi.fn(), moderatorStatus: vi.fn(), createQuestion: vi.fn(), importQuestions: vi.fn(), membership: vi.fn(), concepts: vi.fn(), questions: vi.fn(), generateQuestions: vi.fn(), editQuestion: vi.fn(), transitionQuestion: vi.fn(), questionVersions: vi.fn(), reportQuestion: vi.fn(), suggestQuestionEdit: vi.fn() }));
+const mock = vi.hoisted(() => ({ me: vi.fn(), course: vi.fn(), moderatorStatus: vi.fn(), createQuestion: vi.fn(), importQuestions: vi.fn(), membership: vi.fn(), concepts: vi.fn(), questions: vi.fn(), generateQuestions: vi.fn(), editQuestion: vi.fn(), transitionQuestion: vi.fn(), questionVersions: vi.fn(), reportQuestion: vi.fn(), suggestQuestionEdit: vi.fn(), units: vi.fn(), setQuestionUnits: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 
 const draft: OwnerQuestion = {
@@ -23,6 +23,7 @@ beforeEach(() => {
   mock.membership.mockResolvedValue({ role: "OWNER" });
   mock.concepts.mockResolvedValue([{ id: "c1", name: "Matrices", status: "APPROVED" }, { id: "c2", name: "Unreviewed", status: "DRAFT" }]);
   mock.questions.mockImplementation(async () => [current]);
+  mock.units.mockResolvedValue([]);
   mock.createQuestion.mockImplementation(async () => ({ ...draft, id: "created", stem: "New question?", source: "USER", ai_job_id: null, concept_ids: [], source_chunks: [] }));
   mock.generateQuestions.mockResolvedValue({ status: "SUCCEEDED", model: "fake" });
   mock.editQuestion.mockImplementation(async (_id, patch) => {
@@ -693,4 +694,83 @@ it("ignores suggestion completion after selecting a different question", async (
   expect(screen.getByRole("article", { name: "Selected question" })).toHaveTextContent(second.stem);
   fireEvent.click(screen.getByRole("button", { name: "Suggest edit" }));
   expect(screen.getByLabelText("Proposed difficulty")).toHaveValue(null);
+});
+
+const unitRows = [
+  { id: "unit-1", course_id: "course", position: 0, title: "Linear maps", description: null, is_archived: false, approved_question_count: 1, created_at: "2026-10-01", updated_at: "2026-10-01" },
+  { id: "unit-2", course_id: "course", position: 1, title: "Eigenvalues", description: null, is_archived: false, approved_question_count: 0, created_at: "2026-10-01", updated_at: "2026-10-01" },
+  { id: "unit-old", course_id: "course", position: 2, title: "Old syllabus", description: null, is_archived: true, approved_question_count: 0, created_at: "2026-10-01", updated_at: "2026-10-01" },
+];
+
+it("filters the bank by unit or by questions without a unit", async () => {
+  mock.units.mockResolvedValue(unitRows);
+  current = { ...draft, unit_ids: ["unit-1"] };
+  await open();
+  expect(mock.units).toHaveBeenCalledWith("course", true);
+  const list = screen.getByRole("list", { name: "Questions list" });
+  expect(await within(list).findByText("Linear maps")).toBeInTheDocument();
+  const filter = screen.getByLabelText("Unit");
+  expect(within(filter).getByRole("option", { name: "Old syllabus (archived)" })).toBeInTheDocument();
+  fireEvent.change(filter, { target: { value: "unit-2" } });
+  await waitFor(() => expect(mock.questions).toHaveBeenLastCalledWith("course", expect.objectContaining({ unit_id: "unit-2", unassigned: undefined, offset: 0 })));
+  fireEvent.change(filter, { target: { value: "none" } });
+  await waitFor(() => expect(mock.questions).toHaveBeenLastCalledWith("course", expect.objectContaining({ unit_id: undefined, unassigned: true })));
+});
+
+it("creates a draft linked to active units only", async () => {
+  mock.units.mockResolvedValue(unitRows);
+  const form = await openCreate();
+  expect(await within(form).findByLabelText("Linear maps")).toBeInTheDocument();
+  expect(within(form).queryByLabelText(/Old syllabus/)).not.toBeInTheDocument();
+  fireEvent.change(within(form).getByLabelText("Question type"), { target: { value: "TRUE_FALSE" } });
+  fireEvent.change(within(form).getByLabelText("Question text"), { target: { value: "New question?" } });
+  fireEvent.change(within(form).getByLabelText("Correct answer"), { target: { value: "true" } });
+  fireEvent.click(within(form).getByLabelText("Eigenvalues"));
+  fireEvent.click(within(form).getByRole("button", { name: "Save draft" }));
+  await waitFor(() => expect(mock.createQuestion).toHaveBeenCalledWith("course", expect.objectContaining({ type: "TRUE_FALSE", unit_ids: ["unit-2"] })));
+});
+
+it("keeps an archived unit on edit until the creator removes it", async () => {
+  mock.units.mockResolvedValue(unitRows);
+  current = { ...draft, unit_ids: ["unit-old"] };
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  expect(await screen.findByText("Old syllabus (archived)", { selector: "span" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Edit question" }));
+  const form = screen.getByRole("form", { name: "Edit question form" });
+  const archived = within(form).getByLabelText("Old syllabus (archived)");
+  expect(archived).toBeChecked();
+  fireEvent.click(within(form).getByRole("button", { name: "Save question" }));
+  await waitFor(() => expect(mock.editQuestion).toHaveBeenLastCalledWith("q1", expect.objectContaining({ unit_ids: ["unit-old"] })));
+});
+
+it("lets a moderator reorganize an approved question without editing its content", async () => {
+  mock.units.mockResolvedValue(unitRows);
+  mock.moderatorStatus.mockResolvedValue({ is_moderator: true });
+  mock.membership.mockResolvedValue({ role: "MEMBER" });
+  mock.me.mockResolvedValue({ id: "moderator" });
+  current = { ...draft, status: "APPROVED", unit_ids: ["unit-1"] };
+  mock.setQuestionUnits.mockImplementation(async (_id: string, unitIds: string[]) => ({ ...current, unit_ids: unitIds }));
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  const selected = screen.getByRole("article", { name: "Selected question" });
+  fireEvent.click(await within(selected).findByRole("button", { name: "Change units" }));
+  const form = within(selected).getByRole("form", { name: "Change question units" });
+  fireEvent.click(within(form).getByLabelText("Linear maps"));
+  fireEvent.click(within(form).getByLabelText("Eigenvalues"));
+  fireEvent.click(within(form).getByRole("button", { name: "Save units" }));
+  await waitFor(() => expect(mock.setQuestionUnits).toHaveBeenCalledWith("q1", ["unit-2"]));
+  expect(await within(selected).findByText((_, node) => node?.tagName === "P" && node.textContent === "Units: Eigenvalues")).toBeInTheDocument();
+  expect(mock.editQuestion).not.toHaveBeenCalled();
+});
+
+it("hides unit reorganization from ordinary members", async () => {
+  mock.units.mockResolvedValue(unitRows);
+  mock.membership.mockResolvedValue({ role: "MEMBER" });
+  mock.me.mockResolvedValue({ id: "someone-else" });
+  current = { ...draft, status: "APPROVED" };
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  await screen.findByText((_, node) => node?.tagName === "P" && node.textContent === "Units: None");
+  expect(screen.queryByRole("button", { name: "Change units" })).not.toBeInTheDocument();
 });

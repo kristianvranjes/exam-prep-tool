@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { api, Concept, OwnerQuestion, Question, QuestionAction, QuestionCreate, QuestionEdit, QuestionStatus, QuestionType, QuestionVersion, type ReportReason } from "../lib/api";
+import { api, Concept, type CourseUnit, OwnerQuestion, Question, QuestionAction, QuestionCreate, QuestionEdit, QuestionStatus, QuestionType, QuestionVersion, type ReportReason } from "../lib/api";
 
 import { QuizImport } from "./quiz-import";
 import { SuggestQuestionEdit } from "./suggest-question-edit";
@@ -12,6 +12,11 @@ const types: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
 const statuses: QuestionStatus[] = ["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED", "ARCHIVED"];
 const label = (value: string) => value === "PENDING_REVIEW" ? "Awaiting faculty review" : value.toLowerCase().replaceAll("_", " ");
 const textareaClass = "min-h-28 w-full rounded-lg border border-line bg-surface px-3 py-2 text-foreground";
+const MAX_QUESTION_UNITS = 5;
+const unitNames = (ids: string[] | undefined, units: CourseUnit[]) => (ids ?? []).map((id) => {
+  const unit = units.find((u) => u.id === id);
+  return unit ? unit.title + (unit.is_archived ? " (archived)" : "") : "Unavailable unit";
+});
 
 export function QuestionBank({ courseId, onOpenMaterials }: { courseId: string; onOpenMaterials?: () => void }) {
   const [open, setOpen] = useState(false);
@@ -33,6 +38,9 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
   const [userId, setUserId] = useState("");
   const [moderator, setModerator] = useState(false);
   const [concepts, setConcepts] = useState<Concept[]>([]);
+  // Includes archived units so existing links keep readable names.
+  const [units, setUnits] = useState<CourseUnit[]>([]);
+  const [unit, setUnit] = useState("");
   const [rows, setRows] = useState<Question[]>([]);
   const [selected, setSelected] = useState<Question | null>(null);
   const [status, setStatus] = useState<QuestionStatus | "">("");
@@ -61,18 +69,20 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
       if (active) { setJoined(true); setOwner(membership.role === "OWNER"); }
       try { const available = await api.concepts(courseId); if (active) setConcepts(available); }
       catch { /* Manual creation, import and review remain available without concepts. */ }
+      try { const available = await api.units(courseId, true); if (active) setUnits(available ?? []); }
+      catch { /* Questions remain usable without course units. */ }
     }).catch(() => { if (active) setError("Could not load question-bank permissions"); });
     return () => { active = false; };
   }, [courseId]);
 
   useEffect(() => {
     let active = true;
-    api.questions(courseId, { status: status || undefined, type: type || undefined, limit: 20, offset })
+    api.questions(courseId, { status: status || undefined, type: type || undefined, unit_id: unit && unit !== "none" ? unit : undefined, unassigned: unit === "none" || undefined, limit: 20, offset })
       .then((result) => { if (active) setRows(result); })
       .catch(() => { if (active) setListError("Could not load questions. Try again."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [courseId, status, type, offset, revision]);
+  }, [courseId, status, type, unit, offset, revision]);
 
   function refresh() { setLoading(true); setListError(""); setRevision((value) => value + 1); }
 
@@ -82,7 +92,7 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
     setCreateBusy(true); setCreateError(""); setCreateNotice("");
     try {
       const created = await api.createQuestion(courseId, body);
-      setStatus("DRAFT"); setType(""); setOffset(0); setSelected(created);
+      setStatus("DRAFT"); setType(""); setUnit(""); setOffset(0); setSelected(created);
       setCreating(false); setCreateNotice("Question saved as a private draft.");
       refresh();
     } catch (e) { setCreateError(e instanceof Error ? e.message : "Could not create question"); }
@@ -107,6 +117,13 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
     finally { setBusy(false); }
   }
 
+  async function saveUnits(questionId: string, unitIds: string[]) {
+    setBusy(true); setError("");
+    try { setSelected(await api.setQuestionUnits(questionId, unitIds)); refresh(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not save question units"); }
+    finally { setBusy(false); }
+  }
+
   async function mutate(operation: () => Promise<OwnerQuestion>) {
     setBusy(true); setError("");
     try { setSelected(await operation()); refresh(); }
@@ -121,13 +138,13 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
         <p className="mt-1 text-sm text-muted">Write a private draft here. You can edit it and submit it for faculty review when ready.</p>
       </div>
       {!creating && <Button type="button" variant="secondary" disabled={busy} onClick={() => { setCreating(true); setCreateError(""); setCreateNotice(""); }}>Create question</Button>}
-      {creating && <QuestionForm concepts={concepts} busy={createBusy} save={createQuestion} cancel={() => setCreating(false)} />}
+      {creating && <QuestionForm concepts={concepts} units={units} busy={createBusy} save={createQuestion} cancel={() => setCreating(false)} />}
       {createError && <Alert>{createError}</Alert>}
       {createNotice && <p role="status" className="rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{createNotice}</p>}
     </Surface>}
 
-    <QuizImport courseId={courseId} disabled={busy} onImported={(imported) => {
-      setStatus("DRAFT"); setType(""); setOffset(0); setSelected(imported[0] ?? null); refresh();
+    <QuizImport courseId={courseId} disabled={busy} units={units.filter((u) => !u.is_archived)} onImported={(imported) => {
+      setStatus("DRAFT"); setType(""); setUnit(""); setOffset(0); setSelected(imported[0] ?? null); refresh();
     }} />
 
     {owner && <details className="rounded-lg border border-line p-3">
@@ -171,7 +188,7 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
         <h4 className="text-lg font-semibold">Browse questions</h4>
         <p className="mt-1 text-sm text-muted">Choose a question to see its details and available actions.</p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={units.length ? "grid gap-3 sm:grid-cols-3" : "grid gap-3 sm:grid-cols-2"}>
         <label className="block text-sm font-medium">Status
           <Select className="mt-1" value={status} disabled={busy} onChange={(e) => { setStatus(e.target.value as QuestionStatus | ""); setOffset(0); setListError(""); setLoading(true); }}>
             <option value="">All statuses</option>{statuses.map((s) => <option key={s} value={s}>{label(s)}</option>)}
@@ -182,14 +199,20 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
             <option value="">All types</option>{types.map((t) => <option key={t} value={t}>{label(t)}</option>)}
           </Select>
         </label>
+        {units.length > 0 && <label className="block text-sm font-medium">Unit
+          <Select className="mt-1" value={unit} disabled={busy} onChange={(e) => { setUnit(e.target.value); setOffset(0); setListError(""); setLoading(true); }}>
+            <option value="">All units</option><option value="none">Without a unit</option>
+            {units.map((u) => <option key={u.id} value={u.id}>{u.title}{u.is_archived ? " (archived)" : ""}</option>)}
+          </Select>
+        </label>}
       </div>
       {listError && <div className="space-y-3"><Alert>{listError}</Alert><Button type="button" variant="secondary" onClick={refresh}>Retry questions</Button></div>}
       {loading && <LoadingState>Loading questions…</LoadingState>}
-      {!loading && !listError && rows.length === 0 && <EmptyState title="No questions match this view.">Try another status or type, or create a draft above.</EmptyState>}
+      {!loading && !listError && rows.length === 0 && <EmptyState title="No questions match this view.">Try another status, type or unit, or create a draft above.</EmptyState>}
       {!loading && !listError && rows.length > 0 && <ul className="space-y-2" aria-label="Questions list">
         {rows.map((q) => <li key={q.id} className="min-w-0 rounded-lg border border-line bg-surface">
           <Button type="button" variant="ghost" disabled={busy} aria-pressed={selected?.id === q.id} className="h-auto w-full min-w-0 flex-col items-start gap-2 whitespace-normal p-3 text-left" onClick={() => { setSelected(q); setError(""); }}>
-            <span className="flex flex-wrap gap-2"><Badge>{label(q.type)}</Badge><Badge>{label(q.status)}</Badge></span>
+            <span className="flex flex-wrap gap-2"><Badge>{label(q.type)}</Badge><Badge>{label(q.status)}</Badge>{unitNames(q.unit_ids, units).map((name, index) => <Badge key={index}>{name}</Badge>)}</span>
             <span className="max-w-full break-words font-medium [overflow-wrap:anywhere]">{q.stem}</span>
           </Button>
         </li>)}
@@ -207,8 +230,10 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
         <Button type="button" variant="secondary" disabled={busy} onClick={() => setSelected(null)}>Close question</Button>
       </div>
       <div className="flex flex-wrap items-center gap-2"><Badge>{label(selected.type)}</Badge><Badge>{label(selected.status)}</Badge>{selected.difficulty && <span className="text-sm text-muted">Difficulty {selected.difficulty}/5</span>}</div>
+      {units.length > 0 && <p className="break-words text-sm [overflow-wrap:anywhere]"><span className="font-medium">Units:</span> {unitNames(selected.unit_ids, units).join(", ") || "None"}</p>}
       <ul className="list-inside list-disc space-y-1 text-sm">{selected.options.map((option) => <li key={option.position} className="break-words [overflow-wrap:anywhere]">{option.text}{selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (correct)" : ""}</li>)}</ul>
-      {selected.visibility === "OWNER" && <OwnerReview key={selected.id + ":" + selected.updated_at} question={selected} creator={selected.created_by_user_id === userId} moderator={moderator} concepts={concepts} busy={busy} mutate={mutate} />}
+      {selected.visibility === "OWNER" && <OwnerReview key={selected.id + ":" + selected.updated_at} question={selected} creator={selected.created_by_user_id === userId} moderator={moderator} concepts={concepts} units={units} busy={busy} mutate={mutate} />}
+      {(owner || moderator) && selected.status !== "ARCHIVED" && units.some((u) => !u.is_archived) && <QuestionUnitsEditor key={selected.id + ":" + (selected.unit_ids ?? []).join(",")} question={selected} units={units} busy={busy} save={(ids) => saveUnits(selected.id, ids)} />}
       {joined && selected.status === "APPROVED" && <ReportIssue key={selected.id} questionId={selected.id} />}
       {joined && selected.status === "APPROVED" && <SuggestQuestionEdit key={selected.id} question={{ id: selected.id, type: selected.type, stem: selected.stem, difficulty: selected.difficulty, options: selected.options.map(({ position, text }) => ({ position, text })) }} />}
     </article>}
@@ -268,7 +293,34 @@ function ReportIssue({ questionId }: { questionId: string }) {
   </section>;
 }
 
-function OwnerReview({ question: q, creator, moderator, concepts, busy, mutate }: { creator: boolean; moderator: boolean; question: OwnerQuestion; concepts: Concept[]; busy: boolean; mutate: (operation: () => Promise<OwnerQuestion>) => Promise<void> }) {
+function QuestionUnitsEditor({ question, units, busy, save }: { question: Question; units: CourseUnit[]; busy: boolean; save: (unitIds: string[]) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [chosen, setChosen] = useState<string[]>(question.unit_ids ?? []);
+  return <section className="space-y-3 border-t border-line pt-4" aria-label="Question units">
+    {!open && <Button type="button" variant="secondary" disabled={busy} onClick={() => setOpen(true)}>Change units</Button>}
+    {open && <DraftForm aria-label="Change question units" className="space-y-3" onSubmit={(e) => { e.preventDefault(); void save(chosen); }}>
+      <fieldset disabled={busy}>
+        <legend className="font-medium">Units for this question (up to {MAX_QUESTION_UNITS})</legend>
+        <p className="mt-1 text-sm text-muted">Changing units only reorganizes the course. It does not create a new version or require another review.</p>
+        <UnitChoices units={units} linked={question.unit_ids ?? []} chosen={chosen} setChosen={setChosen} />
+      </fieldset>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save units"}</Button>
+        <Button type="button" variant="secondary" disabled={busy} onClick={() => { setOpen(false); setChosen(question.unit_ids ?? []); }}>Cancel</Button>
+      </div>
+    </DraftForm>}
+  </section>;
+}
+
+function UnitChoices({ units, linked, chosen, setChosen }: { units: CourseUnit[]; linked: string[]; chosen: string[]; setChosen: (update: (ids: string[]) => string[]) => void }) {
+  // Archived units stay listed only where the question already uses them, so they can be removed.
+  const offered = units.filter((unit) => !unit.is_archived || linked.includes(unit.id));
+  return <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">{offered.map((unit) => <label key={unit.id}>
+    <input type="checkbox" checked={chosen.includes(unit.id)} disabled={!chosen.includes(unit.id) && chosen.length >= MAX_QUESTION_UNITS} onChange={(e) => setChosen((ids) => e.target.checked ? [...ids, unit.id] : ids.filter((id) => id !== unit.id))} />{unit.title}{unit.is_archived ? " (archived)" : ""}
+  </label>)}</div>;
+}
+
+function OwnerReview({ question: q, creator, moderator, concepts, units, busy, mutate }: { creator: boolean; moderator: boolean; question: OwnerQuestion; concepts: Concept[]; units: CourseUnit[]; busy: boolean; mutate: (operation: () => Promise<OwnerQuestion>) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
   const [versions, setVersions] = useState<QuestionVersion[]>([]);
   const [versionError, setVersionError] = useState("");
@@ -311,7 +363,7 @@ function OwnerReview({ question: q, creator, moderator, concepts, busy, mutate }
       <Input aria-label="Rejection reason" className="min-w-0 flex-1" name="reason" required maxLength={1000} placeholder="Reason for rejection" disabled={busy} />
       <Button type="submit" variant="secondary" disabled={busy}>Reject question</Button>
     </DraftForm>}
-    {editing && <QuestionForm question={q} concepts={concepts} busy={busy} save={(body) => mutate(() => api.editQuestion(q.id, toEdit(body)))} />}
+    {editing && <QuestionForm question={q} concepts={concepts} units={units} busy={busy} save={(body) => mutate(() => api.editQuestion(q.id, toEdit(body)))} />}
 
     {(versions.length > 0 || versionBusy || versionError) && <section className="min-w-0 space-y-3 border-t border-line pt-4" aria-label="Question history">
       <h5 className="font-semibold">Version history</h5>
@@ -338,13 +390,15 @@ function OwnerReview({ question: q, creator, moderator, concepts, busy, mutate }
 
 function toEdit(body: QuestionCreate): QuestionEdit {
   const patch: QuestionEdit = { stem: body.stem, explanation: body.explanation, difficulty: body.difficulty, concept_ids: body.concept_ids };
+  if (body.unit_ids) patch.unit_ids = body.unit_ids;
   if (body.type === "MULTIPLE_CHOICE") patch.options = body.options;
   if (body.type === "TRUE_FALSE") patch.correct_answer = body.correct_answer;
   if (body.type === "SHORT_ANSWER") patch.reference_answer = body.reference_answer;
   return patch;
 }
 
-function QuestionForm({ question: q, concepts, busy, save, cancel }: { question?: OwnerQuestion; concepts: Concept[]; busy: boolean; save: (body: QuestionCreate) => Promise<void>; cancel?: () => void }) {
+function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { question?: OwnerQuestion; concepts: Concept[]; units: CourseUnit[]; busy: boolean; save: (body: QuestionCreate) => Promise<void>; cancel?: () => void }) {
+  const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>(q?.unit_ids ?? []);
   const [questionType, setQuestionType] = useState<QuestionType>(q?.type ?? "MULTIPLE_CHOICE");
   const [options, setOptions] = useState(q?.options.map((o) => ({ text: o.text, is_correct: o.is_correct })) ?? [{ text: "", is_correct: true }, { text: "", is_correct: false }]);
   const [selectedConceptIds, setSelectedConceptIds] = useState<string[]>(q?.concept_ids ?? []);
@@ -368,6 +422,8 @@ function QuestionForm({ question: q, concepts, busy, save, cancel }: { question?
       explanation: String(data.get("explanation") || "") || null,
       difficulty: data.get("difficulty") ? Number(data.get("difficulty")) : null,
       concept_ids: [...retained, ...chosen],
+      // Omitted when units are unavailable, so an edit keeps existing links.
+      ...(units.length ? { unit_ids: selectedUnitIds } : {}),
     };
     let body: QuestionCreate;
     if (questionType === "MULTIPLE_CHOICE") body = { ...common, type: questionType, options };
@@ -417,6 +473,10 @@ function QuestionForm({ question: q, concepts, busy, save, cancel }: { question?
         <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">{approved.map((concept) => <label key={concept.id}><input type="checkbox" checked={chosen.includes(concept.id)} disabled={!chosen.includes(concept.id) && retained.length + chosen.length >= 5} onChange={(e) => setSelectedConceptIds((ids) => e.target.checked ? [...ids, concept.id] : ids.filter((id) => id !== concept.id))} />{concept.name}</label>)}</div>
         {approved.length === 0 && <p className="mt-2 text-sm text-muted">No approved concepts are available. You can save without them.</p>}
       </fieldset>
+      {units.length > 0 && <fieldset>
+        <legend className="font-medium">Course units (optional, up to {MAX_QUESTION_UNITS})</legend>
+        <UnitChoices units={units} linked={q?.unit_ids ?? []} chosen={selectedUnitIds} setChosen={setSelectedUnitIds} />
+      </fieldset>}
       <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={busy}>{busy ? "Saving…" : q ? "Save question" : "Save draft"}</Button>
         {cancel && <Button type="button" variant="secondary" disabled={busy} onClick={cancel}>Cancel create</Button>}

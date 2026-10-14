@@ -2,14 +2,15 @@
 
 import { FormEvent, useId, useRef, useState } from "react";
 import { useUnsavedChanges } from "./unsaved-changes";
-import { api, OwnerQuestion } from "../lib/api";
+import { api, type CourseUnit, OwnerQuestion } from "../lib/api";
 import { quizImportPrompt } from "../lib/quiz-import-prompt";
-import { Alert, Button, Surface } from "./ui";
+import { Alert, Button, Select, Surface } from "./ui";
 
-export function QuizImport({ courseId, disabled, onImported }: {
-  courseId: string; disabled: boolean; onImported: (questions: OwnerQuestion[]) => void;
+export function QuizImport({ courseId, disabled, onImported, units = [] }: {
+  courseId: string; disabled: boolean; onImported: (questions: OwnerQuestion[]) => void; units?: CourseUnit[];
 }) {
   const [file, setFile] = useState<File | null>(null);
+  const [unitId, setUnitId] = useState("");
   useUnsavedChanges(file !== null);
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
@@ -29,7 +30,7 @@ export function QuizImport({ courseId, disabled, onImported }: {
     try {
       const text = await file.text();
       try { JSON.parse(text); } catch { throw new Error("Invalid JSON. Save only the JSON object, without Markdown fences."); }
-      const questions = await api.importQuestions(courseId, text);
+      const questions = unitId ? await api.importQuestions(courseId, text, [unitId]) : await api.importQuestions(courseId, text);
       setNotice(`Imported ${questions.length} private draft ${questions.length === 1 ? "question" : "questions"}. Check each draft, then submit it for faculty review when ready.`);
       setFile(null); if (input.current) input.current.value = "";
       onImported(questions);
@@ -55,6 +56,11 @@ export function QuizImport({ courseId, disabled, onImported }: {
       {copyError && <Alert className="mt-3">{copyError}</Alert>}
     </details>
     <form onSubmit={submit} className="space-y-3">
+      {units.length > 0 && <label className="block text-sm font-medium">Add imported drafts to unit (optional)
+        <Select className="mt-1" value={unitId} disabled={busy || disabled} onChange={(e) => setUnitId(e.target.value)}>
+          <option value="">No unit</option>{units.map((unit) => <option key={unit.id} value={unit.id}>{unit.title}</option>)}
+        </Select>
+      </label>}
       <label htmlFor={`${id}-file`} className="block text-sm font-medium">Quiz JSON file</label>
       <input ref={input} id={`${id}-file`} type="file" accept=".json,application/json" aria-describedby={`${id}-help${file ? ` ${id}-selected` : ""}${error ? ` ${id}-error` : ""}`} aria-invalid={!!error} className="block min-h-11 w-full min-w-0 text-sm file:mr-3 file:min-h-11 file:rounded-lg file:border file:border-line file:bg-subtle file:px-3 file:text-foreground" disabled={busy || disabled} onChange={(e) => { setFile(e.target.files?.[0] ?? null); setError(""); setNotice(""); }} />
       <p id={`${id}-help`} className="text-xs text-muted">1–50 questions, up to 256 KiB. Server limits may be lower. Duplicates among your current questions are rejected; nothing is saved on error.</p>

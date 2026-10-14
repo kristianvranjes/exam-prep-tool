@@ -35,7 +35,9 @@ def test_0013_upgrade_downgrade_preserves_applied_content_versions_and_reports(c
         command.downgrade(config, "0012")
         assert question_history(question_id) == before
         assert rows_for(question_id, "question_reports") == reports
-        command.upgrade(config, "0013")
+        # The current API also uses tables newer than 0013, so exercise it at head;
+        # downgrading to 0012 still rolls back through 0013 below.
+        command.upgrade(config, "head")
         assert question_history(question_id) == before
         assert rows_for(question_id, "question_reports") == reports
         receipt = submit(
@@ -59,7 +61,7 @@ def test_0013_upgrade_downgrade_preserves_applied_content_versions_and_reports(c
             assert conn.scalar(text("SELECT to_regclass('question_edit_suggestions')")) is None
         assert question_history(question_id) == applied
         assert rows_for(question_id, "question_reports") == reports
-        command.upgrade(config, "0013")
+        command.upgrade(config, "head")
         assert question_history(question_id) == applied
         assert rows_for(question_id, "question_reports") == reports
         assert submit(creator, path)["base_version_number"] == 4

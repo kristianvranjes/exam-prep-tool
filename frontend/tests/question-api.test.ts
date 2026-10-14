@@ -43,3 +43,36 @@ it("creates a typed question with session credentials and propagates safe errors
   }));
   await expect(api.createQuestion("course", body)).rejects.toThrow("Duplicate active question stem or conflicting change");
 });
+
+it("uses course-unit paths and sends unit filters and selections", async () => {
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ([]) });
+  vi.stubGlobal("fetch", fetchMock);
+  await api.units("course");
+  await api.units("course", true);
+  await api.createUnit("course", { title: "Sets", description: null });
+  await api.updateUnit("u1", { description: null });
+  await api.archiveUnit("u1");
+  await api.restoreUnit("u1");
+  await api.reorderUnits("course", ["u2", "u1"]);
+  await api.setQuestionUnits("q1", ["u1"]);
+  await api.questions("course", { unit_id: "u1" });
+  await api.questions("course", { unassigned: true });
+  await api.importQuestions("course", "{}", ["u1", "u2"]);
+  await api.importQuestions("course", "{}");
+  const calls = fetchMock.mock.calls;
+  expect(calls[0][0]).toMatch(/\/courses\/course\/units$/);
+  expect(calls[1][0]).toContain("/courses/course/units?include_archived=true");
+  expect(calls[2][1]).toMatchObject({ method: "POST", body: JSON.stringify({ title: "Sets", description: null }) });
+  expect(calls[3][0]).toContain("/units/u1");
+  expect(calls[3][1]).toMatchObject({ method: "PATCH", body: JSON.stringify({ description: null }) });
+  expect(calls[4][0]).toContain("/units/u1/archive");
+  expect(calls[5][0]).toContain("/units/u1/restore");
+  expect(calls[6][0]).toContain("/courses/course/units/order");
+  expect(calls[6][1]).toMatchObject({ method: "PATCH", body: JSON.stringify({ unit_ids: ["u2", "u1"] }) });
+  expect(calls[7][0]).toContain("/questions/q1/units");
+  expect(calls[7][1]).toMatchObject({ method: "PATCH", body: JSON.stringify({ unit_ids: ["u1"] }) });
+  expect(calls[8][0]).toContain("/courses/course/questions?unit_id=u1");
+  expect(calls[9][0]).toContain("/courses/course/questions?unassigned=true");
+  expect(calls[10][0]).toContain("/courses/course/questions/import?unit_ids=u1&unit_ids=u2");
+  expect(calls[11][0]).toMatch(/\/courses\/course\/questions\/import$/);
+});

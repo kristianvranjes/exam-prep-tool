@@ -9,6 +9,7 @@ from app.config import Settings
 from app.models import User
 from app.models.question import Question
 from app.schemas.question import OwnerQuestion, QuizImport
+from app.services.course_units import replace_question_units, validate_unit_links
 from app.services.courses import get_member_course
 from app.services.questions.service import add_version, owner_view, save_content
 
@@ -37,10 +38,16 @@ async def read_import(request: Request) -> QuizImport:
 
 
 def import_questions(
-    db: Session, user: User, course_id: UUID, document: QuizImport
+    db: Session,
+    user: User,
+    course_id: UUID,
+    document: QuizImport,
+    unit_ids: list[UUID] | None = None,
 ) -> list[OwnerQuestion]:
     get_member_course(db, user, course_id)
     try:
+        # One optional unit selection applies to every imported draft.
+        units = validate_unit_links(db, course_id, unit_ids or [])
         rows = []
         for content in document.questions:
             question = Question(
@@ -53,9 +60,13 @@ def import_questions(
             )
             db.add(question)
             save_content(db, question, content)
+            replace_question_units(db, question.id, units)
             add_version(db, question, user, "CREATED")
             rows.append(owner_view(db, question))
         db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
     except IntegrityError:
         db.rollback()
         raise HTTPException(
