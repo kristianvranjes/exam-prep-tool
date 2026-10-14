@@ -277,7 +277,23 @@ def test_migration_roundtrip_and_conflicting_downgrade_is_non_destructive(commun
             assert history() == before
             command.upgrade(config, "0011")
             assert history() == before
-        contribute(owner, course)  # Different creator, same stem, unapproved.
+        # Different creator, same stem, unapproved. Seeded directly because the
+        # current API also uses tables that schema 0011 predates.
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO questions (id, course_id, created_by_user_id, type, status,"
+                    " source, stem, normalized_stem, correct_boolean) VALUES (:id, :course,"
+                    " :user, 'TRUE_FALSE', 'DRAFT', 'USER', :stem, :normalized, true)"
+                ),
+                {
+                    "id": uuid4(),
+                    "course": course,
+                    "user": owner.get("/auth/me").json()["id"],
+                    "stem": row["stem"],
+                    "normalized": row["stem"].casefold(),
+                },
+            )
         conflicting = history()
         with pytest.raises(IntegrityError):
             command.downgrade(config, "0010")

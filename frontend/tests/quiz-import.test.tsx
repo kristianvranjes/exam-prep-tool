@@ -89,3 +89,15 @@ it("explains how to copy the prompt when clipboard access fails", async () => {
   expect(fileInput).toHaveAttribute("aria-invalid", "false");
   expect(fileInput.getAttribute("aria-describedby")).not.toContain("-error");
 });
+it("imports into an optionally selected course unit", async () => {
+  const units = [{ id: "unit-1", course_id: "course", position: 0, title: "Linear maps", description: null, is_archived: false, approved_question_count: 0, created_at: "2026-10-01", updated_at: "2026-10-01" }];
+  render(<QuizImport courseId="course" disabled={false} onImported={onImported} units={units} />);
+  fireEvent.click(screen.getByText("Import question drafts"));
+  fireEvent.change(screen.getByLabelText("Add imported drafts to unit (optional)"), { target: { value: "unit-1" } });
+  choose(); fireEvent.click(screen.getByRole("button", { name: "Import drafts" }));
+  await waitFor(() => expect(mock.importQuestions).toHaveBeenCalledWith("course", expect.stringContaining("quiz-import-v1"), ["unit-1"]));
+});
+it("hides the unit choice when the course has no units", () => {
+  open();
+  expect(screen.queryByLabelText("Add imported drafts to unit (optional)")).not.toBeInTheDocument();
+});

@@ -7,6 +7,7 @@ from app.config import Settings
 from app.dependencies import get_current_user, get_db
 from app.models import User
 from app.schemas.concept import JobDetail
+from app.schemas.course_unit import QuestionUnits
 from app.schemas.question import (
     GenerationRequest,
     OwnerQuestion,
@@ -45,11 +46,12 @@ def create(
 )
 def import_quiz(
     course_id: UUID,
+    unit_ids: list[UUID] = Query(default=[], max_length=5),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     document: QuizImport = Depends(read_import),
 ) -> list[OwnerQuestion]:
-    return import_questions(db, user, course_id, document)
+    return import_questions(db, user, course_id, document, unit_ids)
 
 
 @router.post("/courses/{course_id}/questions/generate", response_model=JobDetail)
@@ -69,12 +71,16 @@ def list_questions(
     course_id: UUID,
     status: QuestionStatus | None = None,
     type: QuestionType | None = None,
+    unit_id: UUID | None = None,
+    unassigned: bool = False,
     limit: int = Query(default=20, ge=1, le=50),
     offset: int = Query(default=0, ge=0, le=10000),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[QuestionResponse]:
-    return service.list_questions(db, user, course_id, status, type, limit, offset)
+    return service.list_questions(
+        db, user, course_id, status, type, limit, offset, unit_id, unassigned
+    )
 
 
 @router.get("/questions/{question_id}", response_model=QuestionResponse)
@@ -92,6 +98,16 @@ def edit(
     db: Session = Depends(get_db),
 ) -> OwnerQuestion:
     return service.edit_question(db, user, question_id, data)
+
+
+@router.patch("/questions/{question_id}/units", response_model=QuestionResponse)
+def set_units(
+    question_id: UUID,
+    data: QuestionUnits,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> QuestionResponse:
+    return service.set_units(db, user, question_id, data.unit_ids)
 
 
 @router.post("/questions/{question_id}/submit", response_model=OwnerQuestion)

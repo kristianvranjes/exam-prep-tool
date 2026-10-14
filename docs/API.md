@@ -217,10 +217,11 @@ See [community permissions](COMMUNITY.md) for the creator/moderator action matri
 
 | Method/path | Contract |
 | --- | --- |
-| POST `/courses/{course_id}/questions` | Joined MEMBER/OWNER creates one private USER/DRAFT question; HTTP 201 `OwnerQuestion`. Flat strict body discriminated by `type`, with content fields and optional `concept_ids` (default `[]`, at most five unique APPROVED concepts from this course). Creator/course/status/source and provenance are server-owned. No AI, embeddings or material source is needed. Question, options/concepts and version 1 `CREATED` are atomic. |
+| POST `/courses/{course_id}/questions` | Joined MEMBER/OWNER creates one private USER/DRAFT question; HTTP 201 `OwnerQuestion`. Flat strict body discriminated by `type`, with content fields and optional `concept_ids` (default `[]`, at most five unique APPROVED concepts from this course). Optional `unit_ids` (default `[]`, at most five unique active units of this course). Creator/course/status/source and provenance are server-owned. No AI, embeddings or material source is needed. Question, options/concepts and version 1 `CREATED` are atomic. |
 | POST `/courses/{course_id}/questions/generate` | OWNER, `{concept_ids, question_types, count, retrieval_top_k}`. Unique approved concept IDs (1–5), unique types (1–3), count/top-k (1–10). Returns completed JobDetail, HTTP 200 for SUCCEEDED or FAILED. |
-| GET `/courses/{course_id}/questions` | `status`, `type`, `limit` (default 20, 1–50), `offset` (default 0, 0–10000). Stable created_at descending then ID. Status filters intersect visible content; no filter reveals another creator's private question. |
+| GET `/courses/{course_id}/questions` | `status`, `type`, optional `unit_id` or `unassigned=true` (not both, 422), `limit` (default 20, 1–50), `offset` (default 0, 0–10000). Stable created_at descending then ID. Status filters intersect visible content; no filter reveals another creator's private question. |
 | GET `/questions/{question_id}` | OWNER/review or MEMBER/public representation. |
+| PATCH `/questions/{question_id}/units` | Course OWNER or faculty moderator (or the creator of a DRAFT/REJECTED question): strict `{unit_ids}` replaces the question's units (at most five unique active units of its course; links it already has to archived units may stay). No version, review or suggestion change. ARCHIVED questions are 409. |
 | PATCH `/questions/{question_id}` | Creator, DRAFT/REJECTED only. Partial stem/explanation/difficulty, options, correct_answer, reference_answer, concept_ids. Full merged content is validated; source chunks/type/status/source are not editable. |
 | POST `/questions/{question_id}/submit` | Creator only: DRAFT → PENDING_REVIEW. |
 | POST `/questions/{question_id}/approve` | Non-creator faculty moderator: PENDING_REVIEW → APPROVED with reviewer/time. |
@@ -230,6 +231,22 @@ See [community permissions](COMMUNITY.md) for the creator/moderator action matri
 | GET `/faculties/{faculty_id}/question-reports` | Faculty moderator only, without course enrollment. Optional `course_id`, `status=OPEN|RESOLVED` (default OPEN), `limit` 1–50 (default 20), `offset` 0–10000. Oldest report first, then ID. Includes full question content for moderation but no reporter identity. Unknown faculty or foreign course filter is 404. |
 | POST `/question-reports/{report_id}/dismiss` | Correct faculty moderator resolves an OPEN report as DISMISSED with resolver and UTC time. Already resolved is 409; question and versions are unchanged. |
 | GET `/questions/{question_id}/versions` | Creator or faculty moderator, version ascending; `limit` default 50/max 100, `offset` max 10000. |
+
+### Course units (R2)
+
+See [course units](COURSE_UNITS.md). Non-members get 404; members read; only the course
+OWNER mutates (403 otherwise).
+
+| Method/path | Contract |
+| --- | --- |
+| GET `/courses/{course_id}/units` | Members. Active units by position; `include_archived=true` adds archived ones. Each row has `approved_question_count`. |
+| POST `/courses/{course_id}/units` | OWNER, strict `{title, description?}`; appended at the end. 409 for a duplicate normalized title or more than 50 units. |
+| PATCH `/units/{unit_id}` | OWNER, `{title?, description?}` with at least one field; `description: null` clears it. |
+| PATCH `/courses/{course_id}/units/order` | OWNER, `{unit_ids}` listing every active unit exactly once (422 otherwise). Archived units follow in their previous order. Returns all units. |
+| POST `/units/{unit_id}/archive`, POST `/units/{unit_id}/restore` | OWNER. Archived units keep existing question links but accept no new ones. |
+
+`POST /courses/{course_id}/questions/import` also accepts repeated `unit_ids` query
+parameters, applied to every imported draft atomically.
 
 ### Moderated edit suggestions (Phase 12C)
 

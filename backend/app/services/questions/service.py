@@ -4,12 +4,13 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import delete, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import User
 from app.models.concept import Concept
+from app.models.course_unit import QuestionUnit
 from app.models.material import Material
 from app.models.material_chunk import MaterialChunk
 from app.models.question import (
@@ -38,6 +39,12 @@ from app.schemas.question import (
     TrueFalse,
     content_adapter,
     normalize,
+)
+from app.services.course_units import (
+    is_course_owner,
+    question_unit_ids,
+    replace_question_units,
+    validate_unit_links,
 )
 from app.services.courses import get_member_course
 from app.services.moderation import course_moderator
@@ -94,6 +101,7 @@ def owner_view(db: Session, question: Question) -> OwnerQuestion:
             .order_by(QuestionConcept.concept_id)
         )
     )
+    result.unit_ids = question_unit_ids(db, question.id)
     result.source_chunks = [
         SourceReference(chunk_id=r.id, material_id=r.material_id, ordinal=r.ordinal)
         for r in db.execute(
@@ -117,6 +125,7 @@ def representation(db: Session, question: Question, owner: bool) -> QuestionResp
         stem=question.stem,
         difficulty=question.difficulty,
         options=[PublicOption(position=o.position, text=o.text) for o in options(db, question)],
+        unit_ids=question_unit_ids(db, question.id),
     )
 
 
@@ -133,8 +142,12 @@ def list_questions(
     type_: QuestionType | None,
     limit: int,
     offset: int,
+    unit_id: UUID | None = None,
+    unassigned: bool = False,
 ) -> list[QuestionResponse]:
     get_member_course(db, user, course_id)
+    if unit_id and unassigned:
+        raise HTTPException(422, "Filter by one unit or by questions without units, not both")
     moderator = course_moderator(db, user, course_id)
     query = select(Question).where(Question.course_id == course_id)
     if not moderator:
@@ -145,6 +158,12 @@ def list_questions(
         query = query.where(Question.status == status)
     if type_:
         query = query.where(Question.type == type_)
+    if unit_id:
+        query = query.where(
+            Question.id.in_(select(QuestionUnit.question_id).where(QuestionUnit.unit_id == unit_id))
+        )
+    if unassigned:
+        query = query.where(~exists().where(QuestionUnit.question_id == Question.id))
     rows = db.scalars(
         query.order_by(Question.created_at.desc(), Question.id)
         .limit(limit)
@@ -263,6 +282,7 @@ def create_question(
     get_member_course(db, user, course_id)
     try:
         concepts = validate_concepts(db, course_id, data.concept_ids) if data.concept_ids else []
+        units = validate_unit_links(db, course_id, data.unit_ids)
         question = Question(
             id=uuid4(),
             course_id=course_id,
@@ -276,6 +296,7 @@ def create_question(
         save_content(db, question, data)
         for concept in concepts:
             db.add(QuestionConcept(question_id=question.id, concept_id=concept.id))
+        replace_question_units(db, question.id, units)
         add_version(db, question, user, "CREATED")
         result = owner_view(db, question)
         db.commit()
@@ -304,7 +325,12 @@ def edit_question(
     concepts = changes.pop("concept_ids", owner_view(db, question).concept_ids)
     if concepts is None:
         raise HTTPException(422, "Concepts are required")
+    current_units = question_unit_ids(db, question.id)
+    units = changes.pop("unit_ids", current_units)
+    if units is None:
+        raise HTTPException(422, "Units must be a list; send [] for none")
     validate_provenance(db, question, concepts)
+    units = validate_unit_links(db, question.course_id, units, current_units)
     try:
         content = content_adapter.validate_python(current_content(db, question) | changes)
     except ValidationError:
@@ -314,6 +340,7 @@ def edit_question(
         db.execute(delete(QuestionConcept).where(QuestionConcept.question_id == question.id))
         for id_ in sorted(concepts):
             db.add(QuestionConcept(question_id=question.id, concept_id=id_))
+        replace_question_units(db, question.id, units)
         question.status = "DRAFT"
         question.reviewed_by_user_id = None
         question.reviewed_at = None
@@ -418,3 +445,36 @@ def versions(
             .offset(offset)
         )
     )
+
+
+def set_units(db: Session, user: User, question_id: UUID, unit_ids: list[UUID]) -> QuestionResponse:
+    """Reorganize a question without a content version or another review.
+
+    Units are course organization, not question content: owners and moderators may
+    adjust approved questions, and pending edit suggestions stay valid.
+    """
+    question, full = load_question(db, user, question_id, mutate=True)
+    manager = course_moderator(db, user, question.course_id) or is_course_owner(
+        db, user, question.course_id
+    )
+    creator_draft = question.created_by_user_id == user.id and question.status in (
+        "DRAFT",
+        "REJECTED",
+    )
+    if not (manager or creator_draft):
+        raise HTTPException(403, "Course owner or faculty moderator access required")
+    if question.status == "ARCHIVED":
+        raise HTTPException(409, "Archived questions cannot change units")
+    try:
+        units = validate_unit_links(
+            db, question.course_id, unit_ids, question_unit_ids(db, question.id)
+        )
+        replace_question_units(db, question.id, units)
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(503, "Could not save question units") from None
+    return representation(db, question, full)

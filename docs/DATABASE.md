@@ -220,3 +220,21 @@ Use migration roundtrips only on disposable PostgreSQL. The faculty migration te
 cover 0009 -> 0010 -> 0009 -> 0010 with preservation checks; base -> head remains
 in CI. Membership/material/question/quiz/answer/progress records and course IDs
 survive the faculty migration roundtrip unchanged.
+
+## Course units migration 0016
+
+Revision 0016 follows 0015. `course_units` stores id, course_id (indexed, ON DELETE
+CASCADE), position, title (nonblank, at most 150 characters), normalized_title,
+optional description (nonblank, at most 2000 characters), is_archived (default
+false), created_by_user_id (ON DELETE RESTRICT) and timestamps. `(course_id, position)`
+is unique and DEFERRABLE INITIALLY DEFERRED so a reorder can swap positions in one
+transaction; `(course_id, normalized_title)` is unique. Unit mutations serialize on
+the course row.
+
+`question_units` links questions and units (composite primary key, both ON DELETE
+CASCADE, indexed unit_id). Same-course links are enforced by the service layer.
+
+`alembic downgrade 0015` drops both tables and with them all unit organization;
+questions, versions, attempts and progress are unchanged. Back up first if unit data
+matters.
+

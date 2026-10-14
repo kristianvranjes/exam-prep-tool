@@ -9,6 +9,7 @@ QuestionStatus = Literal["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED", "ARC
 Stem = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=400)]
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 Difficulty = Annotated[int, Field(ge=1, le=5)]
+MAX_QUESTION_UNITS = 5
 
 
 def normalize(text: str) -> str:
@@ -69,15 +70,32 @@ class ManualConcepts(StrictModel):
         return self
 
 
-class CreateMCQ(MCQ, ManualConcepts):
+def unique_ids(ids: list[UUID]) -> list[UUID]:
+    if len(set(ids)) != len(ids):
+        raise ValueError("Unit IDs must be unique")
+    return ids
+
+
+class ManualUnits(StrictModel):
+    unit_ids: list[Annotated[UUID, Field(strict=False)]] = Field(
+        default_factory=list, max_length=MAX_QUESTION_UNITS
+    )
+
+    @model_validator(mode="after")
+    def unique_units(self) -> Self:
+        unique_ids(self.unit_ids)
+        return self
+
+
+class CreateMCQ(MCQ, ManualConcepts, ManualUnits):
     pass
 
 
-class CreateTrueFalse(TrueFalse, ManualConcepts):
+class CreateTrueFalse(TrueFalse, ManualConcepts, ManualUnits):
     pass
 
 
-class CreateShortAnswer(ShortAnswer, ManualConcepts):
+class CreateShortAnswer(ShortAnswer, ManualConcepts, ManualUnits):
     pass
 
 
@@ -136,6 +154,7 @@ class QuestionPatch(BaseModel):
     correct_answer: bool | None = Field(default=None, strict=True)
     reference_answer: Text | None = None
     concept_ids: list[UUID] | None = Field(default=None, max_length=5)
+    unit_ids: list[UUID] | None = Field(default=None, max_length=MAX_QUESTION_UNITS)
 
 
 class RejectRequest(StrictModel):
@@ -160,6 +179,7 @@ class PublicQuestion(BaseModel):
     stem: str
     difficulty: int | None
     options: list[PublicOption]
+    unit_ids: list[UUID] = []
 
 
 class SourceReference(BaseModel):
@@ -190,6 +210,7 @@ class OwnerQuestion(BaseModel):
     updated_at: datetime
     options: list[OwnerOption] = []
     concept_ids: list[UUID] = []
+    unit_ids: list[UUID] = []
     source_chunks: list[SourceReference] = []
 
 

@@ -51,17 +51,29 @@ export const api = {
   reviewProgressSummary: (courseId: string) => request<ReviewProgressSummary>(`/courses/${courseId}/review-progress/summary`),
   membership: (courseId: string) => request<{ role: "OWNER" | "MEMBER" }>(`/courses/${courseId}/membership`),
   concepts: (courseId: string, materialId?: string) => request<Concept[]>(`/courses/${courseId}/concepts${materialId ? `?material_id=${encodeURIComponent(materialId)}` : ""}`),
-  questions: (courseId: string, filters: { status?: QuestionStatus; type?: QuestionType; limit?: number; offset?: number } = {}) => {
+  questions: (courseId: string, filters: { status?: QuestionStatus; type?: QuestionType; unit_id?: string; unassigned?: boolean; limit?: number; offset?: number } = {}) => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => { if (value !== undefined) params.set(key, String(value)); });
     return request<Question[]>(`/courses/${courseId}/questions?${params}`);
   },
   createQuestion: (courseId: string, body: QuestionCreate) => request<OwnerQuestion>(`/courses/${courseId}/questions`, { method: "POST", body: JSON.stringify(body) }),
-  importQuestions: (courseId: string, json: string) => request<OwnerQuestion[]>(`/courses/${courseId}/questions/import`, { method: "POST", body: json }),
+  importQuestions: (courseId: string, json: string, unitIds: string[] = []) => {
+    const params = new URLSearchParams();
+    unitIds.forEach((id) => params.append("unit_ids", id));
+    const query = unitIds.length ? `?${params}` : "";
+    return request<OwnerQuestion[]>(`/courses/${courseId}/questions/import${query}`, { method: "POST", body: json });
+  },
   generateQuestions: (courseId: string, body: QuestionGeneration) => request<AIJob>(`/courses/${courseId}/questions/generate`, { method: "POST", body: JSON.stringify(body) }),
   question: (id: string) => request<Question>(`/questions/${id}`),
   editQuestion: (id: string, body: QuestionEdit) => request<OwnerQuestion>(`/questions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   transitionQuestion: (id: string, action: QuestionAction, reason?: string) => request<OwnerQuestion>(`/questions/${id}/${action}`, { method: "POST", ...(action === "reject" ? { body: JSON.stringify({ reason }) } : {}) }),
+  setQuestionUnits: (id: string, unitIds: string[]) => request<Question>(`/questions/${id}/units`, { method: "PATCH", body: JSON.stringify({ unit_ids: unitIds }) }),
+  units: (courseId: string, includeArchived = false) => request<CourseUnit[]>(`/courses/${courseId}/units${includeArchived ? "?include_archived=true" : ""}`),
+  createUnit: (courseId: string, body: { title: string; description: string | null }) => request<CourseUnit>(`/courses/${courseId}/units`, { method: "POST", body: JSON.stringify(body) }),
+  updateUnit: (id: string, body: { title?: string; description?: string | null }) => request<CourseUnit>(`/units/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  archiveUnit: (id: string) => request<CourseUnit>(`/units/${id}/archive`, { method: "POST" }),
+  restoreUnit: (id: string) => request<CourseUnit>(`/units/${id}/restore`, { method: "POST" }),
+  reorderUnits: (courseId: string, unitIds: string[]) => request<CourseUnit[]>(`/courses/${courseId}/units/order`, { method: "PATCH", body: JSON.stringify({ unit_ids: unitIds }) }),
   questionVersions: (id: string, offset = 0) => request<QuestionVersion[]>(`/questions/${id}/versions?limit=50&offset=${offset}`),
   concept: (id: string) => request<ConceptDetail>(`/concepts/${id}`),
   extractConcepts: (materialId: string) => request<AIJob>(`/materials/${materialId}/concept-extraction`, { method: "POST" }),
@@ -94,6 +106,8 @@ export type MaterialEmbeddingStatus = { material_id: string; total_chunks: numbe
 export type MaterialEmbeddingResult = { material_id: string; embedded: number; skipped: number; signature: string };
 export type MaterialChunk = { id: string; material_id: string; section_id: string | null; ordinal: number; content: string; char_count: number };
 
+export type CourseUnit = { id: string; course_id: string; position: number; title: string; description: string | null; is_archived: boolean; approved_question_count: number; created_at: string; updated_at: string };
+
 export type Concept = { id: string; course_id: string; name: string; normalized_name: string; description: string | null; aliases: string[]; importance: 'LOW' | 'MEDIUM' | 'HIGH'; status: 'DRAFT' | 'APPROVED' | 'REJECTED'; created_by: string; created_at: string; updated_at: string };
 export type ConceptDetail = Concept & { source_chunks: { id: string; material_id: string; ordinal: number; content: string }[] };
 export type AIJob = { id: string; status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'; model: string; error_message: string | null; error_code: string | null };
@@ -106,14 +120,14 @@ export type ReportStatus = "OPEN" | "RESOLVED";
 export type ReportReceipt = { id: string; question_id: string; reason: ReportReason; details: string | null; status: ReportStatus; created_at: string };
 export type ModeratorReport = ReportReceipt & { resolution: "DISMISSED" | "QUESTION_ARCHIVED" | null; resolved_by_user_id: string | null; resolved_at: string | null; question: OwnerQuestion };
 type QuestionBase = { id: string; course_id: string; type: QuestionType; stem: string; difficulty: number | null };
-export type PublicQuestion = QuestionBase & { visibility: "MEMBER"; status: "APPROVED"; options: { position: number; text: string }[] };
+export type PublicQuestion = QuestionBase & { visibility: "MEMBER"; status: "APPROVED"; options: { position: number; text: string }[]; unit_ids?: string[] };
 export type OwnerQuestion = QuestionBase & {
   visibility: "OWNER"; status: QuestionStatus; source: "AI" | "USER"; ai_job_id: string | null;
   created_by_user_id: string; created_at: string; updated_at: string;
   explanation: string | null; correct_boolean: boolean | null; reference_answer: string | null;
   reviewed_by_user_id: string | null; reviewed_at: string | null; rejection_reason: string | null;
   options: { position: number; text: string; is_correct: boolean }[];
-  concept_ids: string[]; source_chunks: { chunk_id: string; material_id: string; ordinal: number }[];
+  concept_ids: string[]; unit_ids?: string[]; source_chunks: { chunk_id: string; material_id: string; ordinal: number }[];
 };
 export type Question = PublicQuestion | OwnerQuestion;
 export type QuestionGeneration = { concept_ids: string[]; question_types: QuestionType[]; count: number; retrieval_top_k: number };
@@ -123,7 +137,7 @@ export type QuestionContent = Omit<QuestionCreateBase, "concept_ids"> & (
   | { type: "TRUE_FALSE"; correct_answer: boolean }
   | { type: "SHORT_ANSWER"; reference_answer: string }
 );
-export type QuestionCreate = QuestionContent & { concept_ids: string[] };
+export type QuestionCreate = QuestionContent & { concept_ids: string[]; unit_ids?: string[] };
 export type SuggestionChanges = {
   stem?: string; explanation?: string | null; difficulty?: number | null;
   options?: { position: number; text: string }[]; correct_option_position?: number;
@@ -138,7 +152,7 @@ export type ModeratorSuggestion = SuggestionReceipt & {
   applied_version_number: number | null; base_snapshot: OwnerQuestion;
   proposed_content: QuestionContent; question: OwnerQuestion;
 };
-export type QuestionEdit = { stem: string; explanation: string | null; difficulty: number | null; concept_ids: string[]; options?: { text: string; is_correct: boolean }[]; correct_answer?: boolean; reference_answer?: string };
+export type QuestionEdit = { stem: string; explanation: string | null; difficulty: number | null; concept_ids: string[]; unit_ids?: string[]; options?: { text: string; is_correct: boolean }[]; correct_answer?: boolean; reference_answer?: string };
 export type QuestionVersion = { version_number: number; reason: string; snapshot: OwnerQuestion; changed_by_user_id: string; created_at: string };
 
 export type ReviewProgress = {

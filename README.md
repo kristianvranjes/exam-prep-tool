@@ -9,6 +9,11 @@ Faculty moderators review contributions, reports and edit suggestions across cou
 owners can update or delete their courses. See [frontend journeys](docs/FRONTEND.md),
 [community moderation](docs/COMMUNITY.md) and [practice rules](docs/PRACTICE.md).
 
+See the [future roadmap](docs/ROADMAP.md) for hosted pilot readiness, course units and
+exam scopes (MI/ZI/full exam), past exams as practice sources, numeric and multiple-select
+questions, mistakes and favorites, pilot evaluation, and later optional AI grading.
+Milestones are planned work with dependencies and completion criteria.
+
 Optional [external AI quiz import](docs/QUIZ_IMPORT.md) accepts versioned JSON as drafts
 for human review. Manual in-app authoring also needs no AI provider or embeddings.
 Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
@@ -174,6 +179,9 @@ security limits and exact test instructions.
 - `docs/DATABASE.md`: infrastructure and migrations.
 - `docs/API.md`: health, authentication and course endpoint contracts.
 - `docs/AI.md`: local provider architecture, concept review and optional smoke test.
+- [docs/COURSE_UNITS.md](docs/COURSE_UNITS.md): ordered course units (cjeline) and question-unit links.
+- [docs/ROADMAP.md](docs/ROADMAP.md): canonical future roadmap, milestone dependencies,
+  acceptance criteria, and verification rules.
 - `docs/PRODUCT_VISION.md`: original Croatian product vision, preserved as historical
   planning; its roadmap numbering and tentative stack do not define issue #1 scope.
 

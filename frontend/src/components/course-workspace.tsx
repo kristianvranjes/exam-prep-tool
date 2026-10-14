@@ -7,6 +7,7 @@ import type { CourseDestination } from "../lib/workspace-route";
 import { CourseMaterials, type MaterialsSummary } from "./course-materials";
 import { CourseOverview } from "./course-overview";
 import { CourseSettings } from "./course-settings";
+import { CourseUnits } from "./course-units";
 import { PracticeQuiz, type PracticeSetupRequest } from "./practice-quiz";
 import { ProgressPanel } from "./progress-panel";
 import { QuestionBank } from "./question-bank";
@@ -29,7 +30,9 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
   onAnswerDirtyChange: (dirty: boolean) => void;
   onUpdated: (course: Course) => void; onDeleted: (course: Course) => void;
 }) {
-  const [moreDestination, setMoreDestination] = useState<"questions" | "settings" | null>(null);
+  const [moreDestination, setMoreDestination] = useState<"questions" | "units" | "settings" | null>(null);
+  // Mount units on first use, then keep them mounted like other destinations.
+  const [unitsOpened, setUnitsOpened] = useState(false);
   const [materials, setMaterials] = useState<MaterialsSummary>({ materials: [], loading: true, error: false });
   const [setupRequest, setSetupRequest] = useState<PracticeSetupRequest | null>(null);
   const focused = destination === "practice" && activeSession;
@@ -75,9 +78,11 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
       <h2 className="text-xl font-semibold">More</h2>
       <div className="mt-4 flex flex-wrap gap-3">
         <Button variant="secondary" aria-pressed={moreDestination === "questions"} onClick={() => setMoreDestination("questions")}>Question bank</Button>
+        <Button variant="secondary" aria-pressed={moreDestination === "units"} onClick={() => { setUnitsOpened(true); setMoreDestination("units"); }}>Course units</Button>
         {isOwner && <Button variant="secondary" aria-pressed={moreDestination === "settings"} onClick={() => setMoreDestination("settings")}>Course settings</Button>}
       </div>
       <div hidden={moreDestination !== "questions"}><QuestionBank courseId={course.id} onOpenMaterials={() => navigate("materials")} /></div>
+      {unitsOpened && <div hidden={moreDestination !== "units"}><CourseUnits courseId={course.id} isOwner={isOwner} /></div>}
       {isOwner && <div hidden={moreDestination !== "settings"}><CourseSettings course={course} onUpdated={onUpdated} onDeleted={onDeleted} /></div>}
     </section>
   </section>;
