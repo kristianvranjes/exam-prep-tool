@@ -73,6 +73,11 @@ export const api = {
   updateUnit: (id: string, body: { title?: string; description?: string | null }) => request<CourseUnit>(`/units/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   archiveUnit: (id: string) => request<CourseUnit>(`/units/${id}/archive`, { method: "POST" }),
   restoreUnit: (id: string) => request<CourseUnit>(`/units/${id}/restore`, { method: "POST" }),
+  examScopes: (courseId: string) => request<ExamScope[]>(`/courses/${courseId}/exam-scopes`),
+  createExamScope: (courseId: string, body: ExamScopeBody) => request<ExamScope>(`/courses/${courseId}/exam-scopes`, { method: "POST", body: JSON.stringify(body) }),
+  updateExamScope: (id: string, body: Partial<ExamScopeBody>) => request<ExamScope>(`/exam-scopes/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteExamScope: (id: string) => request<void>(`/exam-scopes/${id}`, { method: "DELETE" }),
+  copyExamScopes: (courseId: string, fromYear: string, toYear: string) => request<ExamScope[]>(`/courses/${courseId}/exam-scopes/copy`, { method: "POST", body: JSON.stringify({ from_year: fromYear, to_year: toYear }) }),
   reorderUnits: (courseId: string, unitIds: string[]) => request<CourseUnit[]>(`/courses/${courseId}/units/order`, { method: "PATCH", body: JSON.stringify({ unit_ids: unitIds }) }),
   questionVersions: (id: string, offset = 0) => request<QuestionVersion[]>(`/questions/${id}/versions?limit=50&offset=${offset}`),
   concept: (id: string) => request<ConceptDetail>(`/concepts/${id}`),
@@ -107,6 +112,10 @@ export type MaterialEmbeddingResult = { material_id: string; embedded: number; s
 export type MaterialChunk = { id: string; material_id: string; section_id: string | null; ordinal: number; content: string; char_count: number };
 
 export type CourseUnit = { id: string; course_id: string; position: number; title: string; description: string | null; is_archived: boolean; approved_question_count: number; created_at: string; updated_at: string };
+
+export type ExamScopeKind = "MIDTERM" | "FINAL" | "FULL_EXAM";
+export type ExamScopeBody = { academic_year: string; kind: ExamScopeKind; name: string; unit_ids: string[] };
+export type ExamScope = ExamScopeBody & { id: string; course_id: string; approved_question_count: number; created_at: string; updated_at: string };
 
 export type Concept = { id: string; course_id: string; name: string; normalized_name: string; description: string | null; aliases: string[]; importance: 'LOW' | 'MEDIUM' | 'HIGH'; status: 'DRAFT' | 'APPROVED' | 'REJECTED'; created_by: string; created_at: string; updated_at: string };
 export type ConceptDetail = Concept & { source_chunks: { id: string; material_id: string; ordinal: number; content: string }[] };

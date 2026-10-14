@@ -238,3 +238,21 @@ CASCADE, indexed unit_id). Same-course links are enforced by the service layer.
 questions, versions, attempts and progress are unchanged. Back up first if unit data
 matters.
 
+## Exam scopes migration 0017
+
+Revision 0017 follows 0016. `exam_scopes` stores id, course_id (indexed, ON DELETE
+CASCADE), academic_year (`YYYY/YY` checked by pattern; the API also requires
+consecutive years), kind (`MIDTERM`, `FINAL`, `FULL_EXAM`), name (nonblank, at most
+100 characters), normalized_name, created_by_user_id (ON DELETE RESTRICT) and
+timestamps; `(course_id, academic_year, normalized_name)` is unique.
+`exam_scope_units` links scopes and units (composite primary key, both ON DELETE
+CASCADE, indexed unit_id).
+
+`quizzes` gains nullable `exam_scope_id` (indexed, ON DELETE SET NULL),
+`focus_unit_ids` JSONB (default `[]`) and nullable `focus_label` (at most 300
+characters). Existing quizzes keep an empty, unlabeled focus.
+
+`alembic downgrade 0016` drops the scope tables and the quiz focus columns; quizzes,
+attempts, answers and progress otherwise survive unchanged. Back up first if scope
+data or focus labels matter.
+

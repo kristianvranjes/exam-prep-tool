@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import and_, case, select
 from sqlalchemy.orm import Session
 
+from app.models.course_unit import QuestionUnit
 from app.models.question import Question
 from app.models.quiz import Quiz, QuizAttempt, QuizQuestion
 from app.models.user_question_progress import UserQuestionProgress
@@ -14,13 +15,25 @@ from app.services.practice_eligibility import practice_eligible
 
 
 def select_questions(
-    db: Session, user_id: UUID, course_id: UUID, data: StartQuiz, selection_time: datetime
+    db: Session,
+    user_id: UUID,
+    course_id: UUID,
+    data: StartQuiz,
+    selection_time: datetime,
+    unit_ids: list[UUID] | None = None,
 ) -> list[Question]:
     query = select(Question).where(
         Question.course_id == course_id,
         practice_eligible(user_id),
         Question.type.in_(data.question_types),
     )
+    if unit_ids:
+        # A question linked to any focused unit matches; unlinked questions do not.
+        query = query.where(
+            Question.id.in_(
+                select(QuestionUnit.question_id).where(QuestionUnit.unit_id.in_(unit_ids))
+            )
+        )
     if data.selection_mode == "ADAPTIVE":
         history = (
             select(QuizQuestion.id)

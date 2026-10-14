@@ -196,9 +196,10 @@ cycle (MI, ZI, or full exam term), and see progress per unit, without requiring 
   snapshots or submitted results.
 
 **Dependencies:** R1 baseline. Ship units, scopes, filtered practice/availability, and
-unit progress as separate coherent changes. Course units and question-unit links are
-implemented (see [course units](COURSE_UNITS.md)); bulk assignment beyond import and
-work packages 2–4 remain open. Preserve the existing
+unit progress as separate coherent changes. Course units, question-unit links, exam
+scopes and unit/scope-filtered practice are implemented (see
+[course units](COURSE_UNITS.md)); the server-side availability summary, unit progress
+and bulk assignment beyond import remain open. Preserve the existing
 [practice invariants](PRACTICE.md).
 
 ### R3 — Past exams and materials as practice sources

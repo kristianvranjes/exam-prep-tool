@@ -9,7 +9,10 @@ export type PracticeAnswer =
 export type AttemptSummary = {
   id: string; course_id: string; status: "ACTIVE" | "SUBMITTED" | "ABANDONED";
   started_at: string; submitted_at: string | null;
+  exam_scope_id?: string | null; focus_unit_ids?: string[]; focus_label?: string | null;
 };
+/** Optional practice focus: selected units or one exam scope. */
+export type PracticeFocus = { unit_ids: string[] } | { exam_scope_id: string };
 export type ActiveQuestion = {
   id: string; position: number; type: QuestionType; stem: string; difficulty: number | null;
   options: { position: number; text: string }[]; answer: PracticeAnswer | null;
@@ -27,7 +30,7 @@ export type Attempt = AttemptSummary & (
 const path = (course: string) => `/courses/${course}/attempts`;
 export const practiceApi = {
   history: (course: string, offset = 0) => request<AttemptSummary[]>(`${path(course)}?limit=20&offset=${offset}`),
-  start: (course: string, count: number, question_types: QuestionType[], selection_mode: SelectionMode = "STANDARD") => request<Attempt>(path(course), { method: "POST", body: JSON.stringify({ count, question_types, selection_mode }) }),
+  start: (course: string, count: number, question_types: QuestionType[], selection_mode: SelectionMode = "STANDARD", focus?: PracticeFocus) => request<Attempt>(path(course), { method: "POST", body: JSON.stringify({ count, question_types, selection_mode, ...focus }) }),
   read: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}`),
   save: (course: string, id: string, question: string, answer: PracticeAnswer) => request<Attempt>(`${path(course)}/${id}/answers/${question}`, { method: "PATCH", body: JSON.stringify(answer) }),
   abandon: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/abandon`, { method: "POST" }),

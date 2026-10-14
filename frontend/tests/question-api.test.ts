@@ -76,3 +76,24 @@ it("uses course-unit paths and sends unit filters and selections", async () => {
   expect(calls[10][0]).toContain("/courses/course/questions/import?unit_ids=u1&unit_ids=u2");
   expect(calls[11][0]).toMatch(/\/courses\/course\/questions\/import$/);
 });
+
+it("uses exam-scope paths for listing, saving, deleting and copying", async () => {
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ([]) });
+  vi.stubGlobal("fetch", fetchMock);
+  const body = { academic_year: "2025/26", kind: "MIDTERM" as const, name: "MI", unit_ids: ["u1"] };
+  await api.examScopes("course");
+  await api.createExamScope("course", body);
+  await api.updateExamScope("mi", { name: "1. MI" });
+  await api.copyExamScopes("course", "2025/26", "2026/27");
+  fetchMock.mockResolvedValueOnce({ ok: true, status: 204, json: async () => ({}) });
+  await api.deleteExamScope("mi");
+  const calls = fetchMock.mock.calls;
+  expect(calls[0][0]).toMatch(/\/courses\/course\/exam-scopes$/);
+  expect(calls[1][1]).toMatchObject({ method: "POST", body: JSON.stringify(body) });
+  expect(calls[2][0]).toContain("/exam-scopes/mi");
+  expect(calls[2][1]).toMatchObject({ method: "PATCH", body: JSON.stringify({ name: "1. MI" }) });
+  expect(calls[3][0]).toContain("/courses/course/exam-scopes/copy");
+  expect(calls[3][1]).toMatchObject({ method: "POST", body: JSON.stringify({ from_year: "2025/26", to_year: "2026/27" }) });
+  expect(calls[4][0]).toContain("/exam-scopes/mi");
+  expect(calls[4][1]).toMatchObject({ method: "DELETE" });
+});

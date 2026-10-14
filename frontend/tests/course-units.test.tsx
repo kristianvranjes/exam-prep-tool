@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { CourseUnits } from "../src/components/course-units";
 import type { CourseUnit } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ units: vi.fn(), createUnit: vi.fn(), updateUnit: vi.fn(), archiveUnit: vi.fn(), restoreUnit: vi.fn(), reorderUnits: vi.fn() }));
+const mock = vi.hoisted(() => ({ units: vi.fn(), createUnit: vi.fn(), updateUnit: vi.fn(), archiveUnit: vi.fn(), restoreUnit: vi.fn(), reorderUnits: vi.fn(), examScopes: vi.fn(), createExamScope: vi.fn(), updateExamScope: vi.fn(), deleteExamScope: vi.fn(), copyExamScopes: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 
 function unit(id: string, title: string, position: number, extra: Partial<CourseUnit> = {}): CourseUnit {
@@ -17,6 +17,7 @@ const old = unit("u3", "Old unit", 2, { is_archived: true });
 beforeEach(() => {
   vi.resetAllMocks();
   mock.units.mockResolvedValue([logic, sets, old]);
+  mock.examScopes.mockResolvedValue([]);
 });
 
 it("shows members an ordered, read-only list without archived units or controls", async () => {

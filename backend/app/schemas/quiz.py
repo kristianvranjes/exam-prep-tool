@@ -5,7 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.schemas.question import OwnerOption, PublicOption, QuestionType, StrictModel
+from app.schemas.course_unit import MAX_COURSE_UNITS, UnitId
+from app.schemas.question import OwnerOption, PublicOption, QuestionType, StrictModel, unique_ids
 
 
 def default_types() -> list[QuestionType]:
@@ -20,11 +21,17 @@ class StartQuiz(StrictModel):
         min_length=1,
         max_length=3,
     )
+    # Optional focus: selected units, or an exam scope that expands to its units.
+    unit_ids: list[UnitId] = Field(default_factory=list, max_length=MAX_COURSE_UNITS)
+    exam_scope_id: UnitId | None = None
 
     @model_validator(mode="after")
     def unique_types(self) -> Self:
         if len(set(self.question_types)) != len(self.question_types):
             raise ValueError("Question types must be unique")
+        unique_ids(self.unit_ids)
+        if self.unit_ids and self.exam_scope_id:
+            raise ValueError("Choose units or an exam scope, not both")
         return self
 
 
@@ -62,6 +69,9 @@ class AttemptSummary(BaseModel):
     status: Literal["ACTIVE", "SUBMITTED", "ABANDONED"]
     started_at: datetime
     submitted_at: datetime | None
+    exam_scope_id: UUID | None = None
+    focus_unit_ids: list[UUID] = []
+    focus_label: str | None = None
 
 
 class ActiveQuestion(BaseModel):

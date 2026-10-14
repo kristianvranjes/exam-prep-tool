@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { PracticeQuiz } from "../src/components/practice-quiz";
 import type { Attempt, PracticeAnswer } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), questions: vi.fn() }));
+const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), questions: vi.fn(), units: vi.fn(), examScopes: vi.fn() }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 let current: Attempt;
@@ -779,4 +779,58 @@ it('returns directly to marked questions from Guided review without changing exp
   expect(await screen.findByLabelText('One')).toBeChecked();
   expect(screen.getByRole('radio', { name: 'Guided practice' })).toBeChecked();
   expect(mock.submit).not.toHaveBeenCalled();
+});
+
+const focusUnits = ["Unit 1", "Unit 2", "Unit 3"].map((title, position) => ({ id: `u${position + 1}`, course_id: "course", position, title, description: null, is_archived: false, approved_question_count: 10, created_at: "2026-10-01", updated_at: "2026-10-01" }));
+const midterm = { id: "mi", course_id: "course", academic_year: "2025/26", kind: "MIDTERM" as const, name: "MI", unit_ids: ["u1", "u2"], approved_question_count: 20, created_at: "2026-10-01", updated_at: "2026-10-01" };
+const allTypes = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
+
+function withUnits() {
+  mock.units.mockResolvedValue(focusUnits);
+  mock.examScopes.mockResolvedValue([midterm]);
+  mock.questions.mockResolvedValue(Array.from({ length: 30 }, (_, id) => ({ id: String(id), status: "APPROVED", type: allTypes[id % 3], unit_ids: [`u${(id % 3) + 1}`] })));
+}
+
+it("hides the practice focus when the course has no units", async () => {
+  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
+  expect(screen.queryByRole("group", { name: "What to practice" })).not.toBeInTheDocument();
+});
+
+it("starts practice for one exam cycle", async () => {
+  withUnits();
+  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  fireEvent.click(await screen.findByRole("radio", { name: "Exam cycle" }));
+  expect(screen.getByLabelText("Exam cycle", { selector: "select" })).toHaveValue("mi");
+  expect(screen.getByText("Covers: Unit 1, Unit 2")).toBeVisible();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  await screen.findByText("Choose a number");
+  expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE", { exam_scope_id: "mi" });
+});
+
+it("requires chosen units and counts only their questions", async () => {
+  withUnits();
+  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  fireEvent.click(await screen.findByRole("radio", { name: "Selected units" }));
+  expect(screen.getByText("Choose at least one unit.")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Unit 3" }));
+  fireEvent.click(screen.getByRole("radio", { name: "20 questions" }));
+  expect(screen.getByText(/Only 10 course questions match your options\..*or the units you practice\./)).toBeVisible();
+  fireEvent.click(screen.getByRole("radio", { name: "10 questions" }));
+  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  await screen.findByText("Choose a number");
+  expect(mock.start).toHaveBeenCalledWith("course", 10, allTypes, "ADAPTIVE", { unit_ids: ["u3"] });
+});
+
+it("keeps whole-course practice unfocused and labels focused history", async () => {
+  withUnits();
+  mock.history.mockResolvedValue([{ id: "past", course_id: "course", status: "SUBMITTED", started_at: "2026-10-01T10:00:00Z", submitted_at: "2026-10-01T10:10:00Z", focus_label: "MI 2025/26" }]);
+  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  expect(await screen.findByRole("radio", { name: "Whole course" })).toBeChecked();
+  expect(screen.getByRole("button", { name: /Review practice .* · MI 2025\/26/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  await screen.findByText("Choose a number");
+  expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE");
 });

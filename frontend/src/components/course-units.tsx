@@ -2,15 +2,13 @@
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { api, type CourseUnit } from "../lib/api";
+import { questionCount } from "../lib/utils";
+import { ExamScopes } from "./exam-scopes";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Surface } from "./ui";
 import { DraftForm } from "./unsaved-changes";
 
 const MAX_UNITS = 50;
 const textareaClass = "mt-1 min-h-20 w-full rounded-lg border border-line bg-surface px-3 py-2 text-foreground";
-
-export function questionCount(count: number) {
-  return `${count} approved ${count === 1 ? "question" : "questions"}`;
-}
 
 export function CourseUnits({ courseId, isOwner }: { courseId: string; isOwner: boolean }) {
   const [units, setUnits] = useState<CourseUnit[]>([]);
@@ -126,6 +124,8 @@ export function CourseUnits({ courseId, isOwner }: { courseId: string; isOwner: 
         </li>)}
       </ul>
     </details>}
+
+    {!loading && !loadError && <ExamScopes courseId={courseId} isOwner={isOwner} units={units} />}
   </section>;
 }
 
