@@ -126,9 +126,8 @@ reviewed content and an operator recovery procedure.
   or submission.
 
 **Dependencies:** current hosting access and operator credentials. Live deployment
-inspection is future execution work. Use the existing [staging and recovery guide](STAGING.md),
-[browser acceptance documentation](E2E.md), and [R1 hosted checkpoint](R1_HOSTED_CHECKPOINT.md)
-as starting points.
+inspection is future execution work. Use the existing [staging and recovery guide](STAGING.md)
+and [browser acceptance documentation](E2E.md) as starting points.
 
 ### R2 — Course units and exam scopes
 
