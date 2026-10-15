@@ -69,6 +69,7 @@ export const api = {
   editQuestion: (id: string, body: QuestionEdit) => request<OwnerQuestion>(`/questions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   transitionQuestion: (id: string, action: QuestionAction, reason?: string) => request<OwnerQuestion>(`/questions/${id}/${action}`, { method: "POST", ...(action === "reject" ? { body: JSON.stringify({ reason }) } : {}) }),
   setQuestionUnits: (id: string, unitIds: string[]) => request<Question>(`/questions/${id}/units`, { method: "PATCH", body: JSON.stringify({ unit_ids: unitIds }) }),
+  bulkQuestionUnits: (courseId: string, body: { question_ids: string[]; unit_id: string; action: "ADD" | "REMOVE" }) => request<{ changed: number; unchanged: number }>(`/courses/${courseId}/questions/units`, { method: "POST", body: JSON.stringify(body) }),
   units: (courseId: string, includeArchived = false) => request<CourseUnit[]>(`/courses/${courseId}/units${includeArchived ? "?include_archived=true" : ""}`),
   createUnit: (courseId: string, body: { title: string; description: string | null }) => request<CourseUnit>(`/courses/${courseId}/units`, { method: "POST", body: JSON.stringify(body) }),
   updateUnit: (id: string, body: { title?: string; description?: string | null }) => request<CourseUnit>(`/units/${id}`, { method: "PATCH", body: JSON.stringify(body) }),

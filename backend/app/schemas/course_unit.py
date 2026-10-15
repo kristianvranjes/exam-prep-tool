@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 from app.schemas.question import MAX_QUESTION_UNITS, StrictModel, unique_ids
 
 MAX_COURSE_UNITS = 50
+# One bank page is 20 rows; the cap leaves room without unbounded row locks.
+MAX_BULK_QUESTIONS = 50
 
 UnitTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=150)]
 UnitDescription = Annotated[
@@ -51,6 +53,25 @@ class QuestionUnits(StrictModel):
     def unique(self) -> Self:
         unique_ids(self.unit_ids)
         return self
+
+
+class BulkQuestionUnits(StrictModel):
+    question_ids: list[Annotated[UUID, Field(strict=False)]] = Field(
+        min_length=1, max_length=MAX_BULK_QUESTIONS
+    )
+    unit_id: UnitId
+    action: Literal["ADD", "REMOVE"]
+
+    @model_validator(mode="after")
+    def unique(self) -> Self:
+        if len(set(self.question_ids)) != len(self.question_ids):
+            raise ValueError("Question IDs must be unique")
+        return self
+
+
+class BulkQuestionUnitsResult(BaseModel):
+    changed: int
+    unchanged: int
 
 
 class CourseUnitResponse(BaseModel):

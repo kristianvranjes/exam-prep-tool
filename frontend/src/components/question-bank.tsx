@@ -13,6 +13,7 @@ const statuses: QuestionStatus[] = ["DRAFT", "PENDING_REVIEW", "APPROVED", "REJE
 const label = (value: string) => value === "PENDING_REVIEW" ? "Awaiting faculty review" : value.toLowerCase().replaceAll("_", " ");
 const textareaClass = "min-h-28 w-full rounded-lg border border-line bg-surface px-3 py-2 text-foreground";
 const MAX_QUESTION_UNITS = 5;
+const questionCount = (count: number) => `${count} ${count === 1 ? "question" : "questions"}`;
 const unitNames = (ids: string[] | undefined, units: CourseUnit[]) => (ids ?? []).map((id) => {
   const unit = units.find((u) => u.id === id);
   return unit ? unit.title + (unit.is_archived ? " (archived)" : "") : "Unavailable unit";
@@ -43,6 +44,9 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
   const [unit, setUnit] = useState("");
   const [rows, setRows] = useState<Question[]>([]);
   const [selected, setSelected] = useState<Question | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [bulkUnit, setBulkUnit] = useState("");
+  const [bulkNotice, setBulkNotice] = useState("");
   const [status, setStatus] = useState<QuestionStatus | "">("");
   const [type, setType] = useState<QuestionType | "">("");
   const [offset, setOffset] = useState(0);
@@ -84,6 +88,12 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
     return () => { active = false; };
   }, [courseId, status, type, unit, offset, revision]);
 
+  const canOrganize = (owner || moderator) && units.length > 0;
+  // Selection follows the visible page; archived questions cannot change units.
+  const selectable = rows.filter((q) => q.status !== "ARCHIVED").map((q) => q.id);
+  const pickedIds = picked.filter((id) => selectable.includes(id));
+  const bulkTarget = units.find((u) => u.id === bulkUnit);
+
   function refresh() { setLoading(true); setListError(""); setRevision((value) => value + 1); }
 
   async function createQuestion(body: QuestionCreate) {
@@ -121,6 +131,22 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
     setBusy(true); setError("");
     try { setSelected(await api.setQuestionUnits(questionId, unitIds)); refresh(); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not save question units"); }
+    finally { setBusy(false); }
+  }
+
+  async function organize(action: "ADD" | "REMOVE") {
+    if (!bulkTarget || !pickedIds.length) return;
+    const ids = pickedIds;
+    setBusy(true); setError(""); setBulkNotice("");
+    try {
+      const { changed, unchanged } = await api.bulkQuestionUnits(courseId, { question_ids: ids, unit_id: bulkTarget.id, action });
+      setBulkNotice(action === "ADD"
+        ? `Added ${questionCount(changed)} to ${bulkTarget.title}.${unchanged ? ` ${questionCount(unchanged)} already there.` : ""}`
+        : `Removed ${questionCount(changed)} from ${bulkTarget.title}.${unchanged ? ` ${questionCount(unchanged)} not in it.` : ""}`);
+      setSelected((q) => q && ids.includes(q.id) ? { ...q, unit_ids: action === "ADD"
+        ? [...new Set([...(q.unit_ids ?? []), bulkTarget.id])] : (q.unit_ids ?? []).filter((id) => id !== bulkTarget.id) } : q);
+      setPicked([]); refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not save question units"); }
     finally { setBusy(false); }
   }
 
@@ -190,17 +216,17 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
       </div>
       <div className={units.length ? "grid gap-3 sm:grid-cols-3" : "grid gap-3 sm:grid-cols-2"}>
         <label className="block text-sm font-medium">Status
-          <Select className="mt-1" value={status} disabled={busy} onChange={(e) => { setStatus(e.target.value as QuestionStatus | ""); setOffset(0); setListError(""); setLoading(true); }}>
+          <Select className="mt-1" value={status} disabled={busy} onChange={(e) => { setStatus(e.target.value as QuestionStatus | ""); setOffset(0); setPicked([]); setListError(""); setLoading(true); }}>
             <option value="">All statuses</option>{statuses.map((s) => <option key={s} value={s}>{label(s)}</option>)}
           </Select>
         </label>
         <label className="block text-sm font-medium">Type
-          <Select className="mt-1" value={type} disabled={busy} onChange={(e) => { setType(e.target.value as QuestionType | ""); setOffset(0); setListError(""); setLoading(true); }}>
+          <Select className="mt-1" value={type} disabled={busy} onChange={(e) => { setType(e.target.value as QuestionType | ""); setOffset(0); setPicked([]); setListError(""); setLoading(true); }}>
             <option value="">All types</option>{types.map((t) => <option key={t} value={t}>{label(t)}</option>)}
           </Select>
         </label>
         {units.length > 0 && <label className="block text-sm font-medium">Unit
-          <Select className="mt-1" value={unit} disabled={busy} onChange={(e) => { setUnit(e.target.value); setOffset(0); setListError(""); setLoading(true); }}>
+          <Select className="mt-1" value={unit} disabled={busy} onChange={(e) => { setUnit(e.target.value); setOffset(0); setPicked([]); setListError(""); setLoading(true); }}>
             <option value="">All units</option><option value="none">Without a unit</option>
             {units.map((u) => <option key={u.id} value={u.id}>{u.title}{u.is_archived ? " (archived)" : ""}</option>)}
           </Select>
@@ -209,18 +235,44 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
       {listError && <div className="space-y-3"><Alert>{listError}</Alert><Button type="button" variant="secondary" onClick={refresh}>Retry questions</Button></div>}
       {loading && <LoadingState>Loading questions…</LoadingState>}
       {!loading && !listError && rows.length === 0 && <EmptyState title="No questions match this view.">Try another status, type or unit, or create a draft above.</EmptyState>}
+      {canOrganize && !listError && rows.length > 0 && <div role="group" aria-label="Organize selected questions" className="space-y-3 rounded-lg border border-line bg-subtle p-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
+            <input type="checkbox" disabled={busy || loading || !selectable.length} checked={selectable.length > 0 && pickedIds.length === selectable.length}
+              ref={(box) => { if (box) box.indeterminate = pickedIds.length > 0 && pickedIds.length < selectable.length; }}
+              onChange={(e) => setPicked(e.target.checked ? selectable : [])} />Select all on this page
+          </label>
+          <span className="text-sm text-muted">{pickedIds.length} selected</span>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <label className="block min-w-0 text-sm font-medium sm:flex-1">Unit for selected questions
+            <Select className="mt-1" value={bulkUnit} disabled={busy} onChange={(e) => { setBulkUnit(e.target.value); setBulkNotice(""); }}>
+              <option value="">Choose a unit</option>
+              {units.map((u) => <option key={u.id} value={u.id}>{u.title}{u.is_archived ? " (archived)" : ""}</option>)}
+            </Select>
+          </label>
+          <Button type="button" variant="secondary" disabled={busy || loading || !pickedIds.length || !bulkTarget || bulkTarget.is_archived} onClick={() => void organize("ADD")}>Add to unit</Button>
+          <Button type="button" variant="ghost" disabled={busy || loading || !pickedIds.length || !bulkTarget} onClick={() => void organize("REMOVE")}>Remove from unit</Button>
+        </div>
+        {bulkTarget?.is_archived && <p className="text-sm text-muted">Archived units take no new questions, but you can remove them.</p>}
+        {bulkNotice && <p role="status" className="text-sm text-foreground">{bulkNotice}</p>}
+      </div>}
       {!loading && !listError && rows.length > 0 && <ul className="space-y-2" aria-label="Questions list">
-        {rows.map((q) => <li key={q.id} className="min-w-0 rounded-lg border border-line bg-surface">
-          <Button type="button" variant="ghost" disabled={busy} aria-pressed={selected?.id === q.id} className="h-auto w-full min-w-0 flex-col items-start gap-2 whitespace-normal p-3 text-left" onClick={() => { setSelected(q); setError(""); }}>
+        {rows.map((q) => <li key={q.id} className="flex min-w-0 rounded-lg border border-line bg-surface">
+          {canOrganize && <label className="flex min-w-11 shrink-0 items-center justify-center border-r border-line px-3">
+            <input type="checkbox" aria-label={"Select question: " + q.stem} disabled={busy || q.status === "ARCHIVED"} checked={pickedIds.includes(q.id)}
+              onChange={(e) => setPicked((ids) => e.target.checked ? [...ids, q.id] : ids.filter((id) => id !== q.id))} />
+          </label>}
+          <Button type="button" variant="ghost" disabled={busy} aria-pressed={selected?.id === q.id} className="h-auto w-full min-w-0 flex-1 flex-col items-start gap-2 whitespace-normal p-3 text-left" onClick={() => { setSelected(q); setError(""); }}>
             <span className="flex flex-wrap gap-2"><Badge>{label(q.type)}</Badge><Badge>{label(q.status)}</Badge>{unitNames(q.unit_ids, units).map((name, index) => <Badge key={index}>{name}</Badge>)}</span>
             <span className="max-w-full break-words font-medium [overflow-wrap:anywhere]">{q.stem}</span>
           </Button>
         </li>)}
       </ul>}
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" variant="secondary" disabled={busy || loading || !!listError || offset === 0} onClick={() => { setOffset(offset - 20); setLoading(true); }}>Previous</Button>
+        <Button type="button" variant="secondary" disabled={busy || loading || !!listError || offset === 0} onClick={() => { setOffset(offset - 20); setPicked([]); setLoading(true); }}>Previous</Button>
         <span className="text-sm text-muted">Page {offset / 20 + 1}</span>
-        <Button type="button" variant="secondary" disabled={busy || loading || !!listError || rows.length < 20 || offset >= 10000} onClick={() => { setOffset(offset + 20); setLoading(true); }}>Next</Button>
+        <Button type="button" variant="secondary" disabled={busy || loading || !!listError || rows.length < 20 || offset >= 10000} onClick={() => { setOffset(offset + 20); setPicked([]); setLoading(true); }}>Next</Button>
       </div>
     </Surface>
 
