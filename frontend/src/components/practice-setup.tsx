@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { api, type CourseUnit, type ExamScope, type Question, type QuestionType } from "../lib/api";
-import type { PracticeFocus, SelectionMode } from "../lib/practice-api";
+import { api, type CourseUnit, type ExamScope, type QuestionType } from "../lib/api";
+import { practiceApi, type PracticeAvailability, type PracticeFocus, type SelectionMode } from "../lib/practice-api";
 import { kindLabels } from "./exam-scopes";
 import { ExperiencePicker, type QuizExperience } from "./quiz-navigation";
 import { Alert, Button, Input, Select } from "./ui";
@@ -15,9 +15,8 @@ const types: { type: QuestionType; label: string }[] = [
 export type SessionLength = "5" | "10" | "20" | "custom";
 /** What a session covers: the whole course, one exam cycle, or chosen units. */
 export type FocusChoice = { kind: "COURSE" } | { kind: "SCOPE"; scopeId: string } | { kind: "UNITS"; unitIds: string[] };
-type Availability = { loading: boolean; error: boolean; complete: boolean; rows: Question[] };
+type Availability = { loading: boolean; error: boolean; data: PracticeAvailability | null };
 type Catalog = { units: CourseUnit[]; scopes: ExamScope[] };
-const emptyCounts = (): Record<QuestionType, number> => ({ MULTIPLE_CHOICE: 0, TRUE_FALSE: 0, SHORT_ANSWER: 0 });
 
 export function focusRequest(focus: FocusChoice): PracticeFocus | undefined {
   if (focus.kind === "SCOPE") return { exam_scope_id: focus.scopeId };
@@ -25,10 +24,10 @@ export function focusRequest(focus: FocusChoice): PracticeFocus | undefined {
   return undefined;
 }
 
-export function PracticeSetup({ courseId, currentUserId, active, ready, busy, hasUnfinishedSession, mode, setMode,
+export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSession, mode, setMode,
   count, setCount, length, setLength, selectedTypes, setSelectedTypes, experience, setExperience, start,
   focus = { kind: "COURSE" }, setFocus = () => {}, onOpenMaterials, onOpenQuestions }: {
-  courseId: string; currentUserId: string; active: boolean; ready: boolean; busy: boolean; hasUnfinishedSession: boolean;
+  courseId: string; active: boolean; ready: boolean; busy: boolean; hasUnfinishedSession: boolean;
   mode: SelectionMode; setMode: (mode: SelectionMode) => void; count: number; setCount: (count: number) => void;
   length: SessionLength; setLength: (length: SessionLength) => void;
   selectedTypes: QuestionType[]; setSelectedTypes: (types: QuestionType[]) => void;
@@ -38,7 +37,7 @@ export function PracticeSetup({ courseId, currentUserId, active, ready, busy, ha
 }) {
   const id = useId();
   const [revision, setRevision] = useState(0);
-  const [availability, setAvailability] = useState<Availability>({ loading: true, error: false, complete: false, rows: [] });
+  const [availability, setAvailability] = useState<Availability>({ loading: true, error: false, data: null });
   const [catalog, setCatalog] = useState<Catalog>({ units: [], scopes: [] });
   useEffect(() => {
     if (!active) return;
@@ -54,36 +53,36 @@ export function PracticeSetup({ courseId, currentUserId, active, ready, busy, ha
       });
     return () => { current = false; };
   }, [active, courseId]);
+  // Primitive keys so the request reruns only when its parameters change.
+  const typesKey = types.map(item => item.type).filter(type => selectedTypes.includes(type)).join(",");
+  const scopeKey = focus.kind === "SCOPE" ? focus.scopeId : "";
+  const unitsKey = focus.kind === "UNITS" ? focus.unitIds.join(",") : "";
   useEffect(() => {
     if (!active) return;
     let current = true;
     queueMicrotask(() => {
       if (!current) return;
-      setAvailability({ loading: true, error: false, complete: false, rows: [] });
-      void api.questions(courseId, { limit: 50, offset: 0 }).then(rows => {
-        if (!current) return;
-        const eligible = rows.filter(question => question.status === "APPROVED" || (question.visibility === "OWNER" && question.created_by_user_id === currentUserId &&
-          (question.status === "DRAFT" || question.status === "PENDING_REVIEW")));
-        // Never infer absence or an exact upper bound from a partial first page.
-        setAvailability({ loading: false, error: false, complete: rows.length < 50, rows: eligible });
+      // Without a type there is nothing to count; the help text asks for one instead.
+      if (!typesKey) { setAvailability(value => ({ ...value, loading: false })); return; }
+      setAvailability({ loading: true, error: false, data: null });
+      // An empty unit choice counts the whole course until a unit is chosen.
+      const request: PracticeFocus | undefined = scopeKey ? { exam_scope_id: scopeKey } : unitsKey ? { unit_ids: unitsKey.split(",") } : undefined;
+      void practiceApi.availability(courseId, typesKey.split(",") as QuestionType[], mode, request).then(data => {
+        if (current) setAvailability({ loading: false, error: false, data });
       }).catch(() => {
-        if (current) setAvailability({ loading: false, error: true, complete: false, rows: [] });
+        if (current) setAvailability({ loading: false, error: true, data: null });
       });
     });
     return () => { current = false; };
-  }, [active, courseId, currentUserId, revision]);
+  }, [active, courseId, mode, typesKey, scopeKey, unitsKey, revision]);
 
   const activeUnits = catalog.units.filter(unit => !unit.is_archived);
   const scope = focus.kind === "SCOPE" ? catalog.scopes.find(item => item.id === focus.scopeId) : undefined;
   const focusUnits = focus.kind === "SCOPE" ? scope?.unit_ids ?? [] : focus.kind === "UNITS" ? focus.unitIds : null;
-  const counts = emptyCounts();
-  for (const question of availability.rows) {
-    if (!focusUnits || (question.unit_ids ?? []).some(unitId => focusUnits.includes(unitId))) counts[question.type]++;
-  }
-  const total = availability.rows.length;
-  const matching = selectedTypes.reduce((sum, type) => sum + counts[type], 0);
+  const counted = availability.data;
+  const matching = counted?.total ?? 0;
   const focusHint = focusUnits ? " or the units you practice" : "";
-  const noQuestions = ready && !busy && !availability.loading && !availability.error && availability.complete && total === 0;
+  const noQuestions = ready && !busy && !availability.loading && !availability.error && counted?.course_total === 0;
   let help = "";
   if (availability.loading) help = "Checking practice questions…";
   else if (busy) help = "Loading practice…";
@@ -93,8 +92,8 @@ export function PracticeSetup({ courseId, currentUserId, active, ready, busy, ha
   else if (focus.kind === "UNITS" && !focus.unitIds.length) help = "Choose at least one unit.";
   else if (!selectedTypes.length) help = "Choose at least one question type in More options.";
   else if (!Number.isInteger(count) || count < 1 || count > 20) help = "Enter a whole number from 1 to 20.";
-  else if (availability.complete && matching === 0) help = focusUnits ? "No questions match these units and types yet. Choose other units or change question types in More options." : "No questions match your selected types. Change question types in More options.";
-  else if (availability.complete && count > matching) help = `Only ${matching} course ${matching === 1 ? "question matches" : "questions match"} your options. Choose Custom and enter ${matching} or fewer, or change question types in More options${focusHint}.`;
+  else if (counted && matching === 0) help = focusUnits ? "No questions match these units and types yet. Choose other units or change question types in More options." : "No questions match your selected types. Change question types in More options.";
+  else if (counted && count > matching) help = `Only ${matching} course ${matching === 1 ? "question matches" : "questions match"} your options. Choose Custom and enter ${matching} or fewer, or change question types in More options${focusHint}.`;
 
   if (noQuestions) return <div className="max-w-prose space-y-3">
     <p className="font-semibold">No practice questions are available for this course yet.</p>

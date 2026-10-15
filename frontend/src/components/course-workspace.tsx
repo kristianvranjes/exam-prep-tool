@@ -60,7 +60,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
         onQuestions={() => { setMoreDestination("questions"); navigate("more"); }} />
     </section>
     <div id="course-practice" hidden={destination !== "practice"}>
-      <div id="practice" tabIndex={-1}><PracticeQuiz courseId={course.id} currentUserId={currentUserId} active={visible && destination === "practice"}
+      <div id="practice" tabIndex={-1}><PracticeQuiz courseId={course.id} active={visible && destination === "practice"}
         adaptiveReviewRequest={adaptiveReviewRequest} setupRequest={setupRequest} resumeAttemptId={knownAttemptId} onResumableAttemptChange={onResumableAttemptChange}
         routeAttemptId={routeAttemptId} routeResults={routeResults} onAttemptRoute={onAttemptRoute} onAttemptChange={onAttemptChange} onAnswerDirtyChange={onAnswerDirtyChange}
         onOpenMaterials={() => navigate("materials")} onOpenQuestions={() => { setMoreDestination("questions"); navigate("more"); }}

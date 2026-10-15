@@ -1,9 +1,9 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProgressPanel } from "../src/components/progress-panel";
-import type { ReviewProgress, ReviewProgressSummary } from "../src/lib/api";
+import type { ReviewProgress, ReviewProgressSummary, UnitProgress } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ reviewProgress: vi.fn(), reviewProgressSummary: vi.fn() }));
+const mock = vi.hoisted(() => ({ reviewProgress: vi.fn(), reviewProgressSummary: vi.fn(), unitProgress: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 
 const asOf = "2030-01-02T12:00:00Z";
@@ -18,6 +18,10 @@ const row = (changes: Partial<ReviewProgress> = {}): ReviewProgress => ({
   question_id: "question-1", is_actionable: true, review_stage: 0, resolved_review_count: 3,
   correct_review_count: 2, incorrect_review_count: 1, last_result: "INCORRECT",
   last_reviewed_at: "2030-01-01T10:00:00Z", due_at: "2030-01-01T11:00:00Z", ...changes,
+});
+const unit = (changes: Partial<UnitProgress> = {}): UnitProgress => ({
+  unit_id: "unit-1", title: "Unit 1", position: 0, is_archived: false, reviewed_questions: 0,
+  resolved_review_count: 0, correct_review_count: 0, incorrect_review_count: 0, due_now: 0, ...changes,
 });
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -39,6 +43,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 1 }));
   mock.reviewProgress.mockResolvedValue([]);
+  mock.unitProgress.mockResolvedValue({ as_of: asOf, units: [] });
 });
 
 it("loads only when Progress becomes active and does not flash empty metrics", async () => {
@@ -330,4 +335,40 @@ it("wraps long question IDs without fixed legacy color classes", async () => {
   await open();
   expect(screen.getByText(`Question ID: ${longId}`)).toHaveClass("break-words");
   expect(document.querySelector('[class*="text-red-"], [class*="text-neutral-"]')).toBeNull();
+});
+
+it("shows progress by unit in unit order with sample counts and an overlap note", async () => {
+  mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 3, resolved_review_count: 5, correct_review_count: 3, incorrect_review_count: 2 }));
+  mock.unitProgress.mockResolvedValue({ as_of: asOf, units: [
+    unit({ unit_id: "u2", title: "Sets", reviewed_questions: 2, resolved_review_count: 4, correct_review_count: 3, incorrect_review_count: 1, due_now: 1 }),
+    unit({ unit_id: "u1", title: "Logic", position: 1, reviewed_questions: 1, resolved_review_count: 1, correct_review_count: 0, incorrect_review_count: 1 }),
+    unit({ unit_id: "u3", title: "Graphs", position: 2 }),
+    unit({ unit_id: "u4", title: "Old unit", position: 3, is_archived: true }),
+    unit({ unit_id: "u5", title: "Retired unit", position: 4, is_archived: true, reviewed_questions: 1, resolved_review_count: 2, correct_review_count: 2 }),
+  ] });
+  render(<ProgressPanel courseId="course" />);
+  const section = await screen.findByRole("region", { name: "By unit" });
+  expect(mock.unitProgress).toHaveBeenCalledWith("course");
+  const items = within(section).getAllByRole("listitem");
+  expect(items.map(item => within(item).getByRole("heading").textContent)).toEqual(["Sets", "Logic", "Graphs", "Retired unit · Archived"]);
+  expect(items[0]).toHaveTextContent("2 questions reviewed · 75% correct (3 of 4 graded answers)");
+  expect(within(items[0]).getByText("1 due now")).toBeInTheDocument();
+  expect(items[1]).toHaveTextContent("1 question reviewed · 0% correct (0 of 1 graded answer)");
+  expect(within(items[1]).queryByText(/due now/)).not.toBeInTheDocument();
+  expect(items[2]).toHaveTextContent("Not practiced yet");
+  expect(within(section).getByText(/counts in each of them/)).toBeVisible();
+  expect(within(section).getByText(/not a measure of mastery/)).toBeVisible();
+});
+
+it("hides progress by unit for a course without units or before any graded practice", async () => {
+  render(<ProgressPanel courseId="course" />);
+  await open();
+  expect(screen.queryByRole("region", { name: "By unit" })).not.toBeInTheDocument();
+  cleanup();
+  mock.reviewProgressSummary.mockResolvedValue(summary());
+  mock.unitProgress.mockResolvedValue({ as_of: asOf, units: [unit()] });
+  render(<ProgressPanel courseId="course" />);
+  await open();
+  expect(screen.getByText(/Your progress will appear/)).toBeVisible();
+  expect(screen.queryByRole("region", { name: "By unit" })).not.toBeInTheDocument();
 });

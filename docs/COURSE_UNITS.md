@@ -63,14 +63,42 @@ return them, so practice history shows the focus. Deleting a scope clears the
 reference but keeps the label; later unit or scope edits do not rewrite history.
 
 The practice setup shows **What to practice** (whole course, an exam cycle or
-selected units) only when the course has active units. Its availability estimate
-filters the existing first page of eligible questions by unit; the server remains
-authoritative.
+selected units) only when the course has active units.
+
+## Practice availability
+
+`GET /courses/{course_id}/practice-availability` counts what a session with the
+same `selection_mode`, `question_types` and focus (`unit_ids` or `exam_scope_id`)
+could select right now. It shares one filter builder with session start
+(`selection_filters` in `app/services/quiz_selection.py`): practice eligibility,
+types, the unit filter, and ADAPTIVE's exclusion of questions in the caller's
+active attempts. Counts cover the whole bank, not one page, and a question linked
+to several focused units counts once in `total` and once in each `by_unit` entry.
+A scope whose units were all removed counts zero, matching the 409 a start returns.
+Counts are advisory; starting a session stays authoritative under concurrent changes.
+
+The practice setup asks for availability whenever mode, types or focus change and
+uses `total` for its help messages; `course_total` (eligible questions ignoring
+every filter) decides the "no practice questions yet" screen.
+
+## Progress by unit
+
+`GET /courses/{course_id}/review-progress/units` aggregates the caller's review
+progress per unit in unit order: reviewed questions, resolved/correct/incorrect
+review counts and questions due now. It counts questions currently linked to each
+unit, so a multi-unit question counts in every unit and unit totals overlap.
+Progress rows only come from resolved reviews, so pending short answers never count
+as errors. Due counts use the same practice-eligibility rule as the course summary.
+Archived units are included and flagged.
+
+The Progress tab shows **By unit** only when the course has units and the student
+has graded practice. Each unit shows accuracy next to its sample size ("3 of 4
+graded answers"); archived units appear only while they hold history. The tab says
+that unit totals overlap and that accuracy is not mastery.
 
 ## Not yet included
 
-A server-side practice availability summary and per-unit progress remain later R2
-parts. Bulk unit assignment beyond import is not included yet.
+Bulk unit assignment beyond import is not included yet.
 
 ## Data and migration
 

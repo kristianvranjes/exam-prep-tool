@@ -1,12 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type ReviewProgress, type ReviewProgressSummary } from "../lib/api";
+import { api, type ReviewProgress, type ReviewProgressSummary, type UnitProgress } from "../lib/api";
 import { Alert, Badge, Button, EmptyState, LoadingState, Surface } from "./ui";
 
-type Dashboard = { summary: ReviewProgressSummary; rows: ReviewProgress[]; offset: number };
+type Dashboard = { summary: ReviewProgressSummary; units: UnitProgress[]; rows: ReviewProgress[]; offset: number };
 type Action = "initial" | "refresh" | "page";
 type FailedAction = { action: Action; offset: number };
+
+function percent(correct: number, total: number) {
+  return `${Math.round((correct / total) * 100)}%`;
+}
 
 function dateTime(value: string) {
   return new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -40,14 +44,14 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview }: 
     setBusy(action);
     setError("");
     setFailed(null);
-    const request: Promise<{ summary?: ReviewProgressSummary; rows: ReviewProgress[] }> = action === "page"
+    const request: Promise<{ summary?: ReviewProgressSummary; units?: UnitProgress[]; rows: ReviewProgress[] }> = action === "page"
       ? api.reviewProgress(courseId, nextOffset).then(rows => ({ rows }))
-      : Promise.all([api.reviewProgressSummary(courseId), api.reviewProgress(courseId, nextOffset)])
-          .then(([summary, rows]) => ({ summary, rows }));
+      : Promise.all([api.reviewProgressSummary(courseId), api.unitProgress(courseId), api.reviewProgress(courseId, nextOffset)])
+          .then(([summary, unitSummary, rows]) => ({ summary, units: unitSummary.units, rows }));
     void request.then(result => {
       if (id !== requestId.current) return;
       setDashboard(current => {
-        if (result.summary) return { summary: result.summary, rows: result.rows, offset: nextOffset };
+        if (result.summary) return { summary: result.summary, units: result.units ?? [], rows: result.rows, offset: nextOffset };
         return current ? { ...current, rows: result.rows, offset: nextOffset } : null;
       });
     }).catch(() => {
@@ -79,6 +83,8 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview }: 
     ? `${((summary.correct_review_count / summary.resolved_review_count) * 100).toFixed(1)}%`
     : "No graded accuracy yet";
   const hasHistory = summary && summary.reviewed_questions > 0;
+  // Archived units stay listed only while they still hold your review history.
+  const units = dashboard?.units.filter(unit => !unit.is_archived || unit.reviewed_questions > 0) ?? [];
 
   return <section className="mt-6 min-w-0 max-w-4xl space-y-8" aria-label="Progress">
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -119,6 +125,19 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview }: 
             <div className="min-w-0"><dt className="text-sm text-muted">Last practiced</dt><dd className="mt-2 font-medium">{summary.last_reviewed_at ? <time dateTime={summary.last_reviewed_at}>{dateTime(summary.last_reviewed_at)}</time> : "No graded practice yet"}</dd><dd className="mt-2 text-sm text-muted">Last automatically graded practice.</dd></div>
           </dl>
           <p className="max-w-prose text-sm text-muted">Accuracy counts automatically graded answers across sessions, including repeated questions. Short answers require self-review and do not change accuracy or the review schedule.</p>
+        </section>}
+        {hasHistory && units.length > 0 && <section aria-labelledby="unit-progress-heading" className="space-y-4">
+          <h3 id="unit-progress-heading" className="text-lg font-semibold">By unit</h3>
+          <p className="max-w-prose text-sm text-muted">A question linked to several units counts in each of them, so unit totals can add up to more than your course totals. Accuracy shows how often your automatically graded answers were correct; it is not a measure of mastery.</p>
+          <ul className="divide-y divide-line border-y border-line">{units.map(unit => <li key={unit.unit_id} className="min-w-0 py-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <h4 className="font-medium [overflow-wrap:anywhere]">{unit.title}{unit.is_archived && <span className="text-sm font-normal text-muted"> · Archived</span>}</h4>
+              {unit.due_now > 0 && <Badge>{unit.due_now} due now</Badge>}
+            </div>
+            {unit.reviewed_questions === 0
+              ? <p className="mt-1 text-sm text-muted">Not practiced yet</p>
+              : <p className="mt-1 text-sm">{unit.reviewed_questions} {unit.reviewed_questions === 1 ? "question" : "questions"} reviewed · {percent(unit.correct_review_count, unit.resolved_review_count)} correct <span className="text-muted">({unit.correct_review_count} of {unit.resolved_review_count} graded {unit.resolved_review_count === 1 ? "answer" : "answers"})</span></p>}
+          </li>)}</ul>
         </section>}
         {hasHistory && <details className="min-w-0 border-t border-line pt-3">
           <summary className="min-h-11 cursor-pointer py-2 font-medium">Scheduling details</summary>

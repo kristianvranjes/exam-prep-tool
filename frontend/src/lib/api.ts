@@ -49,6 +49,7 @@ export const api = {
   joinCourse: (courseId: string) => request<CourseMembership>(`/courses/${courseId}/join`, { method: "POST" }),
   reviewProgress: (courseId: string, offset = 0) => request<ReviewProgress[]>(`/courses/${courseId}/review-progress?limit=20&offset=${offset}`),
   reviewProgressSummary: (courseId: string) => request<ReviewProgressSummary>(`/courses/${courseId}/review-progress/summary`),
+  unitProgress: (courseId: string) => request<UnitProgressSummary>(`/courses/${courseId}/review-progress/units`),
   membership: (courseId: string) => request<{ role: "OWNER" | "MEMBER" }>(`/courses/${courseId}/membership`),
   concepts: (courseId: string, materialId?: string) => request<Concept[]>(`/courses/${courseId}/concepts${materialId ? `?material_id=${encodeURIComponent(materialId)}` : ""}`),
   questions: (courseId: string, filters: { status?: QuestionStatus; type?: QuestionType; unit_id?: string; unassigned?: boolean; limit?: number; offset?: number } = {}) => {
@@ -189,3 +190,11 @@ export type ReviewProgressSummary = {
   next_due_at: string | null;
   stage_counts: ReviewStageCount[];
 };
+
+/** Review history per unit in unit order; a multi-unit question counts in each unit. */
+export type UnitProgress = {
+  unit_id: string; title: string; position: number; is_archived: boolean;
+  reviewed_questions: number; resolved_review_count: number;
+  correct_review_count: number; incorrect_review_count: number; due_now: number;
+};
+export type UnitProgressSummary = { as_of: string; units: UnitProgress[] };

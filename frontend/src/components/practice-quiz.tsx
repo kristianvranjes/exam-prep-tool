@@ -14,8 +14,8 @@ const types: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
 
 export type PracticeSetupRequest = { id: number; mode: SelectionMode };
 
-export function PracticeQuiz({ courseId, currentUserId, active = true, adaptiveReviewRequest = 0, setupRequest, resumeAttemptId, routeAttemptId, routeResults = false, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onResumableAttemptChange, onOpenMaterials, onOpenQuestions, onOpenProgress, onBackToCourse }: {
-  courseId: string; currentUserId: string; active?: boolean; adaptiveReviewRequest?: number; setupRequest?: PracticeSetupRequest | null; resumeAttemptId?: string | null;
+export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 0, setupRequest, resumeAttemptId, routeAttemptId, routeResults = false, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onResumableAttemptChange, onOpenMaterials, onOpenQuestions, onOpenProgress, onBackToCourse }: {
+  courseId: string; active?: boolean; adaptiveReviewRequest?: number; setupRequest?: PracticeSetupRequest | null; resumeAttemptId?: string | null;
   routeAttemptId?: string | null; routeResults?: boolean; onResumableAttemptChange?: (id: string | null) => void;
   onAttemptRoute?: (attempt: Attempt | null, replace?: boolean) => void;
   onAttemptChange?: (attempt: Attempt | null) => void; onAnswerDirtyChange?: (dirty: boolean) => void;
@@ -175,7 +175,7 @@ export function PracticeQuiz({ courseId, currentUserId, active = true, adaptiveR
           <Button className="mt-4 w-full sm:w-auto" disabled={busy} onClick={() => void run(() => openAttempt(knownResumableId))}>Resume session</Button>
         </Surface>}
         {!historyReady && error && <Button variant="secondary" className="self-start" disabled={busy} onClick={() => void run(() => loadHistory())}>Retry practice setup</Button>}
-        <PracticeSetup courseId={courseId} currentUserId={currentUserId} active={active} ready={historyReady} busy={busy}
+        <PracticeSetup courseId={courseId} active={active} ready={historyReady} busy={busy}
           hasUnfinishedSession={Boolean(knownResumableId)} mode={selectionMode} setMode={setSelectionMode}
           count={count} setCount={setCount} length={length} setLength={setLength}
           selectedTypes={selectedTypes} setSelectedTypes={setSelectedTypes} experience={experience} setExperience={setExperience}

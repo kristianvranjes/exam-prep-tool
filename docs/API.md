@@ -114,7 +114,14 @@ Comparisons use one server UTC `as_of` timestamp. `reviewed_questions` may excee
 metrics remain populated while due/upcoming are zero and `next_due_at` is null.
 Empty summaries have zero counts and null dates.
 
-Both endpoints return 404 for missing/inaccessible courses and 401 without
+`GET /courses/{course_id}/review-progress/units` returns `{as_of, units}` with one
+row per course unit in unit order (archived units included, `is_archived` set):
+`unit_id`, `title`, `position`, `reviewed_questions`, `resolved_review_count`,
+`correct_review_count`, `incorrect_review_count` and `due_now`. A question counts
+in every unit it is currently linked to, so rows overlap. A course without units
+returns an empty list. See [progress by unit](COURSE_UNITS.md#progress-by-unit).
+
+All three endpoints return 404 for missing/inaccessible courses and 401 without
 authentication, and return only the caller's own progress. Reads never delete,
 reschedule or otherwise change persisted progress and expose no user ID,
 scheduling version, snapshots or answer keys. ADAPTIVE remains due-first, not
@@ -260,6 +267,24 @@ OWNER rules as units.
 | PATCH `/exam-scopes/{scope_id}` | OWNER, any non-null subset of the create fields. Units already linked may stay archived. |
 | DELETE `/exam-scopes/{scope_id}` | OWNER, 204. Past practice keeps its frozen focus label. |
 | POST `/courses/{course_id}/exam-scopes/copy` | OWNER, `{from_year, to_year}`. 201 with the created scopes; 404 when the source year is empty; 409 on a name conflict (nothing saved). |
+
+### Practice availability (R2)
+
+GET `/courses/{course_id}/practice-availability` — members. Query parameters match
+`StartQuiz` without `count`: `selection_mode` (`STANDARD` default or `ADAPTIVE`),
+repeated `question_types` (default all three, unique), repeated `unit_ids` or one
+`exam_scope_id` (not both). Unknown parameters return 422; foreign units 422; an
+unknown scope 404. Response:
+
+```json
+{"course_total": 64, "total": 12,
+ "by_type": [{"type": "TRUE_FALSE", "count": 12}],
+ "by_unit": [{"unit_id": "…", "count": 7}]}
+```
+
+`by_type` lists the requested types; `by_unit` lists the focused units in unit order
+(empty for the whole course). See
+[practice availability](COURSE_UNITS.md#practice-availability).
 
 ### Moderated edit suggestions (Phase 12C)
 

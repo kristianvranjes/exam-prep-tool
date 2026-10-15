@@ -1,3 +1,4 @@
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -5,10 +6,30 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_db
 from app.models import User
-from app.schemas.quiz import AnswerPayload, AttemptResponse, AttemptSummary, StartQuiz
+from app.schemas.quiz import (
+    AnswerPayload,
+    AttemptResponse,
+    AttemptSummary,
+    PracticeAvailability,
+    PracticeFilters,
+    StartQuiz,
+)
 from app.services import quizzes
 
 router = APIRouter(prefix="/courses/{course_id}/attempts", tags=["practice"])
+availability_router = APIRouter(tags=["practice"])
+
+
+@availability_router.get(
+    "/courses/{course_id}/practice-availability", response_model=PracticeAvailability
+)
+def availability(
+    course_id: UUID,
+    filters: Annotated[PracticeFilters, Query()],
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PracticeAvailability:
+    return quizzes.availability(db, user, course_id, filters)
 
 
 @router.post("", response_model=AttemptResponse, status_code=201)

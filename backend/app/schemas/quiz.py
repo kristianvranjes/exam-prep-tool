@@ -13,9 +13,13 @@ def default_types() -> list[QuestionType]:
     return ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]
 
 
-class StartQuiz(StrictModel):
-    selection_mode: Literal["STANDARD", "ADAPTIVE"] = "STANDARD"
-    count: int = Field(default=5, ge=1, le=20)
+SelectionMode = Literal["STANDARD", "ADAPTIVE"]
+
+
+class PracticeFilters(StrictModel):
+    """Selection rules shared by session start and the availability summary."""
+
+    selection_mode: SelectionMode = "STANDARD"
     question_types: list[QuestionType] = Field(
         default_factory=default_types,
         min_length=1,
@@ -33,6 +37,32 @@ class StartQuiz(StrictModel):
         if self.unit_ids and self.exam_scope_id:
             raise ValueError("Choose units or an exam scope, not both")
         return self
+
+
+class StartQuiz(PracticeFilters):
+    count: int = Field(default=5, ge=1, le=20)
+
+
+class TypeAvailability(BaseModel):
+    type: QuestionType
+    count: int
+
+
+class UnitAvailability(BaseModel):
+    unit_id: UUID
+    count: int
+
+
+class PracticeAvailability(BaseModel):
+    """Advisory counts; starting a session remains authoritative."""
+
+    # Every practice-eligible course question, ignoring mode, type and focus filters.
+    course_total: int
+    # Questions a session with these filters could select, per requested type.
+    total: int
+    by_type: list[TypeAvailability]
+    # Per focused unit in unit order; a multi-unit question counts in each unit.
+    by_unit: list[UnitAvailability]
 
 
 class MCQAnswer(StrictModel):

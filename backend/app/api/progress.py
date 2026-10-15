@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_db
 from app.models import User
-from app.schemas.progress import ProgressResponse, ProgressSummary
-from app.services.progress import list_progress, summarize_progress
+from app.schemas.progress import ProgressResponse, ProgressSummary, UnitProgressSummary
+from app.services.progress import list_progress, summarize_progress, summarize_unit_progress
 
 router = APIRouter(prefix="/courses/{course_id}/review-progress", tags=["progress"])
 
@@ -29,3 +29,12 @@ def get_course_progress_summary(
     db: Session = Depends(get_db),
 ) -> ProgressSummary:
     return summarize_progress(db, user, course_id)
+
+
+@router.get("/units", response_model=UnitProgressSummary)
+def get_course_unit_progress(
+    course_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UnitProgressSummary:
+    return summarize_unit_progress(db, user, course_id)

@@ -30,3 +30,12 @@ it("adds an optional unit or exam-cycle focus to the start request", async () =>
     method: "POST", body: JSON.stringify({ count: 4, question_types: ["TRUE_FALSE"], selection_mode: "ADAPTIVE", exam_scope_id: "mi" }),
   });
 });
+
+it("reads server-side availability with the same mode, types and focus as a start", async () => {
+  await practiceApi.availability("course", ["TRUE_FALSE", "SHORT_ANSWER"]);
+  expect(mock).toHaveBeenLastCalledWith("/courses/course/practice-availability?selection_mode=STANDARD&question_types=TRUE_FALSE&question_types=SHORT_ANSWER");
+  await practiceApi.availability("course", ["TRUE_FALSE"], "ADAPTIVE", { unit_ids: ["u1", "u2"] });
+  expect(mock).toHaveBeenLastCalledWith("/courses/course/practice-availability?selection_mode=ADAPTIVE&question_types=TRUE_FALSE&unit_ids=u1&unit_ids=u2");
+  await practiceApi.availability("course", ["MULTIPLE_CHOICE"], "STANDARD", { exam_scope_id: "mi" });
+  expect(mock).toHaveBeenLastCalledWith("/courses/course/practice-availability?selection_mode=STANDARD&question_types=MULTIPLE_CHOICE&exam_scope_id=mi");
+});

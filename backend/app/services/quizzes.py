@@ -20,16 +20,25 @@ from app.schemas.quiz import (
     AttemptSummary,
     Grade,
     MCQAnswer,
+    PracticeAvailability,
+    PracticeFilters,
     ResultQuestion,
     StartQuiz,
     SubmittedAttempt,
+    TypeAvailability,
+    UnitAvailability,
 )
 from app.services.courses import get_member_course
 from app.services.exam_scopes import resolve_focus
 from app.services.grading import grade
 from app.services.progress import apply_reviews
 from app.services.questions.service import owner_view
-from app.services.quiz_selection import select_questions
+from app.services.quiz_selection import (
+    count_by_type,
+    count_by_unit,
+    count_eligible,
+    select_questions,
+)
 
 answer_adapter: TypeAdapter[AnswerPayload] = TypeAdapter(AnswerPayload)
 
@@ -112,6 +121,27 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
         assert attempt.abandoned_at is not None
         return AbandonedAttempt(**fields, abandoned_at=attempt.abandoned_at, questions=active)
     return ActiveAttempt(**fields, questions=active)
+
+
+def availability(
+    db: Session, user: User, course_id: UUID, data: PracticeFilters
+) -> PracticeAvailability:
+    """Count what `start` would select now, without creating a session."""
+    get_member_course(db, user, course_id)
+    unit_ids, scope_id, _ = resolve_focus(db, course_id, data.unit_ids, data.exam_scope_id)
+    course_total = count_eligible(db, user.id, course_id)
+    if scope_id and not unit_ids:
+        # Starting such a scope is refused, so nothing is available.
+        by_type = dict.fromkeys(data.question_types, 0)
+    else:
+        by_type = count_by_type(db, user.id, course_id, data, unit_ids)
+    by_unit = count_by_unit(db, user.id, course_id, data, unit_ids)
+    return PracticeAvailability(
+        course_total=course_total,
+        total=sum(by_type.values()),
+        by_type=[TypeAvailability(type=type_, count=count) for type_, count in by_type.items()],
+        by_unit=[UnitAvailability(unit_id=id_, count=count) for id_, count in by_unit.items()],
+    )
 
 
 def start(db: Session, user: User, course_id: UUID, data: StartQuiz) -> AttemptResponse:
