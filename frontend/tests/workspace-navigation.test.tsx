@@ -6,7 +6,7 @@ import type { Attempt } from "../src/lib/practice-api";
 const mock = vi.hoisted(() => ({
   me: vi.fn(), login: vi.fn(), courses: vi.fn(), faculties: vi.fn(), membership: vi.fn(), course: vi.fn(),
   reviewProgressSummary: vi.fn(), moderatorStatus: vi.fn(), concepts: vi.fn(), questions: vi.fn(), logout: vi.fn(),
-  history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(),
+  history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), availability: vi.fn(),
 }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
@@ -30,6 +30,7 @@ beforeEach(() => {
   mock.moderatorStatus.mockResolvedValue({ is_moderator: false });
   mock.reviewProgressSummary.mockResolvedValue({ reviewed_questions: 0, resolved_review_count: 0 });
   mock.concepts.mockResolvedValue([]); mock.questions.mockResolvedValue(Array.from({ length: 50 }, (_, id) => ({ id: String(id), status: "APPROVED", type: "TRUE_FALSE" })));
+  mock.availability.mockResolvedValue({ course_total: 50, total: 50, by_type: [{ type: "TRUE_FALSE", count: 50 }], by_unit: [] });
   mock.history.mockResolvedValue([]); mock.start.mockResolvedValue(activeAttempt); mock.read.mockResolvedValue(activeAttempt);
 });
 

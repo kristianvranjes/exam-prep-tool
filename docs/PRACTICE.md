@@ -27,6 +27,7 @@ requests return 401. Payload ownership, status, timestamp and score fields are f
 | Method / path | Contract |
 | --- | --- |
 | `POST /courses/{course_id}/attempts` | `{ "count": 5, "question_types": ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"] }`; 201 ACTIVE attempt. Omitted types means all three. Optional `unit_ids` or `exam_scope_id` (not both) limit selection to questions in those units; see [practice by unit](COURSE_UNITS.md#practice-by-unit-or-exam-cycle). |
+| `GET /courses/{course_id}/practice-availability` | Advisory counts of what a start with the same mode, types and focus could select now, using the same selection filters; see [practice availability](COURSE_UNITS.md#practice-availability). |
 | `GET /courses/{course_id}/attempts?limit=20&offset=0` | Own attempt summaries, newest first; limit 1–50, offset 0–10000. |
 | `GET /courses/{course_id}/attempts/{id}` | Saved ACTIVE attempt, frozen SUBMITTED result, or read-only ABANDONED history. |
 | `PATCH /courses/{course_id}/attempts/{id}/answers/{quiz_question_id}` | Upsert a typed answer while ACTIVE, return the saved attempt. |
@@ -274,7 +275,9 @@ history-only rows has zero due/upcoming and no next scheduled review.
 Dashboard accuracy is
 `correct_review_count / resolved_review_count * 100`; when no resolved reviews
 exist, it shows no data. PENDING answers create no progress and are never counted
-as incorrect. Stage 5 is a schedule stage, not permanent mastery.
+as incorrect. Stage 5 is a schedule stage, not permanent mastery. Courses with
+units also show the same counts per unit; see
+[progress by unit](COURSE_UNITS.md#progress-by-unit).
 
 **Open adaptive review** focuses and opens the existing Practice Quiz launcher
 with ADAPTIVE selected. It remains available when due_now is zero: ADAPTIVE is

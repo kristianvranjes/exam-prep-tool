@@ -1,12 +1,22 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { PracticeQuiz } from "../src/components/practice-quiz";
-import type { Attempt, PracticeAnswer } from "../src/lib/practice-api";
+import type { QuestionType } from "../src/lib/api";
+import type { Attempt, PracticeAnswer, PracticeAvailability, PracticeFocus } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), questions: vi.fn(), units: vi.fn(), examScopes: vi.fn() }));
+const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), availability: vi.fn(), units: vi.fn(), examScopes: vi.fn() }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 let current: Attempt;
+type Counts = Partial<Record<QuestionType, number>>;
+function reply(counts: Counts, types: QuestionType[], courseTotal: number): PracticeAvailability {
+  const by_type = types.map(type => ({ type, count: counts[type] ?? 0 }));
+  return { course_total: courseTotal, total: by_type.reduce((sum, row) => sum + row.count, 0), by_type, by_unit: [] };
+}
+/** Serve server-side availability counts for whichever types the setup asks about. */
+function serve(counts: Counts, courseTotal = Object.values(counts).reduce((sum, count) => sum + count, 0)) {
+  mock.availability.mockImplementation(async (_course: string, types: QuestionType[]) => reply(counts, types, courseTotal));
+}
 beforeEach(() => {
   vi.resetAllMocks();
   current = {
@@ -17,7 +27,7 @@ beforeEach(() => {
       { id: "sa", position: 2, type: "SHORT_ANSWER", stem: "Explain gravity", difficulty: null, options: [], answer: null },
     ],
   };
-  mock.questions.mockResolvedValue(Array.from({ length: 30 }, (_, id) => ({ id: String(id), status: "APPROVED", type: ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"][id % 3] })));
+  serve({ MULTIPLE_CHOICE: 10, TRUE_FALSE: 10, SHORT_ANSWER: 10 });
   mock.history.mockResolvedValue([]);
   mock.start.mockImplementation(async () => structuredClone(current));
   mock.read.mockImplementation(async () => structuredClone(current));
@@ -37,7 +47,7 @@ async function open() {
 }
 
 it("starts, saves all types, resumes after remount, and reviews a final result", async () => {
-  const view = render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  const view = render(<PracticeQuiz courseId="course" />);
   await open();
   fireEvent.click(screen.getByLabelText("Course questions"));
   fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
@@ -54,7 +64,7 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
   expect(screen.getByText("1 of 3 answered and saved")).toBeVisible();
   view.unmount();
   mock.history.mockResolvedValue([current]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   fireEvent.click(await screen.findByText("Practice history"));
   fireEvent.click(await screen.findByRole("button", { name: /Resume practice/ }));
   expect(await screen.findByText("The sky is green")).toBeVisible();
@@ -77,7 +87,7 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
 });
 
 it.each(["Only 0 eligible approved questions available", "Only 2 eligible approved questions available", "Course not found", "Network failed"])("shows start errors: %s", async error => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
   mock.start.mockRejectedValue(new Error(error));
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
@@ -85,7 +95,7 @@ it.each(["Only 0 eligible approved questions available", "Only 2 eligible approv
 });
 
 it("keeps failed saves unsaved and allows reloading an already submitted attempt", async () => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   fireEvent.click(await screen.findByLabelText("One"));
@@ -104,7 +114,7 @@ it("keeps failed saves unsaved and allows reloading an already submitted attempt
 });
 
 it("supports type filters and refuses an empty selection", async () => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
   for (const label of ["Multiple choice", "True / false", "Short answer"]) fireEvent.click(screen.getByLabelText(label));
   expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
@@ -116,7 +126,7 @@ it("supports type filters and refuses an empty selection", async () => {
 });
 
 it("reloads the saved selection even when the current draft differs", async () => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   fireEvent.click(await screen.findByLabelText("One"));
@@ -140,7 +150,7 @@ it("preserves the original short answer after saving", async () => {
     current.questions[0].answer = { ...answer, text: answer.text };
     return structuredClone(current);
   });
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   fireEvent.change(await screen.findByLabelText("Your short answer"), { target: { value: "  Saved text  " } });
@@ -159,12 +169,12 @@ it.each(["  MASS\n attracts  mass  ", "  My different\n explanation  "])("review
       correct_boolean: null, explanation: null }],
   };
   mock.history.mockResolvedValue([current]);
-  const view = render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  const view = render(<PracticeQuiz courseId="course" />);
   fireEvent.click(await screen.findByText("Practice history"));
   fireEvent.click(await screen.findByRole("button", { name: /Review practice/ }));
   await screen.findByText("Practice complete");
   view.unmount();
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   fireEvent.click(await screen.findByText("Practice history"));
   fireEvent.click(await screen.findByRole("button", { name: /Review practice/ }));
   await screen.findByText("Practice complete");
@@ -187,7 +197,7 @@ it.each(["  MASS\n attracts  mass  ", "  My different\n explanation  "])("review
 it("returns submitted history to setup with preferences intact, keeping results on failure and preventing duplicate requests", async () => {
   const result = await mock.submit(); mock.submit.mockClear();
   mock.history.mockResolvedValue([result]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
   fireEvent.click(screen.getByLabelText("Course questions"));
   fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
@@ -227,7 +237,7 @@ it("keeps historical results loading neutral and allows retrying a failed read w
   const result = await mock.submit(); mock.submit.mockClear();
   mock.history.mockResolvedValue([result]);
   mock.read.mockRejectedValueOnce(new Error("Result unavailable"));
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   fireEvent.click(await screen.findByText("Practice history"));
   fireEvent.click(await screen.findByRole("button", { name: /Review practice/ }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Result unavailable");
@@ -245,7 +255,7 @@ it("keeps historical results loading neutral and allows retrying a failed read w
 });
 
 it("launches adaptive review with the existing count and type controls", async () => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
   expect(screen.getByLabelText("Recommended practice")).toBeChecked();
   fireEvent.click(screen.getByLabelText("Recommended practice"));
@@ -260,7 +270,7 @@ it("launches adaptive review with the existing count and type controls", async (
 });
 
 async function start(experience: "Guided practice" | "Exam practice" = "Guided practice") {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
   fireEvent.click(screen.getByLabelText(experience));
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
@@ -275,7 +285,7 @@ function allAnswered() {
 }
 
 it("keeps Study/Exam separate from the selection strategy and saves before navigating", async () => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
   expect(screen.getByLabelText("Guided practice")).toBeChecked();
   expect(screen.getByLabelText("Recommended practice")).toBeChecked();
@@ -444,7 +454,7 @@ it("blocks navigation for an empty short-answer edit without losing the edit", a
 
 it("preserves attempt history pagination and prevents duplicate starts", async () => {
   mock.history.mockResolvedValue(Array.from({ length: 20 }, (_, index) => ({ ...current, id: `attempt-${index}` })));
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   fireEvent.click(await screen.findByText("Practice history"));
   await screen.findAllByRole("button", { name: /Resume practice/ });
   fireEvent.click(screen.getByRole("button", { name: "Older sessions" }));
@@ -464,13 +474,13 @@ it("preserves attempt history pagination and prevents duplicate starts", async (
 });
 
 it("opens adaptive review by handoff without starting and preserves setup controls", async () => {
-  const view = render(<PracticeQuiz currentUserId="student" courseId="course" adaptiveReviewRequest={0} />);
+  const view = render(<PracticeQuiz courseId="course" adaptiveReviewRequest={0} />);
   await open();
   fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
   fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value: "7" } });
   fireEvent.click(screen.getByLabelText("Multiple choice"));
   fireEvent.click(screen.getByLabelText("Exam practice"));
-  view.rerender(<PracticeQuiz currentUserId="student" courseId="course" adaptiveReviewRequest={1} />);
+  view.rerender(<PracticeQuiz courseId="course" adaptiveReviewRequest={1} />);
   await waitFor(() => expect(screen.getByLabelText("Recommended practice")).toBeChecked());
   expect(screen.getByLabelText("Custom question count")).toHaveValue(7);
   expect(screen.getByLabelText("Multiple choice")).not.toBeChecked();
@@ -480,27 +490,27 @@ it("opens adaptive review by handoff without starting and preserves setup contro
   expect(screen.getByLabelText("Guided practice")).toBeInTheDocument();
   expect(mock.start).not.toHaveBeenCalled();
   fireEvent.click(screen.getByLabelText("Course questions"));
-  view.rerender(<PracticeQuiz currentUserId="student" courseId="course" adaptiveReviewRequest={2} />);
+  view.rerender(<PracticeQuiz courseId="course" adaptiveReviewRequest={2} />);
   await waitFor(() => expect(screen.getByLabelText("Recommended practice")).toBeChecked());
   expect(mock.start).not.toHaveBeenCalled();
 });
 
 it("defers hidden setup loads and opens with Recommended practice by default", async () => {
-  const view = render(<PracticeQuiz currentUserId="student" courseId="course" active={false} />);
-  expect(mock.history).not.toHaveBeenCalled(); expect(mock.questions).not.toHaveBeenCalled();
-  view.rerender(<PracticeQuiz currentUserId="student" courseId="course" adaptiveReviewRequest={1} />);
+  const view = render(<PracticeQuiz courseId="course" active={false} />);
+  expect(mock.history).not.toHaveBeenCalled(); expect(mock.availability).not.toHaveBeenCalled();
+  view.rerender(<PracticeQuiz courseId="course" adaptiveReviewRequest={1} />);
   expect(await screen.findByLabelText("Recommended practice")).toBeChecked();
   expect(mock.history).toHaveBeenCalledWith("course", 0);
   expect(mock.start).not.toHaveBeenCalled();
   view.unmount();
-  render(<PracticeQuiz currentUserId="student" courseId="another" />);
+  render(<PracticeQuiz courseId="another" />);
   await open();
   expect(screen.getByLabelText("Recommended practice")).toBeChecked();
   expect(screen.getByLabelText("Course questions")).not.toBeChecked();
 });
 
 it("opens a simple Recommended setup with secondary options and history collapsed", async () => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
   expect(screen.getByRole("radio", { name: "Recommended practice" })).toBeChecked();
   expect(screen.getByRole("radio", { name: "5 questions" })).toBeChecked();
@@ -516,7 +526,7 @@ it("opens a simple Recommended setup with secondary options and history collapse
 });
 
 it.each([5, 10, 20])("uses the %i question preset with the unchanged ADAPTIVE transport value", async count => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
   fireEvent.click(screen.getByRole("radio", { name: `${count} questions` }));
   expect(screen.getByRole("radio", { name: `${count} questions` })).toBeChecked();
@@ -526,7 +536,7 @@ it.each([5, 10, 20])("uses the %i question preset with the unchanged ADAPTIVE tr
 });
 
 it.each(["0", "21", "1.5", ""])("explains invalid Custom length %s and does not start", async value => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />); await open();
+  render(<PracticeQuiz courseId="course" />); await open();
   fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
   fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value } });
   const button = screen.getByRole("button", { name: "Start practice" });
@@ -536,7 +546,7 @@ it.each(["0", "21", "1.5", ""])("explains invalid Custom length %s and does not 
 
 it("prioritizes Resume over starting another session and explains the actual adaptive constraint", async () => {
   mock.history.mockResolvedValue([current]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   const resume = await screen.findByRole("button", { name: "Resume session" });
   expect(screen.getByRole("heading", { name: "Continue studying" })).toBeVisible();
   expect(resume).toHaveClass("bg-accent");
@@ -549,7 +559,7 @@ it("prioritizes Resume over starting another session and explains the actual ada
 
 it("keeps submitted history available only through its secondary disclosure", async () => {
   mock.history.mockResolvedValue([{ ...current, status: "SUBMITTED" }]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
   expect(screen.getByRole("button", { name: /Review practice/ })).not.toBeVisible();
   fireEvent.click(screen.getByText("Practice history"));
@@ -557,15 +567,15 @@ it("keeps submitted history available only through its secondary disclosure", as
 });
 
 it("waits for eligibility, then replaces setup with an intentional empty state and existing navigation", async () => {
-  let resolve!: (rows: []) => void;
-  mock.questions.mockReturnValueOnce(new Promise<[]>(done => { resolve = done; }));
+  let resolve!: (value: PracticeAvailability) => void;
+  mock.availability.mockReturnValueOnce(new Promise<PracticeAvailability>(done => { resolve = done; }));
   const materials = vi.fn(), questions = vi.fn();
-  render(<PracticeQuiz currentUserId="student" courseId="course" onOpenMaterials={materials} onOpenQuestions={questions} />);
+  render(<PracticeQuiz courseId="course" onOpenMaterials={materials} onOpenQuestions={questions} />);
   const start = await screen.findByRole("button", { name: "Start practice" });
   expect(start).toBeDisabled();
   expect(screen.queryByText("No practice questions are available for this course yet.")).not.toBeInTheDocument();
   expect(screen.getByText("Checking practice questions…")).toBeVisible();
-  await act(async () => resolve([]));
+  await act(async () => resolve(reply({}, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], 0)));
   expect(await screen.findByText("No practice questions are available for this course yet.")).toBeVisible();
   expect(screen.queryByRole("button", { name: "Start practice" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "View materials" })); expect(materials).toHaveBeenCalledOnce();
@@ -574,8 +584,8 @@ it("waits for eligibility, then replaces setup with an intentional empty state a
 });
 
 it("keeps a failed eligibility load distinct from empty questions and supports retry", async () => {
-  mock.questions.mockRejectedValueOnce(new Error("Offline"));
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  mock.availability.mockRejectedValueOnce(new Error("Offline"));
+  render(<PracticeQuiz courseId="course" />);
   expect(await screen.findByRole("alert")).toHaveTextContent("Could not load practice questions");
   expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
   expect(screen.queryByText("No practice questions are available for this course yet.")).not.toBeInTheDocument();
@@ -586,7 +596,7 @@ it("keeps a failed eligibility load distinct from empty questions and supports r
 
 it("blocks setup after a history load failure until the existing load is retried", async () => {
   mock.history.mockRejectedValueOnce(new Error("History unavailable"));
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   expect(await screen.findByRole("alert")).toHaveTextContent("History unavailable");
   expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Retry practice setup" }));
@@ -594,8 +604,8 @@ it("blocks setup after a history load failure until the existing load is retried
 });
 
 it("prevents a predictably oversized request and allows a valid Custom count", async () => {
-  mock.questions.mockResolvedValue([{ id: "source", status: "APPROVED", type: "TRUE_FALSE" }]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  serve({ TRUE_FALSE: 1 });
+  render(<PracticeQuiz courseId="course" />);
   expect(await screen.findByText(/Only 1 course question matches your options/)).toBeVisible();
   expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
   fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
@@ -606,38 +616,31 @@ it("prevents a predictably oversized request and allows a valid Custom count", a
   expect(mock.start).toHaveBeenCalledWith("course", 1, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE");
 });
 
-it("does not claim no practice questions from a full first page of ineligible questions", async () => {
-  mock.questions.mockResolvedValue(Array.from({ length: 50 }, (_, id) => ({ id: String(id), status: "ARCHIVED", type: "TRUE_FALSE", visibility: "OWNER", created_by_user_id: "student" })));
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+it("asks the server again for the chosen mode and types and counts banks beyond one page", async () => {
+  serve({ MULTIPLE_CHOICE: 40, TRUE_FALSE: 25 }, 65);
+  render(<PracticeQuiz courseId="course" />);
+  await open();
+  expect(mock.availability).toHaveBeenLastCalledWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE", undefined);
+  fireEvent.click(screen.getByLabelText("Course questions"));
+  await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "STANDARD", undefined));
+  fireEvent.click(screen.getByLabelText("Multiple choice"));
+  await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", ["TRUE_FALSE", "SHORT_ANSWER"], "STANDARD", undefined));
+  fireEvent.click(screen.getByRole("radio", { name: "20 questions" }));
   await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
+  fireEvent.click(screen.getByLabelText("True / false"));
+  expect(await screen.findByText(/No questions match your selected types/)).toBeVisible();
   expect(screen.queryByText("No practice questions are available for this course yet.")).not.toBeInTheDocument();
-  expect(mock.questions).toHaveBeenCalledOnce();
-});
-
-it.each(["DRAFT", "PENDING_REVIEW"])("allows the student's own %s question without making another person's draft eligible", async status => {
-  mock.questions.mockResolvedValue([{ id: "own", status, type: "TRUE_FALSE", visibility: "OWNER", created_by_user_id: "student" }]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  await screen.findByText(/Only 1 course question matches/);
-  fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
-  fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value: "1" } });
-  expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled();
-});
-
-it("excludes archived, rejected and other people's private questions from a complete availability read", async () => {
-  mock.questions.mockResolvedValue([
-    { id: "archived", status: "ARCHIVED", type: "TRUE_FALSE", visibility: "OWNER", created_by_user_id: "student" },
-    { id: "rejected", status: "REJECTED", type: "TRUE_FALSE", visibility: "OWNER", created_by_user_id: "student" },
-    { id: "private", status: "DRAFT", type: "TRUE_FALSE", visibility: "OWNER", created_by_user_id: "another-user" },
-  ]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  expect(await screen.findByText("No practice questions are available for this course yet.")).toBeVisible();
+  const calls = mock.availability.mock.calls.length;
+  fireEvent.click(screen.getByLabelText("Short answer"));
+  expect(await screen.findByText("Choose at least one question type in More options.")).toBeVisible();
+  expect(mock.availability).toHaveBeenCalledTimes(calls);
   expect(mock.start).not.toHaveBeenCalled();
 });
 
 it("shows the explicit Course questions handoff while history is still loading", async () => {
   let resolve!: (rows: []) => void;
   mock.history.mockReturnValueOnce(new Promise<[]>(done => { resolve = done; }));
-  render(<PracticeQuiz currentUserId="student" courseId="course" setupRequest={{ id: 1, mode: "STANDARD" }} />);
+  render(<PracticeQuiz courseId="course" setupRequest={{ id: 1, mode: "STANDARD" }} />);
   await waitFor(() => expect(screen.getByRole("radio", { name: "Course questions" })).toBeChecked());
   expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
   await act(async () => resolve([]));
@@ -648,8 +651,8 @@ it("shows the explicit Course questions handoff while history is still loading",
 
 it("waits for unfinished-session discovery before showing an empty setup", async () => {
   let resolve!: (rows: []) => void;
-  mock.history.mockReturnValueOnce(new Promise<[]>(done => { resolve = done; })); mock.questions.mockResolvedValue([]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  mock.history.mockReturnValueOnce(new Promise<[]>(done => { resolve = done; })); serve({}, 0);
+  render(<PracticeQuiz courseId="course" />);
   expect(await screen.findByText("Loading practice…")).toBeVisible();
   expect(screen.queryByText("No practice questions are available for this course yet.")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
@@ -710,7 +713,7 @@ it("saves the final answer, reviews missing answers, and never submits implicitl
 
 it("does not enter review when the final answer fails to save", async () => {
   current.questions = [current.questions[2]];
-  render(<PracticeQuiz currentUserId="student" courseId="course" />); await open();
+  render(<PracticeQuiz courseId="course" />); await open();
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   fireEvent.change(await screen.findByLabelText("Your short answer"), { target: { value: "Keep this draft" } });
   mock.save.mockRejectedValueOnce(new Error("Network failed"));
@@ -765,7 +768,7 @@ it("keeps local edits visible when recovery cannot load the saved session", asyn
 
 
 it('returns directly to marked questions from Guided review without changing experience', async () => {
-  render(<PracticeQuiz currentUserId='student' courseId='course' />);
+  render(<PracticeQuiz courseId='course' />);
   await open();
   fireEvent.click(screen.getByRole('button', { name: 'Start practice' }));
   fireEvent.click(await screen.findByLabelText('One'));
@@ -788,18 +791,23 @@ const allTypes = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
 function withUnits() {
   mock.units.mockResolvedValue(focusUnits);
   mock.examScopes.mockResolvedValue([midterm]);
-  mock.questions.mockResolvedValue(Array.from({ length: 30 }, (_, id) => ({ id: String(id), status: "APPROVED", type: allTypes[id % 3], unit_ids: [`u${(id % 3) + 1}`] })));
+  // Ten questions per unit; the server expands an exam cycle to its units.
+  mock.availability.mockImplementation(async (_course: string, types: QuestionType[], _mode: string, focus?: PracticeFocus) => {
+    const units = !focus ? null : "exam_scope_id" in focus ? midterm.unit_ids : focus.unit_ids;
+    if (!units) return reply({ MULTIPLE_CHOICE: 10, TRUE_FALSE: 10, SHORT_ANSWER: 10 }, types, 30);
+    return { ...reply({ [types[0]]: units.length * 10 }, types, 30), by_unit: units.map(unit_id => ({ unit_id, count: 10 })) };
+  });
 }
 
 it("hides the practice focus when the course has no units", async () => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
   expect(screen.queryByRole("group", { name: "What to practice" })).not.toBeInTheDocument();
 });
 
 it("starts practice for one exam cycle", async () => {
   withUnits();
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   fireEvent.click(await screen.findByRole("radio", { name: "Exam cycle" }));
   expect(screen.getByLabelText("Exam cycle", { selector: "select" })).toHaveValue("mi");
   expect(screen.getByText("Covers: Unit 1, Unit 2")).toBeVisible();
@@ -807,27 +815,29 @@ it("starts practice for one exam cycle", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
   expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE", { exam_scope_id: "mi" });
+  expect(mock.availability).toHaveBeenCalledWith("course", allTypes, "ADAPTIVE", { exam_scope_id: "mi" });
 });
 
 it("requires chosen units and counts only their questions", async () => {
   withUnits();
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   fireEvent.click(await screen.findByRole("radio", { name: "Selected units" }));
   expect(screen.getByText("Choose at least one unit.")).toBeVisible();
   expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
   fireEvent.click(screen.getByRole("checkbox", { name: "Unit 3" }));
   fireEvent.click(screen.getByRole("radio", { name: "20 questions" }));
-  expect(screen.getByText(/Only 10 course questions match your options\..*or the units you practice\./)).toBeVisible();
+  expect(await screen.findByText(/Only 10 course questions match your options\..*or the units you practice\./)).toBeVisible();
   fireEvent.click(screen.getByRole("radio", { name: "10 questions" }));
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
   expect(mock.start).toHaveBeenCalledWith("course", 10, allTypes, "ADAPTIVE", { unit_ids: ["u3"] });
+  expect(mock.availability).toHaveBeenLastCalledWith("course", allTypes, "ADAPTIVE", { unit_ids: ["u3"] });
 });
 
 it("keeps whole-course practice unfocused and labels focused history", async () => {
   withUnits();
   mock.history.mockResolvedValue([{ id: "past", course_id: "course", status: "SUBMITTED", started_at: "2026-10-01T10:00:00Z", submitted_at: "2026-10-01T10:10:00Z", focus_label: "MI 2025/26" }]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   expect(await screen.findByRole("radio", { name: "Whole course" })).toBeChecked();
   expect(screen.getByRole("button", { name: /Review practice .* · MI 2025\/26/ })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));

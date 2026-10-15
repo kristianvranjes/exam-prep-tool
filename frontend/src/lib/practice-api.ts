@@ -27,8 +27,22 @@ export type Attempt = AttemptSummary & (
   | { status: "SUBMITTED"; questions: ResultQuestion[] }
   | { status: "ABANDONED"; abandoned_at: string; questions: ActiveQuestion[] }
 );
+/** Advisory counts from the same rules the server uses to start a session. */
+export type PracticeAvailability = {
+  course_total: number; total: number;
+  by_type: { type: QuestionType; count: number }[];
+  by_unit: { unit_id: string; count: number }[];
+};
 const path = (course: string) => `/courses/${course}/attempts`;
+function availabilityQuery(question_types: QuestionType[], selection_mode: SelectionMode, focus?: PracticeFocus) {
+  const params = new URLSearchParams({ selection_mode });
+  for (const type of question_types) params.append("question_types", type);
+  if (focus && "exam_scope_id" in focus) params.set("exam_scope_id", focus.exam_scope_id);
+  else for (const unitId of focus?.unit_ids ?? []) params.append("unit_ids", unitId);
+  return params.toString();
+}
 export const practiceApi = {
+  availability: (course: string, question_types: QuestionType[], selection_mode: SelectionMode = "STANDARD", focus?: PracticeFocus) => request<PracticeAvailability>(`/courses/${course}/practice-availability?${availabilityQuery(question_types, selection_mode, focus)}`),
   history: (course: string, offset = 0) => request<AttemptSummary[]>(`${path(course)}?limit=20&offset=${offset}`),
   start: (course: string, count: number, question_types: QuestionType[], selection_mode: SelectionMode = "STANDARD", focus?: PracticeFocus) => request<Attempt>(path(course), { method: "POST", body: JSON.stringify({ count, question_types, selection_mode, ...focus }) }),
   read: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}`),

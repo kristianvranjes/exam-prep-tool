@@ -1,13 +1,20 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import case, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from app.models import User
+from app.models.course_unit import CourseUnit, QuestionUnit
 from app.models.question import Question
 from app.models.user_question_progress import UserQuestionProgress
-from app.schemas.progress import ProgressResponse, ProgressSummary, StageCount
+from app.schemas.progress import (
+    ProgressResponse,
+    ProgressSummary,
+    StageCount,
+    UnitProgress,
+    UnitProgressSummary,
+)
 from app.schemas.quiz import Grade
 from app.services.courses import get_member_course
 from app.services.practice_eligibility import practice_eligible
@@ -140,5 +147,54 @@ def summarize_progress(db: Session, user: User, course_id: UUID) -> ProgressSumm
         stage_counts=[
             StageCount(review_stage=stage, question_count=counts.get(stage, 0))
             for stage in range(6)
+        ],
+    )
+
+
+def summarize_unit_progress(db: Session, user: User, course_id: UUID) -> UnitProgressSummary:
+    """Aggregate this user's review progress per course unit, in unit order.
+
+    Only resolved reviews are stored, so pending short answers never count as errors.
+    Due counts use the same practice-availability rule as the course summary.
+    """
+    get_member_course(db, user, course_id)
+    as_of = datetime.now(UTC)
+    progress = UserQuestionProgress
+    due = practice_eligible(user.id) & (progress.due_at <= as_of)
+    rows = db.execute(
+        select(
+            CourseUnit.id,
+            CourseUnit.title,
+            CourseUnit.position,
+            CourseUnit.is_archived,
+            func.count(progress.id),
+            func.coalesce(func.sum(progress.resolved_review_count), 0),
+            func.coalesce(func.sum(progress.correct_review_count), 0),
+            func.coalesce(func.sum(progress.incorrect_review_count), 0),
+            func.coalesce(func.sum(case((due, 1), else_=0)), 0),
+        )
+        .select_from(CourseUnit)
+        .outerjoin(QuestionUnit, QuestionUnit.unit_id == CourseUnit.id)
+        .outerjoin(Question, Question.id == QuestionUnit.question_id)
+        .outerjoin(progress, and_(progress.question_id == Question.id, progress.user_id == user.id))
+        .where(CourseUnit.course_id == course_id)
+        .group_by(CourseUnit.id)
+        .order_by(CourseUnit.position, CourseUnit.id)
+    ).all()
+    return UnitProgressSummary(
+        as_of=as_of,
+        units=[
+            UnitProgress(
+                unit_id=row[0],
+                title=row[1],
+                position=row[2],
+                is_archived=row[3],
+                reviewed_questions=row[4],
+                resolved_review_count=row[5],
+                correct_review_count=row[6],
+                incorrect_review_count=row[7],
+                due_now=row[8],
+            )
+            for row in rows
         ],
     )

@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { PracticeQuiz } from "../src/components/practice-quiz";
 import type { Attempt } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), abandon: vi.fn(), questions: vi.fn() }));
+const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), abandon: vi.fn(), availability: vi.fn() }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 let current: Extract<Attempt, { status: "ACTIVE" }>;
@@ -20,14 +20,14 @@ beforeEach(() => {
       { id: "sa", position: 2, type: "SHORT_ANSWER", stem: "Explain gravity", difficulty: null, options: [], answer: null },
     ],
   };
-  mock.questions.mockResolvedValue(Array.from({ length: 30 }, (_, id) => ({ id: String(id), status: "APPROVED", type: "TRUE_FALSE" })));
+  mock.availability.mockResolvedValue({ course_total: 30, total: 30, by_type: [{ type: "TRUE_FALSE", count: 30 }], by_unit: [] });
   mock.history.mockResolvedValue([]);
   mock.start.mockImplementation(async () => structuredClone(current));
   mock.abandon.mockImplementation(async () => abandoned());
   mock.read.mockImplementation(async () => abandoned());
 });
 async function start(mode = "Guided practice") {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
   fireEvent.click(screen.getByText("More options"));
   fireEvent.click(screen.getByLabelText(mode));
@@ -121,7 +121,7 @@ it("reopens abandoned history with exact saved short answers and no grading cont
   current.questions[1].answer = { type: "TRUE_FALSE", value: false };
   current.questions[2].answer = { type: "SHORT_ANSWER", text: "  My answer\n stays here  " };
   mock.history.mockResolvedValue([abandoned()]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   fireEvent.click(await screen.findByText("Practice history"));
   fireEvent.click(await screen.findByRole("button", { name: /View abandoned practice/ }));
   const view = await screen.findByRole("region", { name: "Abandoned attempt" });

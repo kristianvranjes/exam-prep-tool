@@ -35,3 +35,25 @@ class ProgressSummary(BaseModel):
     last_reviewed_at: datetime | None
     next_due_at: datetime | None
     stage_counts: list[StageCount]
+
+
+class UnitProgress(BaseModel):
+    """Review history for questions currently linked to one unit.
+
+    A question linked to several units counts in each, so unit totals overlap.
+    """
+
+    unit_id: UUID
+    title: str
+    position: int
+    is_archived: bool
+    reviewed_questions: int
+    resolved_review_count: int
+    correct_review_count: int
+    incorrect_review_count: int
+    due_now: int
+
+
+class UnitProgressSummary(BaseModel):
+    as_of: datetime
+    units: list[UnitProgress]
