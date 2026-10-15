@@ -9,6 +9,8 @@ from app.models import User
 from app.schemas.concept import JobDetail
 from app.schemas.course_unit import BulkQuestionUnits, BulkQuestionUnitsResult, QuestionUnits
 from app.schemas.question import (
+    BulkQuestionTransition,
+    BulkQuestionTransitionResult,
     GenerationRequest,
     OwnerQuestion,
     QuestionCreate,
@@ -118,6 +120,18 @@ def bulk_set_units(
     db: Session = Depends(get_db),
 ) -> BulkQuestionUnitsResult:
     return service.bulk_set_units(db, user, course_id, data)
+
+
+@router.post(
+    "/courses/{course_id}/questions/transition", response_model=BulkQuestionTransitionResult
+)
+def bulk_transition(
+    course_id: UUID,
+    data: BulkQuestionTransition,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BulkQuestionTransitionResult:
+    return service.bulk_transition(db, user, course_id, data)
 
 
 @router.post("/questions/{question_id}/submit", response_model=OwnerQuestion)
