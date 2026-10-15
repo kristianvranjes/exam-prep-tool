@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +16,14 @@ class Quiz(Base):
     )
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Practice focus frozen at start; the label survives scope or unit edits and deletion.
+    exam_scope_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("exam_scopes.id", ondelete="SET NULL"), index=True
+    )
+    focus_unit_ids: Mapped[list[str]] = mapped_column(
+        JSONB, server_default=text("'[]'::jsonb"), default=list
+    )
+    focus_label: Mapped[str | None] = mapped_column(String(300))
 
 
 class QuizQuestion(Base):

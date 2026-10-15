@@ -19,3 +19,14 @@ it("abandons only the addressed course attempt through the authenticated request
   await practiceApi.abandon("course", "attempt");
   expect(mock).toHaveBeenCalledWith("/courses/course/attempts/attempt/abandon", { method: "POST" });
 });
+
+it("adds an optional unit or exam-cycle focus to the start request", async () => {
+  await practiceApi.start("course", 4, ["TRUE_FALSE"], "STANDARD", { unit_ids: ["u1", "u2"] });
+  expect(mock).toHaveBeenLastCalledWith("/courses/course/attempts", {
+    method: "POST", body: JSON.stringify({ count: 4, question_types: ["TRUE_FALSE"], selection_mode: "STANDARD", unit_ids: ["u1", "u2"] }),
+  });
+  await practiceApi.start("course", 4, ["TRUE_FALSE"], "ADAPTIVE", { exam_scope_id: "mi" });
+  expect(mock).toHaveBeenLastCalledWith("/courses/course/attempts", {
+    method: "POST", body: JSON.stringify({ count: 4, question_types: ["TRUE_FALSE"], selection_mode: "ADAPTIVE", exam_scope_id: "mi" }),
+  });
+});

@@ -5,7 +5,7 @@ import type { QuestionType } from "../lib/api";
 import { practiceApi, type Attempt, type AttemptSummary, type SelectionMode } from "../lib/practice-api";
 import { ActiveQuiz } from "./active-quiz";
 import { AbandonedQuiz } from "./abandoned-quiz";
-import { PracticeSetup, type SessionLength } from "./practice-setup";
+import { focusRequest, PracticeSetup, type FocusChoice, type SessionLength } from "./practice-setup";
 import type { QuizExperience } from "./quiz-navigation";
 import { QuizResults } from "./quiz-results";
 import { Alert, Button, LoadingState, Surface } from "./ui";
@@ -50,6 +50,7 @@ export function PracticeQuiz({ courseId, currentUserId, active = true, adaptiveR
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("ADAPTIVE");
   const [experience, setExperience] = useState<QuizExperience>("STUDY");
   const [selectedTypes, setSelectedTypes] = useState<QuestionType[]>(types);
+  const [focus, setFocus] = useState<FocusChoice>({ kind: "COURSE" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef(false);
@@ -178,17 +179,19 @@ export function PracticeQuiz({ courseId, currentUserId, active = true, adaptiveR
           hasUnfinishedSession={Boolean(knownResumableId)} mode={selectionMode} setMode={setSelectionMode}
           count={count} setCount={setCount} length={length} setLength={setLength}
           selectedTypes={selectedTypes} setSelectedTypes={setSelectedTypes} experience={experience} setExperience={setExperience}
+          focus={focus} setFocus={setFocus}
           start={() => void run(async () => {
             const requestRevision = revision.current;
             if (!selectedTypes.length) throw new Error("Select at least one question type.");
-            const next = await practiceApi.start(courseId, count, selectedTypes, selectionMode);
+            const focused = focusRequest(focus);
+            const next = focused ? await practiceApi.start(courseId, count, selectedTypes, selectionMode, focused) : await practiceApi.start(courseId, count, selectedTypes, selectionMode);
             if (mounted.current && requestRevision === revision.current) { adopt(next); onAttemptRoute?.(next); }
           })} onOpenMaterials={onOpenMaterials} onOpenQuestions={onOpenQuestions} />
         <details open={historyOpen} onToggle={event => setHistoryOpen(event.currentTarget.open)} className="max-w-2xl border-t border-line pt-3">
           <summary className="min-h-11 cursor-pointer py-2 font-medium">Practice history</summary>
           {busy ? <LoadingState>Loading session…</LoadingState> : <>
             {!history.length && <p className="mt-3 text-muted">No practice history yet. Start with shared approved questions or your own drafts from this course.</p>}
-            <ul className="mt-3 flex flex-col gap-2">{history.map(row => <li key={row.id}><Button variant="secondary" onClick={() => void run(() => openAttempt(row.id))}>{row.status === "ACTIVE" ? "Resume practice" : row.status === "SUBMITTED" ? "Review practice" : "View abandoned practice"} · {new Date(row.started_at).toLocaleString()}</Button></li>)}</ul>
+            <ul className="mt-3 flex flex-col gap-2">{history.map(row => <li key={row.id}><Button variant="secondary" onClick={() => void run(() => openAttempt(row.id))}>{row.status === "ACTIVE" ? "Resume practice" : row.status === "SUBMITTED" ? "Review practice" : "View abandoned practice"} · {new Date(row.started_at).toLocaleString()}{row.focus_label ? ` · ${row.focus_label}` : ""}</Button></li>)}</ul>
           </>}
           <div className="mt-4 flex flex-wrap gap-2"><Button variant="secondary" disabled={busy || offset === 0} onClick={() => void run(() => loadHistory(offset - 20))}>Newer sessions</Button><Button variant="secondary" disabled={busy || history.length < 20} onClick={() => void run(() => loadHistory(offset + 20))}>Older sessions</Button><Button variant="ghost" disabled={busy} onClick={() => void run(() => loadHistory(offset))}>Refresh practice history</Button></div>
         </details>

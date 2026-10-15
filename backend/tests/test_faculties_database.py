@@ -222,7 +222,6 @@ def historical_rows():
         "questions",
         "question_options",
         "question_versions",
-        "quizzes",
         "quiz_questions",
         "answers",
         "question_review_progress",
@@ -231,6 +230,10 @@ def historical_rows():
         result = {
             name: conn.execute(text(f"SELECT * FROM {name} ORDER BY id")).all() for name in tables
         }
+        # Compare columns shared by old revisions; 0017's practice focus is tested separately.
+        result["quizzes"] = conn.execute(
+            text("SELECT id, course_id, user_id, created_at FROM quizzes ORDER BY id")
+        ).all()
         # Compare columns shared by old revisions; 0015's timestamp is tested separately.
         result["quiz_attempts"] = conn.execute(
             text(

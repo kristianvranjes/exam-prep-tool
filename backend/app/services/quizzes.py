@@ -25,6 +25,7 @@ from app.schemas.quiz import (
     SubmittedAttempt,
 )
 from app.services.courses import get_member_course
+from app.services.exam_scopes import resolve_focus
 from app.services.grading import grade
 from app.services.progress import apply_reviews
 from app.services.questions.service import owner_view
@@ -48,13 +49,16 @@ def load_attempt(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> 
     return attempt
 
 
-def summary(attempt: QuizAttempt, course_id: UUID) -> AttemptSummary:
+def summary(attempt: QuizAttempt, quiz: Quiz) -> AttemptSummary:
     return AttemptSummary(
         id=attempt.id,
-        course_id=course_id,
+        course_id=quiz.course_id,
         status=cast(Literal["ACTIVE", "SUBMITTED", "ABANDONED"], attempt.status),
         started_at=attempt.started_at,
         submitted_at=attempt.submitted_at,
+        exam_scope_id=quiz.exam_scope_id,
+        focus_unit_ids=[UUID(id_) for id_ in quiz.focus_unit_ids],
+        focus_label=quiz.focus_label,
     )
 
 
@@ -99,7 +103,9 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
                     grading_status=cast(Grade, answer.grading_status) if answer else "PENDING",
                 )
             )
-    fields = summary(attempt, course_id).model_dump(exclude={"status"})
+    quiz = db.get(Quiz, attempt.quiz_id)
+    assert quiz is not None and quiz.course_id == course_id
+    fields = summary(attempt, quiz).model_dump(exclude={"status"})
     if attempt.status == "SUBMITTED":
         return SubmittedAttempt(**fields, questions=results)
     if attempt.status == "ABANDONED":
@@ -115,14 +121,24 @@ def start(db: Session, user: User, course_id: UUID, data: StartQuiz) -> AttemptR
         # Compatible with FK locks; shares submission's per-user serialization boundary.
         db.execute(select(User.id).where(User.id == user.id).with_for_update(key_share=True))
         selection_time = datetime.now(UTC)
-        questions = select_questions(db, user.id, course_id, data, selection_time)
+        unit_ids, scope_id, label = resolve_focus(db, course_id, data.unit_ids, data.exam_scope_id)
+        if scope_id and not unit_ids:
+            raise HTTPException(409, "This exam scope has no units yet")
+        questions = select_questions(db, user.id, course_id, data, selection_time, unit_ids)
         if len(questions) < data.count:
+            filters = "type or unit filter" if unit_ids else "type filter"
             raise HTTPException(
                 409,
                 f"Only {len(questions)} eligible questions available; "
-                f"requested {data.count}. Reduce the count or change the type filter.",
+                f"requested {data.count}. Reduce the count or change the {filters}.",
             )
-        quiz = Quiz(course_id=course_id, user_id=user.id)
+        quiz = Quiz(
+            course_id=course_id,
+            user_id=user.id,
+            exam_scope_id=scope_id,
+            focus_unit_ids=[str(id_) for id_ in unit_ids],
+            focus_label=label,
+        )
         db.add(quiz)
         db.flush()
         for position, question in enumerate(questions):
@@ -158,15 +174,15 @@ def list_attempts(
 ) -> list[AttemptSummary]:
     get_member_course(db, user, course_id)
     return [
-        summary(a, course_id)
-        for a in db.scalars(
-            select(QuizAttempt)
+        summary(attempt, quiz)
+        for attempt, quiz in db.execute(
+            select(QuizAttempt, Quiz)
             .join(Quiz)
             .where(Quiz.course_id == course_id, Quiz.user_id == user.id)
             .order_by(QuizAttempt.started_at.desc(), QuizAttempt.id)
             .limit(limit)
             .offset(offset)
-        )
+        ).tuples()
     ]
 
 

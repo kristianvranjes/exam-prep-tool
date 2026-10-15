@@ -26,7 +26,7 @@ requests return 401. Payload ownership, status, timestamp and score fields are f
 
 | Method / path | Contract |
 | --- | --- |
-| `POST /courses/{course_id}/attempts` | `{ "count": 5, "question_types": ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"] }`; 201 ACTIVE attempt. Omitted types means all three. |
+| `POST /courses/{course_id}/attempts` | `{ "count": 5, "question_types": ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"] }`; 201 ACTIVE attempt. Omitted types means all three. Optional `unit_ids` or `exam_scope_id` (not both) limit selection to questions in those units; see [practice by unit](COURSE_UNITS.md#practice-by-unit-or-exam-cycle). |
 | `GET /courses/{course_id}/attempts?limit=20&offset=0` | Own attempt summaries, newest first; limit 1–50, offset 0–10000. |
 | `GET /courses/{course_id}/attempts/{id}` | Saved ACTIVE attempt, frozen SUBMITTED result, or read-only ABANDONED history. |
 | `PATCH /courses/{course_id}/attempts/{id}/answers/{quiz_question_id}` | Upsert a typed answer while ACTIVE, return the saved attempt. |
