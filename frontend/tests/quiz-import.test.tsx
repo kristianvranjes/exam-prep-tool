@@ -55,8 +55,8 @@ it("shows backend validation errors and permits retry", async () => {
 it("rejects wrong extensions and oversize files", async () => {
   open(); choose("{}", "quiz.txt"); fireEvent.click(screen.getByRole("button", { name: "Import drafts" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(".json");
-  choose("x".repeat(262145)); fireEvent.click(screen.getByRole("button", { name: "Import drafts" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("256 KiB");
+  choose("x".repeat(2097153)); fireEvent.click(screen.getByRole("button", { name: "Import drafts" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("2 MiB");
   expect(mock.importQuestions).not.toHaveBeenCalled();
 });
 it("blocks duplicate submits while pending", async () => {

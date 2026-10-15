@@ -66,7 +66,7 @@ def test_duplicate_stems_and_hard_count_limit():
     with pytest.raises(ValidationError):
         QuizImport.model_validate(body)
     body["questions"] = [
-        {"type": "SHORT_ANSWER", "stem": str(i), "reference_answer": "A"} for i in range(51)
+        {"type": "SHORT_ANSWER", "stem": str(i), "reference_answer": "A"} for i in range(501)
     ]
     with pytest.raises(ValidationError):
         QuizImport.model_validate(body)

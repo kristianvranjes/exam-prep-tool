@@ -36,8 +36,8 @@ class Settings(BaseSettings):
     openai_compatible_url: str = ""
     openai_compatible_model: str = ""
     openai_compatible_api_key: SecretStr = SecretStr("")
-    question_import_max_bytes: int = Field(default=262144, ge=1, le=262144)
-    question_import_max_count: int = Field(default=50, ge=1, le=50)
+    question_import_max_bytes: int = Field(default=2097152, ge=1, le=2097152)
+    question_import_max_count: int = Field(default=500, ge=1, le=500)
     question_generation_max_count: int = Field(default=10, ge=1, le=10)
     question_generation_max_concepts: int = Field(default=5, ge=1, le=5)
     question_generation_retrieval_top_k_max: int = Field(default=10, ge=1, le=10)
