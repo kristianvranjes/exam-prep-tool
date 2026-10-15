@@ -4,11 +4,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.schemas.question import MAX_QUESTION_UNITS, StrictModel, unique_ids
+from app.schemas.question import MAX_BULK_QUESTIONS, MAX_QUESTION_UNITS, StrictModel, unique_ids
 
 MAX_COURSE_UNITS = 50
-# One bank page is 20 rows; the cap leaves room without unbounded row locks.
-MAX_BULK_QUESTIONS = 50
 
 UnitTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=150)]
 UnitDescription = Annotated[

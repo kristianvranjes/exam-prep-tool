@@ -10,6 +10,8 @@ Stem = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 Difficulty = Annotated[int, Field(ge=1, le=5)]
 MAX_QUESTION_UNITS = 5
+# One bank page is 20 rows; the cap leaves room without unbounded row locks.
+MAX_BULK_QUESTIONS = 50
 # A whole course unit fits in one file; the byte cap in settings still bounds the body.
 MAX_IMPORT_QUESTIONS = 500
 
@@ -159,8 +161,32 @@ class QuestionPatch(BaseModel):
     unit_ids: list[UUID] | None = Field(default=None, max_length=MAX_QUESTION_UNITS)
 
 
+Reason = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
+QuestionAction = Literal["submit", "approve", "reject", "archive"]
+
+
 class RejectRequest(StrictModel):
-    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
+    reason: Reason
+
+
+class BulkQuestionTransition(StrictModel):
+    question_ids: list[Annotated[UUID, Field(strict=False)]] = Field(
+        min_length=1, max_length=MAX_BULK_QUESTIONS
+    )
+    action: QuestionAction
+    reason: Reason | None = None
+
+    @model_validator(mode="after")
+    def valid(self) -> Self:
+        if len(set(self.question_ids)) != len(self.question_ids):
+            raise ValueError("Question IDs must be unique")
+        if (self.action == "reject") != (self.reason is not None):
+            raise ValueError("A reason is required for reject and only for reject")
+        return self
+
+
+class BulkQuestionTransitionResult(BaseModel):
+    changed: int
 
 
 class PublicOption(BaseModel):

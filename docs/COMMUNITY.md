@@ -49,7 +49,7 @@ moderation authority.
 
 | Actor | Read/list | Edit/submit | Review |
 | --- | --- | --- | --- |
-| Joined creator | Own questions in all states, full content/history | Own DRAFT; edit REJECTED back to DRAFT | Cannot approve/reject own question |
+| Joined creator | Own questions in all states, full content/history | Own DRAFT; edit REJECTED back to DRAFT; archive (withdraw) own DRAFT/PENDING_REVIEW/REJECTED | Cannot approve/reject own question, except a faculty moderator who owns the course may approve their own |
 | Other joined student, including OWNER | APPROVED only, public answer-free view | None | None |
 | Faculty moderator | Full content/history within assigned faculty | Only own content, with course membership | Approve/reject others' PENDING_REVIEW; archive APPROVED |
 

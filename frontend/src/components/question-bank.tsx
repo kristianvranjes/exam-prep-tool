@@ -13,6 +13,11 @@ const statuses: QuestionStatus[] = ["DRAFT", "PENDING_REVIEW", "APPROVED", "REJE
 const label = (value: string) => value === "PENDING_REVIEW" ? "Awaiting faculty review" : value.toLowerCase().replaceAll("_", " ");
 const textareaClass = "min-h-28 w-full rounded-lg border border-line bg-surface px-3 py-2 text-foreground";
 const MAX_QUESTION_UNITS = 5;
+const UNPUBLISHED: QuestionStatus[] = ["DRAFT", "PENDING_REVIEW", "REJECTED"];
+const DONE: Record<QuestionAction, { status: QuestionStatus; verb: string }> = {
+  submit: { status: "PENDING_REVIEW", verb: "Submitted" }, approve: { status: "APPROVED", verb: "Approved" },
+  reject: { status: "REJECTED", verb: "Rejected" }, archive: { status: "ARCHIVED", verb: "Archived" },
+};
 const questionCount = (count: number) => `${count} ${count === 1 ? "question" : "questions"}`;
 const unitNames = (ids: string[] | undefined, units: CourseUnit[]) => (ids ?? []).map((id) => {
   const unit = units.find((u) => u.id === id);
@@ -47,6 +52,7 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
   const [picked, setPicked] = useState<string[]>([]);
   const [bulkUnit, setBulkUnit] = useState("");
   const [bulkNotice, setBulkNotice] = useState("");
+  const [bulkReason, setBulkReason] = useState("");
   const [status, setStatus] = useState<QuestionStatus | "">("");
   const [type, setType] = useState<QuestionType | "">("");
   const [offset, setOffset] = useState(0);
@@ -89,10 +95,21 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
   }, [courseId, status, type, unit, offset, revision]);
 
   const canOrganize = (owner || moderator) && units.length > 0;
+  const own = (q: Question) => q.visibility === "OWNER" && q.created_by_user_id === userId;
+  // Mirrors the server rules; the server stays authoritative for every action.
+  const allows = (q: Question, action: QuestionAction) => {
+    if (action === "submit") return own(q) && q.status === "DRAFT";
+    if (action === "archive") return (own(q) && UNPUBLISHED.includes(q.status)) || (moderator && q.status === "APPROVED");
+    if (!moderator) return false;
+    if (action === "reject") return !own(q) && q.status === "PENDING_REVIEW";
+    return own(q) ? owner && (q.status === "DRAFT" || q.status === "PENDING_REVIEW") : q.status === "PENDING_REVIEW";
+  };
   // Selection follows the visible page; archived questions cannot change units.
   const selectable = rows.filter((q) => q.status !== "ARCHIVED").map((q) => q.id);
   const pickedIds = picked.filter((id) => selectable.includes(id));
   const bulkTarget = units.find((u) => u.id === bulkUnit);
+  const pickedRows = rows.filter((q) => pickedIds.includes(q.id));
+  const canApply = (action: QuestionAction) => pickedRows.length > 0 && pickedRows.every((q) => allows(q, action));
 
   function refresh() { setLoading(true); setListError(""); setRevision((value) => value + 1); }
 
@@ -147,6 +164,21 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
         ? [...new Set([...(q.unit_ids ?? []), bulkTarget.id])] : (q.unit_ids ?? []).filter((id) => id !== bulkTarget.id) } : q);
       setPicked([]); refresh();
     } catch (e) { setError(e instanceof Error ? e.message : "Could not save question units"); }
+    finally { setBusy(false); }
+  }
+
+  async function applyToPicked(action: QuestionAction) {
+    if (!canApply(action)) return;
+    const ids = pickedIds;
+    if (action === "archive" && !window.confirm(`Archive ${questionCount(ids.length)}? Archived questions leave practice and the default bank view.`)) return;
+    setBusy(true); setError(""); setBulkNotice("");
+    try {
+      const { changed } = await api.bulkTransitionQuestions(courseId, { question_ids: ids, action, ...(action === "reject" ? { reason: bulkReason.trim() } : {}) });
+      setBulkNotice(`${DONE[action].verb} ${questionCount(changed)}.`);
+      setSelected((q) => q && ids.includes(q.id) ? { ...q, status: DONE[action].status } as Question : q);
+      if (action === "reject") setBulkReason("");
+      setPicked([]); refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not change the selected questions"); }
     finally { setBusy(false); }
   }
 
@@ -235,7 +267,7 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
       {listError && <div className="space-y-3"><Alert>{listError}</Alert><Button type="button" variant="secondary" onClick={refresh}>Retry questions</Button></div>}
       {loading && <LoadingState>Loading questions…</LoadingState>}
       {!loading && !listError && rows.length === 0 && <EmptyState title="No questions match this view.">Try another status, type or unit, or create a draft above.</EmptyState>}
-      {canOrganize && !listError && rows.length > 0 && <div role="group" aria-label="Organize selected questions" className="space-y-3 rounded-lg border border-line bg-subtle p-3">
+      {joined && !listError && rows.length > 0 && <div role="group" aria-label="Organize selected questions" className="space-y-3 rounded-lg border border-line bg-subtle p-3">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
             <input type="checkbox" disabled={busy || loading || !selectable.length} checked={selectable.length > 0 && pickedIds.length === selectable.length}
@@ -244,7 +276,19 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
           </label>
           <span className="text-sm text-muted">{pickedIds.length} selected</span>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" disabled={busy || loading || !canApply("submit")} onClick={() => void applyToPicked("submit")}>Submit selected</Button>
+          {moderator && <Button type="button" variant="secondary" disabled={busy || loading || !canApply("approve")} onClick={() => void applyToPicked("approve")}>Approve selected</Button>}
+          <Button type="button" variant="ghost" disabled={busy || loading || !canApply("archive")} onClick={() => void applyToPicked("archive")}>Archive selected</Button>
+        </div>
+        {moderator && <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <label className="block min-w-0 text-sm font-medium sm:flex-1">Rejection reason for selected questions
+            <Input className="mt-1" value={bulkReason} maxLength={1000} disabled={busy} onChange={(e) => setBulkReason(e.target.value)} />
+          </label>
+          <Button type="button" variant="secondary" disabled={busy || loading || !bulkReason.trim() || !canApply("reject")} onClick={() => void applyToPicked("reject")}>Reject selected</Button>
+        </div>}
+        <p className="text-sm text-muted">Actions apply only when every selected question allows them. Filter by status to select matching questions.</p>
+        {canOrganize && <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <label className="block min-w-0 text-sm font-medium sm:flex-1">Unit for selected questions
             <Select className="mt-1" value={bulkUnit} disabled={busy} onChange={(e) => { setBulkUnit(e.target.value); setBulkNotice(""); }}>
               <option value="">Choose a unit</option>
@@ -253,13 +297,13 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
           </label>
           <Button type="button" variant="secondary" disabled={busy || loading || !pickedIds.length || !bulkTarget || bulkTarget.is_archived} onClick={() => void organize("ADD")}>Add to unit</Button>
           <Button type="button" variant="ghost" disabled={busy || loading || !pickedIds.length || !bulkTarget} onClick={() => void organize("REMOVE")}>Remove from unit</Button>
-        </div>
-        {bulkTarget?.is_archived && <p className="text-sm text-muted">Archived units take no new questions, but you can remove them.</p>}
+        </div>}
+        {canOrganize && bulkTarget?.is_archived && <p className="text-sm text-muted">Archived units take no new questions, but you can remove them.</p>}
         {bulkNotice && <p role="status" className="text-sm text-foreground">{bulkNotice}</p>}
       </div>}
       {!loading && !listError && rows.length > 0 && <ul className="space-y-2" aria-label="Questions list">
         {rows.map((q) => <li key={q.id} className="flex min-w-0 rounded-lg border border-line bg-surface">
-          {canOrganize && <label className="flex min-w-11 shrink-0 items-center justify-center border-r border-line px-3">
+          {joined && <label className="flex min-w-11 shrink-0 items-center justify-center border-r border-line px-3">
             <input type="checkbox" aria-label={"Select question: " + q.stem} disabled={busy || q.status === "ARCHIVED"} checked={pickedIds.includes(q.id)}
               onChange={(e) => setPicked((ids) => e.target.checked ? [...ids, q.id] : ids.filter((id) => id !== q.id))} />
           </label>}
@@ -284,7 +328,7 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
       <div className="flex flex-wrap items-center gap-2"><Badge>{label(selected.type)}</Badge><Badge>{label(selected.status)}</Badge>{selected.difficulty && <span className="text-sm text-muted">Difficulty {selected.difficulty}/5</span>}</div>
       {units.length > 0 && <p className="break-words text-sm [overflow-wrap:anywhere]"><span className="font-medium">Units:</span> {unitNames(selected.unit_ids, units).join(", ") || "None"}</p>}
       <ul className="list-inside list-disc space-y-1 text-sm">{selected.options.map((option) => <li key={option.position} className="break-words [overflow-wrap:anywhere]">{option.text}{selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (correct)" : ""}</li>)}</ul>
-      {selected.visibility === "OWNER" && <OwnerReview key={selected.id + ":" + selected.updated_at} question={selected} creator={selected.created_by_user_id === userId} moderator={moderator} concepts={concepts} units={units} busy={busy} mutate={mutate} />}
+      {selected.visibility === "OWNER" && <OwnerReview key={selected.id + ":" + selected.updated_at} question={selected} creator={selected.created_by_user_id === userId} moderator={moderator} owner={owner} concepts={concepts} units={units} busy={busy} mutate={mutate} />}
       {(owner || moderator) && selected.status !== "ARCHIVED" && units.some((u) => !u.is_archived) && <QuestionUnitsEditor key={selected.id + ":" + (selected.unit_ids ?? []).join(",")} question={selected} units={units} busy={busy} save={(ids) => saveUnits(selected.id, ids)} />}
       {joined && selected.status === "APPROVED" && <ReportIssue key={"report:" + selected.id} questionId={selected.id} />}
       {joined && selected.status === "APPROVED" && <SuggestQuestionEdit key={"suggest:" + selected.id} question={{ id: selected.id, type: selected.type, stem: selected.stem, difficulty: selected.difficulty, options: selected.options.map(({ position, text }) => ({ position, text })) }} />}
@@ -372,7 +416,7 @@ function UnitChoices({ units, linked, chosen, setChosen }: { units: CourseUnit[]
   </label>)}</div>;
 }
 
-function OwnerReview({ question: q, creator, moderator, concepts, units, busy, mutate }: { creator: boolean; moderator: boolean; question: OwnerQuestion; concepts: Concept[]; units: CourseUnit[]; busy: boolean; mutate: (operation: () => Promise<OwnerQuestion>) => Promise<void> }) {
+function OwnerReview({ question: q, creator, moderator, owner, concepts, units, busy, mutate }: { creator: boolean; moderator: boolean; owner: boolean; question: OwnerQuestion; concepts: Concept[]; units: CourseUnit[]; busy: boolean; mutate: (operation: () => Promise<OwnerQuestion>) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
   const [versions, setVersions] = useState<QuestionVersion[]>([]);
   const [versionError, setVersionError] = useState("");
@@ -406,8 +450,9 @@ function OwnerReview({ question: q, creator, moderator, concepts, units, busy, m
     <div className="flex flex-wrap gap-2">
       {creator && ["DRAFT", "REJECTED"].includes(q.status) && <Button type="button" variant="secondary" disabled={busy} onClick={() => setEditing(!editing)}>{editing ? "Cancel edit" : "Edit question"}</Button>}
       {creator && q.status === "DRAFT" && <Button type="button" disabled={busy} onClick={() => transition("submit")}>Submit for review</Button>}
-      {moderator && !creator && q.status === "PENDING_REVIEW" && <Button type="button" disabled={busy} onClick={() => transition("approve")}>Approve question</Button>}
-      {moderator && q.status === "APPROVED" && <Button type="button" variant="secondary" disabled={busy} onClick={() => transition("archive")}>Archive question</Button>}
+      {/* Course owners who moderate may approve their own questions, even straight from draft. */}
+      {moderator && (creator ? owner && (q.status === "DRAFT" || q.status === "PENDING_REVIEW") : q.status === "PENDING_REVIEW") && <Button type="button" disabled={busy} onClick={() => transition("approve")}>Approve question</Button>}
+      {((moderator && q.status === "APPROVED") || (creator && UNPUBLISHED.includes(q.status))) && <Button type="button" variant="secondary" disabled={busy} onClick={() => { if (window.confirm("Archive this question? It leaves practice and the default bank view.")) void transition("archive"); }}>Archive question</Button>}
       {hasMore && <Button type="button" variant="secondary" disabled={busy || versionBusy} onClick={loadVersions}>{versions.length ? "Load more versions" : "View versions"}</Button>}
     </div>
 

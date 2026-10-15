@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID, uuid4
@@ -26,6 +27,8 @@ from app.schemas.course_unit import BulkQuestionUnits, BulkQuestionUnitsResult
 from app.schemas.question import (
     MAX_QUESTION_UNITS,
     MCQ,
+    BulkQuestionTransition,
+    BulkQuestionTransitionResult,
     OwnerOption,
     OwnerQuestion,
     PublicOption,
@@ -364,21 +367,39 @@ TRANSITIONS = {
     "reject": ("PENDING_REVIEW", "REJECTED", "REJECTED"),
     "archive": ("APPROVED", "ARCHIVED", "ARCHIVED"),
 }
+# Creators withdraw (archive) their own unpublished questions; shared ones need a moderator.
+UNPUBLISHED = ("DRAFT", "PENDING_REVIEW", "REJECTED")
 
 
-def transition(
-    db: Session, user: User, question_id: UUID, action: str, reason: str | None = None
-) -> OwnerQuestion:
-    question, _ = load_question(db, user, question_id, mutate=True)
+def check_transition(
+    db: Session, user: User, question: Question, action: str, moderator: bool, owner: bool
+) -> None:
+    """Raise unless `user` may apply `action` to `question` in its current state.
+
+    A course owner who is also a faculty moderator may approve their own question,
+    straight from DRAFT; every other creator still needs a second reviewer.
+    """
+    creator = question.created_by_user_id == user.id
+    allowed: tuple[str, ...] = (TRANSITIONS[action][0],)
     if action == "submit":
         require_creator(db, user, question)
-    elif not course_moderator(db, user, question.course_id):
+    elif action == "archive" and creator and question.status in UNPUBLISHED:
+        require_creator(db, user, question)
+        allowed = UNPUBLISHED
+    elif not moderator:
         raise HTTPException(403, "Faculty moderator access required")
-    elif action in ("approve", "reject") and question.created_by_user_id == user.id:
-        raise HTTPException(403, "Creators cannot review their own question")
-    old, new, version_reason = TRANSITIONS[action]
-    if question.status != old:
+    elif action in ("approve", "reject") and creator:
+        if action == "reject" or not owner:
+            raise HTTPException(403, "Creators cannot review their own question")
+        allowed = ("DRAFT", "PENDING_REVIEW")
+    if question.status not in allowed:
         raise HTTPException(409, "Invalid question lifecycle transition")
+
+
+def apply_transition(
+    db: Session, user: User, question: Question, action: str, reason: str | None = None
+) -> None:
+    """Change state and record history; the caller has checked access and commits."""
     if action in ("submit", "approve"):
         view = owner_view(db, question)
         validate_provenance(db, question, view.concept_ids)
@@ -388,39 +409,51 @@ def transition(
             raise HTTPException(409, "Question content requires rework") from None
     if action == "reject" and (not reason or not reason.strip() or len(reason) > 1000):
         raise HTTPException(422, "A rejection reason is required")
+    _, new, version_reason = TRANSITIONS[action]
     question.status = new
     if action in ("approve", "reject"):
         question.reviewed_by_user_id = user.id
         question.reviewed_at = datetime.now(UTC)
         question.rejection_reason = reason.strip() if action == "reject" and reason else None
+    if action == "archive":
+        archive_time = datetime.now(UTC)
+        db.execute(
+            update(QuestionReport)
+            .where(QuestionReport.question_id == question.id, QuestionReport.status == "OPEN")
+            .values(
+                status="RESOLVED",
+                resolution="QUESTION_ARCHIVED",
+                resolved_by_user_id=user.id,
+                resolved_at=archive_time,
+            )
+        )
+        db.execute(
+            update(QuestionEditSuggestion)
+            .where(
+                QuestionEditSuggestion.question_id == question.id,
+                QuestionEditSuggestion.status == "OPEN",
+            )
+            .values(
+                status="RESOLVED",
+                resolution="QUESTION_ARCHIVED",
+                resolved_by_user_id=user.id,
+                resolved_at=archive_time,
+            )
+        )
+    add_version(db, question, user, version_reason)
+
+
+def save_transitions(
+    db: Session, user: User, questions: Sequence[Question], action: str, reason: str | None
+) -> None:
+    """Apply already-checked transitions and commit them together, or none of them."""
     try:
-        if action == "archive":
-            archive_time = datetime.now(UTC)
-            db.execute(
-                update(QuestionReport)
-                .where(QuestionReport.question_id == question.id, QuestionReport.status == "OPEN")
-                .values(
-                    status="RESOLVED",
-                    resolution="QUESTION_ARCHIVED",
-                    resolved_by_user_id=user.id,
-                    resolved_at=archive_time,
-                )
-            )
-            db.execute(
-                update(QuestionEditSuggestion)
-                .where(
-                    QuestionEditSuggestion.question_id == question.id,
-                    QuestionEditSuggestion.status == "OPEN",
-                )
-                .values(
-                    status="RESOLVED",
-                    resolution="QUESTION_ARCHIVED",
-                    resolved_by_user_id=user.id,
-                    resolved_at=archive_time,
-                )
-            )
-        add_version(db, question, user, version_reason)
+        for question in questions:
+            apply_transition(db, user, question, action, reason)
         db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
     except IntegrityError:
         db.rollback()
         raise HTTPException(
@@ -429,7 +462,60 @@ def transition(
     except Exception:
         db.rollback()
         raise HTTPException(503, "Could not save question transition") from None
+
+
+def transition(
+    db: Session, user: User, question_id: UUID, action: str, reason: str | None = None
+) -> OwnerQuestion:
+    question, _ = load_question(db, user, question_id, mutate=True)
+    moderator = course_moderator(db, user, question.course_id)
+    owner = moderator and is_course_owner(db, user, question.course_id)
+    try:
+        check_transition(db, user, question, action, moderator, owner)
+    except HTTPException:
+        db.rollback()
+        raise
+    save_transitions(db, user, [question], action, reason)
     return owner_view(db, question)
+
+
+def bulk_transition(
+    db: Session, user: User, course_id: UUID, data: BulkQuestionTransition
+) -> BulkQuestionTransitionResult:
+    """Apply one lifecycle action to selected questions, all or nothing."""
+    moderator = course_moderator(db, user, course_id)
+    if not moderator:
+        get_member_course(db, user, course_id)
+    owner = moderator and is_course_owner(db, user, course_id)
+    ids = sorted(data.question_ids)
+    # Lock in ID order so concurrent bulk requests cannot deadlock each other.
+    questions = db.scalars(
+        select(Question)
+        .where(Question.id.in_(ids), Question.course_id == course_id)
+        .order_by(Question.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).all()
+    if len(questions) != len(ids) or any(
+        not moderator and q.status != "APPROVED" and q.created_by_user_id != user.id
+        for q in questions
+    ):
+        raise HTTPException(404, "Question not found")
+    refused: list[HTTPException] = []
+    for question in questions:
+        try:
+            check_transition(db, user, question, data.action, moderator, owner)
+        except HTTPException as error:
+            refused.append(error)
+    if refused:
+        db.rollback()
+        raise HTTPException(
+            max(error.status_code for error in refused),
+            f"{len(refused)} of {len(questions)} selected questions cannot be changed this way "
+            f"({refused[0].detail}); nothing was saved",
+        )
+    save_transitions(db, user, questions, data.action, data.reason)
+    return BulkQuestionTransitionResult(changed=len(questions))
 
 
 def versions(

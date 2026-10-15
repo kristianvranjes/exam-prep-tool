@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { QuestionBank } from "../src/components/question-bank";
 import type { OwnerQuestion, PublicQuestion } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ me: vi.fn(), course: vi.fn(), moderatorStatus: vi.fn(), createQuestion: vi.fn(), importQuestions: vi.fn(), membership: vi.fn(), concepts: vi.fn(), questions: vi.fn(), generateQuestions: vi.fn(), editQuestion: vi.fn(), transitionQuestion: vi.fn(), questionVersions: vi.fn(), reportQuestion: vi.fn(), suggestQuestionEdit: vi.fn(), units: vi.fn(), setQuestionUnits: vi.fn(), bulkQuestionUnits: vi.fn() }));
+const mock = vi.hoisted(() => ({ me: vi.fn(), course: vi.fn(), moderatorStatus: vi.fn(), createQuestion: vi.fn(), importQuestions: vi.fn(), membership: vi.fn(), concepts: vi.fn(), questions: vi.fn(), generateQuestions: vi.fn(), editQuestion: vi.fn(), transitionQuestion: vi.fn(), questionVersions: vi.fn(), reportQuestion: vi.fn(), suggestQuestionEdit: vi.fn(), units: vi.fn(), setQuestionUnits: vi.fn(), bulkQuestionUnits: vi.fn(), bulkTransitionQuestions: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 
 const draft: OwnerQuestion = {
@@ -327,8 +327,9 @@ it("shows review actions only for a faculty moderator reviewing someone else's p
   expect(screen.queryByRole("button", { name: "Edit question" })).not.toBeInTheDocument();
 });
 
-it("does not allow a moderator to self-approve", async () => {
+it("does not allow a moderator who does not own the course to self-approve", async () => {
   mock.moderatorStatus.mockResolvedValue({ is_moderator: true });
+  mock.membership.mockResolvedValue({ role: "MEMBER" });
   current.status = "PENDING_REVIEW";
   await open();
   fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
@@ -364,7 +365,28 @@ it("lets the contributor rework a rejected question and resubmit", async () => {
   expect(screen.queryByText("Rejection reason: Needs precision")).not.toBeInTheDocument();
 });
 
+it("lets a course owner who moderates approve their own draft directly", async () => {
+  mock.moderatorStatus.mockResolvedValue({ is_moderator: true });
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "Approve question" }));
+  await waitFor(() => expect(mock.transitionQuestion).toHaveBeenCalledWith("q1", "approve", undefined));
+  expect(screen.queryByRole("button", { name: "Reject question" })).not.toBeInTheDocument();
+});
+
+it("lets a creator archive their own draft after confirming", async () => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "Archive question" }));
+  expect(mock.transitionQuestion).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Archive question" }));
+  await waitFor(() => expect(mock.transitionQuestion).toHaveBeenCalledWith("q1", "archive", undefined));
+  confirm.mockRestore();
+});
+
 it("archives approved content as a moderator and retains version access", async () => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
   mock.me.mockResolvedValue({ id: "reviewer" });
   mock.moderatorStatus.mockResolvedValue({ is_moderator: true });
   current.status = "APPROVED";
@@ -375,6 +397,7 @@ it("archives approved content as a moderator and retains version access", async 
   fireEvent.click(screen.getByRole("button", { name: "View versions" }));
   expect(await screen.findByText(/Version 1/)).toBeInTheDocument();
   expect(mock.transitionQuestion).toHaveBeenCalledWith("q1", "archive", undefined);
+  confirm.mockRestore();
 });
 
 it("loads version history in 50-row pages with a local retry", async () => {
@@ -829,13 +852,52 @@ it("keeps the bulk selection after a rejected change and clears it when the page
   expect(await screen.findByRole("checkbox", { name: "Select question: Question 1" })).not.toBeChecked();
 });
 
-it("does not offer bulk organization to ordinary members", async () => {
+it("gives ordinary members bulk actions for their own questions only, without units or review", async () => {
   mock.units.mockResolvedValue(unitRows);
   mock.membership.mockResolvedValue({ role: "MEMBER" });
+  const other = { id: "q2", course_id: "course", type: "TRUE_FALSE" as const, status: "APPROVED" as const, visibility: "MEMBER" as const, stem: "Shared question?", difficulty: null, options: [] };
+  mock.questions.mockImplementation(async () => [current, other]);
+  mock.bulkTransitionQuestions.mockResolvedValue({ changed: 1 });
   await open();
   await waitFor(() => expect(mock.units).toHaveBeenCalled());
-  expect(screen.queryByRole("group", { name: "Organize selected questions" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("checkbox", { name: /Select question/ })).not.toBeInTheDocument();
+  const toolbar = screen.getByRole("group", { name: "Organize selected questions" });
+  expect(within(toolbar).queryByLabelText("Unit for selected questions")).not.toBeInTheDocument();
+  expect(within(toolbar).queryByRole("button", { name: "Approve selected" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select question: Shared question?" }));
+  expect(within(toolbar).getByRole("button", { name: "Submit selected" })).toBeDisabled();
+  expect(within(toolbar).getByRole("button", { name: "Archive selected" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select question: Shared question?" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select question: What is a matrix?" }));
+  fireEvent.click(within(toolbar).getByRole("button", { name: "Submit selected" }));
+  await waitFor(() => expect(mock.bulkTransitionQuestions).toHaveBeenCalledWith("course", { question_ids: ["q1"], action: "submit" }));
+  expect(await within(toolbar).findByText("Submitted 1 question.")).toBeInTheDocument();
+});
+
+it("lets a moderator review others' pending questions in bulk and keeps errors visible", async () => {
+  mock.me.mockResolvedValue({ id: "reviewer" });
+  mock.moderatorStatus.mockResolvedValue({ is_moderator: true });
+  mock.membership.mockResolvedValue({ role: "MEMBER" });
+  const pending = { ...draft, status: "PENDING_REVIEW" as const };
+  const mine = { ...pending, id: "q3", stem: "My pending question?", created_by_user_id: "reviewer" };
+  mock.questions.mockImplementation(async () => [pending, { ...pending, id: "q2", stem: "Second pending?" }, mine]);
+  mock.bulkTransitionQuestions.mockResolvedValueOnce({ changed: 2 }).mockRejectedValueOnce(new Error("1 of 1 selected questions cannot be changed this way"));
+  await open();
+  const toolbar = screen.getByRole("group", { name: "Organize selected questions" });
+  fireEvent.click(within(toolbar).getByLabelText("Select all on this page"));
+  expect(within(toolbar).getByRole("button", { name: "Approve selected" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select question: My pending question?" }));
+  fireEvent.click(within(toolbar).getByRole("button", { name: "Approve selected" }));
+  await waitFor(() => expect(mock.bulkTransitionQuestions).toHaveBeenCalledWith("course", { question_ids: ["q1", "q2"], action: "approve" }));
+  expect(await within(toolbar).findByText("Approved 2 questions.")).toBeInTheDocument();
+
+  fireEvent.click(await screen.findByRole("checkbox", { name: "Select question: Second pending?" }));
+  const reject = within(toolbar).getByRole("button", { name: "Reject selected" });
+  expect(reject).toBeDisabled();
+  fireEvent.change(within(toolbar).getByLabelText("Rejection reason for selected questions"), { target: { value: "  Unclear wording  " } });
+  fireEvent.click(reject);
+  await waitFor(() => expect(mock.bulkTransitionQuestions).toHaveBeenLastCalledWith("course", { question_ids: ["q2"], action: "reject", reason: "Unclear wording" }));
+  expect(await screen.findByText(/cannot be changed this way/)).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", { name: "Select question: Second pending?" })).toBeChecked();
 });
 
 it("renders one report and one suggestion panel for an approved question", async () => {
