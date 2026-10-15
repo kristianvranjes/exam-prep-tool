@@ -128,6 +128,7 @@ def test_abandon_authorization_and_detail_privacy(bank):
             "difficulty",
             "options",
             "answer",
+            "units",
         }
     with SessionLocal() as db:
         user_id = UUID(member.get("/auth/me").json()["id"])

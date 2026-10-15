@@ -844,3 +844,18 @@ it("keeps whole-course practice unfocused and labels focused history", async () 
   await screen.findByText("Choose a number");
   expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE");
 });
+
+it("shows the course units of the current question while practicing", async () => {
+  if (current.status !== "ACTIVE") throw new Error("expected an active attempt");
+  current.questions[0].units = [{ id: "unit-2", title: "Lexical analysis" }, { id: "unit-5", title: "LR parsing" }];
+  render(<PracticeQuiz courseId="course" />);
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  await screen.findByText("Choose a number");
+  const units = screen.getByRole("list", { name: "Course units" });
+  expect(within(units).getAllByRole("listitem").map(item => item.textContent)).toEqual(["Lexical analysis", "LR parsing"]);
+  fireEvent.click(screen.getByLabelText("One"));
+  fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
+  await screen.findByText("The sky is green");
+  expect(screen.queryByRole("list", { name: "Course units" })).not.toBeInTheDocument();
+});

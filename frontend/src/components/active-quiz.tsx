@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { practiceApi, type Attempt, type PracticeAnswer } from "../lib/practice-api";
 import { Alert, Button } from "./ui";
 import { QuizAnswerEditor } from "./quiz-answer-editor";
+import { QuestionUnits } from "./question-units";
 import { ExperiencePicker, QuizNavigator, type QuizExperience } from "./quiz-navigation";
 import { useUnsavedChanges } from "./unsaved-changes";
 
@@ -153,6 +154,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
           <h2 ref={questionHeading} tabIndex={-1} className="text-base font-semibold">Question {index + 1} of {attempt.questions.length}</h2>
           <p role="status" className="text-sm text-muted">{saveState}</p>
         </div>
+        <QuestionUnits units={question.units} />
         <QuizAnswerEditor question={question} answer={answer} change={value => { setAnswer(value); setSaveFailed(false); setError(""); }} disabled={busy} />
         <div className="flex flex-col gap-3">
           {!valid && <p id="answer-help" className="text-sm text-muted">{question.type === "SHORT_ANSWER" ? "Enter your answer to continue." : "Choose an answer to continue."}</p>}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Attempt, ResultQuestion } from "../lib/practice-api";
+import { QuestionUnits } from "./question-units";
 import { Button, Surface } from "./ui";
 
 type ReviewView = "INCORRECT" | "PENDING" | "ALL";
@@ -71,7 +72,7 @@ export function QuizResults({ attempt, busy = false, onPracticeAgain, onViewProg
       <div><h3 ref={reviewHeading} tabIndex={-1} className="text-lg font-semibold">{viewLabels[view]}</h3><p role="status" className="mt-1 text-sm text-muted">{visibleQuestions.length} {visibleQuestions.length === 1 ? "answer" : "answers"}</p></div>
       <div className="space-y-5">{visibleQuestions.map(({ question, number }) => {
         const correct = question.grading_status === "CORRECT";
-        const header = <div className="space-y-2"><h4 className="text-lg font-semibold">{number}. {question.stem}</h4><p className="text-sm text-muted">{correct ? "Correct" : question.grading_status === "PENDING" ? "Self-review required" : "Incorrect"}</p></div>;
+        const header = <div className="space-y-2"><h4 className="text-lg font-semibold">{number}. {question.stem}</h4><QuestionUnits units={question.units} /><p className="text-sm text-muted">{correct ? "Correct" : question.grading_status === "PENDING" ? "Self-review required" : "Incorrect"}</p></div>;
         return <article key={question.id} aria-label={`Question ${number} result`} className="min-w-0">
           {correct ? <div className="space-y-3 border-b border-line py-4">
             {header}
