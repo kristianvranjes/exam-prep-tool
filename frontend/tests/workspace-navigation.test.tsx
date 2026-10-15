@@ -206,7 +206,7 @@ it("preserves an actual question draft across More, Materials and Home and guard
   expect(screen.getByLabelText("Question text")).toHaveValue("Unfinished draft question");
   fireEvent.click(screen.getByRole("button", { name: "Back to Home" })); await enterCourse(); navigate("More");
   expect(screen.getByLabelText("Option 1", { exact: true })).toHaveValue("Draft option");
-  expect(mock.questions.mock.calls.filter(([, filters]) => filters?.limit !== 50)).toHaveLength(1);
+  expect(mock.questions).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole("button", { name: "Back to Home" }));
   fireEvent.click(screen.getByRole("button", { name: "Open course: Statistics" }));
   expect(confirm).toHaveBeenCalledOnce(); await enterCourse(); navigate("More");
@@ -231,7 +231,6 @@ it("removes the resume entry after submission and retains the existing result", 
   expect(screen.queryByRole("heading", { name: "Continue studying" })).not.toBeInTheDocument();
   await enterCourse(); navigate("Practice");
   expect(screen.getByRole("region", { name: "Practice results" })).toBeVisible();
-  mock.questions.mockResolvedValue(Array.from({ length: 50 }, (_, id) => ({ id: String(id), status: "APPROVED", type: "TRUE_FALSE" })));
   mock.history.mockResolvedValue([submitted]);
   navigate("Overview");
   fireEvent.click(await screen.findByRole("button", { name: "Start recommended practice" }));
@@ -262,7 +261,6 @@ it("opens existing Progress and Course Overview directly from submitted results 
 });
 
 it("opens Recommended and Standard setup from Overview without starting an attempt or resetting settings", async () => {
-  mock.questions.mockResolvedValue(Array.from({ length: 50 }, (_, id) => ({ id: String(id), status: "APPROVED", type: "TRUE_FALSE" })));
   render(<AppShell />); await enterCourse();
   expect(screen.queryByRole("button", { name: "Resume session" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Start recommended practice" }));
@@ -286,7 +284,6 @@ it("opens Recommended and Standard setup from Overview without starting an attem
 });
 
 it("offers an honestly labelled return to the mounted session from Overview", async () => {
-  mock.questions.mockResolvedValue(Array.from({ length: 50 }, (_, id) => ({ id: String(id), status: "APPROVED", type: "TRUE_FALSE" })));
   render(<AppShell />); fireEvent.change(await startPractice(), { target: { value: "Keep this answer" } });
   navigate("Overview");
   expect(screen.getByRole("button", { name: "Resume session" })).toHaveClass("bg-accent");
@@ -338,7 +335,7 @@ it("keeps the active unsaved answer when Recommended practice is requested from 
 });
 
 it("opens progress and materials from summaries and keeps contribution behind More", async () => {
-  mock.questions.mockResolvedValue([]);
+  mock.availability.mockResolvedValue({ course_total: 0, total: 0, by_type: [], by_unit: [] });
   render(<AppShell />); await enterCourse();
   await screen.findByText("No practice questions are available for this course yet.");
   fireEvent.click(screen.getByRole("button", { name: "View progress" }));

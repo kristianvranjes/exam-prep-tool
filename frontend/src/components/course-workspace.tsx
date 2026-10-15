@@ -52,7 +52,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
     <section id="course-overview" hidden={destination !== "overview"} aria-labelledby="overview-heading" className="mt-6">
       <h2 id="overview-heading" className="text-xl font-semibold">Overview</h2>
       {course.description && <p className="mt-3 max-w-prose text-muted">{course.description}</p>}
-      <CourseOverview courseId={course.id} currentUserId={currentUserId} active={visible && destination === "overview"}
+      <CourseOverview courseId={course.id} active={visible && destination === "overview"}
         knownAttemptId={knownAttemptId} checkingSession={checkingSession} activeSession={activeSession} materials={materials} onResume={onResume}
         onRecommendedPractice={() => openPractice("ADAPTIVE")}
         onStandardPractice={() => openPractice("STANDARD")}
