@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { Attempt } from "../lib/practice-api";
+import { QuestionUnits } from "./question-units";
 import { Badge, Surface } from "./ui";
 
 export function AbandonedQuiz({ attempt }: { attempt: Extract<Attempt, { status: "ABANDONED" }> }) {
@@ -16,6 +17,7 @@ export function AbandonedQuiz({ attempt }: { attempt: Extract<Attempt, { status:
       const savedAnswer = answer?.type === "SHORT_ANSWER" ? answer.text : answer?.type === "TRUE_FALSE" ? String(answer.value) : question.options.find(option => answer?.type === "MULTIPLE_CHOICE" && option.position === answer.option_position)?.text;
       return <article key={question.id} aria-label={`Question ${index + 1} saved answer`}><Surface className="flex flex-col gap-3">
         <h3 className="text-lg font-semibold">{index + 1}. {question.stem}</h3>
+        <QuestionUnits units={question.units} />
         <div><Badge>{answer ? "Answer saved" : "No answer saved"}</Badge></div>
         <p className="whitespace-pre-wrap">Your saved answer: {savedAnswer ?? "No answer saved"}</p>
       </Surface></article>;

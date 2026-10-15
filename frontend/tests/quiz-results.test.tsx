@@ -147,3 +147,11 @@ it("shows missing saved answers neutrally and does not create an empty explanati
   expect(screen.getByText("No answer saved")).toBeVisible();
   expect(screen.queryByText("Explanation")).not.toBeInTheDocument();
 });
+
+it("labels each reviewed question with its course units", () => {
+  open([{ ...mistake, units: [{ id: "unit-1", title: "Regular expressions" }] }, correct]);
+  const result = screen.getByRole("article", { name: "Question 1 result" });
+  expect(within(within(result).getByRole("list", { name: "Course units" })).getByText("Regular expressions")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "All answers" }));
+  expect(within(screen.getByRole("article", { name: "Question 2 result" })).queryByRole("list", { name: "Course units" })).not.toBeInTheDocument();
+});

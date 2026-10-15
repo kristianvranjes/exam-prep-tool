@@ -200,3 +200,53 @@ def test_unit_progress_overlaps_units_and_ignores_pending(clients):
         {key: row[key] for key in zero} == zero for row in unit_progress(owner, course)["units"]
     )
     assert stranger.get(f"/courses/{course}/review-progress/units").status_code in {403, 404}
+
+
+def test_attempt_questions_show_live_units(clients):
+    owner, member, stranger, course = clients
+    first = unit(owner, course, "Unit 1")
+    second = unit(owner, course, "Unit 2")
+    third = unit(owner, course, "Unit 3")
+    order = {"unit_ids": [second, first, third]}
+    assert owner.patch(f"/courses/{course}/units/order", json=order).status_code == 200
+    both = draft(member, course, "Both?", [first, second])
+    draft(member, course, "Loose?", [])
+    draft(member, course, "Retired?", [third])
+
+    attempt = start(member, course, 3).json()
+    path = f"/courses/{course}/attempts/{attempt['id']}"
+
+    def units(body):
+        return {q["stem"]: [(u["id"], u["title"]) for u in q["units"]] for q in body["questions"]}
+
+    # Units follow course order, not the order they were assigned in.
+    assert units(attempt) == {
+        "Both?": [(second, "Unit 2"), (first, "Unit 1")],
+        "Loose?": [],
+        "Retired?": [(third, "Unit 3")],
+    }
+    assert all(set(u) == {"id", "title"} for q in attempt["questions"] for u in q["units"])
+
+    # Units are organization read live; the frozen question snapshot is untouched.
+    assert owner.patch(f"/units/{first}", json={"title": "Renamed"}).status_code == 200
+    assert owner.post(f"/units/{third}/archive").status_code == 200
+    live = member.get(path).json()
+    assert units(live) == {
+        "Both?": [(second, "Unit 2"), (first, "Renamed")],
+        "Loose?": [],
+        "Retired?": [],
+    }
+    assert [q["stem"] for q in live["questions"]] == [q["stem"] for q in attempt["questions"]]
+
+    for question in live["questions"]:
+        answer = {"type": "TRUE_FALSE", "value": True}
+        response = member.patch(f"{path}/answers/{question['id']}", json=answer)
+        assert response.status_code == 200, response.text
+    submitted = member.post(path + "/submit")
+    assert submitted.status_code == 200, submitted.text
+    assert units(submitted.json())["Both?"] == [(second, "Unit 2"), (first, "Renamed")]
+
+    unlinked = member.patch(f"/questions/{both}/units", json={"unit_ids": []})
+    assert unlinked.status_code == 200, unlinked.text
+    assert units(member.get(path).json())["Both?"] == []
+    assert stranger.get(path).status_code in {403, 404}

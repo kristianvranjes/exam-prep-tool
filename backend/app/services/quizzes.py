@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import User
+from app.models.course_unit import CourseUnit, QuestionUnit
 from app.models.question import QuestionVersion
 from app.models.quiz import Answer, Quiz, QuizAttempt, QuizQuestion
 from app.schemas.question import OwnerQuestion, PublicOption
@@ -22,6 +23,7 @@ from app.schemas.quiz import (
     MCQAnswer,
     PracticeAvailability,
     PracticeFilters,
+    QuestionUnitLabel,
     ResultQuestion,
     StartQuiz,
     SubmittedAttempt,
@@ -81,14 +83,38 @@ def question_rows(db: Session, attempt: QuizAttempt) -> list[QuizQuestion]:
     )
 
 
+def unit_labels(
+    db: Session, course_id: UUID, question_ids: list[UUID]
+) -> dict[UUID, list[QuestionUnitLabel]]:
+    """Current active units per source question; deleted sources simply have none."""
+    labels: dict[UUID, list[QuestionUnitLabel]] = {}
+    if not question_ids:
+        return labels
+    rows = db.execute(
+        select(QuestionUnit.question_id, CourseUnit.id, CourseUnit.title)
+        .join(CourseUnit, CourseUnit.id == QuestionUnit.unit_id)
+        .where(
+            QuestionUnit.question_id.in_(question_ids),
+            CourseUnit.course_id == course_id,
+            CourseUnit.is_archived.is_(False),
+        )
+        .order_by(CourseUnit.position, CourseUnit.id)
+    )
+    for question_id, unit_id, title in rows:
+        labels.setdefault(question_id, []).append(QuestionUnitLabel(id=unit_id, title=title))
+    return labels
+
+
 def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> AttemptResponse:
     answers = {
         a.quiz_question_id: a
         for a in db.scalars(select(Answer).where(Answer.attempt_id == attempt.id))
     }
+    rows = question_rows(db, attempt)
+    units = unit_labels(db, course_id, [row.source_question_id for row in rows])
     active: list[ActiveQuestion] = []
     results: list[ResultQuestion] = []
-    for row in question_rows(db, attempt):
+    for row in rows:
         content = OwnerQuestion.model_validate(row.snapshot)
         answer = answers.get(row.id)
         public = ActiveQuestion(
@@ -99,6 +125,7 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
             difficulty=content.difficulty,
             options=[PublicOption(position=o.position, text=o.text) for o in content.options],
             answer=answer_adapter.validate_python(answer.payload) if answer else None,
+            units=units.get(row.source_question_id, []),
         )
         active.append(public)
         if attempt.status == "SUBMITTED":

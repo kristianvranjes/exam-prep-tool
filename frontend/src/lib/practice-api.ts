@@ -13,9 +13,12 @@ export type AttemptSummary = {
 };
 /** Optional practice focus: selected units or one exam scope. */
 export type PracticeFocus = { unit_ids: string[] } | { exam_scope_id: string };
+/** A course unit the source question belongs to now; read live, not frozen with the attempt. */
+export type QuestionUnitLabel = { id: string; title: string };
 export type ActiveQuestion = {
   id: string; position: number; type: QuestionType; stem: string; difficulty: number | null;
   options: { position: number; text: string }[]; answer: PracticeAnswer | null;
+  units?: QuestionUnitLabel[];
 };
 export type ResultQuestion = Omit<ActiveQuestion, "options"> & {
   options: { position: number; text: string; is_correct: boolean }[];

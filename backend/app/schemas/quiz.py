@@ -104,6 +104,11 @@ class AttemptSummary(BaseModel):
     focus_label: str | None = None
 
 
+class QuestionUnitLabel(BaseModel):
+    id: UUID
+    title: str
+
+
 class ActiveQuestion(BaseModel):
     id: UUID
     position: int
@@ -112,6 +117,8 @@ class ActiveQuestion(BaseModel):
     difficulty: int | None
     options: Sequence[PublicOption]
     answer: AnswerPayload | None
+    # Live organization, not part of the snapshot: current active units in course order.
+    units: list[QuestionUnitLabel] = []
 
 
 class ResultQuestion(ActiveQuestion):
