@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { QuestionBank } from "../src/components/question-bank";
 import type { OwnerQuestion, PublicQuestion } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ me: vi.fn(), course: vi.fn(), moderatorStatus: vi.fn(), createQuestion: vi.fn(), importQuestions: vi.fn(), membership: vi.fn(), concepts: vi.fn(), questions: vi.fn(), generateQuestions: vi.fn(), editQuestion: vi.fn(), transitionQuestion: vi.fn(), questionVersions: vi.fn(), reportQuestion: vi.fn(), suggestQuestionEdit: vi.fn(), units: vi.fn(), setQuestionUnits: vi.fn() }));
+const mock = vi.hoisted(() => ({ me: vi.fn(), course: vi.fn(), moderatorStatus: vi.fn(), createQuestion: vi.fn(), importQuestions: vi.fn(), membership: vi.fn(), concepts: vi.fn(), questions: vi.fn(), generateQuestions: vi.fn(), editQuestion: vi.fn(), transitionQuestion: vi.fn(), questionVersions: vi.fn(), reportQuestion: vi.fn(), suggestQuestionEdit: vi.fn(), units: vi.fn(), setQuestionUnits: vi.fn(), bulkQuestionUnits: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 
 const draft: OwnerQuestion = {
@@ -773,6 +773,69 @@ it("hides unit reorganization from ordinary members", async () => {
   fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
   await screen.findByText((_, node) => node?.tagName === "P" && node.textContent === "Units: None");
   expect(screen.queryByRole("button", { name: "Change units" })).not.toBeInTheDocument();
+});
+
+it("lets an owner add and remove a unit for the selected questions on a page", async () => {
+  mock.units.mockResolvedValue(unitRows);
+  current = { ...draft, status: "APPROVED", unit_ids: ["unit-1"] };
+  const loose = { ...draft, id: "q2", status: "APPROVED" as const, stem: "What is a vector?", unit_ids: [] };
+  const archived = { ...draft, id: "q3", status: "ARCHIVED" as const, stem: "What is a tensor?", unit_ids: [] };
+  mock.questions.mockImplementation(async () => [current, loose, archived]);
+  mock.bulkQuestionUnits.mockResolvedValueOnce({ changed: 2, unchanged: 0 }).mockResolvedValueOnce({ changed: 0, unchanged: 1 });
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  const toolbar = screen.getByRole("group", { name: "Organize selected questions" });
+  const add = within(toolbar).getByRole("button", { name: "Add to unit" });
+  expect(add).toBeDisabled();
+  expect(screen.getByRole("checkbox", { name: "Select question: What is a tensor?" })).toBeDisabled();
+
+  fireEvent.click(within(toolbar).getByLabelText("Select all on this page"));
+  expect(within(toolbar).getByText("2 selected")).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", { name: "Select question: What is a tensor?" })).not.toBeChecked();
+  fireEvent.change(within(toolbar).getByLabelText("Unit for selected questions"), { target: { value: "unit-2" } });
+  fireEvent.click(add);
+  await waitFor(() => expect(mock.bulkQuestionUnits).toHaveBeenCalledWith("course", { question_ids: ["q1", "q2"], unit_id: "unit-2", action: "ADD" }));
+  expect(await within(toolbar).findByText("Added 2 questions to Eigenvalues.")).toBeInTheDocument();
+  expect(within(toolbar).getByText("0 selected")).toBeInTheDocument();
+  const selected = screen.getByRole("article", { name: "Selected question" });
+  expect(within(selected).getByText((_, node) => node?.tagName === "P" && node.textContent === "Units: Linear maps, Eigenvalues")).toBeInTheDocument();
+  expect(mock.setQuestionUnits).not.toHaveBeenCalled();
+
+  // Archived units accept removal only.
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select question: What is a vector?" }));
+  fireEvent.change(within(toolbar).getByLabelText("Unit for selected questions"), { target: { value: "unit-old" } });
+  expect(add).toBeDisabled();
+  expect(within(toolbar).getByText(/Archived units take no new questions/)).toBeInTheDocument();
+  fireEvent.click(within(toolbar).getByRole("button", { name: "Remove from unit" }));
+  await waitFor(() => expect(mock.bulkQuestionUnits).toHaveBeenLastCalledWith("course", { question_ids: ["q2"], unit_id: "unit-old", action: "REMOVE" }));
+  expect(await within(toolbar).findByText("Removed 0 questions from Old syllabus. 1 question not in it.")).toBeInTheDocument();
+});
+
+it("keeps the bulk selection after a rejected change and clears it when the page changes", async () => {
+  mock.units.mockResolvedValue(unitRows);
+  mock.moderatorStatus.mockResolvedValue({ is_moderator: true });
+  mock.membership.mockResolvedValue({ role: "MEMBER" });
+  mock.questions.mockImplementation(async () => Array.from({ length: 20 }, (_, n) => ({ ...current, id: `q${n}`, stem: n ? `Question ${n}` : draft.stem })));
+  mock.bulkQuestionUnits.mockRejectedValue(new Error("A question can belong to at most 5 units"));
+  await open();
+  const toolbar = screen.getByRole("group", { name: "Organize selected questions" });
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select question: Question 1" }));
+  fireEvent.change(within(toolbar).getByLabelText("Unit for selected questions"), { target: { value: "unit-1" } });
+  fireEvent.click(within(toolbar).getByRole("button", { name: "Add to unit" }));
+  expect(await screen.findByText("A question can belong to at most 5 units")).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", { name: "Select question: Question 1" })).toBeChecked();
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  await waitFor(() => expect(mock.questions).toHaveBeenLastCalledWith("course", expect.objectContaining({ offset: 20 })));
+  expect(await screen.findByRole("checkbox", { name: "Select question: Question 1" })).not.toBeChecked();
+});
+
+it("does not offer bulk organization to ordinary members", async () => {
+  mock.units.mockResolvedValue(unitRows);
+  mock.membership.mockResolvedValue({ role: "MEMBER" });
+  await open();
+  await waitFor(() => expect(mock.units).toHaveBeenCalled());
+  expect(screen.queryByRole("group", { name: "Organize selected questions" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("checkbox", { name: /Select question/ })).not.toBeInTheDocument();
 });
 
 it("renders one report and one suggestion panel for an approved question", async () => {

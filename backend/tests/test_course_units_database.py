@@ -13,6 +13,7 @@ from test_quiz_import import document
 from app.database import Base, SessionLocal, engine
 from app.main import app
 from app.models.course_unit import CourseUnit, QuestionUnit
+from app.models.faculty_moderator import FacultyModerator
 from app.models.question import Question, QuestionVersion
 
 pytestmark = pytest.mark.skipif(os.getenv("RUN_DB_TESTS") != "1", reason="Requires PostgreSQL")
@@ -249,6 +250,75 @@ def test_import_applies_selected_units_atomically(clients):
     assert {tuple(row["unit_ids"]) for row in imported.json()} == {(first,)}
     plain = owner.post(path, json=document())
     assert plain.status_code == 201 and all(row["unit_ids"] == [] for row in plain.json())
+
+
+def test_bulk_unit_assignment_is_atomic_and_manager_only(clients):
+    owner, member, stranger, course = clients
+    first, second, third, fourth, fifth, sixth = (
+        unit(owner, course, f"Cjelina {n}") for n in range(1, 7)
+    )
+    faculty = owner.get(f"/courses/{course}").json()["faculty_id"]
+    other_course = create_course(owner, json={"name": "Other", "faculty_id": faculty}).json()["id"]
+    foreign = unit(owner, other_course, "Foreign")
+    elsewhere = owner.post(f"/courses/{other_course}/questions", json=question("Elsewhere?")).json()
+    path = f"/courses/{course}/questions"
+    linked = member.post(path, json=question("Is P or not P valid?", [first])).json()
+    loose = member.post(path, json=question("Is every set finite?")).json()
+    full = member.post(
+        path, json=question("Is the empty set finite?", [second, third, fourth, fifth, sixth])
+    ).json()
+    draft = member.post(path, json=question("Private draft?")).json()
+    for row in (linked, loose, full):
+        approve(member, row["id"])
+    bulk = f"/courses/{course}/questions/units"
+
+    def body(ids, unit_id, action="ADD"):
+        return {"question_ids": [row["id"] for row in ids], "unit_id": unit_id, "action": action}
+
+    def units_of(row):
+        return member.get(f"/questions/{row['id']}").json()["unit_ids"]
+
+    # Only owners and moderators reorganize; strangers do not learn the course exists.
+    assert member.post(bulk, json=body([loose], first)).status_code == 403
+    assert stranger.post(bulk, json=body([loose], first)).status_code == 404
+    duplicate = {"question_ids": [loose["id"], loose["id"]], "unit_id": first, "action": "ADD"}
+    assert owner.post(bulk, json=duplicate).status_code == 422
+    assert owner.post(bulk, json=body([loose], first, "MOVE")).status_code == 422
+    assert owner.post(bulk, json=body([loose], foreign)).status_code == 422
+    # Any unknown, foreign-course, or over-limit question rejects the whole request.
+    assert owner.post(bulk, json=body([loose, {"id": str(uuid4())}], first)).status_code == 404
+    assert owner.post(bulk, json=body([loose, elsewhere], first)).status_code == 404
+    assert owner.post(bulk, json=body([loose, full], first)).status_code == 422
+    assert units_of(loose) == [] and units_of(full) == sorted([second, third, fourth, fifth, sixth])
+
+    before = version_count(loose["id"])
+    added = owner.post(bulk, json=body([linked, loose, draft], first))
+    assert added.status_code == 200, added.text
+    assert added.json() == {"changed": 2, "unchanged": 1}
+    assert units_of(loose) == [first] and units_of(draft) == [first]
+    assert version_count(loose["id"]) == before
+    assert member.get(f"/questions/{loose['id']}").json()["status"] == "APPROVED"
+
+    # Archived units take no new links but can still be removed in bulk.
+    assert owner.post(f"/units/{second}/archive").status_code == 200
+    assert owner.post(bulk, json=body([loose], second)).status_code == 422
+    removed = owner.post(bulk, json=body([loose, full], second, "REMOVE"))
+    assert removed.json() == {"changed": 1, "unchanged": 1}
+    assert units_of(full) == sorted([third, fourth, fifth, sixth])
+
+    archived = review_question(member, f"/questions/{loose['id']}/archive")
+    assert archived.status_code == 200, archived.text
+    assert owner.post(bulk, json=body([linked, loose], third)).status_code == 409
+    assert third not in units_of(linked)
+
+    # A course owner who is not a moderator cannot see, so cannot organize, others' drafts.
+    with SessionLocal() as db:
+        owner_id = UUID(owner.get("/auth/me").json()["id"])
+        db.query(FacultyModerator).filter_by(user_id=owner_id).delete()
+        db.commit()
+    assert owner.post(bulk, json=body([linked, draft], first, "REMOVE")).status_code == 404
+    kept = owner.post(bulk, json=body([linked], first, "REMOVE"))
+    assert kept.status_code == 200 and units_of(linked) == [] and units_of(draft) == [first]
 
 
 def test_course_delete_removes_units_and_links(clients):

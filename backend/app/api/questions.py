@@ -7,7 +7,7 @@ from app.config import Settings
 from app.dependencies import get_current_user, get_db
 from app.models import User
 from app.schemas.concept import JobDetail
-from app.schemas.course_unit import QuestionUnits
+from app.schemas.course_unit import BulkQuestionUnits, BulkQuestionUnitsResult, QuestionUnits
 from app.schemas.question import (
     GenerationRequest,
     OwnerQuestion,
@@ -108,6 +108,16 @@ def set_units(
     db: Session = Depends(get_db),
 ) -> QuestionResponse:
     return service.set_units(db, user, question_id, data.unit_ids)
+
+
+@router.post("/courses/{course_id}/questions/units", response_model=BulkQuestionUnitsResult)
+def bulk_set_units(
+    course_id: UUID,
+    data: BulkQuestionUnits,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BulkQuestionUnitsResult:
+    return service.bulk_set_units(db, user, course_id, data)
 
 
 @router.post("/questions/{question_id}/submit", response_model=OwnerQuestion)

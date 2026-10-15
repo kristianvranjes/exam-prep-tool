@@ -22,7 +22,9 @@ from app.models.question import (
 )
 from app.models.question_edit_suggestion import QuestionEditSuggestion
 from app.models.question_report import QuestionReport
+from app.schemas.course_unit import BulkQuestionUnits, BulkQuestionUnitsResult
 from app.schemas.question import (
+    MAX_QUESTION_UNITS,
     MCQ,
     OwnerOption,
     OwnerQuestion,
@@ -478,3 +480,69 @@ def set_units(db: Session, user: User, question_id: UUID, unit_ids: list[UUID]) 
         db.rollback()
         raise HTTPException(503, "Could not save question units") from None
     return representation(db, question, full)
+
+
+def bulk_set_units(
+    db: Session, user: User, course_id: UUID, data: BulkQuestionUnits
+) -> BulkQuestionUnitsResult:
+    """Add or remove one unit across selected questions, all or nothing.
+
+    Follows set_units for owners and moderators: organization only, so no content
+    version or review. Questions that already match the request count as unchanged.
+    """
+    moderator = course_moderator(db, user, course_id)
+    if not moderator:
+        get_member_course(db, user, course_id)
+        if not is_course_owner(db, user, course_id):
+            raise HTTPException(403, "Course owner or faculty moderator access required")
+    ids = sorted(data.question_ids)
+    # Lock in ID order so concurrent bulk requests cannot deadlock each other.
+    questions = db.scalars(
+        select(Question)
+        .where(Question.id.in_(ids), Question.course_id == course_id)
+        .order_by(Question.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).all()
+    # Owners who are not moderators see only approved questions and their own drafts.
+    if len(questions) != len(ids) or any(
+        not moderator and q.status != "APPROVED" and q.created_by_user_id != user.id
+        for q in questions
+    ):
+        raise HTTPException(404, "Question not found")
+    if any(q.status == "ARCHIVED" for q in questions):
+        raise HTTPException(409, "Archived questions cannot change units")
+    try:
+        linked: dict[UUID, set[UUID]] = {question_id: set() for question_id in ids}
+        for question_id, unit_id in db.execute(
+            select(QuestionUnit.question_id, QuestionUnit.unit_id).where(
+                QuestionUnit.question_id.in_(ids)
+            )
+        ):
+            linked[question_id].add(unit_id)
+        if data.action == "ADD":
+            validate_unit_links(db, course_id, [data.unit_id])
+            targets = [q for q in ids if data.unit_id not in linked[q]]
+            if any(len(linked[q]) >= MAX_QUESTION_UNITS for q in targets):
+                raise HTTPException(
+                    422, f"A question can belong to at most {MAX_QUESTION_UNITS} units"
+                )
+            db.add_all(QuestionUnit(question_id=q, unit_id=data.unit_id) for q in targets)
+        else:
+            # Removing an archived unit is allowed, as in single-question edits.
+            validate_unit_links(db, course_id, [data.unit_id], [data.unit_id])
+            targets = [q for q in ids if data.unit_id in linked[q]]
+            if targets:
+                db.execute(
+                    delete(QuestionUnit).where(
+                        QuestionUnit.unit_id == data.unit_id, QuestionUnit.question_id.in_(targets)
+                    )
+                )
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(503, "Could not save question units") from None
+    return BulkQuestionUnitsResult(changed=len(targets), unchanged=len(ids) - len(targets))
