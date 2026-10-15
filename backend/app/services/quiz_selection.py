@@ -1,6 +1,7 @@
 """Deterministic selection; callers supply the clock and own the transaction."""
 
 from datetime import datetime
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import Select, and_, case, func, select
@@ -16,7 +17,8 @@ from app.schemas.quiz import PracticeFilters, StartQuiz
 from app.services.practice_eligibility import practice_eligible
 
 
-def _history(user_id: UUID) -> Select[tuple[UUID]]:
+# Select generics differ between SQLAlchemy 2.0 and 2.1, so keep the row type open.
+def _history(user_id: UUID) -> Select[Any]:
     """Snapshots of the correlated source question in this user's sessions."""
     return (
         select(QuizQuestion.id)
@@ -99,7 +101,7 @@ def count_by_type(
     for type_, count in db.execute(
         select(Question.type, func.count(Question.id)).where(*filters).group_by(Question.type)
     ):
-        counts[type_] = count
+        counts[cast(QuestionType, type_)] = count
     return counts
 
 
