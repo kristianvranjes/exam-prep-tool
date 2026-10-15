@@ -25,7 +25,8 @@ const apiMock = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/lib/api", () => ({ api: apiMock }));
-vi.mock("../src/lib/practice-api", () => ({ practiceApi: { history: vi.fn().mockResolvedValue([]) } }));
+vi.mock("../src/lib/practice-api", () => ({ practiceApi: { history: vi.fn().mockResolvedValue([]),
+  availability: vi.fn().mockResolvedValue({ course_total: 1, total: 1, by_type: [], by_unit: [] }) } }));
 vi.mock("../src/components/course-materials", () => ({ CourseMaterials: ({ courseId }: { courseId: string }) => <section aria-label="Course materials">Materials for {courseId}</section> }));
 vi.mock("../src/components/practice-quiz", () => ({ PracticeQuiz: ({ courseId, adaptiveReviewRequest }: { courseId: string; adaptiveReviewRequest: number }) => <section aria-label="Practice quiz">Practice for {courseId} · handoff {adaptiveReviewRequest}</section> }));
 vi.mock("../src/components/progress-panel", () => ({ ProgressPanel: ({ courseId, onOpenAdaptiveReview }: { courseId: string; onOpenAdaptiveReview: () => void }) => <section aria-label="Progress">Progress for {courseId}<button onClick={onOpenAdaptiveReview}>Start recommended practice</button></section> }));

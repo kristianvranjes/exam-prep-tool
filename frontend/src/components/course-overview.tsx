@@ -2,15 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { api, type ReviewProgressSummary } from "../lib/api";
+import { practiceApi } from "../lib/practice-api";
 import type { MaterialsSummary } from "./course-materials";
 import { Button, Surface } from "./ui";
 
 type ProgressState = { loading: boolean; summary: ReviewProgressSummary | null; error: boolean };
 type Availability = "loading" | "available" | "empty" | "unknown";
 
-export function CourseOverview({ courseId, currentUserId, active, knownAttemptId, checkingSession, activeSession, materials, onResume,
+export function CourseOverview({ courseId, active, knownAttemptId, checkingSession, activeSession, materials, onResume,
   onRecommendedPractice, onStandardPractice, onProgress, onMaterials, onQuestions }: {
-  courseId: string; currentUserId: string; active: boolean; knownAttemptId: string | null;
+  courseId: string; active: boolean; knownAttemptId: string | null;
   checkingSession?: boolean; activeSession?: boolean; materials: MaterialsSummary; onResume: () => void; onRecommendedPractice: () => void;
   onStandardPractice: () => void; onProgress: () => void; onMaterials: () => void; onQuestions: () => void;
 }) {
@@ -30,18 +31,13 @@ export function CourseOverview({ courseId, currentUserId, active, knownAttemptId
       }).catch(() => {
         if (current) setProgress({ loading: false, summary: null, error: true });
       });
-      // A bounded read establishes an empty state only when the whole visible list fits.
-      // Moderators may see other people's drafts; those are not eligible for their practice.
-      void api.questions(courseId, { limit: 50, offset: 0 }).then(rows => {
-        if (!current) return;
-        const eligible = rows.some(question => question.status === "APPROVED" ||
-          (question.visibility === "OWNER" && question.created_by_user_id === currentUserId &&
-            (question.status === "DRAFT" || question.status === "PENDING_REVIEW")));
-        setAvailability(eligible ? "available" : rows.length < 50 ? "empty" : "unknown");
+      // Counts every practice-eligible course question with the same rules as session start.
+      void practiceApi.availability(courseId, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]).then(counts => {
+        if (current) setAvailability(counts.course_total > 0 ? "available" : "empty");
       }).catch(() => { if (current) setAvailability("unknown"); });
     });
     return () => { current = false; };
-  }, [active, courseId, currentUserId]);
+  }, [active, courseId]);
 
   const noQuestions = availability === "empty";
   const summary = progress.summary;

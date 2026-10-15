@@ -1,28 +1,25 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { CourseOverview } from "../src/components/course-overview";
-import type { Material, OwnerQuestion, PublicQuestion, ReviewProgressSummary } from "../src/lib/api";
+import type { Material, ReviewProgressSummary } from "../src/lib/api";
+import type { PracticeAvailability } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ reviewProgressSummary: vi.fn(), questions: vi.fn() }));
+const mock = vi.hoisted(() => ({ reviewProgressSummary: vi.fn(), availability: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
+vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 const summary: ReviewProgressSummary = { as_of: "2026-10-05", reviewed_questions: 3, due_now: 42, upcoming: 1,
   resolved_review_count: 4, correct_review_count: 3, incorrect_review_count: 1, last_reviewed_at: null,
   next_due_at: null, stage_counts: [{ review_stage: 5, question_count: 3 }] };
-const approved: PublicQuestion = { id: "q", course_id: "course", type: "TRUE_FALSE", stem: "Private question text",
-  difficulty: null, visibility: "MEMBER", status: "APPROVED", options: [] };
-const privateQuestion: OwnerQuestion = { ...approved, visibility: "OWNER", status: "DRAFT", created_by_user_id: "student",
-  created_at: "2026-10-01", updated_at: "2026-10-01", source: "USER", ai_job_id: null, explanation: null,
-  correct_boolean: true, reference_answer: null, reviewed_by_user_id: null, reviewed_at: null,
-  rejection_reason: null, concept_ids: [], source_chunks: [], options: [] };
+const counts = (course_total: number): PracticeAvailability => ({ course_total, total: course_total, by_type: [], by_unit: [] });
 const material: Material = { id: "m", course_id: "course", original_filename: "notes.pdf", uploaded_by_user_id: "student",
   created_at: "2026-10-01", updated_at: "2026-10-01", status: "READY", processing_error: null,
   media_type: "application/pdf", file_size_bytes: 100 };
-const props = () => ({ courseId: "course", currentUserId: "student", active: true, knownAttemptId: null as string | null,
+const props = () => ({ courseId: "course", active: true, knownAttemptId: null as string | null,
   materials: { materials: [material], loading: false, error: false }, onResume: vi.fn(), onRecommendedPractice: vi.fn(),
   onStandardPractice: vi.fn(), onProgress: vi.fn(), onMaterials: vi.fn(), onQuestions: vi.fn() });
 
 beforeEach(() => {
-  vi.resetAllMocks(); mock.reviewProgressSummary.mockResolvedValue(summary); mock.questions.mockResolvedValue([approved]);
+  vi.resetAllMocks(); mock.reviewProgressSummary.mockResolvedValue(summary); mock.availability.mockResolvedValue(counts(1));
 });
 
 it("shows a default recommendation, two trustworthy progress metrics and recent materials without management tools", async () => {
@@ -66,8 +63,8 @@ it("connects recommendation, ordinary practice, progress and materials actions",
   await screen.findByText("75.0%");
 });
 
-it("offers materials and a secondary contribution path when the visible list proves no questions are eligible", async () => {
-  mock.questions.mockResolvedValue([{ ...privateQuestion, status: "ARCHIVED" }, { ...privateQuestion, id: "other", created_by_user_id: "other-student" }]);
+it("offers materials and a secondary contribution path when the course has no practice-eligible questions", async () => {
+  mock.availability.mockResolvedValue(counts(0));
   const p = props(); render(<CourseOverview {...p} />);
   expect(await screen.findByText("No practice questions are available for this course yet.")).toBeVisible();
   expect(screen.queryByRole("button", { name: "Start recommended practice" })).not.toBeInTheDocument();
@@ -76,18 +73,11 @@ it("offers materials and a secondary contribution path when the visible list pro
   expect(contribution).not.toHaveClass("bg-accent"); fireEvent.click(contribution); expect(p.onQuestions).toHaveBeenCalledOnce();
 });
 
-it.each(["DRAFT", "PENDING_REVIEW"] as const)("keeps practice available for the student's own %s question", async status => {
-  mock.questions.mockResolvedValue([{ ...privateQuestion, status }]); render(<CourseOverview {...props()} />);
-  await waitFor(() => expect(mock.questions).toHaveBeenCalledWith("course", { limit: 50, offset: 0 }));
+it("asks for course-wide availability across every practice type, ignoring the current setup", async () => {
+  render(<CourseOverview {...props()} />);
+  await waitFor(() => expect(mock.availability).toHaveBeenCalledExactlyOnceWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]));
   expect(screen.getByRole("button", { name: "Start recommended practice" })).toBeVisible();
   expect(screen.queryByText("No practice questions are available for this course yet.")).not.toBeInTheDocument();
-});
-
-it("does not infer no eligible questions from a full first page", async () => {
-  mock.questions.mockResolvedValue(Array.from({ length: 50 }, (_, id) => ({ ...privateQuestion, id: String(id), status: "ARCHIVED" })));
-  render(<CourseOverview {...props()} />); await screen.findByText("75.0%");
-  expect(screen.getByRole("button", { name: "Start recommended practice" })).toBeVisible();
-  expect(mock.questions).toHaveBeenCalledOnce();
 });
 
 it("uses concise empty states instead of a dashboard of zeros", async () => {
@@ -99,7 +89,7 @@ it("uses concise empty states instead of a dashboard of zeros", async () => {
 });
 
 it("keeps failures distinct from empty data and allows normal navigation", async () => {
-  mock.reviewProgressSummary.mockRejectedValue(new Error("Offline")); mock.questions.mockRejectedValue(new Error("Offline"));
+  mock.reviewProgressSummary.mockRejectedValue(new Error("Offline")); mock.availability.mockRejectedValue(new Error("Offline"));
   render(<CourseOverview {...props()} materials={{ materials: [], loading: false, error: true }} />);
   expect(await screen.findByText(/Progress summary could not be loaded/)).toBeVisible();
   expect(screen.getByText(/Materials summary could not be loaded/)).toBeVisible();
