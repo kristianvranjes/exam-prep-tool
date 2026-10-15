@@ -825,7 +825,7 @@ it("lets an owner add and remove a unit for the selected questions on a page", a
   expect(mock.setQuestionUnits).not.toHaveBeenCalled();
 
   // Archived units accept removal only.
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select question: What is a vector?" }));
+  fireEvent.click(await screen.findByRole("checkbox", { name: "Select question: What is a vector?" }));
   fireEvent.change(within(toolbar).getByLabelText("Unit for selected questions"), { target: { value: "unit-old" } });
   expect(add).toBeDisabled();
   expect(within(toolbar).getByText(/Archived units take no new questions/)).toBeInTheDocument();
