@@ -25,7 +25,7 @@ export function QuizImport({ courseId, disabled, onImported, units = [] }: {
     if (pending.current || disabled) return;
     setError(""); setNotice("");
     if (!file || !file.name.toLowerCase().endsWith(".json")) { setError("Select a .json quiz file."); return; }
-    if (file.size > 262144) { setError("Quiz file must be at most 256 KiB."); return; }
+    if (file.size > 2097152) { setError("Quiz file must be at most 2 MiB."); return; }
     pending.current = true; setBusy(true);
     try {
       const text = await file.text();
@@ -63,7 +63,7 @@ export function QuizImport({ courseId, disabled, onImported, units = [] }: {
       </label>}
       <label htmlFor={`${id}-file`} className="block text-sm font-medium">Quiz JSON file</label>
       <input ref={input} id={`${id}-file`} type="file" accept=".json,application/json" aria-describedby={`${id}-help${file ? ` ${id}-selected` : ""}${error ? ` ${id}-error` : ""}`} aria-invalid={!!error} className="block min-h-11 w-full min-w-0 text-sm file:mr-3 file:min-h-11 file:rounded-lg file:border file:border-line file:bg-subtle file:px-3 file:text-foreground" disabled={busy || disabled} onChange={(e) => { setFile(e.target.files?.[0] ?? null); setError(""); setNotice(""); }} />
-      <p id={`${id}-help`} className="text-xs text-muted">1–50 questions, up to 256 KiB. Server limits may be lower. Duplicates among your current questions are rejected; nothing is saved on error.</p>
+      <p id={`${id}-help`} className="text-xs text-muted">1–500 questions, up to 2 MiB. Server limits may be lower. Duplicates among your current questions are rejected; nothing is saved on error.</p>
       {file && <p id={`${id}-selected`} role="status" className="break-words text-sm text-muted">Selected file: <span className="font-medium text-foreground">{file.name}</span></p>}
       <Button type="submit" variant="secondary" disabled={busy || disabled || !file}>{busy ? "Importing…" : "Import drafts"}</Button>
     </form>

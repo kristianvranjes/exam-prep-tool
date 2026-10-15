@@ -10,6 +10,8 @@ Stem = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 Difficulty = Annotated[int, Field(ge=1, le=5)]
 MAX_QUESTION_UNITS = 5
+# A whole course unit fits in one file; the byte cap in settings still bounds the body.
+MAX_IMPORT_QUESTIONS = 500
 
 
 def normalize(text: str) -> str:
@@ -228,7 +230,7 @@ class VersionResponse(BaseModel):
 
 class QuizImport(StrictModel):
     version: Literal["quiz-import-v1"]
-    questions: list[QuestionContent] = Field(min_length=1, max_length=50)
+    questions: list[QuestionContent] = Field(min_length=1, max_length=MAX_IMPORT_QUESTIONS)
 
     @model_validator(mode="after")
     def unique_stems(self) -> Self:

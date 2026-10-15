@@ -63,8 +63,8 @@ send the trusted `Origin`. The course comes from the URL, never the file. Succes
 201 with the imported owner question representations. The route uses the existing
 membership rules: 401 anonymous, MEMBER/OWNER may import, 404 unavailable course.
 
-`QUESTION_IMPORT_MAX_BYTES` defaults to 262144 (256 KiB) and
-`QUESTION_IMPORT_MAX_COUNT` defaults to 50. Operators may lower them; these are also
+`QUESTION_IMPORT_MAX_BYTES` defaults to 2097152 (2 MiB) and
+`QUESTION_IMPORT_MAX_COUNT` defaults to 500. Operators may lower them; these are also
 hard maxima. Both are forwarded by Compose. The stream is bounded before JSON parsing,
 including without Content-Length. No file is saved or executed. Text is rendered
 through existing React text output. Validation returns 422 with up to five field-path
