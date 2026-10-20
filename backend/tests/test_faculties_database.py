@@ -223,7 +223,6 @@ def historical_rows():
         "question_options",
         "question_versions",
         "quiz_questions",
-        "answers",
         "question_review_progress",
     ]
     with engine.connect() as conn:
@@ -233,6 +232,13 @@ def historical_rows():
         # Compare columns shared by old revisions; 0017's practice focus is tested separately.
         result["quizzes"] = conn.execute(
             text("SELECT id, course_id, user_id, created_at FROM quizzes ORDER BY id")
+        ).all()
+        # Compare columns shared by old revisions; 0018's check/confidence is tested separately.
+        result["answers"] = conn.execute(
+            text(
+                "SELECT id, attempt_id, quiz_question_id, payload, grading_status, "
+                "grading_method, grading_version, updated_at FROM answers ORDER BY id"
+            )
         ).all()
         # Compare columns shared by old revisions; 0015's timestamp is tested separately.
         result["quiz_attempts"] = conn.execute(
