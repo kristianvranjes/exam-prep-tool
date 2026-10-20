@@ -10,19 +10,28 @@ from app.models import User
 from app.models.course_unit import CourseUnit, QuestionUnit
 from app.models.exam_scope import ExamScope, ExamScopeUnit
 from app.models.question import Question
+from app.models.user_question_progress import UserQuestionProgress
 from app.schemas.exam_scope import (
     MAX_EXAM_SCOPES,
     ExamScopeCopy,
+    ExamScopeCoverage,
     ExamScopeCreate,
     ExamScopeKind,
     ExamScopeResponse,
     ExamScopeUpdate,
+    check_dates,
 )
 from app.schemas.question import normalize
 from app.services.course_units import lock_course, validate_unit_links
 from app.services.courses import get_member_course, get_owner_course
 
-KIND_ORDER = case((ExamScope.kind == "MIDTERM", 0), (ExamScope.kind == "FINAL", 1), else_=2)
+KIND_ORDER = case(
+    (ExamScope.kind == "MIDTERM", 0),
+    (ExamScope.kind == "FINAL", 1),
+    (ExamScope.kind == "FULL_EXAM", 2),
+    (ExamScope.kind == "LAB", 3),
+    else_=4,
+)
 DUPLICATE = "An exam scope with this name already exists in that academic year"
 
 
@@ -60,6 +69,8 @@ def responses(db: Session, scopes: list[ExamScope]) -> list[ExamScopeResponse]:
             kind=cast(ExamScopeKind, scope.kind),
             name=scope.name,
             unit_ids=units[scope.id],
+            starts_on=scope.starts_on,
+            ends_on=scope.ends_on,
             approved_question_count=counts.get(scope.id, 0),
             created_at=scope.created_at,
             updated_at=scope.updated_at,
@@ -132,6 +143,8 @@ def create_scope(
         kind=data.kind,
         name=data.name,
         normalized_name=normalize(data.name),
+        starts_on=data.starts_on,
+        ends_on=data.ends_on,
         created_by_user_id=user.id,
     )
     db.add(scope)
@@ -181,6 +194,15 @@ def update_scope(
     if data.name is not None:
         scope.name = data.name
         scope.normalized_name = normalize(data.name)
+    if "starts_on" in data.model_fields_set:
+        scope.starts_on = data.starts_on
+    if "ends_on" in data.model_fields_set:
+        scope.ends_on = data.ends_on
+    try:
+        check_dates(scope.starts_on, scope.ends_on)
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(422, str(error)) from None
     return commit_scopes(db, [scope])[0]
 
 
@@ -224,6 +246,7 @@ def copy_scopes(
     created = []
     for source in sources:
         # A new year only links active units; scopes left without any are skipped.
+        # Dates belong to one year, so copies start undated.
         kept = [unit_id for unit_id in units[source.id] if unit_id in active]
         if not kept:
             continue
@@ -247,6 +270,34 @@ def copy_scopes(
         db.rollback()
         raise HTTPException(409, f"No scope in {data.from_year} has an active unit to copy")
     return commit_scopes(db, created)
+
+
+def coverage(db: Session, user: User, scope_id: UUID) -> ExamScopeCoverage:
+    course_id = db.scalar(select(ExamScope.course_id).where(ExamScope.id == scope_id))
+    if course_id is None:
+        raise HTTPException(404, "Exam scope not found")
+    get_member_course(db, user, course_id)
+    questions = (
+        select(Question.id)
+        .join(QuestionUnit, QuestionUnit.question_id == Question.id)
+        .join(ExamScopeUnit, ExamScopeUnit.unit_id == QuestionUnit.unit_id)
+        .where(ExamScopeUnit.scope_id == scope_id, Question.status == "APPROVED")
+        .distinct()
+        .subquery()
+    )
+    total = db.scalar(select(func.count()).select_from(questions)) or 0
+    reviewed = (
+        db.scalar(
+            select(func.count())
+            .select_from(UserQuestionProgress)
+            .where(
+                UserQuestionProgress.user_id == user.id,
+                UserQuestionProgress.question_id.in_(select(questions.c.id)),
+            )
+        )
+        or 0
+    )
+    return ExamScopeCoverage(scope_id=scope_id, question_count=total, reviewed_count=reviewed)
 
 
 def resolve_focus(

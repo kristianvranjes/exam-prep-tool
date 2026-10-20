@@ -22,6 +22,7 @@ const apiMock = vi.hoisted(() => ({
   questionReview: vi.fn().mockResolvedValue([]),
   transitionQuestion: vi.fn(),
   joinCourse: vi.fn(),
+  examScopes: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../src/lib/api", () => ({ api: apiMock }));

@@ -11,7 +11,7 @@ const units: CourseUnit[] = ["Logic", "Sets", "Relations"].map((title, position)
   approved_question_count: 0, created_at: "2026-10-01", updated_at: "2026-10-01",
 }));
 function scope(id: string, name: string, academic_year: string, kind: ExamScope["kind"], unit_ids: string[], count = 0): ExamScope {
-  return { id, course_id: "course", name, academic_year, kind, unit_ids, approved_question_count: count, created_at: "2026-10-01", updated_at: "2026-10-01" };
+  return { id, course_id: "course", name, academic_year, kind, unit_ids, starts_on: null, ends_on: null, approved_question_count: count, created_at: "2026-10-01", updated_at: "2026-10-01" };
 }
 const midterm = scope("mi", "Međuispit", "2025/26", "MIDTERM", ["u1", "u2"], 4);
 const final = scope("zi", "Završni ispit", "2025/26", "FINAL", ["u3"], 1);
@@ -68,7 +68,7 @@ it("validates and adds a cycle with units in course order", async () => {
   fireEvent.click(within(form).getByLabelText("Sets"));
   fireEvent.click(within(form).getByLabelText("Logic"));
   fireEvent.click(within(form).getByRole("button", { name: "Add exam cycle" }));
-  await waitFor(() => expect(mock.createExamScope).toHaveBeenCalledWith("course", { academic_year: "2025/26", kind: "MIDTERM", name: "Međuispit", unit_ids: ["u1", "u2"] }));
+  await waitFor(() => expect(mock.createExamScope).toHaveBeenCalledWith("course", { academic_year: "2025/26", kind: "MIDTERM", name: "Međuispit", unit_ids: ["u1", "u2"], starts_on: null, ends_on: null }));
   expect(await screen.findByText("Added Međuispit 2025/26.")).toBeInTheDocument();
   expect(screen.getByRole("list", { name: "Exam cycles 2025/26" })).toHaveTextContent("Units: Logic, Sets");
 });
@@ -83,7 +83,7 @@ it("edits a cycle and keeps a server conflict visible", async () => {
   expect(await screen.findByText("An exam scope with this name already exists in that academic year")).toBeInTheDocument();
   fireEvent.change(within(form).getByLabelText("Name"), { target: { value: "1. međuispit" } });
   fireEvent.click(within(form).getByRole("button", { name: "Save exam cycle" }));
-  await waitFor(() => expect(mock.updateExamScope).toHaveBeenLastCalledWith("mi", { academic_year: "2025/26", kind: "MIDTERM", name: "1. međuispit", unit_ids: ["u1", "u2"] }));
+  await waitFor(() => expect(mock.updateExamScope).toHaveBeenLastCalledWith("mi", { academic_year: "2025/26", kind: "MIDTERM", name: "1. međuispit", unit_ids: ["u1", "u2"], starts_on: null, ends_on: null }));
   expect(await screen.findByText("Saved 1. međuispit 2025/26.")).toBeInTheDocument();
 });
 
@@ -113,4 +113,34 @@ it("copies a year's cycles to the next academic year", async () => {
   fireEvent.click(within(form).getByRole("button", { name: "Copy cycles" }));
   await waitFor(() => expect(mock.copyExamScopes).toHaveBeenCalledWith("course", "2025/26", "2026/27"));
   expect(await screen.findByText("Copied 1 exam cycle to 2026/27.")).toBeInTheDocument();
+});
+
+it("saves optional exam dates, blocks an end before the start, and shows dated cycles", async () => {
+  mock.examScopes.mockResolvedValue([{ ...midterm, starts_on: "2026-11-23", ends_on: "2026-12-01" }]);
+  mock.updateExamScope.mockResolvedValue(midterm);
+  render(<ExamScopes courseId="course" isOwner units={units} />);
+  const list = await screen.findByRole("list", { name: "Exam cycles 2025/26" });
+  expect(list).toHaveTextContent("Mon 23 Nov – Tue 1 Dec");
+  fireEvent.click(screen.getByRole("button", { name: "Edit Međuispit 2025/26" }));
+  const form = screen.getByRole("form", { name: "Edit exam cycle Međuispit" });
+  expect(within(form).getByLabelText(/Exam date/)).toHaveValue("2026-11-23");
+  fireEvent.change(within(form).getByLabelText(/Last day/), { target: { value: "2026-11-01" } });
+  // The browser's own date range check blocks the save.
+  expect(within(form).getByLabelText(/Last day/)).toBeInvalid();
+  fireEvent.click(within(form).getByRole("button", { name: "Save exam cycle" }));
+  expect(mock.updateExamScope).not.toHaveBeenCalled();
+  fireEvent.change(within(form).getByLabelText(/Last day/), { target: { value: "" } });
+  fireEvent.click(within(form).getByRole("button", { name: "Save exam cycle" }));
+  await waitFor(() => expect(mock.updateExamScope).toHaveBeenCalledWith("mi", expect.objectContaining({ starts_on: "2026-11-23", ends_on: null })));
+});
+
+it("offers lab sessions and short quizzes with Croatian default names", async () => {
+  mock.examScopes.mockResolvedValue([]);
+  render(<ExamScopes courseId="course" isOwner units={units} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Add exam cycle" }));
+  const form = screen.getByRole("form", { name: "Add exam cycle" });
+  fireEvent.change(within(form).getByLabelText("Exam type"), { target: { value: "LAB" } });
+  expect(within(form).getByLabelText("Name")).toHaveValue("Laboratorijska vježba");
+  fireEvent.change(within(form).getByLabelText("Exam type"), { target: { value: "QUIZ" } });
+  expect(within(form).getByLabelText("Name")).toHaveValue("Blic");
 });

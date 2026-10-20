@@ -5,13 +5,16 @@ import { api, type CourseUnit, type ExamScope, type ExamScopeBody, type ExamScop
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
 import { DraftForm } from "./unsaved-changes";
 import { questionCount } from "../lib/utils";
+import { formatScopeDates } from "../lib/exam-dates";
 
 export const kindLabels: Record<ExamScopeKind, string> = {
   MIDTERM: "Midterm (MI)",
   FINAL: "Final exam (ZI)",
   FULL_EXAM: "Full exam term",
+  LAB: "Lab session",
+  QUIZ: "Short quiz (blic)",
 };
-const defaultNames: Record<ExamScopeKind, string> = { MIDTERM: "Međuispit", FINAL: "Završni ispit", FULL_EXAM: "Ispitni rok" };
+const defaultNames: Record<ExamScopeKind, string> = { MIDTERM: "Međuispit", FINAL: "Završni ispit", FULL_EXAM: "Ispitni rok", LAB: "Laboratorijska vježba", QUIZ: "Blic" };
 const YEAR = /^\d{4}\/\d{2}$/;
 
 /** The academic year in progress: a new FER year starts in October. */
@@ -134,6 +137,7 @@ function ScopeRow({ scope, units, isOwner, busy, editing, confirming, onEdit, on
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="break-words font-medium [overflow-wrap:anywhere]">{scope.name}</p>
+            {formatScopeDates(scope) && <p className="mt-1 text-sm">{formatScopeDates(scope)}</p>}
             <p className="mt-1 break-words text-sm text-muted [overflow-wrap:anywhere]">Units: {scope.unit_ids.map(unitTitle).join(", ")}</p>
           </div>
           <div className="flex flex-wrap gap-2"><Badge>{kindLabels[scope.kind]}</Badge><Badge>{questionCount(scope.approved_question_count)}</Badge></div>
@@ -182,6 +186,8 @@ function ScopeForm({ scope, units, busy, onSave, onCancel }: {
   const [kind, setKind] = useState<ExamScopeKind>(scope?.kind ?? "MIDTERM");
   const [name, setName] = useState(scope?.name ?? defaultNames.MIDTERM);
   const [chosen, setChosen] = useState<string[]>(scope?.unit_ids ?? []);
+  const [startsOn, setStartsOn] = useState(scope?.starts_on ?? "");
+  const [endsOn, setEndsOn] = useState(scope?.ends_on ?? "");
   const [error, setError] = useState("");
   // Archived units stay listed only where this cycle already uses them.
   const offered = units.filter((unit) => !unit.is_archived || scope?.unit_ids.includes(unit.id));
@@ -191,9 +197,11 @@ function ScopeForm({ scope, units, busy, onSave, onCancel }: {
     if (!validYear(year.trim())) { setError("Enter the academic year as 2025/26."); return; }
     if (!name.trim()) { setError("Enter a name for the exam cycle."); return; }
     if (!chosen.length) { setError("Choose at least one unit."); return; }
+    if (endsOn && !startsOn) { setError("Enter a start date before an end date."); return; }
+    if (startsOn && endsOn && endsOn < startsOn) { setError("The end date cannot be before the start date."); return; }
     setError("");
     const ordered = offered.filter((unit) => chosen.includes(unit.id)).map((unit) => unit.id);
-    void onSave({ academic_year: year.trim(), kind, name: name.trim(), unit_ids: ordered });
+    void onSave({ academic_year: year.trim(), kind, name: name.trim(), unit_ids: ordered, starts_on: startsOn || null, ends_on: endsOn || null });
   }
 
   return <DraftForm aria-label={scope ? `Edit exam cycle ${scope.name}` : "Add exam cycle"} className="space-y-4" onSubmit={submit}>
@@ -211,6 +219,11 @@ function ScopeForm({ scope, units, busy, onSave, onCancel }: {
           </Select>
         </label>
         <label className="block text-sm font-medium">Name<Input className="mt-1" value={name} onChange={(event) => setName(event.target.value)} maxLength={100} required /></label>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <label className="block text-sm font-medium">Exam date <span className="font-normal text-muted">(optional)</span><Input type="date" className="mt-1" value={startsOn} onChange={(event) => setStartsOn(event.target.value)} /></label>
+        <label className="block text-sm font-medium">Last day <span className="font-normal text-muted">(optional, for a multi-day period)</span><Input type="date" className="mt-1" value={endsOn} min={startsOn || undefined} onChange={(event) => setEndsOn(event.target.value)} /></label>
+        <p className="self-end text-sm text-muted">Dated cycles show a countdown on the course overview.</p>
       </div>
       <fieldset>
         <legend className="text-sm font-medium">Covered units</legend>
