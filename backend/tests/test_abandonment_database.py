@@ -117,6 +117,7 @@ def test_abandon_authorization_and_detail_privacy(bank):
         "exam_scope_id",
         "focus_unit_ids",
         "focus_label",
+        "feedback_mode",
         "questions",
     }
     for question in abandoned["questions"]:
@@ -129,7 +130,10 @@ def test_abandon_authorization_and_detail_privacy(bank):
             "options",
             "answer",
             "units",
+            "feedback",
         }
+        # An END session never checks answers, so nothing is revealed.
+        assert question["feedback"] is None
     with SessionLocal() as db:
         user_id = UUID(member.get("/auth/me").json()["id"])
         db.execute(delete(CourseMembership).where(CourseMembership.user_id == user_id))
@@ -332,6 +336,6 @@ def test_0015_downgrade_refuses_to_erase_abandoned_history(bank):
     with pytest.raises(RuntimeError, match="abandoned attempts exist"):
         command.downgrade(Config("alembic.ini"), "0014")
     with engine.connect() as conn:
-        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0017"
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0018"
     assert member.get(path).json() == abandoned
     assert retained_rows() == before

@@ -45,6 +45,8 @@ for (const width of [1280, 390]) {
       await expect(page).toHaveURL(new RegExp(`${base}/practice$`));
       await page.getByRole("radio", { name: "Custom", exact: true }).check();
       await page.getByRole("spinbutton", { name: "Custom question count" }).fill("1");
+      await page.getByText("More options", { exact: true }).click();
+      await page.getByRole("radio", { name: "Exam practice", exact: true }).check();
       await page.getByRole("button", { name: "Start practice", exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`${base}/attempts/[^/]+$`));
       const attemptUrl = page.url();

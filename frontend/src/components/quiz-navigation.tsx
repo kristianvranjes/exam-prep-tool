@@ -25,8 +25,8 @@ export function QuizNavigator({ questions, index, flags, busy, jump }: {
   return <nav aria-label="Question navigator" className="flex min-w-0 flex-col gap-3">
     <p className="text-sm text-muted">Revisit marks last while this session stays open.</p>
     <div className="flex flex-wrap gap-2">
-      {questions.map((question, position) => <Button key={question.id} variant="secondary" disabled={busy} aria-current={position === index ? "step" : undefined} aria-label={`Question ${position + 1}${position === index ? " · Current" : ""} · ${question.answer ? "Saved" : "Unanswered"}${flags.has(question.id) ? " · Marked to revisit" : ""}`} onClick={() => jump(position)} className="min-w-11 px-3">
-        {position + 1}{question.answer ? " · Saved" : ""}{flags.has(question.id) ? " · Revisit" : ""}{position === index ? " · Current" : ""}
+      {questions.map((question, position) => <Button key={question.id} variant="secondary" disabled={busy} aria-current={position === index ? "step" : undefined} aria-label={`Question ${position + 1}${position === index ? " · Current" : ""} · ${question.feedback ? "Checked" : question.answer ? "Saved" : "Unanswered"}${flags.has(question.id) ? " · Marked to revisit" : ""}`} onClick={() => jump(position)} className="min-w-11 px-3">
+        {position + 1}{question.feedback ? " · Checked" : question.answer ? " · Saved" : ""}{flags.has(question.id) ? " · Revisit" : ""}{position === index ? " · Current" : ""}
       </Button>)}
     </div>
     <div className="flex flex-wrap gap-2">

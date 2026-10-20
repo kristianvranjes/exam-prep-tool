@@ -2,7 +2,7 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from app.schemas.question import OwnerQuestion
-from app.schemas.quiz import AnswerPayload, StartQuiz
+from app.schemas.quiz import AnswerPayload, CheckAnswer, StartQuiz
 from app.services.grading import grade
 
 
@@ -76,3 +76,27 @@ def test_deterministic_grading(payload, expected):
 def test_selection_mode_defaults_to_standard():
     assert StartQuiz().selection_mode == "STANDARD"
     assert StartQuiz(selection_mode="ADAPTIVE").selection_mode == "ADAPTIVE"
+
+
+@pytest.mark.parametrize("mode", ["", "TUTOR", None, "immediate"])
+def test_invalid_feedback_mode(mode):
+    with pytest.raises(ValidationError):
+        StartQuiz.model_validate({"feedback_mode": mode})
+
+
+def test_feedback_mode_defaults_to_end():
+    assert StartQuiz.model_validate({}).feedback_mode == "END"
+    assert StartQuiz.model_validate({"feedback_mode": "IMMEDIATE"}).feedback_mode == "IMMEDIATE"
+
+
+@pytest.mark.parametrize(
+    "data", [{"confidence": "MAYBE"}, {"confidence": "sure"}, {"grading_status": "CORRECT"}]
+)
+def test_invalid_check(data):
+    with pytest.raises(ValidationError):
+        CheckAnswer.model_validate(data)
+
+
+def test_check_confidence_is_optional():
+    assert CheckAnswer.model_validate({}).confidence is None
+    assert CheckAnswer.model_validate({"confidence": "GUESS"}).confidence == "GUESS"

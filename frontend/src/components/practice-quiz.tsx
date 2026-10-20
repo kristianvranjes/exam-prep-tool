@@ -38,9 +38,12 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
     }
   }, [routeAttemptId]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const [experience, setExperience] = useState<QuizExperience>("STUDY");
   const adopt = useCallback((next: Attempt | null) => {
     if (!mounted.current) return;
     attemptRef.current = next; setAttempt(next);
+    // A resumed session keeps the feedback mode it was started with.
+    if (next?.feedback_mode) setExperience(next.feedback_mode === "IMMEDIATE" ? "STUDY" : "EXAM");
   }, []);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState(false);
@@ -48,7 +51,6 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
   const [count, setCount] = useState(5);
   const [length, setLength] = useState<SessionLength>("5");
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("ADAPTIVE");
-  const [experience, setExperience] = useState<QuizExperience>("STUDY");
   const [selectedTypes, setSelectedTypes] = useState<QuestionType[]>(types);
   const [focus, setFocus] = useState<FocusChoice>({ kind: "COURSE" });
   const [busy, setBusy] = useState(false);
@@ -184,7 +186,8 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
             const requestRevision = revision.current;
             if (!selectedTypes.length) throw new Error("Select at least one question type.");
             const focused = focusRequest(focus);
-            const next = focused ? await practiceApi.start(courseId, count, selectedTypes, selectionMode, focused) : await practiceApi.start(courseId, count, selectedTypes, selectionMode);
+            const feedbackMode = experience === "STUDY" ? "IMMEDIATE" : "END";
+            const next = await practiceApi.start(courseId, count, selectedTypes, selectionMode, focused, feedbackMode);
             if (mounted.current && requestRevision === revision.current) { adopt(next); onAttemptRoute?.(next); }
           })} onOpenMaterials={onOpenMaterials} onOpenQuestions={onOpenQuestions} />
         <details open={historyOpen} onToggle={event => setHistoryOpen(event.currentTarget.open)} className="max-w-2xl border-t border-line pt-3">

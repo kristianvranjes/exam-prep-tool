@@ -14,6 +14,8 @@ def default_types() -> list[QuestionType]:
 
 
 SelectionMode = Literal["STANDARD", "ADAPTIVE"]
+FeedbackMode = Literal["END", "IMMEDIATE"]
+Confidence = Literal["SURE", "UNSURE", "GUESS"]
 
 
 class PracticeFilters(StrictModel):
@@ -41,6 +43,8 @@ class PracticeFilters(StrictModel):
 
 class StartQuiz(PracticeFilters):
     count: int = Field(default=5, ge=1, le=20)
+    # Not a selection filter: availability is the same in both modes.
+    feedback_mode: FeedbackMode = "END"
 
 
 class TypeAvailability(BaseModel):
@@ -93,6 +97,10 @@ AnswerPayload = Annotated[MCQAnswer | BooleanAnswer | TextAnswer, Field(discrimi
 Grade = Literal["PENDING", "CORRECT", "INCORRECT"]
 
 
+class CheckAnswer(StrictModel):
+    confidence: Confidence | None = None
+
+
 class AttemptSummary(BaseModel):
     id: UUID
     course_id: UUID
@@ -102,11 +110,23 @@ class AttemptSummary(BaseModel):
     exam_scope_id: UUID | None = None
     focus_unit_ids: list[UUID] = []
     focus_label: str | None = None
+    feedback_mode: FeedbackMode = "END"
 
 
 class QuestionUnitLabel(BaseModel):
     id: UUID
     title: str
+
+
+class QuestionFeedback(BaseModel):
+    """Key and explanation for one question, revealed once its answer is checked or graded."""
+
+    options: list[OwnerOption]
+    explanation: str | None
+    correct_boolean: bool | None
+    reference_answer: str | None
+    grading_status: Grade
+    confidence: Confidence | None = None
 
 
 class ActiveQuestion(BaseModel):
@@ -119,6 +139,8 @@ class ActiveQuestion(BaseModel):
     answer: AnswerPayload | None
     # Live organization, not part of the snapshot: current active units in course order.
     units: list[QuestionUnitLabel] = []
+    # Only for IMMEDIATE answers that were checked; unchecked questions never carry keys.
+    feedback: QuestionFeedback | None = None
 
 
 class ResultQuestion(ActiveQuestion):
@@ -127,6 +149,7 @@ class ResultQuestion(ActiveQuestion):
     correct_boolean: bool | None
     reference_answer: str | None
     grading_status: Grade
+    confidence: Confidence | None = None
 
 
 class ActiveAttempt(AttemptSummary):

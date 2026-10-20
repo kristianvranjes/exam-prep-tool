@@ -19,10 +19,14 @@ from app.schemas.quiz import (
     AnswerPayload,
     AttemptResponse,
     AttemptSummary,
+    CheckAnswer,
+    Confidence,
+    FeedbackMode,
     Grade,
     MCQAnswer,
     PracticeAvailability,
     PracticeFilters,
+    QuestionFeedback,
     QuestionUnitLabel,
     ResultQuestion,
     StartQuiz,
@@ -70,6 +74,7 @@ def summary(attempt: QuizAttempt, quiz: Quiz) -> AttemptSummary:
         exam_scope_id=quiz.exam_scope_id,
         focus_unit_ids=[UUID(id_) for id_ in quiz.focus_unit_ids],
         focus_label=quiz.focus_label,
+        feedback_mode=cast(FeedbackMode, quiz.feedback_mode),
     )
 
 
@@ -105,6 +110,17 @@ def unit_labels(
     return labels
 
 
+def feedback(content: OwnerQuestion, answer: Answer | None) -> QuestionFeedback:
+    return QuestionFeedback(
+        options=content.options,
+        explanation=content.explanation,
+        correct_boolean=content.correct_boolean,
+        reference_answer=content.reference_answer,
+        grading_status=cast(Grade, answer.grading_status) if answer else "PENDING",
+        confidence=cast(Confidence | None, answer.confidence) if answer else None,
+    )
+
+
 def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> AttemptResponse:
     answers = {
         a.quiz_question_id: a
@@ -127,18 +143,18 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
             answer=answer_adapter.validate_python(answer.payload) if answer else None,
             units=units.get(row.source_question_id, []),
         )
-        active.append(public)
         if attempt.status == "SUBMITTED":
             results.append(
                 ResultQuestion(
                     **public.model_dump(exclude={"options"}),
-                    options=content.options,
-                    explanation=content.explanation,
-                    correct_boolean=content.correct_boolean,
-                    reference_answer=content.reference_answer,
-                    grading_status=cast(Grade, answer.grading_status) if answer else "PENDING",
+                    **feedback(content, answer).model_dump(),
                 )
             )
+            continue
+        # The student already saw a checked key, so abandoned history keeps showing it.
+        if answer is not None and answer.checked_at is not None:
+            public.feedback = feedback(content, answer)
+        active.append(public)
     quiz = db.get(Quiz, attempt.quiz_id)
     assert quiz is not None and quiz.course_id == course_id
     fields = summary(attempt, quiz).model_dump(exclude={"status"})
@@ -195,6 +211,7 @@ def start(db: Session, user: User, course_id: UUID, data: StartQuiz) -> AttemptR
             exam_scope_id=scope_id,
             focus_unit_ids=[str(id_) for id_ in unit_ids],
             focus_label=label,
+            feedback_mode=data.feedback_mode,
         )
         db.add(quiz)
         db.flush()
@@ -250,6 +267,25 @@ def require_active(attempt: QuizAttempt) -> None:
         raise HTTPException(409, "Quiz already submitted; answers are frozen")
 
 
+def attempt_question(db: Session, attempt: QuizAttempt, question_id: UUID) -> QuizQuestion:
+    question = db.scalar(
+        select(QuizQuestion).where(
+            QuizQuestion.id == question_id, QuizQuestion.quiz_id == attempt.quiz_id
+        )
+    )
+    if question is None:
+        raise HTTPException(404, "Attempt question not found")
+    return question
+
+
+def saved_answer(db: Session, attempt: QuizAttempt, question: QuizQuestion) -> Answer | None:
+    return db.scalar(
+        select(Answer).where(
+            Answer.attempt_id == attempt.id, Answer.quiz_question_id == question.id
+        )
+    )
+
+
 def save_answer(
     db: Session,
     user: User,
@@ -260,13 +296,7 @@ def save_answer(
 ) -> AttemptResponse:
     attempt = load_attempt(db, user, course_id, attempt_id)
     require_active(attempt)
-    question = db.scalar(
-        select(QuizQuestion).where(
-            QuizQuestion.id == question_id, QuizQuestion.quiz_id == attempt.quiz_id
-        )
-    )
-    if question is None:
-        raise HTTPException(404, "Attempt question not found")
+    question = attempt_question(db, attempt, question_id)
     content = OwnerQuestion.model_validate(question.snapshot)
     if data.type != content.type or (
         isinstance(data, MCQAnswer)
@@ -274,19 +304,57 @@ def save_answer(
     ):
         raise HTTPException(422, "Answer must match the question type and available options")
     try:
-        answer = db.scalar(
-            select(Answer).where(
-                Answer.attempt_id == attempt.id, Answer.quiz_question_id == question.id
-            )
-        )
+        answer = saved_answer(db, attempt, question)
         if answer is None:
             answer = Answer(attempt_id=attempt.id, quiz_question_id=question.id)
             db.add(answer)
+        elif answer.checked_at is not None:
+            raise HTTPException(409, "Answer already checked; it can no longer change")
         answer.payload = data.model_dump()
         db.flush()
         result = representation(db, attempt, course_id)
         db.commit()
         return result
+    except Exception:
+        db.rollback()
+        raise
+
+
+def check_answer(
+    db: Session,
+    user: User,
+    course_id: UUID,
+    attempt_id: UUID,
+    question_id: UUID,
+    data: CheckAnswer,
+) -> AttemptResponse:
+    """Grade one saved IMMEDIATE answer now and freeze it; scheduling waits for submission."""
+    attempt = load_attempt(db, user, course_id, attempt_id)
+    require_active(attempt)
+    quiz = db.get(Quiz, attempt.quiz_id)
+    assert quiz is not None
+    if quiz.feedback_mode != "IMMEDIATE":
+        raise HTTPException(409, "This session shows results after submission")
+    question = attempt_question(db, attempt, question_id)
+    try:
+        answer = saved_answer(db, attempt, question)
+        if answer is None:
+            raise HTTPException(409, "Save an answer before checking it")
+        # Repeats return the first check unchanged, including its confidence.
+        if answer.checked_at is None:
+            result = grade(
+                OwnerQuestion.model_validate(question.snapshot),
+                answer_adapter.validate_python(answer.payload),
+            )
+            answer.grading_status = result.status
+            answer.grading_method = result.method
+            answer.grading_version = result.version
+            answer.checked_at = datetime.now(UTC)
+            answer.confidence = data.confidence
+            db.flush()
+        response = representation(db, attempt, course_id)
+        db.commit()
+        return response
     except Exception:
         db.rollback()
         raise
@@ -312,14 +380,16 @@ def submit(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> Attemp
         review_results: dict[UUID, Grade] = {}
         for question in questions:
             answer = answers[question.id]
-            grading_result = grade(
-                OwnerQuestion.model_validate(question.snapshot),
-                answer_adapter.validate_python(answer.payload),
-            )
-            answer.grading_status = grading_result.status
-            answer.grading_method = grading_result.method
-            answer.grading_version = grading_result.version
-            review_results[question.source_question_id] = grading_result.status
+            # A checked answer keeps the grade the student already saw.
+            if answer.checked_at is None:
+                grading_result = grade(
+                    OwnerQuestion.model_validate(question.snapshot),
+                    answer_adapter.validate_python(answer.payload),
+                )
+                answer.grading_status = grading_result.status
+                answer.grading_method = grading_result.method
+                answer.grading_version = grading_result.version
+            review_results[question.source_question_id] = cast(Grade, answer.grading_status)
         attempt.status = "SUBMITTED"
         attempt.submitted_at = submitted_at
         apply_reviews(db, user.id, review_results, submitted_at)

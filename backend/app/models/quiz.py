@@ -10,6 +10,9 @@ from app.database import Base
 
 class Quiz(Base):
     __tablename__ = "quizzes"
+    __table_args__ = (
+        CheckConstraint("feedback_mode IN ('END','IMMEDIATE')", name="ck_quiz_feedback_mode"),
+    )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     course_id: Mapped[UUID] = mapped_column(
         ForeignKey("courses.id", ondelete="CASCADE"), index=True
@@ -24,6 +27,8 @@ class Quiz(Base):
         JSONB, server_default=text("'[]'::jsonb"), default=list
     )
     focus_label: Mapped[str | None] = mapped_column(String(300))
+    # IMMEDIATE lets the student check each saved answer before submitting.
+    feedback_mode: Mapped[str] = mapped_column(String(10), server_default="END", default="END")
 
 
 class QuizQuestion(Base):
@@ -75,6 +80,13 @@ class Answer(Base):
             " OR (grading_method = 'PENDING_SEMANTIC' AND grading_status = 'PENDING')))",
             name="ck_answer_grading_provenance",
         ),
+        CheckConstraint(
+            "confidence IS NULL OR confidence IN ('SURE','UNSURE','GUESS')",
+            name="ck_answer_confidence",
+        ),
+        CheckConstraint(
+            "checked_at IS NULL OR grading_method IS NOT NULL", name="ck_answer_checked_graded"
+        ),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     attempt_id: Mapped[UUID] = mapped_column(ForeignKey("quiz_attempts.id", ondelete="CASCADE"))
@@ -85,6 +97,9 @@ class Answer(Base):
     grading_status: Mapped[str] = mapped_column(String(20), default="PENDING")
     grading_method: Mapped[str | None] = mapped_column(String(20))
     grading_version: Mapped[str | None] = mapped_column(String(64))
+    # Set once an IMMEDIATE answer is checked; the answer and its grade are then final.
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confidence: Mapped[str | None] = mapped_column(String(10))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

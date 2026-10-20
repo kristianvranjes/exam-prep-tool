@@ -256,3 +256,17 @@ characters). Existing quizzes keep an empty, unlabeled focus.
 attempts, answers and progress otherwise survive unchanged. Back up first if scope
 data or focus labels matter.
 
+
+## Immediate feedback migration 0018
+
+Revision 0018 follows 0017. `quizzes` gains `feedback_mode` (`END` or `IMMEDIATE`,
+default `END`); existing quizzes keep showing results only after submission.
+`answers` gains nullable `checked_at` and nullable `confidence` (`SURE`, `UNSURE`,
+`GUESS`). A check constraint requires grading provenance on every checked answer;
+the existing provenance constraint is unchanged, so a checked ACTIVE answer stores the
+same deterministic grade, method and version that submission would.
+
+`alembic downgrade 0017` drops the three columns and their constraints. Attempts,
+answers and grades otherwise survive; checked ACTIVE answers keep their stored grade,
+which submission then recomputes from the same frozen snapshot. Back up first if
+confidence data matters.

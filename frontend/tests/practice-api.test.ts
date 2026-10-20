@@ -39,3 +39,14 @@ it("reads server-side availability with the same mode, types and focus as a star
   await practiceApi.availability("course", ["MULTIPLE_CHOICE"], "STANDARD", { exam_scope_id: "mi" });
   expect(mock).toHaveBeenLastCalledWith("/courses/course/practice-availability?selection_mode=STANDARD&question_types=MULTIPLE_CHOICE&exam_scope_id=mi");
 });
+
+it("sends the feedback mode with a start and checks one answer with optional confidence", async () => {
+  await practiceApi.start("course", 2, ["TRUE_FALSE"], "ADAPTIVE", undefined, "IMMEDIATE");
+  expect(mock).toHaveBeenLastCalledWith("/courses/course/attempts", {
+    method: "POST", body: JSON.stringify({ count: 2, question_types: ["TRUE_FALSE"], selection_mode: "ADAPTIVE", feedback_mode: "IMMEDIATE" }),
+  });
+  await practiceApi.check("course", "attempt", "q1", "GUESS");
+  expect(mock).toHaveBeenLastCalledWith("/courses/course/attempts/attempt/answers/q1/check", { method: "POST", body: JSON.stringify({ confidence: "GUESS" }) });
+  await practiceApi.check("course", "attempt", "q1", null);
+  expect(mock).toHaveBeenLastCalledWith("/courses/course/attempts/attempt/answers/q1/check", { method: "POST", body: "{}" });
+});
