@@ -32,6 +32,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
   const questionHeading = useRef<HTMLHeadingElement>(null);
   const reviewHeading = useRef<HTMLHeadingElement>(null);
   const feedbackHeading = useRef<HTMLHeadingElement>(null);
+  const focusFeedback = useRef(false);
   const confirmationHeading = useRef<HTMLHeadingElement>(null);
   const question = attempt.questions[index];
   // Guided sessions started in IMMEDIATE mode check each answer before moving on.
@@ -48,6 +49,12 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
   useUnsavedChanges(dirty, onDirtyChange);
 
   useEffect(() => { (confirmation ? confirmationHeading : review ? reviewHeading : questionHeading).current?.focus(); }, [confirmation, index, review]);
+  // Focus the verdict once the checked feedback has rendered, not before.
+  useEffect(() => {
+    if (!feedback || !focusFeedback.current) return;
+    focusFeedback.current = false;
+    feedbackHeading.current?.focus();
+  }, [feedback]);
 
   async function run(action: () => Promise<void>) {
     if (pending.current) return;
@@ -84,9 +91,9 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
       const saved = await persist();
       if (saved.status !== "ACTIVE") return;
       const checked = await practiceApi.check(attempt.course_id, attempt.id, question.id, confidence);
+      focusFeedback.current = true;
       update(checked);
       if (checked.status === "ACTIVE") setAnswer(checked.questions[index].answer);
-      requestAnimationFrame(() => feedbackHeading.current?.focus());
     });
   }
   function forward() {

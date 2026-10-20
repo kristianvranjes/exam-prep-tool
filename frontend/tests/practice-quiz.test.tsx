@@ -875,6 +875,7 @@ it("checks a guided answer with confidence, reveals only its key, and moves on w
   fireEvent.click(screen.getByLabelText("Guessed"));
   fireEvent.click(screen.getByRole("button", { name: "Check answer" }));
   expect(await screen.findByRole("heading", { name: "Incorrect" })).toBeVisible();
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Incorrect" })).toHaveFocus());
   expect(mock.save).toHaveBeenCalledWith("course", "attempt", "mcq", { type: "MULTIPLE_CHOICE", option_position: 0 });
   expect(mock.check).toHaveBeenCalledWith("course", "attempt", "mcq", "GUESS");
   expect(screen.getByText("Two is the answer")).toBeVisible();
