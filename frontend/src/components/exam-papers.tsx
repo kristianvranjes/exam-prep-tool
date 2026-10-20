@@ -3,6 +3,8 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api, type CourseUnit, type ExamPaper, type ExamPaperBody, type ExamPaperDetail, type ExamPaperItemInput, type ExamScope, type ExamScopeKind, type Question } from "../lib/api";
 import { formatExamDate } from "../lib/exam-dates";
+import { formatPoints, penaltyLabels, penaltyText, pointsLabel } from "../lib/points";
+import { practiceApi, type Attempt } from "../lib/practice-api";
 import { currentAcademicYear, kindLabels } from "./exam-scopes";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
 import { DraftForm } from "./unsaved-changes";
@@ -10,28 +12,32 @@ import { DraftForm } from "./unsaved-changes";
 const YEAR = /^\d{4}\/\d{2}$/;
 const PAGE = 50;
 const typeLabels = { MULTIPLE_CHOICE: "Multiple choice", TRUE_FALSE: "True / false", SHORT_ANSWER: "Short answer" } as const;
-/** Common FER negative marking; any other fraction can be set through the API. */
-export const penaltyLabels: Record<string, string> = { "0": "No negative points", "0.25": "−¼ of the item's points", "0.333": "−⅓ of the item's points", "0.5": "−½ of the item's points" };
-
-export function formatPoints(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0$/, "");
-}
 
 function paperFacts(paper: ExamPaper) {
   return [
     `${paper.item_count} ${paper.item_count === 1 ? "question" : "questions"}`,
-    `${formatPoints(paper.total_points)} points`,
+    pointsLabel(paper.total_points),
     paper.duration_minutes ? `${paper.duration_minutes} min` : null,
-    paper.wrong_answer_penalty > 0 ? penaltyLabels[String(paper.wrong_answer_penalty)] ?? `−${paper.wrong_answer_penalty} per wrong answer` : null,
+    paper.wrong_answer_penalty > 0 ? penaltyText(paper.wrong_answer_penalty) : null,
   ].filter(Boolean).join(" · ");
 }
 
-export function ExamPapers({ courseId }: { courseId: string }) {
+export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onStartAttempt?: (attempt: Attempt) => void }) {
   const [list, setList] = useState<{ canManage: boolean; papers: ExamPaper[] } | null>(null);
   const [loadError, setLoadError] = useState("");
   const [revision, setRevision] = useState(0);
   const [selected, setSelected] = useState<string | "new" | null>(null);
   const [notice, setNotice] = useState("");
+  const [starting, setStarting] = useState<string | null>(null);
+  const [startError, setStartError] = useState("");
+
+  async function take(paper: ExamPaper) {
+    if (!onStartAttempt || starting) return;
+    setStarting(paper.id); setStartError("");
+    try { onStartAttempt(await practiceApi.startPaper(paper.id)); }
+    catch (cause) { setStartError(cause instanceof Error ? cause.message : "Could not start this past exam. Try again."); }
+    finally { setStarting(null); }
+  }
 
   useEffect(() => {
     let active = true;
@@ -54,6 +60,7 @@ export function ExamPapers({ courseId }: { courseId: string }) {
     {!list && !loadError && <LoadingState>Loading past exams…</LoadingState>}
     {loadError && <div className="space-y-3"><Alert>{loadError}</Alert><Button variant="secondary" onClick={() => { setLoadError(""); setRevision((value) => value + 1); }}>Retry past exams</Button></div>}
     {notice && <p role="status" className="rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{notice}</p>}
+    {startError && <Alert>{startError}</Alert>}
     {list && list.papers.length === 0 && <EmptyState title="No past exams yet.">{list.canManage ? "Add the first past exam below." : "Course staff have not published past exams yet."}</EmptyState>}
     {list && years.map((year) => <div key={year} className="space-y-2">
       <h4 className="font-semibold">Academic year {year}</h4>
@@ -70,6 +77,7 @@ export function ExamPapers({ courseId }: { courseId: string }) {
               {list.canManage && <Badge className={paper.status === "PUBLISHED" ? "bg-success-surface text-success" : undefined}>{paper.status === "PUBLISHED" ? "Published" : "Draft"}</Badge>}
             </div>
           </div>
+          {onStartAttempt && paper.status === "PUBLISHED" && <Button className="mt-3 mr-2" disabled={starting !== null} aria-label={`Take ${paper.title}`} onClick={() => void take(paper)}>{starting === paper.id ? "Starting…" : "Take this exam"}</Button>}
           {list.canManage && <Button variant="secondary" className="mt-3" aria-label={`Open ${paper.title}`} aria-expanded={selected === paper.id} onClick={() => { setNotice(""); setSelected(selected === paper.id ? null : paper.id); }}>{selected === paper.id ? "Close" : "Open"}</Button>}
           {selected === paper.id && <PaperEditor paperId={paper.id} courseId={courseId} onChanged={refresh} onDeleted={(title) => { setSelected(null); refresh(`Deleted ${title}.`); }} />}
         </li>)}

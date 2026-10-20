@@ -324,6 +324,11 @@ members read published papers only. See [past exams](PAST_EXAMS.md).
 | POST `/exam-papers/{paper_id}/publish` | Managers. 409 without items or with an item no longer approved. Idempotent. |
 | POST `/exam-papers/{paper_id}/unpublish` | Managers. Back to DRAFT and hidden from members. Idempotent. |
 | DELETE `/exam-papers/{paper_id}` | Managers, DRAFT only (409 otherwise), 204. |
+| POST `/exam-papers/{paper_id}/attempts` | Enrolled members, published papers only (members 404, managers 409 for drafts). Optional `{feedback_mode}` (default `END`). 201 ACTIVE attempt with `paper` (frozen rule) and per-question `points` and `label`. |
+| DELETE `/courses/{course_id}/attempts/{attempt_id}/answers/{quiz_question_id}` | Clears a saved, unchecked answer of an ACTIVE attempt and returns the attempt; idempotent; 409 once checked or closed. Paper sessions may then be submitted with blanks. |
+
+Submitted paper sessions add `score` and each question's `earned_points`; blank
+questions have `grading_status: "UNANSWERED"`. See [past exams](PAST_EXAMS.md#taking-a-paper).
 
 ### Moderated edit suggestions (Phase 12C)
 

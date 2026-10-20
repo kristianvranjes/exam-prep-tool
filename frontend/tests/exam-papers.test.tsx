@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
-import { ExamPapers, formatPoints } from "../src/components/exam-papers";
+import { ExamPapers } from "../src/components/exam-papers";
+import { formatPoints } from "../src/lib/points";
 import type { ExamPaper, ExamPaperDetail, Question } from "../src/lib/api";
 
 const mock = vi.hoisted(() => ({
@@ -8,6 +9,8 @@ const mock = vi.hoisted(() => ({
   publishExamPaper: vi.fn(), unpublishExamPaper: vi.fn(), deleteExamPaper: vi.fn(), examScopes: vi.fn(), units: vi.fn(), questions: vi.fn(),
 }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
+const practice = vi.hoisted(() => ({ startPaper: vi.fn() }));
+vi.mock("../src/lib/practice-api", () => ({ practiceApi: practice }));
 
 const paper: ExamPaper = {
   id: "p1", course_id: "course", academic_year: "2025/26", kind: "MIDTERM", title: "Međuispit 2025/26", term_label: "Jesenski rok",
@@ -109,4 +112,18 @@ it("locks the questions of a published paper and deletes only drafts after confi
   fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
   await waitFor(() => expect(mock.deleteExamPaper).toHaveBeenCalledWith("p1"));
   expect(await screen.findByText("Deleted Međuispit 2025/26.")).toBeVisible();
+});
+
+it("starts a published paper as a session and reports a failed start", async () => {
+  mock.examPapers.mockResolvedValue({ can_manage: false, papers: [{ ...paper, status: "PUBLISHED", item_count: 3, total_points: 6 }, { ...paper, id: "p2", title: "Draft only" }] });
+  const attempt = { id: "a1", course_id: "course", status: "ACTIVE", started_at: "2026-10-21", submitted_at: null, questions: [] };
+  practice.startPaper.mockRejectedValueOnce(new Error("Only published papers can be taken")).mockResolvedValue(attempt);
+  const onStartAttempt = vi.fn();
+  render(<ExamPapers courseId="course" onStartAttempt={onStartAttempt} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Take Međuispit 2025/26" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Only published papers can be taken");
+  expect(screen.queryByRole("button", { name: "Take Draft only" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Take Međuispit 2025/26" }));
+  await waitFor(() => expect(onStartAttempt).toHaveBeenCalledWith(attempt));
+  expect(practice.startPaper).toHaveBeenLastCalledWith("p1");
 });

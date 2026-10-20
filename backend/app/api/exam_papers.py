@@ -13,7 +13,9 @@ from app.schemas.exam_paper import (
     ExamPaperUpdate,
 )
 from app.schemas.exam_scope import AcademicYear, ExamScopeKind
+from app.schemas.quiz import AttemptResponse, StartPaper
 from app.services import exam_papers as service
+from app.services import quizzes
 
 router = APIRouter(tags=["exam papers"])
 
@@ -88,3 +90,13 @@ def remove(
 ) -> Response:
     service.delete_paper(db, user, paper_id)
     return Response(status_code=204)
+
+
+@router.post("/exam-papers/{paper_id}/attempts", response_model=AttemptResponse, status_code=201)
+def start_attempt(
+    paper_id: UUID,
+    data: StartPaper,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AttemptResponse:
+    return quizzes.start_paper(db, user, paper_id, data)

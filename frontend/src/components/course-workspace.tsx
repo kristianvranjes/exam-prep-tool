@@ -21,13 +21,15 @@ const destinations: { id: CourseDestination; label: string }[] = [
 ];
 
 export function CourseWorkspace({ course, currentUserId, isOwner, visible, destination, navigate, goHome, checkingSession,
-  adaptiveReviewRequest, onOpenAdaptiveReview, knownAttemptId, onResume, onResumableAttemptChange, activeSession, routeAttemptId, routeResults, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onUpdated, onDeleted }: {
+  adaptiveReviewRequest, onOpenAdaptiveReview, knownAttemptId, onResume, onResumableAttemptChange, activeSession, routeAttemptId, routeResults, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onUpdated, onDeleted, onOpenAttempt }: {
   course: Course; currentUserId: string; isOwner: boolean; visible: boolean; destination: CourseDestination;
   navigate: (destination: CourseDestination, setup?: boolean) => void; goHome: () => void; checkingSession?: boolean;
   adaptiveReviewRequest: number; onOpenAdaptiveReview: () => void; knownAttemptId: string | null;
   onResume: () => void; onResumableAttemptChange: (id: string | null) => void;
   activeSession: boolean; routeAttemptId?: string | null; routeResults: boolean;
   onAttemptRoute: (attempt: Attempt | null, replace?: boolean) => void; onAttemptChange: (attempt: Attempt | null) => void;
+  /** Opens a session started outside Practice, such as a past exam. */
+  onOpenAttempt?: (attempt: Attempt) => void;
   onAnswerDirtyChange: (dirty: boolean) => void;
   onUpdated: (course: Course) => void; onDeleted: (course: Course) => void;
 }) {
@@ -86,7 +88,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
       </div>
       <div hidden={moreDestination !== "questions"}><QuestionBank courseId={course.id} onOpenMaterials={() => navigate("materials")} /></div>
       {unitsOpened && <div hidden={moreDestination !== "units"}><CourseUnits courseId={course.id} isOwner={isOwner} /></div>}
-      {moreDestination === "papers" && <ExamPapers courseId={course.id} />}
+      {moreDestination === "papers" && <ExamPapers courseId={course.id} onStartAttempt={onOpenAttempt} />}
       {isOwner && <div hidden={moreDestination !== "settings"}><CourseSettings course={course} onUpdated={onUpdated} onDeleted={onDeleted} /></div>}
     </section>
   </section>;

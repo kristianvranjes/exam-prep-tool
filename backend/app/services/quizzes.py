@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Literal, cast
 from uuid import UUID
 
@@ -9,7 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.models import User
 from app.models.course_unit import CourseUnit, QuestionUnit
-from app.models.question import QuestionVersion
+from app.models.exam_paper import ExamPaper, ExamPaperItem
+from app.models.question import Question, QuestionVersion
 from app.models.quiz import Answer, Quiz, QuizAttempt, QuizQuestion
 from app.schemas.question import OwnerQuestion, PublicOption
 from app.schemas.quiz import (
@@ -24,19 +26,24 @@ from app.schemas.quiz import (
     FeedbackMode,
     Grade,
     MCQAnswer,
+    PaperScore,
+    PaperSession,
     PracticeAvailability,
     PracticeFilters,
     QuestionFeedback,
     QuestionUnitLabel,
     ResultQuestion,
+    StartPaper,
     StartQuiz,
     SubmittedAttempt,
     TypeAvailability,
     UnitAvailability,
 )
 from app.services.courses import get_member_course
+from app.services.exam_papers import load_paper
 from app.services.exam_scopes import resolve_focus
 from app.services.grading import grade
+from app.services.paper_scoring import SCORING_VERSION, ItemResult, item_points, score
 from app.services.progress import apply_reviews
 from app.services.questions.service import owner_view
 from app.services.quiz_selection import (
@@ -75,6 +82,23 @@ def summary(attempt: QuizAttempt, quiz: Quiz) -> AttemptSummary:
         focus_unit_ids=[UUID(id_) for id_ in quiz.focus_unit_ids],
         focus_label=quiz.focus_label,
         feedback_mode=cast(FeedbackMode, quiz.feedback_mode),
+        paper=paper_session(quiz),
+    )
+
+
+def paper_session(quiz: Quiz) -> PaperSession | None:
+    rule = quiz.scoring
+    if rule is None:
+        return None
+    threshold = rule["pass_threshold"]
+    duration = rule["duration_minutes"]
+    return PaperSession(
+        exam_paper_id=quiz.exam_paper_id,
+        title=str(rule["title"]),
+        total_points=float(str(rule["total_points"])),
+        wrong_answer_penalty=float(str(rule["wrong_answer_penalty"])),
+        pass_threshold=None if threshold is None else float(str(threshold)),
+        duration_minutes=None if duration is None else int(str(duration)),
     )
 
 
@@ -128,8 +152,12 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
     }
     rows = question_rows(db, attempt)
     units = unit_labels(db, course_id, [row.source_question_id for row in rows])
+    quiz = db.get(Quiz, attempt.quiz_id)
+    assert quiz is not None and quiz.course_id == course_id
+    penalty = Decimal(str(quiz.scoring["wrong_answer_penalty"])) if quiz.scoring else None
     active: list[ActiveQuestion] = []
     results: list[ResultQuestion] = []
+    items: list[ItemResult] = []
     for row in rows:
         content = OwnerQuestion.model_validate(row.snapshot)
         answer = answers.get(row.id)
@@ -142,28 +170,57 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
             options=[PublicOption(position=o.position, text=o.text) for o in content.options],
             answer=answer_adapter.validate_python(answer.payload) if answer else None,
             units=units.get(row.source_question_id, []),
+            points=None if row.points is None else float(row.points),
+            label=row.label,
         )
         if attempt.status == "SUBMITTED":
-            results.append(
-                ResultQuestion(
-                    **public.model_dump(exclude={"options"}),
-                    **feedback(content, answer).model_dump(),
-                )
+            result = ResultQuestion(
+                **public.model_dump(exclude={"options"}),
+                **feedback(content, answer).model_dump(),
             )
+            if penalty is not None and row.points is not None:
+                item = ItemResult(
+                    row.points, cast(Grade, answer.grading_status) if answer else None
+                )
+                items.append(item)
+                earned = item_points(item, penalty)
+                result.earned_points = None if earned is None else float(earned)
+                if answer is None:
+                    result.grading_status = "UNANSWERED"
+            results.append(result)
             continue
         # The student already saw a checked key, so abandoned history keeps showing it.
         if answer is not None and answer.checked_at is not None:
             public.feedback = feedback(content, answer)
         active.append(public)
-    quiz = db.get(Quiz, attempt.quiz_id)
-    assert quiz is not None and quiz.course_id == course_id
     fields = summary(attempt, quiz).model_dump(exclude={"status"})
     if attempt.status == "SUBMITTED":
-        return SubmittedAttempt(**fields, questions=results)
+        return SubmittedAttempt(**fields, questions=results, score=paper_score(quiz, items))
     if attempt.status == "ABANDONED":
         assert attempt.abandoned_at is not None
         return AbandonedAttempt(**fields, abandoned_at=attempt.abandoned_at, questions=active)
     return ActiveAttempt(**fields, questions=active)
+
+
+def paper_score(quiz: Quiz, items: list[ItemResult]) -> PaperScore | None:
+    if quiz.scoring is None:
+        return None
+    threshold = quiz.scoring["pass_threshold"]
+    result = score(
+        items,
+        Decimal(str(quiz.scoring["wrong_answer_penalty"])),
+        None if threshold is None else Decimal(str(threshold)),
+    )
+    return PaperScore(
+        version=str(quiz.scoring["version"]),
+        earned=float(result.earned),
+        max_points=float(result.max_points),
+        correct_points=float(result.correct_points),
+        penalty_points=float(result.penalty_points),
+        pending_points=float(result.pending_points),
+        unanswered_count=result.unanswered_count,
+        passed=result.passed,
+    )
 
 
 def availability(
@@ -216,26 +273,96 @@ def start(db: Session, user: User, course_id: UUID, data: StartQuiz) -> AttemptR
         db.add(quiz)
         db.flush()
         for position, question in enumerate(questions):
-            version = db.scalar(
-                select(func.max(QuestionVersion.version_number)).where(
-                    QuestionVersion.question_id == question.id
-                )
-            )
-            if version is None:
-                raise HTTPException(409, "Approved question has no version history")
-            db.add(
-                QuizQuestion(
-                    quiz_id=quiz.id,
-                    position=position,
-                    source_question_id=question.id,
-                    source_version=version,
-                    snapshot=owner_view(db, question).model_dump(mode="json"),
-                )
-            )
+            db.add(snapshot_row(db, quiz, position, question))
         attempt = QuizAttempt(quiz_id=quiz.id)
         db.add(attempt)
         db.flush()
         result = representation(db, attempt, course_id)
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
+
+
+def snapshot_row(
+    db: Session,
+    quiz: Quiz,
+    position: int,
+    question: Question,
+    points: Decimal | None = None,
+    label: str | None = None,
+) -> QuizQuestion:
+    version = db.scalar(
+        select(func.max(QuestionVersion.version_number)).where(
+            QuestionVersion.question_id == question.id
+        )
+    )
+    if version is None:
+        raise HTTPException(409, "Approved question has no version history")
+    return QuizQuestion(
+        quiz_id=quiz.id,
+        position=position,
+        source_question_id=question.id,
+        source_version=version,
+        snapshot=owner_view(db, question).model_dump(mode="json"),
+        points=points,
+        label=label,
+    )
+
+
+def start_paper(db: Session, user: User, paper_id: UUID, data: StartPaper) -> AttemptResponse:
+    """Start a session with exactly a published paper's questions, order and points."""
+    found, _ = load_paper(db, user, paper_id)
+    get_member_course(db, user, found.course_id)
+    try:
+        db.execute(select(User.id).where(User.id == user.id).with_for_update(key_share=True))
+        # Share-lock the paper so it cannot be unpublished or edited mid-start.
+        paper = db.scalar(
+            select(ExamPaper)
+            .where(ExamPaper.id == paper_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if paper is None or paper.status != "PUBLISHED":
+            raise HTTPException(409, "Only published papers can be taken")
+        rows = db.execute(
+            select(ExamPaperItem, Question)
+            .join(Question, Question.id == ExamPaperItem.question_id)
+            .where(ExamPaperItem.paper_id == paper.id)
+            .order_by(ExamPaperItem.position)
+            .with_for_update(of=Question, read=True)
+        ).tuples()
+        items = list(rows)
+        if not items:
+            raise HTTPException(409, "This paper has no questions")
+        total = sum((item.points for item, _ in items), Decimal(0))
+        quiz = Quiz(
+            course_id=paper.course_id,
+            user_id=user.id,
+            exam_scope_id=paper.exam_scope_id,
+            focus_label=paper.title,
+            feedback_mode=data.feedback_mode,
+            exam_paper_id=paper.id,
+            scoring={
+                "version": SCORING_VERSION,
+                "title": paper.title,
+                "total_points": str(total),
+                "wrong_answer_penalty": str(paper.wrong_answer_penalty),
+                "pass_threshold": None
+                if paper.pass_threshold is None
+                else str(paper.pass_threshold),
+                "duration_minutes": paper.duration_minutes,
+            },
+        )
+        db.add(quiz)
+        db.flush()
+        for position, (item, question) in enumerate(items):
+            db.add(snapshot_row(db, quiz, position, question, item.points, item.label))
+        attempt = QuizAttempt(quiz_id=quiz.id)
+        db.add(attempt)
+        db.flush()
+        result = representation(db, attempt, paper.course_id)
         db.commit()
         return result
     except Exception:
@@ -320,6 +447,28 @@ def save_answer(
         raise
 
 
+def clear_answer(
+    db: Session, user: User, course_id: UUID, attempt_id: UUID, question_id: UUID
+) -> AttemptResponse:
+    """Leave a question blank again; on a paper a blank scores 0 instead of a penalty."""
+    attempt = load_attempt(db, user, course_id, attempt_id)
+    require_active(attempt)
+    question = attempt_question(db, attempt, question_id)
+    try:
+        answer = saved_answer(db, attempt, question)
+        if answer is not None:
+            if answer.checked_at is not None:
+                raise HTTPException(409, "Answer already checked; it can no longer change")
+            db.delete(answer)
+            db.flush()
+        result = representation(db, attempt, course_id)
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
+
+
 def check_answer(
     db: Session,
     user: User,
@@ -371,7 +520,10 @@ def submit(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> Attemp
             for a in db.scalars(select(Answer).where(Answer.attempt_id == attempt.id))
         }
         questions = question_rows(db, attempt)
-        if len(answers) != len(questions):
+        quiz = db.get(Quiz, attempt.quiz_id)
+        assert quiz is not None
+        # A paper may be handed in with blanks; ordinary practice needs every answer.
+        if len(answers) != len(questions) and quiz.scoring is None:
             raise HTTPException(409, "Save an answer to every question before submitting")
         # Serialize overlapping attempts, including first inserts for the same question.
         # NO KEY UPDATE is compatible with FK key-share locks held by other attempts.
@@ -379,7 +531,10 @@ def submit(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> Attemp
         submitted_at = datetime.now(UTC)
         review_results: dict[UUID, Grade] = {}
         for question in questions:
-            answer = answers[question.id]
+            answer = answers.get(question.id)
+            if answer is None:
+                # Blank paper items are neither graded nor scheduled.
+                continue
             # A checked answer keeps the grade the student already saw.
             if answer.checked_at is None:
                 grading_result = grade(

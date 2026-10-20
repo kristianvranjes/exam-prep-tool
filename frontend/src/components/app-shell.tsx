@@ -230,6 +230,7 @@ export function AppShell() {
           routeAttemptId={route?.view === "course" && selectedId === routeCourseId && destination === "practice" ? route.attemptId : undefined}
           routeResults={route?.view === "course" && route.results}
           onAttemptRoute={onAttemptRoute} onAttemptChange={onAttemptChange} onAnswerDirtyChange={setAnswerEdited}
+          onOpenAttempt={attempt => navigate(attemptPath(attempt.course_id, attempt.id))}
           onUpdated={courseUpdated} onDeleted={courseDeleted} />
         </UnsavedChangesProvider>
       </>}

@@ -2,9 +2,9 @@
 
 A past exam paper records a real exam as it was set: which bank questions it had, in
 what order, how many points each was worth and how wrong answers were scored. Papers
-build on the shared question bank; they never copy question content. This change
-covers entering and publishing papers. Retaking a paper as a timed session follows in
-the next R3 changes (see the [roadmap](ROADMAP.md#r3--past-exams-and-materials-as-practice-sources)).
+build on the shared question bank; they never copy question content. Students retake
+a published paper as a scored session; the server-enforced time limit follows in the
+next R3 change (see the [roadmap](ROADMAP.md#r3--past-exams-and-materials-as-practice-sources)).
 
 ## Who can do what
 
@@ -49,14 +49,52 @@ published. Only drafts can be deleted. Repeated publish or unpublish requests re
 the current paper unchanged. Deleting a question removes it from papers; archiving it
 keeps the item but blocks publishing until the item is replaced.
 
+## Taking a paper
+
+`POST /exam-papers/{paper_id}/attempts` starts a session for an enrolled member when the
+paper is published (members get 404 for other papers; managers get 409 for drafts;
+faculty moderators who are not enrolled get 404, because practice belongs to members).
+The session contains exactly the paper's questions in its order. Each question is
+snapshotted as in other practice, together with its points and label, and the quiz
+freezes the scoring rule: version `paper-scoring-v1`, title, total points, wrong-answer
+penalty, pass threshold and time limit. Unpublishing, editing or deleting the paper,
+or editing its questions, never changes a started session. Feedback is `END` by
+default; `{"feedback_mode": "IMMEDIATE"}` turns the paper into guided practice.
+
+Unlike ordinary practice, a paper can be handed in with blank questions, and a saved
+answer can be cleared again (`DELETE …/answers/{quiz_question_id}`), because a blank
+scores 0 while a wrong answer costs points. Blank questions are not graded and do not
+update review scheduling; answered ones update it exactly like other practice.
+
+**Scoring** (`app/services/paper_scoring.py`, pure and versioned) is computed from the
+frozen points, grades and rule whenever the result is read:
+
+- a correct answer earns the item's points;
+- a wrong objective answer loses `wrong_answer_penalty × points`, rounded half up to
+  hundredths; the total may be negative, as on a real paper;
+- a blank earns 0;
+- a short answer awaiting self-review earns nothing yet and is reported as
+  `pending_points`, never guessed into the total;
+- `passed` is true or false once decided and null without a threshold, or while
+  pending points could still change the outcome.
+
+Submitted results add `score` (`earned`, `max_points`, `correct_points`,
+`penalty_points`, `pending_points`, `unanswered_count`, `passed`, `version`), each
+question's `earned_points`, and `UNANSWERED` as the status of blank questions.
+
 ## Interface
 
 Under **More → Past exams**, members see published papers by academic year. Managers
 also see drafts, add a paper with its details, open it to choose approved questions
 (filtered by unit and searched within the loaded page), set points and labels, reorder
 them, save, and publish or unpublish. Unsaved question changes block publishing.
+Published papers offer **Take this exam**, which opens the session in Practice. A paper
+session shows each question's label and points, offers **Skip for now** and **Leave
+blank**, explains the negative marking, and is handed in with blanks allowed. Results
+start with the score, the pass mark and the breakdown, and list each question's points.
 
 ## Data
 
-Revision 0020 adds `exam_papers` and `exam_paper_items`. See
+Revision 0020 adds `exam_papers` and `exam_paper_items`; revision 0021 adds the paper
+and scoring rule to quizzes and frozen points and labels to quiz questions. See
 [database notes](DATABASE.md#exam-papers-migration-0020) and [API](API.md#past-exam-papers-r3).
