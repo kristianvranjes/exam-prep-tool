@@ -4,7 +4,7 @@ import { PracticeQuiz } from "../src/components/practice-quiz";
 import type { QuestionType } from "../src/lib/api";
 import type { Attempt, PracticeAnswer, PracticeAvailability, PracticeFocus } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), check: vi.fn(), submit: vi.fn(), availability: vi.fn(), units: vi.fn(), examScopes: vi.fn() }));
+const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), check: vi.fn(), clear: vi.fn(), submit: vi.fn(), availability: vi.fn(), units: vi.fn(), examScopes: vi.fn() }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 let current: Attempt;
@@ -925,4 +925,36 @@ it("opens setup focused on the exam cycle requested from the overview", async ()
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
   expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE", { exam_scope_id: "mi" }, "IMMEDIATE");
+});
+
+it("takes a past paper with points, skips and clears answers, and hands it in with blanks", async () => {
+  current.feedback_mode = "END";
+  current.paper = { exam_paper_id: "p1", title: "MI 2025/26", total_points: 6, wrong_answer_penalty: 0.25, pass_threshold: 4, duration_minutes: 90 };
+  current.questions = current.questions.map((q, index) => ({ ...q, points: [2, 1, 3][index], label: `Zadatak ${index + 1}` }));
+  mock.history.mockResolvedValue([current]);
+  mock.clear.mockImplementation(async (_course, _id, question: string) => {
+    current = { ...current, questions: current.questions.map(q => q.id === question ? { ...q, answer: null } : q) } as Attempt;
+    return structuredClone(current);
+  });
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Resume session" }));
+  await screen.findByText("Choose a number");
+  expect(screen.getByText("Zadatak 1 · 2 points")).toBeVisible();
+  expect(screen.getByText(/Wrong answers lose ¼ of the item's points; blank answers score 0. The original time limit was 90 minutes./)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+  await screen.findByText("The sky is green");
+  expect(mock.save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByLabelText("False"));
+  fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
+  await screen.findByText("Explain gravity");
+  fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+  await screen.findByText("The sky is green");
+  fireEvent.click(screen.getByRole("button", { name: "Leave blank" }));
+  await waitFor(() => expect(mock.clear).toHaveBeenCalledWith("course", "attempt", "tf"));
+  expect(screen.getByLabelText("False")).not.toBeChecked();
+  fireEvent.click(screen.getByRole("button", { name: "Review and finish" }));
+  expect(await screen.findByText("3 questions are blank and will score 0 points.")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Hand in exam" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirm final submission" }));
+  await waitFor(() => expect(mock.submit).toHaveBeenCalledWith("course", "attempt"));
 });

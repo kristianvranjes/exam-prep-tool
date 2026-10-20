@@ -300,3 +300,14 @@ unique per paper), question_id (indexed, ON DELETE CASCADE, unique per paper), p
 
 `alembic downgrade 0019` drops both tables and every paper. Back up first if papers
 matter.
+
+## Paper sessions migration 0021
+
+Revision 0021 follows 0020. `quizzes` gains nullable `exam_paper_id` (indexed, ON
+DELETE SET NULL) and nullable `scoring` JSONB holding the frozen rule (`version`,
+`title`, `total_points`, `wrong_answer_penalty`, `pass_threshold`, `duration_minutes`;
+decimals as strings). `quiz_questions` gains nullable `points` (`NUMERIC(6,2)`, above 0)
+and `label` (at most 40 characters). Existing sessions stay ordinary practice.
+
+`alembic downgrade 0020` drops these columns; paper sessions then read as ordinary
+practice without points or scores. Back up first if paper results matter.

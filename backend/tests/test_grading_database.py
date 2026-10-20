@@ -119,7 +119,13 @@ def test_phase7_backfill_and_roundtrip_preserve_history(bank, monkeypatch):
                         "FROM quiz_attempts ORDER BY id"
                     )
                 ).all(),
-                "snapshots": conn.execute(text("SELECT * FROM quiz_questions ORDER BY id")).all(),
+                # Columns shared by old revisions; 0021's paper points are tested separately.
+                "snapshots": conn.execute(
+                    text(
+                        "SELECT id, quiz_id, position, source_question_id, source_version, "
+                        "snapshot FROM quiz_questions ORDER BY id"
+                    )
+                ).all(),
             }
 
     config = Config("alembic.ini")

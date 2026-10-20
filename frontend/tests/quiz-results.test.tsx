@@ -168,3 +168,35 @@ it("adds no guess note when confidence was not recorded", () => {
   open();
   expect(screen.queryByText(/marked as a guess/)).not.toBeInTheDocument();
 });
+
+it("scores a past paper with negative marking, pending self-review and blanks", () => {
+  const paper = { exam_paper_id: "p1", title: "MI 2025/26", total_points: 6, wrong_answer_penalty: 0.25, pass_threshold: 4, duration_minutes: 90 };
+  const questions: ResultQuestion[] = [
+    { ...mistake, points: 2, label: "Zadatak 1", earned_points: -0.5 },
+    { ...correct, points: 1, label: "Zadatak 2", earned_points: 1 },
+    { ...short, points: 3, label: "Zadatak 3", earned_points: null },
+    { ...correct, id: "blank", position: 3, stem: "Left alone", answer: null, grading_status: "UNANSWERED", points: 0.5, label: null, earned_points: 0 },
+  ];
+  render(<QuizResults attempt={{ ...submitted(questions), paper, score: { version: "paper-scoring-v1", earned: 0.5, max_points: 6.5, correct_points: 1, penalty_points: 0.5, pending_points: 3, unanswered_count: 1, passed: null } }}
+    onPracticeAgain={vi.fn()} onBackToHistory={vi.fn()} />);
+  const score = screen.getByRole("region", { name: "Score on MI 2025/26" });
+  expect(score).toHaveTextContent("0.5 / 6.5 points");
+  expect(score).toHaveTextContent("The pass mark of 4 points depends on your self-review");
+  expect(score).toHaveTextContent("Wrong answers (−¼ of the item's points)−0.5");
+  expect(score).toHaveTextContent("Awaiting your self-reviewup to 3");
+  expect(score).toHaveTextContent("Left blank1 · 0 points");
+  expect(screen.getByLabelText("Results summary")).toHaveTextContent("Left blank1");
+  expect(screen.getByText("Zadatak 1 · Incorrect · −0.5 of 2 points")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "All answers" }));
+  expect(screen.getByText("Zadatak 3 · Self-review required · up to 3 points after self-review")).toBeVisible();
+  expect(screen.getByText("Left blank · 0 of 0.5 points")).toBeVisible();
+  expect(screen.getByText("Zadatak 2 · Correct · +1 of 1 point")).toBeVisible();
+});
+
+it("states a decided pass mark", () => {
+  const paper = { exam_paper_id: null, title: "ZI", total_points: 1, wrong_answer_penalty: 0, pass_threshold: 1, duration_minutes: null };
+  render(<QuizResults attempt={{ ...submitted([{ ...correct, points: 1, earned_points: 1 }]), paper, score: { version: "paper-scoring-v1", earned: 1, max_points: 1, correct_points: 1, penalty_points: 0, pending_points: 0, unanswered_count: 0, passed: true } }}
+    onPracticeAgain={vi.fn()} onBackToHistory={vi.fn()} />);
+  expect(screen.getByText("Passed · the pass mark is 1 point")).toHaveClass("text-success");
+  expect(screen.queryByText(/Wrong answers \(/)).not.toBeInTheDocument();
+});

@@ -77,6 +77,17 @@ def answer(
     return quizzes.save_answer(db, user, course_id, attempt_id, question_id, data)
 
 
+@router.delete("/{attempt_id}/answers/{question_id}", response_model=AttemptResponse)
+def clear(
+    course_id: UUID,
+    attempt_id: UUID,
+    question_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AttemptResponse:
+    return quizzes.clear_answer(db, user, course_id, attempt_id, question_id)
+
+
 @router.post("/{attempt_id}/answers/{question_id}/check", response_model=AttemptResponse)
 def check(
     course_id: UUID,

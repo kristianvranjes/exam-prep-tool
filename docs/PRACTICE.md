@@ -82,6 +82,14 @@ either commits before submission and is included, or is rejected after submissio
 Detail reads also lock that row to avoid mixing an ACTIVE status with submitted data.
 UUIDs and timestamps are assigned server-side.
 
+## Past exam papers
+
+A session started from a published past paper keeps the paper's order, points, labels
+and scoring rule, may be handed in with blank questions, and lets a saved answer be
+cleared with `DELETE /courses/{course_id}/attempts/{id}/answers/{quiz_question_id}`
+(409 once checked or closed). Ordinary practice still requires every answer. Blank
+questions are neither graded nor scheduled. See [past exams](PAST_EXAMS.md#taking-a-paper).
+
 ## Immediate feedback in guided practice
 
 **Guided practice** starts the session with `feedback_mode: IMMEDIATE`; **Exam

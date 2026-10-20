@@ -1,7 +1,17 @@
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint, func, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,6 +39,11 @@ class Quiz(Base):
     focus_label: Mapped[str | None] = mapped_column(String(300))
     # IMMEDIATE lets the student check each saved answer before submitting.
     feedback_mode: Mapped[str] = mapped_column(String(10), server_default="END", default="END")
+    # A paper session: the paper (null once deleted) and its scoring rule frozen at start.
+    exam_paper_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("exam_papers.id", ondelete="SET NULL"), index=True
+    )
+    scoring: Mapped[dict[str, object] | None] = mapped_column(JSONB)
 
 
 class QuizQuestion(Base):
@@ -36,6 +51,7 @@ class QuizQuestion(Base):
     __table_args__ = (
         UniqueConstraint("quiz_id", "position", name="uq_quiz_question_position"),
         CheckConstraint("position >= 0", name="ck_quiz_question_position"),
+        CheckConstraint("points IS NULL OR points > 0", name="ck_quiz_question_points"),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     quiz_id: Mapped[UUID] = mapped_column(ForeignKey("quizzes.id", ondelete="CASCADE"))
@@ -44,6 +60,9 @@ class QuizQuestion(Base):
     source_question_id: Mapped[UUID]
     source_version: Mapped[int]
     snapshot: Mapped[dict[str, object]] = mapped_column(JSONB)
+    # Paper sessions freeze each item's points and original label.
+    points: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    label: Mapped[str | None] = mapped_column(String(40))
 
 
 class QuizAttempt(Base):

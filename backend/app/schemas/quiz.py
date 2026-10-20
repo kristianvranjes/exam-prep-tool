@@ -95,6 +95,37 @@ class TextAnswer(StrictModel):
 
 AnswerPayload = Annotated[MCQAnswer | BooleanAnswer | TextAnswer, Field(discriminator="type")]
 Grade = Literal["PENDING", "CORRECT", "INCORRECT"]
+# Results also mark questions left blank in a paper session.
+ResultGrade = Literal["PENDING", "CORRECT", "INCORRECT", "UNANSWERED"]
+
+
+class StartPaper(StrictModel):
+    # A past paper is usually an exam simulation, so results come at the end.
+    feedback_mode: FeedbackMode = "END"
+
+
+class PaperSession(BaseModel):
+    """The paper's scoring rule as frozen when the session started."""
+
+    exam_paper_id: UUID | None
+    title: str
+    total_points: float
+    wrong_answer_penalty: float
+    pass_threshold: float | None
+    duration_minutes: int | None
+
+
+class PaperScore(BaseModel):
+    version: str
+    earned: float
+    max_points: float
+    correct_points: float
+    penalty_points: float
+    # Points of short answers awaiting self-review; never guessed into `earned`.
+    pending_points: float
+    unanswered_count: int
+    # None when there is no pass mark or pending answers could still decide it.
+    passed: bool | None
 
 
 class CheckAnswer(StrictModel):
@@ -111,6 +142,7 @@ class AttemptSummary(BaseModel):
     focus_unit_ids: list[UUID] = []
     focus_label: str | None = None
     feedback_mode: FeedbackMode = "END"
+    paper: PaperSession | None = None
 
 
 class QuestionUnitLabel(BaseModel):
@@ -141,6 +173,9 @@ class ActiveQuestion(BaseModel):
     units: list[QuestionUnitLabel] = []
     # Only for IMMEDIATE answers that were checked; unchecked questions never carry keys.
     feedback: QuestionFeedback | None = None
+    # Paper sessions only: the item's frozen points and original label.
+    points: float | None = None
+    label: str | None = None
 
 
 class ResultQuestion(ActiveQuestion):
@@ -148,8 +183,10 @@ class ResultQuestion(ActiveQuestion):
     explanation: str | None
     correct_boolean: bool | None
     reference_answer: str | None
-    grading_status: Grade
+    grading_status: ResultGrade
     confidence: Confidence | None = None
+    # Paper sessions only; None while a short answer awaits self-review.
+    earned_points: float | None = None
 
 
 class ActiveAttempt(AttemptSummary):
@@ -160,6 +197,7 @@ class ActiveAttempt(AttemptSummary):
 class SubmittedAttempt(AttemptSummary):
     status: Literal["SUBMITTED"] = "SUBMITTED"
     questions: list[ResultQuestion]
+    score: PaperScore | None = None
 
 
 class AbandonedAttempt(AttemptSummary):
