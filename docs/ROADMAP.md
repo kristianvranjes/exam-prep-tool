@@ -11,12 +11,14 @@ later as an optional, reviewed capability.
 This roadmap was first grounded in the repository inspected on **6 October 2026** and the
 project owner's confirmation that the website uses **Vercel and Railway**. It was revised
 on **14 October 2026** to put course structure and past exams ahead of secondary learning
-tools. It provides six detailed near-term milestones, followed by longer-term priorities.
-Dates remain unset until pilot feedback and available development capacity support
-estimates.
+tools, and on **20 October 2026** to order the remaining work against the FER 2026/27
+academic calendar and to add tutor practice, UI foundations and scalable community
+review (see [section 2](#2-semester-plan-202627)). It provides six detailed near-term
+milestones, followed by longer-term priorities. Target windows follow exam periods; they
+are not delivery commitments.
 
-**Roadmap status:** R1–R11 are planned. Saving this document does not complete their
-implementation or hosted verification. Record completion only with evidence.
+**Roadmap status:** R2 is implemented; R1 and R3–R14 are planned. Saving this document
+does not complete their implementation or hosted verification. Record completion only with evidence.
 
 **Already implemented in the repository:**
 
@@ -29,11 +31,15 @@ implementation or hosted verification. Record completion only with evidence.
 - Question-level review scheduling, adaptive selection, and course progress summaries.
 - Faculty moderation, question reports, and reviewed edit suggestions.
 - Unit, PostgreSQL integration, and multi-user browser acceptance coverage.
+- Ordered course units, exam scopes per academic year, unit/scope-filtered practice,
+  server-side practice availability, per-unit progress, and bulk unit assignment (R2).
 
 **Important boundaries:** short answers remain ungraded for self-review. Study and Exam
-experiences currently reveal results after final submission. Practice sessions are
-always randomly or adaptively selected from the whole course bank (at most 20 questions);
-there is no notion of course units, exam cycles, past exam papers, or material kinds.
+experiences currently reveal results after final submission; the choice is not stored
+with the attempt. Practice sessions are selected from the whole bank or from chosen
+units or an exam scope (at most 20 questions). Exam scopes have no dates, and there are
+no past exam papers, material kinds, timers, or answer confidence. Scheduling is
+`leitner-v1`.
 Repository tests and documentation establish implementation scope; they do not
 establish the deployed version or hosted reliability.
 
@@ -70,7 +76,65 @@ Faculty
 Bank questions stay the single unit of practice, grading, scheduling, and progress.
 Units, scopes, papers, and material kinds are ways to select and organize them.
 
-## 2. Detailed near-term milestones
+## 2. Semester plan 2026/27
+
+The FER calendar decides what students need next, so the remaining work is grouped by
+exam period rather than strictly by milestone number.
+
+| Period | Dates |
+| --- | --- |
+| Winter semester teaching starts | 5 October 2026 |
+| Winter midterms (MI) | 23 November – 1 December 2026 |
+| Teaching, holidays | 2 December 2026 – 29 January 2027 (break around 24 December – 6 January) |
+| Winter finals (ZI) | 1 – 12 February 2027 |
+| Exam terms | 15 – 26 February 2027 |
+| Summer semester teaching / midterms | from 1 March 2027 / around 19 – 30 April 2027 |
+| Summer finals and exam terms | around 14 June – 9 July 2027 |
+
+### Phase A — before the winter midterms (feature freeze 16 November 2026)
+
+Students use the site in the one or two weeks before MI, and the last week before MI
+is reserved for entering content (past midterms, unit questions) and fixing bugs. Ship
+each item as its own pull request, in this order:
+
+1. **R12 — Tutor practice.** Guided practice checks each answer immediately and shows the
+   key and explanation; exam practice keeps results until submission. Optional
+   confidence (sure / unsure / guessed) is stored with the answer.
+2. **Exam dates and countdown (from R10).** Optional start and end dates on exam scopes,
+   `LAB` and `QUIZ` (blic) scope kinds, and a course-page countdown with unit coverage
+   and a one-click start for the scope.
+3. **R3 core.** Past exam papers and items, paper sessions with original order, points
+   and negative scoring, and a server-enforced deadline with 10/5/1-minute warnings and a
+   pace indicator. Generated mock exams follow if time allows; material kinds and
+   material-based practice move to Phase B.
+4. **R13 — UI foundations** (frontend only, may run alongside item 3). A positive design
+   brief in `DESIGN.md`, a text and a monospace font with Latin Extended coverage, a
+   palette with a non-indigo accent and semantic correct/incorrect/pending colors as
+   tokens with dark variants, and redesigned practice and result screens.
+
+### Phase B — between midterms and finals (2 December 2026 – 31 January 2027)
+
+1. **R5** favorites and mistakes, plus due-only daily review, focus sessions combined
+   with unit and scope filters, and a short five-question quick quiz.
+2. **FSRS scheduling** (`fsrs-v1`) replacing `leitner-v1` per record on its next review,
+   with the rating derived from correctness, confidence, and later response time.
+   Leitner records keep working until then; no bulk rewrite.
+3. **Exam readiness:** per unit coverage, retention and accuracy with sample counts; a
+   readiness range for an exam scope, its three weakest units, and a practice shortcut.
+4. **Item analysis for moderators** (part of R14): difficulty, upper/lower 27 %
+   discrimination, option distribution and median time, shown only after 30 answers.
+5. **R4** numeric and multiple-select questions, KaTeX, code highlighting.
+6. Practice keyboard shortcuts, “continue where you left off”, and time per question.
+7. **R6** pilot evaluation right after the midterms, before the finals.
+
+### Phase C — exam terms and summer semester (from February 2027)
+
+R14 community review, AI assistance in increasing order of risk (pre-moderation notes,
+grounded “explain this” after a mistake, an evaluation set, then R9 rubric assessment),
+R7 ingestion, and quality-of-life items (installable web app, reminders, calendar
+export, Anki export, study timer). Target: Phase B complete before the summer midterms.
+
+## 3. Detailed near-term milestones
 
 ### R1 — Verify and prepare the hosted pilot
 
@@ -198,8 +262,8 @@ cycle (MI, ZI, or full exam term), and see progress per unit, without requiring 
 **Dependencies:** R1 baseline. Ship units, scopes, filtered practice/availability, and
 unit progress as separate coherent changes. Course units, question-unit links, exam
 scopes, unit/scope-filtered practice, the server-side availability summary and
-per-unit progress are implemented (see [course units](COURSE_UNITS.md)); bulk unit
-assignment beyond import remains open. Preserve the existing
+per-unit progress, and bulk unit assignment are implemented (see
+[course units](COURSE_UNITS.md)). Preserve the existing
 [practice invariants](PRACTICE.md).
 
 ### R3 — Past exams and materials as practice sources
@@ -424,15 +488,18 @@ triggers another improvement cycle before broader recruitment.
 **Dependencies:** R1 starts the pilot; R2–R5 supply the learning improvements being
 evaluated.
 
-## 3. Longer-term sequence
+## 4. Longer-term sequence
 
 | Milestone | Planned capability | Entry and release gate |
 | --- | --- | --- |
 | **R7 — Past-exam and material ingestion** | OCR for scanned PDFs, assisted splitting of past-exam PDFs into draft paper items (deterministic layout heuristics first, optional AI second), clearer source/page references, duplicate candidates across years, and richer provenance. | Entering past papers by hand is the observed content bottleneck. OCR and AI remain optional; every extracted item, duplicate match, and correction requires a human decision before approval. |
 | **R8 — Further deterministic question types** | Matching and ordering in separate issues; optional partial credit for multiple-select. | Pilot demonstrates demand. Define scoring before each type ships. Preserve existing import compatibility. |
 | **R9 — Optional AI assessment of extended answers and explanations** | Rubric-based assessment of short and extended answers against R4 rubrics; optional “explain your answer” field on objective questions, with the explanation assessed against the question's explanation and rubric. Clearly labeled suggestions with reasons and human review. | A human-labeled evaluation set demonstrates acceptable correctness, abstention, latency, and cost. Start disabled and advisory; students retain rubric self-review. The correctness of an objective answer always stays deterministic. |
-| **R10 — Study planning and deeper learning tools** | Exam-date goals tied to exam scopes (for example “MI on 10 November covers units 1–5”), due-only review, time-bounded sessions, optional confidence capture, and progress trends. | Pilot usage establishes which tools help. Keep recommendation logic deterministic and distinguish self-assessment from automatic grades. |
+| **R10 — Study planning and deeper learning tools** | Exam-date goals tied to exam scopes (for example “MI on 23 November covers units 1–5”), due-only review, time-bounded sessions, optional confidence capture, and progress trends. Scope dates, the countdown, confidence and due-only review are pulled forward into Phases A and B; FSRS scheduling, readiness ranges and trends follow. | Pilot usage establishes which tools help. Keep recommendation logic deterministic and distinguish self-assessment from automatic grades. |
 | **R11 — Wider rollout and measured scale** | Evaluate AAI@EduHr sign-in, self-service account recovery, operational administration, retention/export/deletion policies, Croatian/English localization, and capacity improvements. | Recovery, moderation, and content permissions are sustainable. Add workers, storage changes, indexes, or replicas only when measurements show the need. |
+| **R12 — Tutor practice** | A feedback mode chosen at session start and stored with the quiz: immediate mode grades one saved answer on request, locks it, and reveals that question's key and explanation (or reference answer); end mode keeps today's behavior. Optional answer confidence. Scheduling still updates once, at submission. | Hidden-answer protection holds for every unchecked question; abandonment still leaves review progress unchanged. Confidence affects scheduling only with FSRS. |
+| **R13 — UI foundations** | Written design brief, typography and spacing scale, palette tokens with semantic result colors and dark variants, then the practice, results and course home screens. | Frontend only. Keyboard, contrast, touch targets and reduced motion checked at 375, 768 and 1280 px in light and dark themes. |
+| **R14 — Community quality at scale** | Automatic contribution checks (explanation, unit, source, duplicate candidates via existing embeddings), anonymous review by three peers who did well in the unit, trust levels for authors and reviewers, 1–5 quality ratings and comments, item analysis, automatic quarantine on repeated wrong-key reports or negative discrimination, and moderator spot checks. | Moderators keep every final decision for disputed items; thresholds (for example 10 approved questions, under 5 % reports) are calibrated on the pilot. Reputation comes from quality and use, never from submission counts. Any authorization change is its own reviewed issue. |
 
 **AI grading architecture guardrails**
 
@@ -448,7 +515,7 @@ evaluated.
   flow requires its own idempotent transaction design and migration.
 - Broader cloud AI use requires explicit configuration and documented data handling.
 
-## 4. Verification and delivery rules
+## 5. Verification and delivery rules
 
 Every implementation issue includes its user outcome, dependencies, API/migration changes,
 acceptance criteria, and relevant checks.
@@ -478,7 +545,7 @@ full regression gate**; do not duplicate the entire suite locally.
 Use additive migrations where practical. Deploy backend support before frontend controls
 that require it. Keep optional AI disabled until its separate release gate passes.
 
-## 5. Planning assumptions and maintenance
+## 6. Planning assumptions and maintenance
 
 - Hosted access continues through the existing Vercel/Railway setup; the actual database
   provider and deployed revision must be recorded in R1.
@@ -492,7 +559,8 @@ that require it. Keep optional AI disabled until its separate release gate passe
   on request.
 - The first pilot is deliberately small; the cohort and success targets above are planning
   defaults.
-- No calendar commitments or free-hosting guarantees are implied.
+- Phase windows in section 2 follow the FER 2026/27 calendar; they order the work but
+  are not calendar commitments. No free-hosting guarantees are implied.
 - Preserve the historical product vision. Use `docs/ROADMAP.md` as the canonical future
   plan and link it from the README.
 - Mark work complete only with implementation and verification evidence. Review the
