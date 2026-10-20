@@ -59,7 +59,7 @@ def test_scope_management_validation_and_copy(clients):
     for invalid in (
         body | {"academic_year": "2025/27", "unit_ids": [first]},
         body | {"academic_year": "2025-26", "unit_ids": [first]},
-        body | {"kind": "QUIZ", "unit_ids": [first]},
+        body | {"kind": "EXAM", "unit_ids": [first]},
         body | {"name": " ", "unit_ids": [first]},
         body | {"unit_ids": []},
         body | {"unit_ids": [first, first]},

@@ -12,7 +12,8 @@ import { Alert, Button, LoadingState, Surface } from "./ui";
 
 const types: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
 
-export type PracticeSetupRequest = { id: number; mode: SelectionMode };
+/** A request to open setup, optionally focused on one exam cycle. */
+export type PracticeSetupRequest = { id: number; mode: SelectionMode; scopeId?: string };
 
 export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 0, setupRequest, resumeAttemptId, routeAttemptId, routeResults = false, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onResumableAttemptChange, onOpenMaterials, onOpenQuestions, onOpenProgress, onBackToCourse }: {
   courseId: string; active?: boolean; adaptiveReviewRequest?: number; setupRequest?: PracticeSetupRequest | null; resumeAttemptId?: string | null;
@@ -152,6 +153,7 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
     queueMicrotask(() => {
       if (!active || handledSetupRequest.current === setupRequest.id) return;
       setSelectionMode(setupRequest.mode);
+      if (setupRequest.scopeId) setFocus({ kind: "SCOPE", scopeId: setupRequest.scopeId });
       if (pending.current) return;
       handledSetupRequest.current = setupRequest.id;
       setOpen(true);

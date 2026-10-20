@@ -270,3 +270,15 @@ same deterministic grade, method and version that submission would.
 answers and grades otherwise survive; checked ACTIVE answers keep their stored grade,
 which submission then recomputes from the same frozen snapshot. Back up first if
 confidence data matters.
+
+## Exam scope dates migration 0019
+
+Revision 0019 follows 0018. `exam_scopes` gains nullable `starts_on` and `ends_on`
+(`DATE`) with `ck_exam_scope_dates`: an end date requires a start date and cannot
+precede it. `ck_exam_scope_kind` now also allows `LAB` and `QUIZ`. Existing scopes
+stay undated.
+
+`alembic downgrade 0018` refuses while `LAB` or `QUIZ` scopes exist, because the old
+kind constraint cannot hold them; delete or re-kind them first. Otherwise it drops
+the date columns and restores the three-kind constraint. Back up first if dates
+matter.

@@ -284,11 +284,12 @@ OWNER rules as units.
 
 | Method/path | Contract |
 | --- | --- |
-| GET `/courses/{course_id}/exam-scopes` | Members; optional `academic_year=2025/26`. Newest year first, then MIDTERM, FINAL, FULL_EXAM, then name. Each row has `unit_ids` in course order and `approved_question_count`. |
-| POST `/courses/{course_id}/exam-scopes` | OWNER, strict `{academic_year, kind, name, unit_ids}` with 1–50 unique active units. 409 for a duplicate normalized name in that year or more than 100 scopes. |
-| PATCH `/exam-scopes/{scope_id}` | OWNER, any non-null subset of the create fields. Units already linked may stay archived. |
+| GET `/courses/{course_id}/exam-scopes` | Members; optional `academic_year=2025/26`. Newest year first, then MIDTERM, FINAL, FULL_EXAM, LAB, QUIZ, then name. Each row has `unit_ids` in course order, `starts_on`/`ends_on` (dates or null) and `approved_question_count`. |
+| POST `/courses/{course_id}/exam-scopes` | OWNER, strict `{academic_year, kind, name, unit_ids}` with 1–50 unique active units, plus optional `starts_on`/`ends_on` (`YYYY-MM-DD`; an end needs a start and cannot precede it). 409 for a duplicate normalized name in that year or more than 100 scopes. |
+| PATCH `/exam-scopes/{scope_id}` | OWNER, any non-null subset of the create fields; `starts_on`/`ends_on` may be null to clear them, and the resulting pair is validated (422). Units already linked may stay archived. |
+| GET `/exam-scopes/{scope_id}/coverage` | Members. The caller's `{scope_id, question_count, reviewed_count}`: distinct APPROVED questions in the scope's units and how many the caller has a graded review for. |
 | DELETE `/exam-scopes/{scope_id}` | OWNER, 204. Past practice keeps its frozen focus label. |
-| POST `/courses/{course_id}/exam-scopes/copy` | OWNER, `{from_year, to_year}`. 201 with the created scopes; 404 when the source year is empty; 409 on a name conflict (nothing saved). |
+| POST `/courses/{course_id}/exam-scopes/copy` | OWNER, `{from_year, to_year}`. 201 with the created scopes, undated; 404 when the source year is empty; 409 on a name conflict (nothing saved). |
 
 ### Practice availability (R2)
 
