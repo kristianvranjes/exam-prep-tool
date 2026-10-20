@@ -7,6 +7,7 @@ const mock = vi.hoisted(() => ({
   me: vi.fn(), login: vi.fn(), courses: vi.fn(), faculties: vi.fn(), membership: vi.fn(), course: vi.fn(),
   reviewProgressSummary: vi.fn(), moderatorStatus: vi.fn(), concepts: vi.fn(), questions: vi.fn(), logout: vi.fn(),
   history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), availability: vi.fn(),
+  examScopes: vi.fn(), examScopeCoverage: vi.fn(),
 }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
@@ -22,6 +23,7 @@ const activeAttempt: Attempt = { id: "attempt", course_id: "course", status: "AC
 beforeEach(() => {
   vi.resetAllMocks();
   mock.me.mockResolvedValue(user);
+  mock.examScopes.mockResolvedValue([]);
   mock.login.mockResolvedValue(user);
   mock.courses.mockResolvedValue([course, { ...course, id: "statistics", name: "Statistics" }]);
   mock.faculties.mockResolvedValue([]);

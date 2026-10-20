@@ -80,6 +80,7 @@ export const api = {
   createExamScope: (courseId: string, body: ExamScopeBody) => request<ExamScope>(`/courses/${courseId}/exam-scopes`, { method: "POST", body: JSON.stringify(body) }),
   updateExamScope: (id: string, body: Partial<ExamScopeBody>) => request<ExamScope>(`/exam-scopes/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteExamScope: (id: string) => request<void>(`/exam-scopes/${id}`, { method: "DELETE" }),
+  examScopeCoverage: (id: string) => request<ExamScopeCoverage>(`/exam-scopes/${id}/coverage`),
   copyExamScopes: (courseId: string, fromYear: string, toYear: string) => request<ExamScope[]>(`/courses/${courseId}/exam-scopes/copy`, { method: "POST", body: JSON.stringify({ from_year: fromYear, to_year: toYear }) }),
   reorderUnits: (courseId: string, unitIds: string[]) => request<CourseUnit[]>(`/courses/${courseId}/units/order`, { method: "PATCH", body: JSON.stringify({ unit_ids: unitIds }) }),
   questionVersions: (id: string, offset = 0) => request<QuestionVersion[]>(`/questions/${id}/versions?limit=50&offset=${offset}`),
@@ -116,9 +117,13 @@ export type MaterialChunk = { id: string; material_id: string; section_id: strin
 
 export type CourseUnit = { id: string; course_id: string; position: number; title: string; description: string | null; is_archived: boolean; approved_question_count: number; created_at: string; updated_at: string };
 
-export type ExamScopeKind = "MIDTERM" | "FINAL" | "FULL_EXAM";
-export type ExamScopeBody = { academic_year: string; kind: ExamScopeKind; name: string; unit_ids: string[] };
-export type ExamScope = ExamScopeBody & { id: string; course_id: string; approved_question_count: number; created_at: string; updated_at: string };
+/** LAB is a lab session, QUIZ a short in-class quiz (blic). */
+export type ExamScopeKind = "MIDTERM" | "FINAL" | "FULL_EXAM" | "LAB" | "QUIZ";
+/** Dates are calendar days (YYYY-MM-DD); null clears them. */
+export type ExamScopeBody = { academic_year: string; kind: ExamScopeKind; name: string; unit_ids: string[]; starts_on?: string | null; ends_on?: string | null };
+export type ExamScope = ExamScopeBody & { id: string; course_id: string; starts_on: string | null; ends_on: string | null; approved_question_count: number; created_at: string; updated_at: string };
+/** The caller's own progress through a cycle's approved questions. */
+export type ExamScopeCoverage = { scope_id: string; question_count: number; reviewed_count: number };
 
 export type Concept = { id: string; course_id: string; name: string; normalized_name: string; description: string | null; aliases: string[]; importance: 'LOW' | 'MEDIUM' | 'HIGH'; status: 'DRAFT' | 'APPROVED' | 'REJECTED'; created_by: string; created_at: string; updated_at: string };
 export type ConceptDetail = Concept & { source_chunks: { id: string; material_id: string; ordinal: number; content: string }[] };

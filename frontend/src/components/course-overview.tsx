@@ -1,22 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type ReviewProgressSummary } from "../lib/api";
+import { api, type ExamScopeCoverage, type ReviewProgressSummary } from "../lib/api";
+import { countdownLabel, formatScopeDates, localIsoDate, nextExam, type NextExam } from "../lib/exam-dates";
 import { practiceApi } from "../lib/practice-api";
 import type { MaterialsSummary } from "./course-materials";
 import { Button, Surface } from "./ui";
 
 type ProgressState = { loading: boolean; summary: ReviewProgressSummary | null; error: boolean };
 type Availability = "loading" | "available" | "empty" | "unknown";
+type Countdown = { exam: NextExam; coverage: ExamScopeCoverage | null };
 
 export function CourseOverview({ courseId, active, knownAttemptId, checkingSession, activeSession, materials, onResume,
-  onRecommendedPractice, onStandardPractice, onProgress, onMaterials, onQuestions }: {
+  onRecommendedPractice, onStandardPractice, onScopePractice, onProgress, onMaterials, onQuestions }: {
   courseId: string; active: boolean; knownAttemptId: string | null;
   checkingSession?: boolean; activeSession?: boolean; materials: MaterialsSummary; onResume: () => void; onRecommendedPractice: () => void;
-  onStandardPractice: () => void; onProgress: () => void; onMaterials: () => void; onQuestions: () => void;
+  onStandardPractice: () => void; onScopePractice?: (scopeId: string) => void; onProgress: () => void; onMaterials: () => void; onQuestions: () => void;
 }) {
   const [progress, setProgress] = useState<ProgressState>({ loading: true, summary: null, error: false });
   const [availability, setAvailability] = useState<Availability>("loading");
+  const [countdown, setCountdown] = useState<Countdown | null>(null);
 
   useEffect(() => {
     if (!active) return;
@@ -26,6 +29,7 @@ export function CourseOverview({ courseId, active, knownAttemptId, checkingSessi
       if (!current) return;
       setProgress({ loading: true, summary: null, error: false });
       setAvailability("loading");
+      setCountdown(null);
       void api.reviewProgressSummary(courseId).then(summary => {
         if (current) setProgress({ loading: false, summary, error: false });
       }).catch(() => {
@@ -35,6 +39,13 @@ export function CourseOverview({ courseId, active, knownAttemptId, checkingSessi
       void practiceApi.availability(courseId, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]).then(counts => {
         if (current) setAvailability(counts.course_total > 0 ? "available" : "empty");
       }).catch(() => { if (current) setAvailability("unknown"); });
+      // Optional context: without dated cycles, or on failure, the overview simply omits it.
+      void api.examScopes(courseId).then(scopes => {
+        const exam = nextExam(scopes, localIsoDate());
+        if (!current || !exam) return;
+        setCountdown({ exam, coverage: null });
+        return api.examScopeCoverage(exam.scope.id).then(coverage => { if (current) setCountdown({ exam, coverage }); });
+      }).catch(() => undefined);
     });
     return () => { current = false; };
   }, [active, courseId]);
@@ -50,6 +61,17 @@ export function CourseOverview({ courseId, active, knownAttemptId, checkingSessi
       <p className="mt-2 text-muted">You have an unfinished practice session.</p>
       <Button className="mt-4 w-full sm:w-auto" onClick={onResume}>Resume session</Button>
     </Surface>}
+
+    {countdown && <section aria-labelledby="overview-exam-heading">
+      <Surface>
+        <p className="text-sm font-medium text-muted">Next exam</p>
+        <h3 id="overview-exam-heading" className="mt-1 text-xl font-semibold">{countdown.exam.scope.name}</h3>
+        <p className="mt-2"><span className="font-semibold">{countdownLabel(countdown.exam)}</span> · <time dateTime={countdown.exam.scope.starts_on ?? undefined}>{formatScopeDates(countdown.exam.scope)}</time></p>
+        <p className="mt-2 text-sm text-muted">Covers {countdown.exam.scope.unit_ids.length} {countdown.exam.scope.unit_ids.length === 1 ? "unit" : "units"}
+          {countdown.coverage && countdown.coverage.question_count > 0 && ` · You have practiced ${countdown.coverage.reviewed_count} of ${countdown.coverage.question_count} approved questions (${Math.round(countdown.coverage.reviewed_count / countdown.coverage.question_count * 100)}%)`}</p>
+        {onScopePractice && !activeSession && <Button className="mt-4 w-full sm:w-auto" variant="secondary" onClick={() => onScopePractice(countdown.exam.scope.id)}>Practice for {countdown.exam.scope.name}</Button>}
+      </Surface>
+    </section>}
 
     <section aria-labelledby="overview-next-heading">
       <h3 id="overview-next-heading" className="text-lg font-semibold">What to study next</h3>

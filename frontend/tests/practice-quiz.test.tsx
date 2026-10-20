@@ -785,7 +785,7 @@ it('returns directly to marked questions from Guided review without changing exp
 });
 
 const focusUnits = ["Unit 1", "Unit 2", "Unit 3"].map((title, position) => ({ id: `u${position + 1}`, course_id: "course", position, title, description: null, is_archived: false, approved_question_count: 10, created_at: "2026-10-01", updated_at: "2026-10-01" }));
-const midterm = { id: "mi", course_id: "course", academic_year: "2025/26", kind: "MIDTERM" as const, name: "MI", unit_ids: ["u1", "u2"], approved_question_count: 20, created_at: "2026-10-01", updated_at: "2026-10-01" };
+const midterm = { id: "mi", course_id: "course", academic_year: "2025/26", kind: "MIDTERM" as const, name: "MI", unit_ids: ["u1", "u2"], starts_on: null, ends_on: null, approved_question_count: 20, created_at: "2026-10-01", updated_at: "2026-10-01" };
 const allTypes = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
 
 function withUnits() {
@@ -914,4 +914,15 @@ it("resumes a guided session with checking enabled", async () => {
   expect(screen.getByRole("button", { name: "Check answer" })).toBeInTheDocument();
   fireEvent.click(screen.getByText("Session options"));
   expect(screen.getByLabelText("Guided practice")).toBeChecked();
+});
+
+it("opens setup focused on the exam cycle requested from the overview", async () => {
+  withUnits();
+  render(<PracticeQuiz courseId="course" setupRequest={{ id: 1, mode: "ADAPTIVE", scopeId: "mi" }} />);
+  expect(await screen.findByLabelText("Exam cycle", { selector: "select" })).toHaveValue("mi");
+  expect(screen.getByRole("radio", { name: "Exam cycle" })).toBeChecked();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  await screen.findByText("Choose a number");
+  expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE", { exam_scope_id: "mi" }, "IMMEDIATE");
 });

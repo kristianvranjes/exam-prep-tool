@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -15,7 +15,13 @@ class ExamScope(Base):
         UniqueConstraint(
             "course_id", "academic_year", "normalized_name", name="uq_exam_scope_year_name"
         ),
-        CheckConstraint("kind IN ('MIDTERM','FINAL','FULL_EXAM')", name="ck_exam_scope_kind"),
+        CheckConstraint(
+            "kind IN ('MIDTERM','FINAL','FULL_EXAM','LAB','QUIZ')", name="ck_exam_scope_kind"
+        ),
+        CheckConstraint(
+            "ends_on IS NULL OR (starts_on IS NOT NULL AND ends_on >= starts_on)",
+            name="ck_exam_scope_dates",
+        ),
         CheckConstraint(
             "academic_year ~ '^[0-9]{4}/[0-9]{2}$'", name="ck_exam_scope_academic_year"
         ),
@@ -31,6 +37,9 @@ class ExamScope(Base):
     kind: Mapped[str] = mapped_column(String(10))
     name: Mapped[str] = mapped_column(String(100))
     normalized_name: Mapped[str] = mapped_column(String(400))
+    # Optional calendar window: an exam day, or a multi-day exam period.
+    starts_on: Mapped[date | None] = mapped_column(Date)
+    ends_on: Mapped[date | None] = mapped_column(Date)
     created_by_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

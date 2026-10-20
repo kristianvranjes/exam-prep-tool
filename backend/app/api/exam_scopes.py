@@ -8,6 +8,7 @@ from app.models import User
 from app.schemas.exam_scope import (
     AcademicYear,
     ExamScopeCopy,
+    ExamScopeCoverage,
     ExamScopeCreate,
     ExamScopeResponse,
     ExamScopeUpdate,
@@ -49,6 +50,13 @@ def copy(
     db: Session = Depends(get_db),
 ) -> list[ExamScopeResponse]:
     return service.copy_scopes(db, user, course_id, data)
+
+
+@router.get("/exam-scopes/{scope_id}/coverage", response_model=ExamScopeCoverage)
+def coverage(
+    scope_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> ExamScopeCoverage:
+    return service.coverage(db, user, scope_id)
 
 
 @router.patch("/exam-scopes/{scope_id}", response_model=ExamScopeResponse)

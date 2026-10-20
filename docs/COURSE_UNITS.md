@@ -38,15 +38,32 @@ An exam scope records which units one exam covers in one academic year.
 
 - A course OWNER creates, edits and deletes scopes. Each has an academic year written
   `2025/26` (the second part must follow the first), a kind (`MIDTERM` for MI,
-  `FINAL` for ZI, `FULL_EXAM` for a full exam term), a name (1–100 characters,
-  unique per course and year after normalization) and at least one unit.
+  `FINAL` for ZI, `FULL_EXAM` for a full exam term, `LAB` for a lab session,
+  `QUIZ` for a short in-class quiz or blic), a name (1–100 characters, unique per
+  course and year after normalization) and at least one unit.
+- Optional `starts_on` and `ends_on` dates (`YYYY-MM-DD`) give the exam day or a
+  multi-day period. An end date needs a start date and cannot precede it; `null`
+  clears a date in an update.
 - New scope links need active units; a scope keeps units archived later.
 - Copying a year creates the same scopes in another year with only their active
   units, skips scopes left without any, and saves nothing if a name already exists
-  there. A course has at most 100 scopes.
-- Members list scopes, newest year first, then MI, ZI and full exam, with the
-  number of distinct APPROVED questions in their units.
+  there. Copies start without dates. A course has at most 100 scopes.
+- Members list scopes, newest year first, then MI, ZI, full exam, lab and quiz, with
+  the number of distinct APPROVED questions in their units.
 - The owner manages cycles under More → Course units; members see them read-only.
+
+## Exam countdown
+
+`GET /exam-scopes/{scope_id}/coverage` returns, for the calling member, the number
+of distinct APPROVED questions in the scope's units and how many of them the caller
+has a graded review for (`question_count`, `reviewed_count`). Pending short answers
+create no review, so they do not count as practiced.
+
+The course overview picks the dated cycle that is in progress or starts next in the
+viewer's local calendar (undated and finished cycles are ignored) and shows a
+**Next exam** card: the countdown ("In 34 days", "Tomorrow", "Today" or "In progress
+until …"), the dates, the number of covered units, the coverage, and **Practice for
+…**, which opens practice setup focused on that cycle.
 
 ## Practice by unit or exam cycle
 
@@ -96,11 +113,8 @@ has graded practice. Each unit shows accuracy next to its sample size ("3 of 4
 graded answers"); archived units appear only while they hold history. The tab says
 that unit totals overlap and that accuracy is not mastery.
 
-## Not yet included
-
-Bulk unit assignment beyond import is not included yet.
-
 ## Data and migration
 
 Revision 0016 adds `course_units` and `question_units`; revision 0017 adds exam
-scopes and the quiz focus. See [database notes](DATABASE.md#course-units-migration-0016).
+scopes and the quiz focus; revision 0019 adds scope dates and the `LAB` and `QUIZ`
+kinds. See [database notes](DATABASE.md#course-units-migration-0016).

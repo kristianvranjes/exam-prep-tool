@@ -1,10 +1,10 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CourseOverview } from "../src/components/course-overview";
-import type { Material, ReviewProgressSummary } from "../src/lib/api";
+import type { ExamScope, Material, ReviewProgressSummary } from "../src/lib/api";
 import type { PracticeAvailability } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ reviewProgressSummary: vi.fn(), availability: vi.fn() }));
+const mock = vi.hoisted(() => ({ reviewProgressSummary: vi.fn(), availability: vi.fn(), examScopes: vi.fn(), examScopeCoverage: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 const summary: ReviewProgressSummary = { as_of: "2026-10-05", reviewed_questions: 3, due_now: 42, upcoming: 1,
@@ -20,6 +20,7 @@ const props = () => ({ courseId: "course", active: true, knownAttemptId: null as
 
 beforeEach(() => {
   vi.resetAllMocks(); mock.reviewProgressSummary.mockResolvedValue(summary); mock.availability.mockResolvedValue(counts(1));
+  mock.examScopes.mockResolvedValue([]);
 });
 
 it("shows a default recommendation, two trustworthy progress metrics and recent materials without management tools", async () => {
@@ -117,4 +118,39 @@ it("refreshes on returning to Overview and ignores a late response from the prev
   view.rerender(<CourseOverview {...p} active />);
   expect(await screen.findByText("75.0%")).toBeVisible();
   expect(mock.reviewProgressSummary).toHaveBeenCalledTimes(2);
+});
+
+const dated = (id: string, starts_on: string | null, ends_on: string | null = null): ExamScope => ({ id, course_id: "course",
+  academic_year: "2026/27", kind: "MIDTERM", name: id === "mi" ? "Međuispit" : id, unit_ids: ["u1", "u2"], starts_on, ends_on,
+  approved_question_count: 40, created_at: "2026-10-01", updated_at: "2026-10-01" });
+afterEach(() => { vi.useRealTimers(); });
+
+it("counts down to the next dated exam cycle with personal coverage and a focused practice shortcut", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 9, 20, 12));
+  mock.examScopes.mockResolvedValue([dated("undated", null), dated("zi", "2027-02-01"), dated("mi", "2026-11-23", "2026-12-01")]);
+  mock.examScopeCoverage.mockResolvedValue({ scope_id: "mi", question_count: 40, reviewed_count: 10 });
+  const handlers = props();
+  render(<CourseOverview {...handlers} onScopePractice={vi.fn()} />);
+  const exam = await screen.findByRole("region", { name: "Međuispit" });
+  expect(within(exam).getByText("In 34 days")).toBeVisible();
+  expect(within(exam).getByText("Mon 23 Nov – Tue 1 Dec")).toHaveAttribute("datetime", "2026-11-23");
+  expect(await within(exam).findByText(/practiced 10 of 40 approved questions \(25%\)/)).toBeVisible();
+  expect(mock.examScopeCoverage).toHaveBeenCalledWith("mi");
+  expect(within(exam).getByRole("button", { name: "Practice for Međuispit" })).not.toHaveClass("bg-accent");
+});
+
+it("passes the cycle to practice and hides the countdown without dated upcoming cycles", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 9, 20, 12));
+  mock.examScopes.mockResolvedValue([dated("mi", "2026-11-23")]);
+  mock.examScopeCoverage.mockRejectedValue(new Error("Offline"));
+  const onScopePractice = vi.fn();
+  const view = render(<CourseOverview {...props()} onScopePractice={onScopePractice} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Practice for Međuispit" }));
+  expect(onScopePractice).toHaveBeenCalledWith("mi");
+  expect(screen.queryByText(/approved questions/)).not.toBeInTheDocument();
+  view.unmount();
+  mock.examScopes.mockResolvedValue([dated("past", "2026-10-01"), dated("undated", null)]);
+  render(<CourseOverview {...props()} onScopePractice={onScopePractice} />);
+  await screen.findByText("75.0%");
+  expect(screen.queryByText("Next exam")).not.toBeInTheDocument();
 });

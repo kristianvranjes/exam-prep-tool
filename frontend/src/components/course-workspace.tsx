@@ -36,8 +36,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
   const [materials, setMaterials] = useState<MaterialsSummary>({ materials: [], loading: true, error: false });
   const [setupRequest, setSetupRequest] = useState<PracticeSetupRequest | null>(null);
   const focused = destination === "practice" && activeSession;
-  function openPractice(mode: PracticeSetupRequest["mode"]) {
-    setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode }));
+  function openPractice(mode: PracticeSetupRequest["mode"], scopeId?: string) {
+    setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode, scopeId }));
     navigate("practice", true);
   }
   const navigation = <nav aria-label="Course navigation" className="flex flex-wrap gap-2 border-b border-line pb-4">
@@ -56,6 +56,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
         knownAttemptId={knownAttemptId} checkingSession={checkingSession} activeSession={activeSession} materials={materials} onResume={onResume}
         onRecommendedPractice={() => openPractice("ADAPTIVE")}
         onStandardPractice={() => openPractice("STANDARD")}
+        onScopePractice={scopeId => openPractice("ADAPTIVE", scopeId)}
         onProgress={() => navigate("progress")} onMaterials={() => navigate("materials")}
         onQuestions={() => { setMoreDestination("questions"); navigate("more"); }} />
     </section>
