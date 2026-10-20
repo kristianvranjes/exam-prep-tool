@@ -343,7 +343,11 @@ drawn from a specific material.
 
 **Dependencies:** R2 units and scopes, R2 availability. Past-exam permissions from R1.
 Ship material kinds, papers/items, scoring, paper sessions, mock exams, and
-material-based practice as separate coherent changes.
+material-based practice as separate coherent changes. Papers, items and their
+draft/published lifecycle are implemented (see [past exams](PAST_EXAMS.md)); the
+manager-only review step is a publish action by the owner or a faculty moderator.
+Paper sessions, scoring results, the deadline, mock exams, material kinds and the
+past-paper count on questions remain open.
 
 ### R4 — FER-ready question content
 

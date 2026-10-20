@@ -81,6 +81,14 @@ export const api = {
   updateExamScope: (id: string, body: Partial<ExamScopeBody>) => request<ExamScope>(`/exam-scopes/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteExamScope: (id: string) => request<void>(`/exam-scopes/${id}`, { method: "DELETE" }),
   examScopeCoverage: (id: string) => request<ExamScopeCoverage>(`/exam-scopes/${id}/coverage`),
+  examPapers: (courseId: string) => request<ExamPaperList>(`/courses/${courseId}/exam-papers`),
+  examPaper: (id: string) => request<ExamPaperDetail>(`/exam-papers/${id}`),
+  createExamPaper: (courseId: string, body: ExamPaperBody) => request<ExamPaperDetail>(`/courses/${courseId}/exam-papers`, { method: "POST", body: JSON.stringify(body) }),
+  updateExamPaper: (id: string, body: Partial<ExamPaperBody>) => request<ExamPaperDetail>(`/exam-papers/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  setExamPaperItems: (id: string, items: ExamPaperItemInput[]) => request<ExamPaperDetail>(`/exam-papers/${id}/items`, { method: "POST", body: JSON.stringify({ items }) }),
+  publishExamPaper: (id: string) => request<ExamPaperDetail>(`/exam-papers/${id}/publish`, { method: "POST" }),
+  unpublishExamPaper: (id: string) => request<ExamPaperDetail>(`/exam-papers/${id}/unpublish`, { method: "POST" }),
+  deleteExamPaper: (id: string) => request<void>(`/exam-papers/${id}`, { method: "DELETE" }),
   copyExamScopes: (courseId: string, fromYear: string, toYear: string) => request<ExamScope[]>(`/courses/${courseId}/exam-scopes/copy`, { method: "POST", body: JSON.stringify({ from_year: fromYear, to_year: toYear }) }),
   reorderUnits: (courseId: string, unitIds: string[]) => request<CourseUnit[]>(`/courses/${courseId}/units/order`, { method: "PATCH", body: JSON.stringify({ unit_ids: unitIds }) }),
   questionVersions: (id: string, offset = 0) => request<QuestionVersion[]>(`/questions/${id}/versions?limit=50&offset=${offset}`),
@@ -124,6 +132,21 @@ export type ExamScopeBody = { academic_year: string; kind: ExamScopeKind; name: 
 export type ExamScope = ExamScopeBody & { id: string; course_id: string; starts_on: string | null; ends_on: string | null; approved_question_count: number; created_at: string; updated_at: string };
 /** The caller's own progress through a cycle's approved questions. */
 export type ExamScopeCoverage = { scope_id: string; question_count: number; reviewed_count: number };
+
+/** A past exam as it was set. Penalty is the fraction of an item's points lost for a wrong objective answer. */
+export type ExamPaperBody = {
+  academic_year: string; kind: ExamScopeKind; title: string; term_label: string | null; exam_date: string | null;
+  exam_scope_id: string | null; duration_minutes: number | null; wrong_answer_penalty: number; pass_threshold: number | null;
+};
+export type ExamPaper = ExamPaperBody & {
+  id: string; course_id: string; status: "DRAFT" | "PUBLISHED"; published_at: string | null;
+  item_count: number; total_points: number; created_at: string; updated_at: string;
+};
+export type ExamPaperItemInput = { question_id: string; points: number; label: string | null };
+/** Members see an item's structure only; managers also see which question it is. */
+export type ExamPaperItem = { position: number; label: string | null; points: number; type: QuestionType; question_id?: string; stem?: string; question_status?: QuestionStatus };
+export type ExamPaperDetail = ExamPaper & { can_manage: boolean; items: ExamPaperItem[] };
+export type ExamPaperList = { can_manage: boolean; papers: ExamPaper[] };
 
 export type Concept = { id: string; course_id: string; name: string; normalized_name: string; description: string | null; aliases: string[]; importance: 'LOW' | 'MEDIUM' | 'HIGH'; status: 'DRAFT' | 'APPROVED' | 'REJECTED'; created_by: string; created_at: string; updated_at: string };
 export type ConceptDetail = Concept & { source_chunks: { id: string; material_id: string; ordinal: number; content: string }[] };

@@ -282,3 +282,21 @@ stay undated.
 kind constraint cannot hold them; delete or re-kind them first. Otherwise it drops
 the date columns and restores the three-kind constraint. Back up first if dates
 matter.
+
+## Exam papers migration 0020
+
+Revision 0020 follows 0019. `exam_papers` stores id, course_id (indexed, ON DELETE
+CASCADE), academic_year (`YYYY/YY` pattern), kind (the five exam-cycle kinds), title and
+normalized_title (`(course_id, academic_year, normalized_title)` unique), optional
+term_label, exam_date, exam_scope_id (indexed, ON DELETE SET NULL),
+duration_minutes (1–600), wrong_answer_penalty (`NUMERIC(4,3)`, 0–1, default 0),
+pass_threshold (`NUMERIC(7,2)`, at least 0), status (`DRAFT`/`PUBLISHED`, default
+`DRAFT`) with a matching published_at, created_by_user_id (ON DELETE RESTRICT) and
+timestamps.
+
+`exam_paper_items` stores id, paper_id (ON DELETE CASCADE), position (at least 0,
+unique per paper), question_id (indexed, ON DELETE CASCADE, unique per paper), points
+(`NUMERIC(6,2)`, above 0) and an optional label of at most 40 characters.
+
+`alembic downgrade 0019` drops both tables and every paper. Back up first if papers
+matter.

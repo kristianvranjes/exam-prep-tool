@@ -8,6 +8,7 @@ from app.api.auth import router as auth_router
 from app.api.concepts import router as concepts_router
 from app.api.course_units import router as course_units_router
 from app.api.courses import router as courses_router
+from app.api.exam_papers import router as exam_papers_router
 from app.api.exam_scopes import router as exam_scopes_router
 from app.api.faculties import router as faculties_router
 from app.api.health import router as health_router
@@ -53,6 +54,7 @@ app.include_router(auth_router)
 app.include_router(courses_router)
 app.include_router(course_units_router)
 app.include_router(exam_scopes_router)
+app.include_router(exam_papers_router)
 app.include_router(faculties_router)
 app.include_router(moderation_router)
 app.include_router(materials_router)
