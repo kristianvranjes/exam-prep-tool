@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { practiceApi, type Attempt, type PracticeAnswer } from "../lib/practice-api";
+import { practiceApi, type Attempt, type Confidence, type PracticeAnswer } from "../lib/practice-api";
 import { Alert, Button } from "./ui";
 import { QuizAnswerEditor } from "./quiz-answer-editor";
+import { CheckedFeedback, ConfidencePicker } from "./quiz-feedback";
 import { QuestionUnits } from "./question-units";
 import { ExperiencePicker, QuizNavigator, type QuizExperience } from "./quiz-navigation";
 import { useUnsavedChanges } from "./unsaved-changes";
@@ -23,14 +24,21 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
   const [error, setError] = useState("");
   const [review, setReview] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [confidence, setConfidence] = useState<Confidence | null>(null);
   const pending = useRef(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   function update(next: Attempt) { if (mounted.current) onUpdate(next); }
   const questionHeading = useRef<HTMLHeadingElement>(null);
   const reviewHeading = useRef<HTMLHeadingElement>(null);
+  const feedbackHeading = useRef<HTMLHeadingElement>(null);
+  const focusFeedback = useRef(false);
   const confirmationHeading = useRef<HTMLHeadingElement>(null);
   const question = attempt.questions[index];
+  // Guided sessions started in IMMEDIATE mode check each answer before moving on.
+  const immediate = attempt.feedback_mode === "IMMEDIATE";
+  const feedback = question.feedback ?? null;
+  const checkedCount = attempt.questions.filter(item => item.feedback).length;
   const dirty = JSON.stringify(answer) !== JSON.stringify(question.answer);
   const valid = answer !== null && (answer.type !== "SHORT_ANSWER" || answer.text.trim().length > 0);
   const answered = attempt.questions.filter(item => item.answer !== null).length;
@@ -41,6 +49,12 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
   useUnsavedChanges(dirty, onDirtyChange);
 
   useEffect(() => { (confirmation ? confirmationHeading : review ? reviewHeading : questionHeading).current?.focus(); }, [confirmation, index, review]);
+  // Focus the verdict once the checked feedback has rendered, not before.
+  useEffect(() => {
+    if (!feedback || !focusFeedback.current) return;
+    focusFeedback.current = false;
+    feedbackHeading.current?.focus();
+  }, [feedback]);
 
   async function run(action: () => Promise<void>) {
     if (pending.current) return;
@@ -65,11 +79,22 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
     if (next === index) return;
     void run(async () => {
       const saved = await persist();
-      if (saved.status === "ACTIVE") { setIndex(next); setAnswer(saved.questions[next].answer); setSaveFailed(false); }
+      if (saved.status === "ACTIVE") { setIndex(next); setAnswer(saved.questions[next].answer); setSaveFailed(false); setConfidence(null); }
     });
   }
   function openReview() {
     void run(async () => { const saved = await persist(); if (saved.status === "ACTIVE") setReview(true); });
+  }
+  function check() {
+    if (!valid) return;
+    void run(async () => {
+      const saved = await persist();
+      if (saved.status !== "ACTIVE") return;
+      const checked = await practiceApi.check(attempt.course_id, attempt.id, question.id, confidence);
+      focusFeedback.current = true;
+      update(checked);
+      if (checked.status === "ACTIVE") setAnswer(checked.questions[index].answer);
+    });
   }
   function forward() {
     if (!valid) return;
@@ -146,21 +171,23 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
         <Button variant={unanswered > 0 ? "secondary" : "primary"} disabled={busy || unanswered > 0} aria-describedby={unanswered > 0 ? "finish-help" : undefined} onClick={() => setConfirmation("submit")}>Finish practice</Button>
       </div>
       {unanswered > 0 && <p id="finish-help" className="text-sm text-muted">Finish practice becomes available when every answer is saved.</p>}
-      <p className="text-sm text-muted">Results appear after final submission. Short answers require self-review.</p>
+      <p className="text-sm text-muted">{immediate ? "Unchecked answers are graded when you finish." : "Results appear after final submission."} Short answers require self-review.</p>
     </section>}
     <div hidden={confirmation !== null || review}>
-      <form className="flex min-w-0 flex-col gap-6" onSubmit={event => { event.preventDefault(); if (!busy) forward(); }}>
+      <form className="flex min-w-0 flex-col gap-6" onSubmit={event => { event.preventDefault(); if (busy) return; if (immediate && !feedback) check(); else forward(); }}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 ref={questionHeading} tabIndex={-1} className="text-base font-semibold">Question {index + 1} of {attempt.questions.length}</h2>
           <p role="status" className="text-sm text-muted">{saveState}</p>
         </div>
         <QuestionUnits units={question.units} />
-        <QuizAnswerEditor question={question} answer={answer} change={value => { setAnswer(value); setSaveFailed(false); setError(""); }} disabled={busy} />
+        <QuizAnswerEditor question={question} answer={answer} change={value => { setAnswer(value); setSaveFailed(false); setError(""); }} disabled={busy} feedback={feedback} />
+        {immediate && !feedback && <ConfidencePicker name={question.id} value={confidence} onChange={setConfidence} disabled={busy} />}
+        <div aria-live="polite">{feedback && <CheckedFeedback question={question} feedback={feedback} headingRef={feedbackHeading} />}</div>
         <div className="flex flex-col gap-3">
           {!valid && <p id="answer-help" className="text-sm text-muted">{question.type === "SHORT_ANSWER" ? "Enter your answer to continue." : "Choose an answer to continue."}</p>}
           <div className="flex flex-wrap justify-between gap-3">
             <Button variant="secondary" disabled={busy || index === 0} onClick={() => navigate(index - 1)}>Previous</Button>
-            <Button type="submit" disabled={busy || !valid} aria-describedby={!valid ? "answer-help" : undefined}>{saving ? "Saving…" : finalQuestion ? "Save and review" : "Save and next"}</Button>
+            <Button type="submit" disabled={busy || !valid} aria-describedby={!valid ? "answer-help" : undefined}>{saving ? "Saving…" : immediate && !feedback ? (busy ? "Checking…" : "Check answer") : immediate ? (finalQuestion ? "Continue to review" : "Next question") : finalQuestion ? "Save and review" : "Save and next"}</Button>
           </div>
         </div>
       </form>
@@ -168,7 +195,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
         <Button variant="ghost" disabled={busy} aria-pressed={flags.has(question.id)} onClick={() => setFlags(current => { const next = new Set(current); if (next.has(question.id)) next.delete(question.id); else next.add(question.id); return next; })}>{flags.has(question.id) ? "Remove revisit mark" : "Mark to revisit"}</Button>
         <Button variant="ghost" disabled={busy} onClick={openReview}>Review and finish</Button>
       </div>
-      <p className="mt-3 text-sm text-muted">Edited answers are saved before moving to another question. Results appear after final submission.</p>
+      <p className="mt-3 text-sm text-muted">{immediate ? `Check each answer to see the key and explanation; a checked answer can no longer change. ${checkedCount} of ${attempt.questions.length} checked. Review progress updates when you finish.` : "Edited answers are saved before moving to another question. Results appear after final submission."}</p>
       {flags.size > 0 && <p className="text-sm text-muted">Revisit marks last while this session stays open.</p>}
     </div>
     {!confirmation && experience === "EXAM" && <details className="border-t border-line pt-3">

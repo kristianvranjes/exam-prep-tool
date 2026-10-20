@@ -64,6 +64,26 @@ textual match. They include the original submitted `answer.text` and frozen
 not update review progress or scheduling. The UI labels it Ungraded. Semantic and
 manual grading are future work only. See [practice](PRACTICE.md) for the lifecycle.
 
+## Immediate feedback (guided practice)
+
+`POST /courses/{course_id}/attempts` accepts optional `feedback_mode`: `END`
+(default, results after submission) or `IMMEDIATE`. Attempt summaries and details
+return `feedback_mode`.
+
+`POST /courses/{course_id}/attempts/{attempt_id}/answers/{quiz_question_id}/check`
+with `{}` or `{"confidence": "SURE" | "UNSURE" | "GUESS"}` grades the saved answer of
+an IMMEDIATE ACTIVE attempt and returns the attempt. Only that question gains
+`feedback`: snapshot options with `is_correct`, `explanation`, `correct_boolean`,
+`reference_answer`, `grading_status` and `confidence`. Every unchecked question still
+omits all key fields. A repeat returns the first result unchanged. After a check,
+saving that answer returns 409.
+
+An END attempt, a missing saved answer, or a SUBMITTED/ABANDONED attempt returns 409;
+an unknown question returns 404, as do other users' attempts. Submission keeps
+checked grades and grades the rest; review progress still updates once, at
+submission. Submitted results include `confidence`; ABANDONED history keeps showing
+feedback for questions that were checked.
+
 ## Abandoning unfinished practice
 
 `POST /courses/{course_id}/attempts/{attempt_id}/abandon` closes the caller's

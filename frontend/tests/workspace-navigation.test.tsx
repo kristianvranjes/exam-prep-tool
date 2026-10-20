@@ -280,7 +280,7 @@ it("opens Recommended and Standard setup from Overview without starting an attem
   expect(mock.start).not.toHaveBeenCalled(); expect(mock.history).toHaveBeenCalledWith("course", 0);
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByLabelText("Your short answer");
-  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE"], "ADAPTIVE");
+  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 it("offers an honestly labelled return to the mounted session from Overview", async () => {
@@ -309,7 +309,7 @@ it("opens Recommended setup from Progress with ADAPTIVE selected, preserving set
   expect(mock.start).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByLabelText("Your short answer");
-  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE");
+  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 it("returns completed results to setup from Progress without creating or changing an attempt", async () => {

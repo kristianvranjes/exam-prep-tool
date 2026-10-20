@@ -173,7 +173,7 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
         </fieldset>
         <p className="text-sm text-muted">Short answers require self-review after submission. Compare your answer with the reference answer.</p>
         <ExperiencePicker value={experience} onChange={setExperience} disabled={busy} />
-        <p className="max-w-prose text-sm text-muted">Guided practice shows one question at a time. Exam practice adds a question navigator for unanswered or flagged questions. Both show results after final submission.</p>
+        <p className="max-w-prose text-sm text-muted">{experience === "STUDY" ? "Guided practice shows one question at a time and checks each answer as you go, with the explanation right away." : "Exam practice adds a question navigator for unanswered or flagged questions and shows results only after you finish."}</p>
       </div>
     </details>
   </form>;

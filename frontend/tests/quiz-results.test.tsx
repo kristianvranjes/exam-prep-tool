@@ -155,3 +155,16 @@ it("labels each reviewed question with its course units", () => {
   fireEvent.click(screen.getByRole("button", { name: "All answers" }));
   expect(within(screen.getByRole("article", { name: "Question 2 result" })).queryByRole("list", { name: "Course units" })).not.toBeInTheDocument();
 });
+
+it("shows recorded confidence and flags correct answers that were guesses", () => {
+  open([{ ...mistake, confidence: "SURE" }, { ...correct, confidence: "GUESS" }, short]);
+  expect(screen.getByText("1 correct answer was marked as a guess. Practice it again before the exam.")).toBeVisible();
+  expect(screen.getByText("Incorrect · marked as sure")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "All answers" }));
+  expect(screen.getByText("Correct · marked as guessed")).toBeVisible();
+});
+
+it("adds no guess note when confidence was not recorded", () => {
+  open();
+  expect(screen.queryByText(/marked as a guess/)).not.toBeInTheDocument();
+});

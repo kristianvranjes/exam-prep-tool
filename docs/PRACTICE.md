@@ -31,6 +31,7 @@ requests return 401. Payload ownership, status, timestamp and score fields are f
 | `GET /courses/{course_id}/attempts?limit=20&offset=0` | Own attempt summaries, newest first; limit 1–50, offset 0–10000. |
 | `GET /courses/{course_id}/attempts/{id}` | Saved ACTIVE attempt, frozen SUBMITTED result, or read-only ABANDONED history. |
 | `PATCH /courses/{course_id}/attempts/{id}/answers/{quiz_question_id}` | Upsert a typed answer while ACTIVE, return the saved attempt. |
+| `POST /courses/{course_id}/attempts/{id}/answers/{quiz_question_id}/check` | IMMEDIATE sessions only: grade and lock one saved answer, revealing only its key; optional `confidence`. See [immediate feedback](#immediate-feedback-in-guided-practice). |
 | `POST /courses/{course_id}/attempts/{id}/submit` | Atomically freeze and grade all saved answers. Repeat returns the same result. |
 | `POST /courses/{course_id}/attempts/{id}/abandon` | Close an ACTIVE attempt without grading, preserve saved answers, and return read-only history. Repeat returns the same timestamp/state. |
 
@@ -80,6 +81,27 @@ Concurrent submissions serialize and return the original frozen result. A racing
 either commits before submission and is included, or is rejected after submission.
 Detail reads also lock that row to avoid mixing an ACTIVE status with submitted data.
 UUIDs and timestamps are assigned server-side.
+
+## Immediate feedback in guided practice
+
+**Guided practice** starts the session with `feedback_mode: IMMEDIATE`; **Exam
+practice** uses `END`, today's results-after-submission behavior. The mode is fixed at
+start and stored with the quiz, so a resumed session keeps it. The in-session
+Study/Exam switch only changes the layout (question navigator).
+
+In an IMMEDIATE session the student saves an answer and chooses **Check answer**,
+optionally marking it *Sure*, *Unsure* or *Guessed*. The check locks the attempt row,
+grades that one answer with the same pure `grade()` used at submission, and stores
+the grade, provenance, `checked_at` and confidence. That question's response then
+includes its frozen key, explanation and reference answer; other questions stay
+key-free. A checked answer can no longer change, and repeat checks return the first
+result. Short answers stay PENDING and show the reference answer for self-review.
+
+Submission still requires every answer, reuses checked grades without regrading, and
+applies review scheduling once for the whole session. Abandoning an IMMEDIATE
+session records no review progress, like any abandonment; its history keeps the
+feedback that was already shown. Confidence is stored and shown in results but does
+not change `leitner-v1` scheduling; it becomes a scheduling input with FSRS.
 
 ## Abandoning unfinished attempts
 

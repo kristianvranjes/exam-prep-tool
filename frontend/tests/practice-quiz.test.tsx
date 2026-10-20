@@ -4,7 +4,7 @@ import { PracticeQuiz } from "../src/components/practice-quiz";
 import type { QuestionType } from "../src/lib/api";
 import type { Attempt, PracticeAnswer, PracticeAvailability, PracticeFocus } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), availability: vi.fn(), units: vi.fn(), examScopes: vi.fn() }));
+const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), check: vi.fn(), submit: vi.fn(), availability: vi.fn(), units: vi.fn(), examScopes: vi.fn() }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 let current: Attempt;
@@ -54,7 +54,7 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
   fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value: "3" } });
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 3, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "STANDARD");
+  expect(mock.start).toHaveBeenCalledWith("course", 3, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "STANDARD", undefined, "IMMEDIATE");
   expect(screen.queryByText(/Correct answer:|Reference answer:|Self-review required/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("One"));
   fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
@@ -122,7 +122,7 @@ it("supports type filters and refuses an empty selection", async () => {
   expect(mock.start).not.toHaveBeenCalled();
   fireEvent.click(screen.getByLabelText("True / false"));
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
-  await waitFor(() => expect(mock.start).toHaveBeenCalledWith("course", 5, ["TRUE_FALSE"], "ADAPTIVE"));
+  await waitFor(() => expect(mock.start).toHaveBeenCalledWith("course", 5, ["TRUE_FALSE"], "ADAPTIVE", undefined, "IMMEDIATE"));
 });
 
 it("reloads the saved selection even when the current draft differs", async () => {
@@ -266,7 +266,7 @@ it("launches adaptive review with the existing count and type controls", async (
   mock.start.mockRejectedValue(new Error("Only 1 eligible approved questions available"));
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Only 1 eligible");
-  expect(mock.start).toHaveBeenCalledWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE");
+  expect(mock.start).toHaveBeenCalledWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 async function start(experience: "Guided practice" | "Exam practice" = "Guided practice") {
@@ -293,7 +293,7 @@ it("keeps Study/Exam separate from the selection strategy and saves before navig
   fireEvent.click(screen.getByLabelText("Recommended practice"));
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 5, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE");
+  expect(mock.start).toHaveBeenCalledWith("course", 5, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE", undefined, "END");
   fireEvent.click(screen.getByText("Session options"));
   fireEvent.click(screen.getByLabelText("Guided practice"));
   expect(screen.queryByRole("navigation", { name: "Question navigator" })).not.toBeInTheDocument();
@@ -532,7 +532,7 @@ it.each([5, 10, 20])("uses the %i question preset with the unchanged ADAPTIVE tr
   expect(screen.getByRole("radio", { name: `${count} questions` })).toBeChecked();
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", count, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE");
+  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", count, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 it.each(["0", "21", "1.5", ""])("explains invalid Custom length %s and does not start", async value => {
@@ -613,7 +613,7 @@ it("prevents a predictably oversized request and allows a valid Custom count", a
   expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 1, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE");
+  expect(mock.start).toHaveBeenCalledWith("course", 1, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 it("asks the server again for the chosen mode and types and counts banks beyond one page", async () => {
@@ -814,7 +814,7 @@ it("starts practice for one exam cycle", async () => {
   await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE", { exam_scope_id: "mi" });
+  expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE", { exam_scope_id: "mi" }, "IMMEDIATE");
   expect(mock.availability).toHaveBeenCalledWith("course", allTypes, "ADAPTIVE", { exam_scope_id: "mi" });
 });
 
@@ -830,7 +830,7 @@ it("requires chosen units and counts only their questions", async () => {
   fireEvent.click(screen.getByRole("radio", { name: "10 questions" }));
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 10, allTypes, "ADAPTIVE", { unit_ids: ["u3"] });
+  expect(mock.start).toHaveBeenCalledWith("course", 10, allTypes, "ADAPTIVE", { unit_ids: ["u3"] }, "IMMEDIATE");
   expect(mock.availability).toHaveBeenLastCalledWith("course", allTypes, "ADAPTIVE", { unit_ids: ["u3"] });
 });
 
@@ -842,7 +842,7 @@ it("keeps whole-course practice unfocused and labels focused history", async () 
   expect(screen.getByRole("button", { name: /Review practice .* · MI 2025\/26/ })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE");
+  expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 it("shows the course units of the current question while practicing", async () => {
@@ -858,4 +858,60 @@ it("shows the course units of the current question while practicing", async () =
   fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
   await screen.findByText("The sky is green");
   expect(screen.queryByRole("list", { name: "Course units" })).not.toBeInTheDocument();
+});
+
+it("checks a guided answer with confidence, reveals only its key, and moves on without re-saving", async () => {
+  current.feedback_mode = "IMMEDIATE";
+  mock.check.mockImplementation(async (_course, _id, question: string, confidence) => {
+    current = { ...current, questions: current.questions.map(q => q.id === question ? { ...q, feedback: { options: q.options.map(o => ({ ...o, is_correct: o.position === 1 })), explanation: "Two is the answer", correct_boolean: null, reference_answer: null, grading_status: "INCORRECT", confidence } } : q) } as Attempt;
+    return structuredClone(current);
+  });
+  render(<PracticeQuiz courseId="course" />);
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  await screen.findByText("Choose a number");
+  expect(screen.queryByText("Two is the answer")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText("One"));
+  fireEvent.click(screen.getByLabelText("Guessed"));
+  fireEvent.click(screen.getByRole("button", { name: "Check answer" }));
+  expect(await screen.findByRole("heading", { name: "Incorrect" })).toBeVisible();
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Incorrect" })).toHaveFocus());
+  expect(mock.save).toHaveBeenCalledWith("course", "attempt", "mcq", { type: "MULTIPLE_CHOICE", option_position: 0 });
+  expect(mock.check).toHaveBeenCalledWith("course", "attempt", "mcq", "GUESS");
+  expect(screen.getByText("Two is the answer")).toBeVisible();
+  expect(screen.getByText("You marked this answer as guessed.")).toBeVisible();
+  expect(screen.getByText("Correct answer", { selector: "span" })).toBeVisible();
+  expect(screen.getByLabelText(/One/)).toBeDisabled();
+  expect(screen.queryByText("How sure are you?", { exact: false })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+  await screen.findByText("The sky is green");
+  expect(mock.save).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("button", { name: "Check answer" })).toBeDisabled();
+  expect(screen.queryByRole("heading", { name: /Correct|Incorrect/ })).not.toBeInTheDocument();
+});
+
+it("keeps exam sessions free of checks and resumes a guided session in its own mode", async () => {
+  render(<PracticeQuiz courseId="course" />);
+  await open();
+  fireEvent.click(screen.getByLabelText("Exam practice"));
+  expect(screen.getByText(/shows results only after you finish/)).toBeInTheDocument();
+  current.feedback_mode = "END";
+  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  await screen.findByText("Choose a number");
+  expect(screen.queryByRole("button", { name: "Check answer" })).not.toBeInTheDocument();
+  expect(screen.queryByText("How sure are you?", { exact: false })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Save and next" })).toBeInTheDocument();
+});
+
+it("resumes a guided session with checking enabled", async () => {
+  current.feedback_mode = "IMMEDIATE";
+  mock.history.mockResolvedValue([current]);
+  render(<PracticeQuiz courseId="course" />);
+  await open();
+  fireEvent.click(screen.getByLabelText("Exam practice"));
+  fireEvent.click(await screen.findByRole("button", { name: "Resume session" }));
+  await screen.findByText("Choose a number");
+  expect(screen.getByRole("button", { name: "Check answer" })).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Session options"));
+  expect(screen.getByLabelText("Guided practice")).toBeChecked();
 });

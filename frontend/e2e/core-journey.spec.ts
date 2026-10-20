@@ -218,13 +218,20 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(student.getByRole("heading", { name: "Continue studying" })).toBeVisible();
     await student.getByRole("button", { name: "Resume session" }).click();
     await expect(student.getByRole("radio", { name: correctOption })).toBeChecked();
-    await student.getByRole("button", { name: "Save and review" }).click();
+    // Guided practice checks the answer immediately and reveals only its key.
+    await student.getByRole("radio", { name: "Sure", exact: true }).check();
+    await student.getByRole("button", { name: "Check answer" }).click();
+    const feedback = student.getByRole("region", { name: "Answer feedback" });
+    await expect(feedback.getByRole("heading", { name: "Correct" })).toBeFocused();
+    await expect(feedback.getByText("Paris is the French capital.", { exact: true })).toBeVisible();
+    await expect(student.getByRole("radio", { name: new RegExp(correctOption) })).toBeDisabled();
+    await student.getByRole("button", { name: "Continue to review", exact: true }).click();
     await expect(student.getByRole("heading", { name: "Review practice" })).toBeFocused();
     await expect(student.getByText("1 of 1 answered and saved", { exact: true })).toBeVisible();
     await student.getByRole("button", { name: "Finish practice", exact: true }).click();
     await student.getByRole("button", { name: "Confirm final submission" }).click();
     const result = student.getByRole("article", { name: "Question 1 result" });
-    await expect(result.getByText("Correct", { exact: true })).toBeVisible();
+    await expect(result.getByText("Correct · marked as sure", { exact: true })).toBeVisible();
     const results = student.getByRole("region", { name: "Practice results" });
     await expect(results.getByRole("heading", { name: "Practice complete" })).toBeFocused();
     await expect(results.getByLabel("Results summary")).toContainText("Correct1Incorrect0Self-review required0");
@@ -304,6 +311,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await student.getByRole("spinbutton", { name: "Custom question count" }).fill("2");
     await moreOptions.click();
     await student.getByRole("checkbox", { name: "Short answer" }).check();
+    await student.getByRole("radio", { name: "Exam practice", exact: true }).check();
     await student.getByRole("button", { name: "Start practice", exact: true }).click();
     const rawShortAnswer = "  Practice helps me recall.\n" + "A long explanation with an unbroken word: " + "learning".repeat(40) + "  ";
     for (let index = 0; index < 2; index++) {

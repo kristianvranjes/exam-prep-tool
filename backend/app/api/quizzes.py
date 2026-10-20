@@ -10,6 +10,7 @@ from app.schemas.quiz import (
     AnswerPayload,
     AttemptResponse,
     AttemptSummary,
+    CheckAnswer,
     PracticeAvailability,
     PracticeFilters,
     StartQuiz,
@@ -74,6 +75,18 @@ def answer(
     db: Session = Depends(get_db),
 ) -> AttemptResponse:
     return quizzes.save_answer(db, user, course_id, attempt_id, question_id, data)
+
+
+@router.post("/{attempt_id}/answers/{question_id}/check", response_model=AttemptResponse)
+def check(
+    course_id: UUID,
+    attempt_id: UUID,
+    question_id: UUID,
+    data: CheckAnswer,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AttemptResponse:
+    return quizzes.check_answer(db, user, course_id, attempt_id, question_id, data)
 
 
 @router.post("/{attempt_id}/submit", response_model=AttemptResponse)

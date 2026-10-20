@@ -13,6 +13,8 @@
   --accent-surface: #eef0ff;
   --danger: #b42336;
   --danger-surface: #fff1f2;
+  --success: #17703f;
+  --success-surface: #ecf8f0;
 }
 [data-theme="dark"] {
   --background: #181b22;
@@ -27,6 +29,8 @@
   --accent-surface: #2b3456;
   --danger: #ffacb6;
   --danger-surface: #422630;
+  --success: #8fd9ab;
+  --success-surface: #1f3a2b;
 }
 @theme inline {
   --color-background: var(--background);
@@ -41,6 +45,8 @@
   --color-accent-surface: var(--accent-surface);
   --color-danger: var(--danger);
   --color-danger-surface: var(--danger-surface);
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
 }
 @layer base {
   * { border-color: var(--line); }
