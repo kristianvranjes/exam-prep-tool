@@ -309,6 +309,22 @@ unknown scope 404. Response:
 (empty for the whole course). See
 [practice availability](COURSE_UNITS.md#practice-availability).
 
+### Past exam papers (R3)
+
+Managers are the course owner and the faculty's moderators (no enrollment needed);
+members read published papers only. See [past exams](PAST_EXAMS.md).
+
+| Route | Contract |
+| --- | --- |
+| GET `/courses/{course_id}/exam-papers` | Members and managers; optional `academic_year`, `kind`, `limit` (1–100, default 50), `offset`. Returns `{can_manage, papers}`; members get published papers only. Newest year first, then exam date (latest first), kind and title. Each paper has its details, `status`, `published_at`, `item_count` and `total_points`. |
+| POST `/courses/{course_id}/exam-papers` | Managers; strict `{academic_year, kind, title}` plus optional `term_label`, `exam_date`, `exam_scope_id` (same course, else 422), `duration_minutes`, `wrong_answer_penalty`, `pass_threshold`. 201 with the DRAFT detail; 409 for a duplicate title in that year or more than 200 papers. |
+| GET `/exam-papers/{paper_id}` | Detail with `can_manage` and ordered `items`. Members: published only (else 404), items as `{position, label, points, type}`. Managers also get `question_id`, `stem`, `question_status`. |
+| PATCH `/exam-papers/{paper_id}` | Managers; any subset of the create fields. `null` clears optional fields; `academic_year`, `kind`, `title` and `wrong_answer_penalty` cannot be null. Allowed while published. |
+| POST `/exam-papers/{paper_id}/items` | Managers, DRAFT only (409 otherwise). `{items: [{question_id, points, label?}]}`, 0–60 unique questions, replacing the list in order. 422 for questions outside the course, 409 when any is not approved. |
+| POST `/exam-papers/{paper_id}/publish` | Managers. 409 without items or with an item no longer approved. Idempotent. |
+| POST `/exam-papers/{paper_id}/unpublish` | Managers. Back to DRAFT and hidden from members. Idempotent. |
+| DELETE `/exam-papers/{paper_id}` | Managers, DRAFT only (409 otherwise), 204. |
+
 ### Moderated edit suggestions (Phase 12C)
 
 - `POST /questions/{question_id}/suggestions`: joined MEMBER/OWNER, including the

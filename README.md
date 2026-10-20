@@ -180,6 +180,7 @@ security limits and exact test instructions.
 - `docs/API.md`: health, authentication and course endpoint contracts.
 - `docs/AI.md`: local provider architecture, concept review and optional smoke test.
 - [docs/COURSE_UNITS.md](docs/COURSE_UNITS.md): ordered course units (cjeline) and question-unit links.
+- [docs/PAST_EXAMS.md](docs/PAST_EXAMS.md): past exam papers, their items and publishing.
 - [docs/ROADMAP.md](docs/ROADMAP.md): canonical future roadmap, milestone dependencies,
   acceptance criteria, and verification rules.
 - `docs/PRODUCT_VISION.md`: original Croatian product vision, preserved as historical
