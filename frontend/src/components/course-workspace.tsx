@@ -43,8 +43,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
     setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode, scopeId }));
     navigate("practice", true);
   }
-  const navigation = <nav aria-label="Course navigation" className="flex flex-wrap gap-2 border-b border-line pb-4">
-      {destinations.map(item => <Button key={item.id} variant={destination === item.id ? "primary" : "ghost"} aria-current={destination === item.id ? "page" : undefined} aria-controls={`course-${item.id}`} onClick={() => navigate(item.id)}>{item.label}</Button>)}
+  const navigation = <nav aria-label="Course navigation" className="flex overflow-x-auto [scrollbar-width:none] shadow-[inset_0_-1px_0_var(--line)] sm:gap-x-1">
+      {destinations.map(item => <Button key={item.id} variant="tab" aria-current={destination === item.id ? "page" : undefined} aria-controls={`course-${item.id}`} onClick={() => navigate(item.id)}>{item.label}</Button>)}
     </nav>;
   // Hide destinations instead of unmounting: answers, drafts and uploads stay in memory.
   return <section aria-labelledby="selected-course-heading">

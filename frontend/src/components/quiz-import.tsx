@@ -47,7 +47,7 @@ export function QuizImport({ courseId, disabled, onImported, units = [] }: {
     </div>
     <details className="rounded-lg border border-line bg-subtle/50 p-3 sm:p-4"><summary className="text-sm font-medium">External AI prompt and example</summary>
       <p className="mt-3 text-sm text-muted">Optionally use this prompt with an external AI and your study material, then save its response as a JSON file. AI-generated questions still need checking and faculty review before sharing.</p>
-      <textarea aria-label="External AI prompt" className="mt-3 w-full rounded-lg border border-line bg-surface p-3 text-sm text-foreground" rows={12} readOnly value={quizImportPrompt} />
+      <textarea aria-label="External AI prompt" className="mt-3 w-full rounded-control border border-line-strong bg-surface p-3 text-sm text-foreground" rows={12} readOnly value={quizImportPrompt} />
       <div className="mt-3 flex flex-wrap items-center gap-3"><Button type="button" variant="secondary" onClick={async () => {
         try { await navigator.clipboard.writeText(quizImportPrompt); setCopyError(""); setNotice("Prompt copied."); }
         catch { setCopyError("Could not copy. Select and copy the prompt text above."); }

@@ -74,7 +74,7 @@ export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onS
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge>{kindLabels[paper.kind]}</Badge>
-              {list.canManage && <Badge className={paper.status === "PUBLISHED" ? "bg-success-surface text-success" : undefined}>{paper.status === "PUBLISHED" ? "Published" : "Draft"}</Badge>}
+              {list.canManage && <Badge tone={paper.status === "PUBLISHED" ? "success" : "neutral"}>{paper.status === "PUBLISHED" ? "Published" : "Draft"}</Badge>}
             </div>
           </div>
           {onStartAttempt && paper.status === "PUBLISHED" && <Button className="mt-3 mr-2" disabled={starting !== null} aria-label={`Take ${paper.title}`} onClick={() => void take(paper)}>{starting === paper.id ? "Starting…" : "Take this exam"}</Button>}

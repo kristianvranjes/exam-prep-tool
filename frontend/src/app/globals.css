@@ -1,36 +1,52 @@
 @import "tailwindcss";
 
+/* Palette, type and spacing are specified in DESIGN.md; keep both in sync. */
 :root {
-  --background: #f6f7f9;
-  --foreground: #20242d;
-  --surface: #ffffff;
-  --subtle: #eceef2;
-  --muted: #596273;
-  --line: #ccd1db;
-  --accent: #414eae;
-  --accent-hover: #333f95;
-  --accent-foreground: #ffffff;
-  --accent-surface: #eef0ff;
-  --danger: #b42336;
-  --danger-surface: #fff1f2;
-  --success: #17703f;
-  --success-surface: #ecf8f0;
+  --background: #f8f5f1;
+  --foreground: #181a1c;
+  --surface: #fefdfc;
+  --subtle: #ece9e3;
+  --muted: #5c5952;
+  --line: #d9d5cd;
+  --line-strong: #848077;
+  --accent: #215d99;
+  --accent-hover: #13497e;
+  --accent-foreground: #fefdfc;
+  --accent-surface: #e4eefa;
+  --success: #1f6a36;
+  --success-surface: #e0f4e3;
+  --danger: #b32926;
+  --danger-foreground: #fefdfc;
+  --danger-surface: #fee8e5;
+  --pending: #84550f;
+  --pending-surface: #fbebcb;
+  --info: var(--accent);
+  --info-surface: var(--accent-surface);
+  --highlight: #f9e596;
+  --focus: var(--accent);
+  color-scheme: light;
 }
 [data-theme="dark"] {
-  --background: #181b22;
-  --foreground: #e9ecf3;
-  --surface: #212630;
-  --subtle: #2c3340;
-  --muted: #b0b9c9;
-  --line: #4a5568;
-  --accent: #a6b2ff;
-  --accent-hover: #c3cbff;
-  --accent-foreground: #1d2556;
-  --accent-surface: #2b3456;
-  --danger: #ffacb6;
-  --danger-surface: #422630;
-  --success: #8fd9ab;
-  --success-surface: #1f3a2b;
+  --background: #141310;
+  --foreground: #ebe9e5;
+  --surface: #1f1e1b;
+  --subtle: #2d2b27;
+  --muted: #b3afa8;
+  --line: #3f3d38;
+  --line-strong: #7e7a72;
+  --accent: #84bbf0;
+  --accent-hover: #a6d1fb;
+  --accent-foreground: #051c30;
+  --accent-surface: #182d41;
+  --success: #7fd091;
+  --success-surface: #19301e;
+  --danger: #f49287;
+  --danger-foreground: #141310;
+  --danger-surface: #43201c;
+  --pending: #eabc6e;
+  --pending-surface: #382a10;
+  --highlight: #635418;
+  color-scheme: dark;
 }
 @theme inline {
   --color-background: var(--background);
@@ -39,20 +55,65 @@
   --color-subtle: var(--subtle);
   --color-muted: var(--muted);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent-surface: var(--accent-surface);
   --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
   --color-danger-surface: var(--danger-surface);
   --color-success: var(--success);
   --color-success-surface: var(--success-surface);
+  --color-pending: var(--pending);
+  --color-pending-surface: var(--pending-surface);
+  --color-info: var(--info);
+  --color-info-surface: var(--info-surface);
+  --font-sans: var(--font-text), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-code), ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@theme {
+  /* Type scale (~1.2 ratio). Line heights tighten as size grows. */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.375rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.625rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.625rem;
+  --text-xl: 1.3125rem;
+  --text-xl--line-height: 1.875rem;
+  --text-2xl: 1.625rem;
+  --text-2xl--line-height: 2.125rem;
+  --text-3xl: 2rem;
+  --text-3xl--line-height: 2.5rem;
+  --text-4xl: 2.5rem;
+  --text-4xl--line-height: 2.875rem;
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 3.375rem;
+  /* Spacing roles on the 4 px grid. */
+  --spacing-stack: 0.75rem;
+  --spacing-card: 1.25rem;
+  --spacing-card-lg: 1.5rem;
+  --spacing-group: 1.5rem;
+  --spacing-section: 2.5rem;
+  /* Radius roles. */
+  --radius-tag: 0.375rem;
+  --radius-control: 0.5rem;
+  --radius-card: 0.75rem;
 }
 @layer base {
   * { border-color: var(--line); }
-  body { background: var(--background); color: var(--foreground); font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; line-height: 1.6; overflow-wrap: anywhere; }
-  h1, h2, h3, h4 { text-wrap: balance; line-height: 1.25; }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  html { scrollbar-color: var(--line-strong) transparent; }
+  body { background: var(--background); color: var(--foreground); font-family: var(--font-text), ui-sans-serif, system-ui, sans-serif; font-size: 1rem; line-height: 1.625; font-optical-sizing: auto; overflow-wrap: anywhere; -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, h4 { text-wrap: balance; line-height: 1.25; letter-spacing: -0.01em; }
+  p, li, dd { text-wrap: pretty; }
+  code, kbd, samp, pre { font-family: var(--font-code), ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.9375em; }
+  a { text-underline-offset: 0.2em; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  /* Headings receive focus after navigation; mark them with an ink underline, not a box. */
+  :where(h1, h2, h3, h4)[tabindex="-1"]:focus-visible { outline: none; text-decoration: underline 2px var(--focus); text-underline-offset: 0.3em; }
   [id] { scroll-margin-top: 1.5rem; }
   button, a, input, select, textarea, summary { touch-action: manipulation; }
   button, summary { cursor: pointer; }
@@ -60,16 +121,17 @@
   button, select, summary { min-height: 2.75rem; }
   input:not([type="checkbox"]):not([type="radio"]), select, textarea { min-height: 2.75rem; max-width: 100%; background-color: var(--surface); color: var(--foreground); }
   input, textarea { caret-color: var(--accent); }
-  input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
-  label:has(input[type="checkbox"], input[type="radio"]) { display: inline-flex; align-items: center; gap: .5rem; min-height: 2.75rem; }
+  input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width: 1.125rem; height: 1.125rem; flex-shrink: 0; }
+  label:has(input[type="checkbox"], input[type="radio"]) { display: inline-flex; align-items: center; gap: .625rem; min-height: 2.75rem; cursor: pointer; }
   ::placeholder { color: var(--muted); opacity: 1; }
-  ::selection { background: var(--accent); color: var(--accent-foreground); }
+  ::selection { background: var(--highlight); color: var(--foreground); }
   pre { max-width: 100%; overflow-x: auto; }
+  .tabular-nums, dd { font-variant-numeric: tabular-nums; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 }
 @layer components {
-  .nav-link { display: flex; align-items: center; gap: .75rem; min-height: 2.75rem; padding: .65rem .75rem; border-radius: .5rem; font-size: .875rem; font-weight: 500; }
+  .nav-link { display: flex; align-items: center; gap: .75rem; min-height: 2.75rem; padding: .625rem .75rem; border-radius: var(--radius-control); font-size: .875rem; font-weight: 500; }
   .nav-link:hover { background: var(--subtle); }
-  .skip-link { position: absolute; left: 1rem; top: 1rem; z-index: 50; transform: translateY(-200%); padding: .75rem 1rem; background: var(--surface); border: 1px solid var(--line); }
+  .skip-link { position: absolute; left: 1rem; top: 1rem; z-index: 50; transform: translateY(-200%); padding: .75rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); }
   .skip-link:focus { transform: translateY(0); }
 }

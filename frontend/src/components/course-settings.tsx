@@ -80,7 +80,7 @@ export function CourseSettings({ course, onUpdated, onDeleted }: {
         <fieldset disabled={busy !== null} className="space-y-4">
           <label className="block text-sm font-medium">Course name<Input className="mt-2" value={name} onChange={event => setName(event.target.value)} required maxLength={150} /></label>
           <label className="block text-sm font-medium">Course code<Input className="mt-2" value={code} onChange={event => setCode(event.target.value)} maxLength={50} /></label>
-          <label className="block text-sm font-medium">Description<textarea className="mt-2 w-full rounded-lg border border-line bg-surface p-3 text-base" value={description} onChange={event => setDescription(event.target.value)} maxLength={2000} rows={4} /></label>
+          <label className="block text-sm font-medium">Description<textarea className="mt-2 w-full rounded-control border border-line-strong bg-surface p-3 text-base" value={description} onChange={event => setDescription(event.target.value)} maxLength={2000} rows={4} /></label>
           <Button type="submit" disabled={busy !== null}>{busy === "save" ? "Saving…" : "Save course"}</Button>
         </fieldset>
         {saveError && <Alert>{saveError}</Alert>}
@@ -92,7 +92,7 @@ export function CourseSettings({ course, onUpdated, onDeleted }: {
         <div><h3 className="text-lg font-semibold text-danger">Danger zone</h3><p className="mt-1 text-sm text-muted">Deleting this course permanently removes the course, uploaded source PDFs, questions, attempts, study history and other course data.</p></div>
         <label className="block text-sm font-medium">Type the exact course name to confirm<Input className="mt-2" value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off" aria-describedby="delete-course-name" /></label>
         <p id="delete-course-name" className="break-words text-sm text-muted">Current course name: {course.name}</p>
-        <Button type="submit" disabled={busy !== null || confirmation !== course.name} className="bg-danger text-white hover:bg-danger/90">{busy === "delete" ? "Deleting…" : "Delete course permanently"}</Button>
+        <Button type="submit" variant="danger" disabled={busy !== null || confirmation !== course.name}>{busy === "delete" ? "Deleting…" : "Delete course permanently"}</Button>
         {deleteError && <Alert>{deleteError}</Alert>}
       </DraftForm>
     </Surface>
