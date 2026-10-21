@@ -347,8 +347,9 @@ material-based practice as separate coherent changes. Papers, items and their
 draft/published lifecycle are implemented (see [past exams](PAST_EXAMS.md)); the
 manager-only review step is a publish action by the owner or a faculty moderator.
 Paper sessions with frozen points and versioned negative-marking scores are
-implemented too, including blank answers. The server-enforced deadline, mock exams,
-material kinds and the past-paper count on questions remain open.
+implemented too, including blank answers, and so is the server-enforced deadline
+with countdown warnings and a pace indicator. Mock exams, material kinds and the
+past-paper count on questions remain open.
 
 ### R4 — FER-ready question content
 

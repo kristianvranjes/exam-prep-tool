@@ -3,8 +3,8 @@
 A past exam paper records a real exam as it was set: which bank questions it had, in
 what order, how many points each was worth and how wrong answers were scored. Papers
 build on the shared question bank; they never copy question content. Students retake
-a published paper as a scored session; the server-enforced time limit follows in the
-next R3 change (see the [roadmap](ROADMAP.md#r3--past-exams-and-materials-as-practice-sources)).
+a published paper as a scored, optionally timed session (see the
+[roadmap](ROADMAP.md#r3--past-exams-and-materials-as-practice-sources)).
 
 ## Who can do what
 
@@ -66,6 +66,17 @@ answer can be cleared again (`DELETE …/answers/{quiz_question_id}`), because a
 scores 0 while a wrong answer costs points. Blank questions are not graded and do not
 update review scheduling; answered ones update it exactly like other practice.
 
+**Time limit.** When the paper has `duration_minutes`, a session is timed by default:
+`deadline_at` is the server start time plus the limit, stored on the attempt and
+returned with every read, so refresh and resume keep the same deadline. Start with
+`{"timed": false}` to practice without it. Active timed sessions also return
+`server_time`, so clients count down against the server clock instead of their own.
+From the deadline on, saving, clearing or checking an answer returns 409 ("Time is
+up"); reading, submitting and abandoning still work, and only answers saved before the
+deadline are handed in. The interface shows the time left, warns at 10, 5 and 1 minutes
+(announced to screen readers), shows a pace indicator (answered points against the
+share of time used), and hands the paper in automatically at the deadline.
+
 **Scoring** (`app/services/paper_scoring.py`, pure and versioned) is computed from the
 frozen points, grades and rule whenever the result is read:
 
@@ -88,7 +99,8 @@ Under **More → Past exams**, members see published papers by academic year. Ma
 also see drafts, add a paper with its details, open it to choose approved questions
 (filtered by unit and searched within the loaded page), set points and labels, reorder
 them, save, and publish or unpublish. Unsaved question changes block publishing.
-Published papers offer **Take this exam**, which opens the session in Practice. A paper
+Published papers offer **Take this exam** (timed when the paper has a limit) and
+**Practice without the timer**, which open the session in Practice. A paper
 session shows each question's label and points, offers **Skip for now** and **Leave
 blank**, explains the negative marking, and is handed in with blanks allowed. Results
 start with the score, the pass mark and the breakdown, and list each question's points.
@@ -96,5 +108,6 @@ start with the score, the pass mark and the breakdown, and list each question's 
 ## Data
 
 Revision 0020 adds `exam_papers` and `exam_paper_items`; revision 0021 adds the paper
-and scoring rule to quizzes and frozen points and labels to quiz questions. See
+and scoring rule to quizzes and frozen points and labels to quiz questions; revision
+0022 adds `deadline_at` to attempts. See
 [database notes](DATABASE.md#exam-papers-migration-0020) and [API](API.md#past-exam-papers-r3).

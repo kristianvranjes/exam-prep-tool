@@ -88,7 +88,8 @@ A session started from a published past paper keeps the paper's order, points, l
 and scoring rule, may be handed in with blank questions, and lets a saved answer be
 cleared with `DELETE /courses/{course_id}/attempts/{id}/answers/{quiz_question_id}`
 (409 once checked or closed). Ordinary practice still requires every answer. Blank
-questions are neither graded nor scheduled. See [past exams](PAST_EXAMS.md#taking-a-paper).
+questions are neither graded nor scheduled. A timed paper session has a server-side
+`deadline_at`; afterwards answers are frozen and only submission or abandonment remain. See [past exams](PAST_EXAMS.md#taking-a-paper).
 
 ## Immediate feedback in guided practice
 
