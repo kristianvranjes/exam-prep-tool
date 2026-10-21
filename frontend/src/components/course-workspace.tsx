@@ -43,8 +43,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
     setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode, scopeId }));
     navigate("practice", true);
   }
-  const navigation = <nav aria-label="Course navigation" className="flex flex-wrap gap-2 border-b border-line pb-4">
-      {destinations.map(item => <Button key={item.id} variant={destination === item.id ? "primary" : "ghost"} aria-current={destination === item.id ? "page" : undefined} aria-controls={`course-${item.id}`} onClick={() => navigate(item.id)}>{item.label}</Button>)}
+  const navigation = <nav aria-label="Course navigation" className="flex overflow-x-auto [scrollbar-width:none] shadow-[inset_0_-1px_0_var(--line)] sm:gap-x-1">
+      {destinations.map(item => <Button key={item.id} variant="tab" aria-current={destination === item.id ? "page" : undefined} aria-controls={`course-${item.id}`} onClick={() => navigate(item.id)}>{item.label}</Button>)}
     </nav>;
   // Hide destinations instead of unmounting: answers, drafts and uploads stay in memory.
   return <section aria-labelledby="selected-course-heading">
@@ -59,7 +59,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
         knownAttemptId={knownAttemptId} checkingSession={checkingSession} activeSession={activeSession} materials={materials} onResume={onResume}
         onRecommendedPractice={() => openPractice("ADAPTIVE")}
         onStandardPractice={() => openPractice("STANDARD")}
-        onScopePractice={scopeId => openPractice("ADAPTIVE", scopeId)}
+        onScopePractice={scopeId => openPractice("ADAPTIVE", scopeId)} onStartAttempt={onOpenAttempt}
         onProgress={() => navigate("progress")} onMaterials={() => navigate("materials")}
         onQuestions={() => { setMoreDestination("questions"); navigate("more"); }} />
     </section>
@@ -76,7 +76,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
       <Button variant="ghost" className="mb-4" onClick={goHome}>Back to Home</Button>
       {navigation}
     </details>}
-    <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} /></div>
+    <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} onStartAttempt={onOpenAttempt} /></div>
     <div id="course-materials" hidden={destination !== "materials"}><CourseMaterials courseId={course.id} currentUserId={currentUserId} onSummaryChange={setMaterials} /></div>
     <section id="course-more" hidden={destination !== "more"} aria-label="More course tools" className="mt-6">
       <h2 className="text-xl font-semibold">More</h2>

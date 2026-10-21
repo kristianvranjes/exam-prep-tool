@@ -13,7 +13,9 @@ def default_types() -> list[QuestionType]:
     return ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]
 
 
-SelectionMode = Literal["STANDARD", "ADAPTIVE"]
+# MISTAKES and DUE narrow selection to the student's review progress; MOCK spreads a
+# session evenly across an exam scope's units. See docs/PRACTICE.md.
+SelectionMode = Literal["STANDARD", "ADAPTIVE", "MISTAKES", "DUE", "MOCK"]
 FeedbackMode = Literal["END", "IMMEDIATE"]
 Confidence = Literal["SURE", "UNSURE", "GUESS"]
 
@@ -38,6 +40,8 @@ class PracticeFilters(StrictModel):
         unique_ids(self.unit_ids)
         if self.unit_ids and self.exam_scope_id:
             raise ValueError("Choose units or an exam scope, not both")
+        if self.selection_mode == "MOCK" and self.exam_scope_id is None:
+            raise ValueError("A mock exam needs an exam scope")
         return self
 
 
@@ -67,6 +71,9 @@ class PracticeAvailability(BaseModel):
     by_type: list[TypeAvailability]
     # Per focused unit in unit order; a multi-unit question counts in each unit.
     by_unit: list[UnitAvailability]
+    # What MISTAKES and DUE would select with the same types and focus, whatever the mode.
+    mistakes_total: int = 0
+    due_total: int = 0
 
 
 class MCQAnswer(StrictModel):

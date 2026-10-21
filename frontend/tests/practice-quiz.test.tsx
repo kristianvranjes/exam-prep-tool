@@ -11,7 +11,7 @@ let current: Attempt;
 type Counts = Partial<Record<QuestionType, number>>;
 function reply(counts: Counts, types: QuestionType[], courseTotal: number): PracticeAvailability {
   const by_type = types.map(type => ({ type, count: counts[type] ?? 0 }));
-  return { course_total: courseTotal, total: by_type.reduce((sum, row) => sum + row.count, 0), by_type, by_unit: [] };
+  return { course_total: courseTotal, total: by_type.reduce((sum, row) => sum + row.count, 0), by_type, by_unit: [], mistakes_total: 0, due_total: 0 };
 }
 /** Serve server-side availability counts for whichever types the setup asks about. */
 function serve(counts: Counts, courseTotal = Object.values(counts).reduce((sum, count) => sum + count, 0)) {

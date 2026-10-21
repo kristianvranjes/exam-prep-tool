@@ -3,8 +3,9 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { ProgressPanel } from "../src/components/progress-panel";
 import type { ReviewProgress, ReviewProgressSummary, UnitProgress } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ reviewProgress: vi.fn(), reviewProgressSummary: vi.fn(), unitProgress: vi.fn() }));
+const mock = vi.hoisted(() => ({ reviewProgress: vi.fn(), reviewProgressSummary: vi.fn(), unitProgress: vi.fn(), reviewDue: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
+vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 
 const asOf = "2030-01-02T12:00:00Z";
 const stages = (counts: number[] = [0, 0, 0, 0, 0, 0]) =>
@@ -371,4 +372,36 @@ it("hides progress by unit for a course without units or before any graded pract
   await open();
   expect(screen.getByText(/Your progress will appear/)).toBeVisible();
   expect(screen.queryByRole("region", { name: "By unit" })).not.toBeInTheDocument();
+});
+
+it("starts a guided review of due questions in one click", async () => {
+  mock.reviewProgressSummary.mockResolvedValue(summary({
+    reviewed_questions: 3, due_now: 2, resolved_review_count: 3, correct_review_count: 1, incorrect_review_count: 2,
+    last_reviewed_at: "2030-01-01T10:00:00Z", next_due_at: "2030-01-01T11:00:00Z",
+  }));
+  mock.reviewProgress.mockResolvedValue([]);
+  mock.unitProgress.mockResolvedValue({ as_of: asOf, units: [] });
+  const attempt = { id: "review" };
+  mock.reviewDue.mockResolvedValueOnce(attempt).mockRejectedValueOnce(new Error("Nothing is due for review right now."));
+  const onStartAttempt = vi.fn();
+  render(<ProgressPanel courseId="course" onOpenAdaptiveReview={vi.fn()} onStartAttempt={onStartAttempt} />);
+  await open();
+  const review = screen.getByRole("button", { name: "Review due questions" });
+  expect(review).toHaveClass("bg-accent");
+  expect(screen.getByRole("button", { name: "Start recommended practice" })).not.toHaveClass("bg-accent");
+  fireEvent.click(review);
+  await waitFor(() => expect(onStartAttempt).toHaveBeenCalledExactlyOnceWith(attempt));
+  expect(mock.reviewDue).toHaveBeenCalledWith("course");
+  fireEvent.click(review);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Nothing is due for review right now.");
+});
+
+it("offers due review only when questions are due", async () => {
+  mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 1, upcoming: 1, resolved_review_count: 1, correct_review_count: 1, next_due_at: "2030-01-03T11:00:00Z" }));
+  mock.reviewProgress.mockResolvedValue([]);
+  mock.unitProgress.mockResolvedValue({ as_of: asOf, units: [] });
+  render(<ProgressPanel courseId="course" onOpenAdaptiveReview={vi.fn()} onStartAttempt={vi.fn()} />);
+  await open();
+  expect(screen.getByText("Nothing is due right now")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Review due questions" })).not.toBeInTheDocument();
 });

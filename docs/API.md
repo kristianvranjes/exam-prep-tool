@@ -294,7 +294,8 @@ OWNER rules as units.
 ### Practice availability (R2)
 
 GET `/courses/{course_id}/practice-availability` — members. Query parameters match
-`StartQuiz` without `count`: `selection_mode` (`STANDARD` default or `ADAPTIVE`),
+`StartQuiz` without `count`: `selection_mode` (`STANDARD` default, `ADAPTIVE`,
+`MISTAKES`, `DUE`, or `MOCK`, which requires `exam_scope_id`),
 repeated `question_types` (default all three, unique), repeated `unit_ids` or one
 `exam_scope_id` (not both). Unknown parameters return 422; foreign units 422; an
 unknown scope 404. Response:
@@ -302,12 +303,23 @@ unknown scope 404. Response:
 ```json
 {"course_total": 64, "total": 12,
  "by_type": [{"type": "TRUE_FALSE", "count": 12}],
- "by_unit": [{"unit_id": "…", "count": 7}]}
+ "by_unit": [{"unit_id": "…", "count": 7}],
+ "mistakes_total": 3, "due_total": 5}
 ```
 
 `by_type` lists the requested types; `by_unit` lists the focused units in unit order
-(empty for the whole course). See
+(empty for the whole course). `mistakes_total` and `due_total` count what `MISTAKES`
+and `DUE` would select with the same types and focus, whatever the requested mode. See
 [practice availability](COURSE_UNITS.md#practice-availability).
+
+### Selection modes (R5, R3)
+
+`POST /courses/{course_id}/attempts` accepts the same `selection_mode` values.
+`MISTAKES` selects questions whose latest resolved review was incorrect (oldest review
+first), `DUE` questions due now (earliest due first), and `MOCK` spreads `count` evenly
+across the units of the required `exam_scope_id` (422 without one). All three exclude
+questions in the caller's active attempts and return 409 when fewer than `count`
+qualify. See [mistakes, due review and mock exams](PRACTICE.md#mistakes-due-review-and-mock-exams-r5-r3).
 
 ### Past exam papers (R3)
 

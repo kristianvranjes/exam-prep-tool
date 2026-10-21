@@ -1,6 +1,7 @@
 import { request, type QuestionType } from "./api";
 
-export type SelectionMode = "STANDARD" | "ADAPTIVE";
+/** MISTAKES and DUE use your review progress; MOCK needs an exam scope and spreads it across its units. */
+export type SelectionMode = "STANDARD" | "ADAPTIVE" | "MISTAKES" | "DUE" | "MOCK";
 /** IMMEDIATE sessions let the student check each saved answer before submitting. */
 export type FeedbackMode = "END" | "IMMEDIATE";
 export type Confidence = "SURE" | "UNSURE" | "GUESS";
@@ -63,8 +64,13 @@ export type PracticeAvailability = {
   course_total: number; total: number;
   by_type: { type: QuestionType; count: number }[];
   by_unit: { unit_id: string; count: number }[];
+  /** What Mistakes and Due for review would select with the same types and focus, whatever the mode. */
+  mistakes_total: number; due_total: number;
 };
 const path = (course: string) => `/courses/${course}/attempts`;
+const allTypes: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
+/** The most questions a generated session may hold. */
+const MAX_SESSION_QUESTIONS = 20;
 function availabilityQuery(question_types: QuestionType[], selection_mode: SelectionMode, focus?: PracticeFocus) {
   const params = new URLSearchParams({ selection_mode });
   for (const type of question_types) params.append("question_types", type);
@@ -80,7 +86,13 @@ export const practiceApi = {
   save: (course: string, id: string, question: string, answer: PracticeAnswer) => request<Attempt>(`${path(course)}/${id}/answers/${question}`, { method: "PATCH", body: JSON.stringify(answer) }),
   check: (course: string, id: string, question: string, confidence: Confidence | null) => request<Attempt>(`${path(course)}/${id}/answers/${question}/check`, { method: "POST", body: JSON.stringify(confidence ? { confidence } : {}) }),
   clear: (course: string, id: string, question: string) => request<Attempt>(`${path(course)}/${id}/answers/${question}`, { method: "DELETE" }),
-  startPaper: (paperId: string, feedback_mode: FeedbackMode = "END", timed = true) => request<Attempt>(`/exam-papers/${paperId}/attempts`, { method: "POST", body: JSON.stringify({ feedback_mode, timed }) }),
+  /** One-click review: a guided session with up to 20 questions due now, earliest due first. */
+  reviewDue: async (course: string): Promise<Attempt> => {
+    const { due_total } = await practiceApi.availability(course, allTypes);
+    if (!due_total) throw new Error("Nothing is due for review right now.");
+    return practiceApi.start(course, Math.min(due_total, MAX_SESSION_QUESTIONS), allTypes, "DUE", undefined, "IMMEDIATE");
+  },
+  startPaper: (paperId: string, feedback_mode: FeedbackMode = "END") => request<Attempt>(`/exam-papers/${paperId}/attempts`, { method: "POST", body: JSON.stringify({ feedback_mode }) }),
   abandon: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/abandon`, { method: "POST" }),
   submit: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/submit`, { method: "POST" }),
 };

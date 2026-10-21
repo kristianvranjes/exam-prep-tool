@@ -50,6 +50,7 @@ from app.services.quiz_selection import (
     count_by_type,
     count_by_unit,
     count_eligible,
+    count_total,
     select_questions,
 )
 
@@ -232,19 +233,27 @@ def availability(
 ) -> PracticeAvailability:
     """Count what `start` would select now, without creating a session."""
     get_member_course(db, user, course_id)
+    as_of = datetime.now(UTC)
     unit_ids, scope_id, _ = resolve_focus(db, course_id, data.unit_ids, data.exam_scope_id)
     course_total = count_eligible(db, user.id, course_id)
+    mistakes = data.model_copy(update={"selection_mode": "MISTAKES"})
+    due = data.model_copy(update={"selection_mode": "DUE"})
     if scope_id and not unit_ids:
         # Starting such a scope is refused, so nothing is available.
         by_type = dict.fromkeys(data.question_types, 0)
+        mistakes_total = due_total = 0
     else:
-        by_type = count_by_type(db, user.id, course_id, data, unit_ids)
-    by_unit = count_by_unit(db, user.id, course_id, data, unit_ids)
+        by_type = count_by_type(db, user.id, course_id, data, unit_ids, as_of)
+        mistakes_total = count_total(db, user.id, course_id, mistakes, unit_ids, as_of)
+        due_total = count_total(db, user.id, course_id, due, unit_ids, as_of)
+    by_unit = count_by_unit(db, user.id, course_id, data, unit_ids, as_of)
     return PracticeAvailability(
         course_total=course_total,
         total=sum(by_type.values()),
         by_type=[TypeAvailability(type=type_, count=count) for type_, count in by_type.items()],
         by_unit=[UnitAvailability(unit_id=id_, count=count) for id_, count in by_unit.items()],
+        mistakes_total=mistakes_total,
+        due_total=due_total,
     )
 
 

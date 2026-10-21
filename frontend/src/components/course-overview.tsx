@@ -3,23 +3,28 @@
 import { useEffect, useState } from "react";
 import { api, type ExamScopeCoverage, type ReviewProgressSummary } from "../lib/api";
 import { countdownLabel, formatScopeDates, localIsoDate, nextExam, type NextExam } from "../lib/exam-dates";
-import { practiceApi } from "../lib/practice-api";
+import { practiceApi, type Attempt } from "../lib/practice-api";
 import type { MaterialsSummary } from "./course-materials";
-import { Button, Surface } from "./ui";
+import { Alert, Button, Surface } from "./ui";
 
 type ProgressState = { loading: boolean; summary: ReviewProgressSummary | null; error: boolean };
 type Availability = "loading" | "available" | "empty" | "unknown";
 type Countdown = { exam: NextExam; coverage: ExamScopeCoverage | null };
 
 export function CourseOverview({ courseId, active, knownAttemptId, checkingSession, activeSession, materials, onResume,
-  onRecommendedPractice, onStandardPractice, onScopePractice, onProgress, onMaterials, onQuestions }: {
+  onRecommendedPractice, onStandardPractice, onScopePractice, onStartAttempt, onProgress, onMaterials, onQuestions }: {
   courseId: string; active: boolean; knownAttemptId: string | null;
   checkingSession?: boolean; activeSession?: boolean; materials: MaterialsSummary; onResume: () => void; onRecommendedPractice: () => void;
   onStandardPractice: () => void; onScopePractice?: (scopeId: string) => void; onProgress: () => void; onMaterials: () => void; onQuestions: () => void;
+  /** Opens a session started here, such as the one-click due review. */
+  onStartAttempt?: (attempt: Attempt) => void;
 }) {
   const [progress, setProgress] = useState<ProgressState>({ loading: true, summary: null, error: false });
   const [availability, setAvailability] = useState<Availability>("loading");
   const [countdown, setCountdown] = useState<Countdown | null>(null);
+  const [due, setDue] = useState(0);
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewError, setReviewError] = useState("");
 
   useEffect(() => {
     if (!active) return;
@@ -30,6 +35,8 @@ export function CourseOverview({ courseId, active, knownAttemptId, checkingSessi
       setProgress({ loading: true, summary: null, error: false });
       setAvailability("loading");
       setCountdown(null);
+      setDue(0);
+      setReviewError("");
       void api.reviewProgressSummary(courseId).then(summary => {
         if (current) setProgress({ loading: false, summary, error: false });
       }).catch(() => {
@@ -37,7 +44,10 @@ export function CourseOverview({ courseId, active, knownAttemptId, checkingSessi
       });
       // Counts every practice-eligible course question with the same rules as session start.
       void practiceApi.availability(courseId, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]).then(counts => {
-        if (current) setAvailability(counts.course_total > 0 ? "available" : "empty");
+        if (!current) return;
+        setAvailability(counts.course_total > 0 ? "available" : "empty");
+        // Due questions not already waiting in an unfinished session.
+        setDue(counts.due_total ?? 0);
       }).catch(() => { if (current) setAvailability("unknown"); });
       // Optional context: without dated cycles, or on failure, the overview simply omits it.
       void api.examScopes(courseId).then(scopes => {
@@ -51,6 +61,14 @@ export function CourseOverview({ courseId, active, knownAttemptId, checkingSessi
   }, [active, courseId]);
 
   const noQuestions = availability === "empty";
+  const showDue = due > 0 && !activeSession && Boolean(onStartAttempt);
+  async function reviewDue() {
+    if (!onStartAttempt || reviewing) return;
+    setReviewing(true); setReviewError("");
+    try { onStartAttempt(await practiceApi.reviewDue(courseId)); }
+    catch (cause) { setReviewError(cause instanceof Error ? cause.message : "Could not start the review. Try again."); }
+    finally { setReviewing(false); }
+  }
   const summary = progress.summary;
   const recentMaterials = [...materials.materials].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 2);
 
@@ -83,13 +101,19 @@ export function CourseOverview({ courseId, active, knownAttemptId, checkingSessi
           <Button variant="ghost" onClick={onQuestions}>Contribute a question</Button>
         </div>
       </Surface> : <Surface className="mt-3">
+        {showDue && <div className="mb-6 border-b border-line pb-6">
+          <h4 className="text-xl font-semibold">Review due questions</h4>
+          <p className="mt-2 max-w-prose text-muted">{due} {due === 1 ? "question is" : "questions are"} due for review. Starts a guided session with {due > 20 ? "the 20 earliest" : due === 1 ? "it" : "all of them"}, earliest due first.</p>
+          {reviewError && <Alert className="mt-3 max-w-prose">{reviewError}</Alert>}
+          <Button className="mt-4 w-full sm:w-auto" disabled={reviewing} onClick={() => void reviewDue()}>{reviewing ? "Starting review…" : "Review due questions"}</Button>
+        </div>}
         <h4 className="text-xl font-semibold">Recommended practice</h4>
         <p className="mt-2 max-w-prose text-muted">Prioritizes questions due for review, then other useful course questions.</p>
         <p className="mt-2 max-w-prose text-sm text-muted">Choose your question count and types before starting. Questions in unfinished sessions are excluded.</p>
         {knownAttemptId && <p className="mt-2 max-w-prose text-sm text-muted">An open session is kept. Return to practice history to set up another if needed.</p>}
         <div className="mt-4 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
           {activeSession ? <Button variant="secondary" onClick={onResume}>Return to session</Button> : <>
-            <Button variant={knownAttemptId ? "secondary" : "primary"} onClick={onRecommendedPractice}>Start recommended practice</Button>
+            <Button variant={knownAttemptId || showDue ? "secondary" : "primary"} onClick={onRecommendedPractice}>Start recommended practice</Button>
             <Button variant="ghost" onClick={onStandardPractice}>Practice course questions</Button>
           </>}
         </div>

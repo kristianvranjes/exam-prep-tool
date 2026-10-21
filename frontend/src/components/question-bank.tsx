@@ -11,7 +11,7 @@ import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface 
 const types: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
 const statuses: QuestionStatus[] = ["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED", "ARCHIVED"];
 const label = (value: string) => value === "PENDING_REVIEW" ? "Awaiting faculty review" : value.toLowerCase().replaceAll("_", " ");
-const textareaClass = "min-h-28 w-full rounded-lg border border-line bg-surface px-3 py-2 text-foreground";
+const textareaClass = "min-h-28 w-full rounded-control border border-line-strong bg-surface px-3 py-2 text-foreground";
 const MAX_QUESTION_UNITS = 5;
 const UNPUBLISHED: QuestionStatus[] = ["DRAFT", "PENDING_REVIEW", "REJECTED"];
 const DONE: Record<QuestionAction, { status: QuestionStatus; verb: string }> = {
@@ -307,7 +307,7 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
             <input type="checkbox" aria-label={"Select question: " + q.stem} disabled={busy || q.status === "ARCHIVED"} checked={pickedIds.includes(q.id)}
               onChange={(e) => setPicked((ids) => e.target.checked ? [...ids, q.id] : ids.filter((id) => id !== q.id))} />
           </label>}
-          <Button type="button" variant="ghost" disabled={busy} aria-pressed={selected?.id === q.id} className="h-auto w-full min-w-0 flex-1 flex-col items-start gap-2 whitespace-normal p-3 text-left" onClick={() => { setSelected(q); setError(""); }}>
+          <Button type="button" variant="ghost" disabled={busy} aria-pressed={selected?.id === q.id} className="h-auto w-full min-w-0 flex-1 flex-col items-start gap-2 whitespace-normal p-3 text-left text-foreground" onClick={() => { setSelected(q); setError(""); }}>
             <span className="flex flex-wrap gap-2"><Badge>{label(q.type)}</Badge><Badge>{label(q.status)}</Badge>{unitNames(q.unit_ids, units).map((name, index) => <Badge key={index}>{name}</Badge>)}</span>
             <span className="max-w-full break-words font-medium [overflow-wrap:anywhere]">{q.stem}</span>
           </Button>

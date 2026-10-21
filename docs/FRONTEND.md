@@ -232,8 +232,11 @@ not initiate progress reads. There is no polling or realtime update.
 The default hierarchy is **What needs attention**, **Your practice**, then a
 collapsed **Scheduling details** disclosure. Attention uses only `due_now`,
 `upcoming` and `next_due_at`, which describe currently practice-eligible questions.
-Due reviews have the primary Start recommended practice action. When nothing is
-due, the next review date is shown and the practice action is secondary. Retained
+Due reviews have the primary **Review due questions** action, which starts a guided
+due-only session in one click (see
+[due review](PRACTICE.md#mistakes-due-review-and-mock-exams-r5-r3)); Start
+recommended practice is then secondary. When nothing is due, the next review date is
+shown and the practice action is secondary. Retained
 history with no actionable schedule is explicitly described as having no reviews
 currently available for practice, rather than having no history.
 
@@ -262,7 +265,8 @@ setup handoff with ADAPTIVE selected. It creates no attempt and preserves count,
 question types and Guided/Exam practice settings. A completed or abandoned view
 returns to setup through the existing history refresh; an active session and its
 unsaved answer remain mounted. Recommended practice is due-first, not due-only,
-and may include other eligible questions. The backend remains authoritative for
+and may include other eligible questions. The practice setup also offers Mistakes,
+Due for review and, for an exam cycle, Mock exam. The backend remains authoritative for
 membership, grading, scheduling and eligibility.
 
 ## Materials upload and browsing
