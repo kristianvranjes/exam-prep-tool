@@ -33,6 +33,8 @@ does not complete their implementation or hosted verification. Record completion
 - Unit, PostgreSQL integration, and multi-user browser acceptance coverage.
 - Ordered course units, exam scopes per academic year, unit/scope-filtered practice,
   server-side practice availability, per-unit progress, and bulk unit assignment (R2).
+- Mistakes and due-only review sessions with one-click due review (R5 selection), and
+  generated mock exams spread across an exam scope's units (R3).
 
 **Important boundaries:** short answers remain ungraded for self-review. Study and Exam
 experiences currently reveal results after final submission; the choice is not stored
@@ -347,7 +349,9 @@ material-based practice as separate coherent changes. Papers, items and their
 draft/published lifecycle are implemented (see [past exams](PAST_EXAMS.md)); the
 manager-only review step is a publish action by the owner or a faculty moderator.
 Paper sessions with frozen points and versioned negative-marking scores are
-implemented too, including blank answers. The server-enforced deadline, mock exams,
+implemented too, including blank answers, and so are generated mock exams for a
+scope (`selection_mode: MOCK`, see [practice rules](PRACTICE.md#mistakes-due-review-and-mock-exams-r5-r3)).
+The server-enforced deadline,
 material kinds and the past-paper count on questions remain open.
 
 ### R4 — FER-ready question content
@@ -453,6 +457,12 @@ for later, within any unit, scope, or material filter.
 
 **Dependencies:** R2 availability interface. Ship favorites and mistake selection as
 separate coherent changes.
+
+**Status:** mistake selection (`MISTAKES`), due-only review (`DUE`) with one-click
+**Review due questions** on the overview and in Progress, their unit/scope/type
+combinations, and their availability counts are implemented without a migration (see
+[practice rules](PRACTICE.md#mistakes-due-review-and-mock-exams-r5-r3)). Favorites, the paginated
+mistakes view, material filters, and the five-question quick quiz remain open.
 
 ### R6 — Evaluate the pilot and prepare the next release
 

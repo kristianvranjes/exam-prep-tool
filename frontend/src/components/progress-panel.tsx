@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ReviewProgress, type ReviewProgressSummary, type UnitProgress } from "../lib/api";
+import { practiceApi, type Attempt } from "../lib/practice-api";
 import { Alert, Badge, Button, EmptyState, LoadingState, Surface } from "./ui";
 
 type Dashboard = { summary: ReviewProgressSummary; units: UnitProgress[]; rows: ReviewProgress[]; offset: number };
@@ -16,18 +17,24 @@ function dateTime(value: string) {
   return new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
-type ProgressProps = { courseId: string; active?: boolean; onOpenAdaptiveReview?: () => void };
+type ProgressProps = {
+  courseId: string; active?: boolean; onOpenAdaptiveReview?: () => void;
+  /** Opens a session started here, such as the one-click due review. */
+  onStartAttempt?: (attempt: Attempt) => void;
+};
 
 export function ProgressPanel(props: ProgressProps) {
   return <CourseProgressPanel key={props.courseId} {...props} />;
 }
 
-function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview }: ProgressProps) {
+function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, onStartAttempt }: ProgressProps) {
   const [open, setOpen] = useState(false);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [busy, setBusy] = useState<Action | null>(null);
   const [error, setError] = useState("");
   const [failed, setFailed] = useState<FailedAction | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewError, setReviewError] = useState("");
   const pending = useRef(false);
   const requestId = useRef(0);
   const activated = useRef(false);
@@ -83,6 +90,14 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview }: 
     ? `${((summary.correct_review_count / summary.resolved_review_count) * 100).toFixed(1)}%`
     : "No graded accuracy yet";
   const hasHistory = summary && summary.reviewed_questions > 0;
+  const showDue = Boolean(onStartAttempt && summary && summary.due_now > 0);
+  async function reviewDue() {
+    if (!onStartAttempt || reviewing) return;
+    setReviewing(true); setReviewError("");
+    try { onStartAttempt(await practiceApi.reviewDue(courseId)); }
+    catch (cause) { setReviewError(cause instanceof Error ? cause.message : "Could not start the review. Try again."); }
+    finally { setReviewing(false); }
+  }
   // Archived units stay listed only while they still hold your review history.
   const units = dashboard?.units.filter(unit => !unit.is_archived || unit.reviewed_questions > 0) ?? [];
 
@@ -110,8 +125,13 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview }: 
                 {summary.next_due_at && <p>Next review: <time dateTime={summary.next_due_at}>{dateTime(summary.next_due_at)}</time></p>}
                 {summary.upcoming > 0 && <p className="text-sm text-muted">{summary.upcoming} {summary.upcoming === 1 ? "question is" : "questions are"} scheduled for later.</p>}
               </>}
+            {showDue && <div>
+              {reviewError && <Alert className="mb-3 max-w-prose">{reviewError}</Alert>}
+              <Button className="w-full sm:w-auto" disabled={busy !== null || reviewing} onClick={() => void reviewDue()}>{reviewing ? "Starting review…" : "Review due questions"}</Button>
+              <p className="mt-3 max-w-prose text-sm text-muted">Starts a guided session with up to 20 due questions, earliest due first. Questions in unfinished sessions are left out.</p>
+            </div>}
             {onOpenAdaptiveReview && <div>
-              <Button variant={!hasHistory || summary.due_now > 0 ? "primary" : "secondary"} className="w-full sm:w-auto" disabled={busy !== null} onClick={onOpenAdaptiveReview}>{hasHistory ? "Start recommended practice" : "Start practice"}</Button>
+              <Button variant={!showDue && (!hasHistory || summary.due_now > 0) ? "primary" : "secondary"} className="w-full sm:w-auto" disabled={busy !== null} onClick={onOpenAdaptiveReview}>{hasHistory ? "Start recommended practice" : "Start practice"}</Button>
               <p className="mt-3 max-w-prose text-sm text-muted">Prioritizes questions due for review and may include other available questions. Opens practice setup so you can choose your session.</p>
             </div>}
           </section>

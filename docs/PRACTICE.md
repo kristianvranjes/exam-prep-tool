@@ -26,7 +26,7 @@ requests return 401. Payload ownership, status, timestamp and score fields are f
 
 | Method / path | Contract |
 | --- | --- |
-| `POST /courses/{course_id}/attempts` | `{ "count": 5, "question_types": ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"] }`; 201 ACTIVE attempt. Omitted types means all three. Optional `unit_ids` or `exam_scope_id` (not both) limit selection to questions in those units; see [practice by unit](COURSE_UNITS.md#practice-by-unit-or-exam-cycle). |
+| `POST /courses/{course_id}/attempts` | `{ "count": 5, "question_types": ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"] }`; 201 ACTIVE attempt. Omitted types means all three. Optional `unit_ids` or `exam_scope_id` (not both) limit selection to questions in those units; see [practice by unit](COURSE_UNITS.md#practice-by-unit-or-exam-cycle). Optional `selection_mode`: `STANDARD` (default), `ADAPTIVE`, `MISTAKES`, `DUE` or `MOCK`; see [adaptive selection](#adaptive-quiz-selection-phase-9b) and [mistakes, due review and mock exams](#mistakes-due-review-and-mock-exams-r5-r3). |
 | `GET /courses/{course_id}/practice-availability` | Advisory counts of what a start with the same mode, types and focus could select now, using the same selection filters; see [practice availability](COURSE_UNITS.md#practice-availability). |
 | `GET /courses/{course_id}/attempts?limit=20&offset=0` | Own attempt summaries, newest first; limit 1–50, offset 0–10000. |
 | `GET /courses/{course_id}/attempts/{id}` | Saved ACTIVE attempt, frozen SUBMITTED result, or read-only ABANDONED history. |
@@ -312,8 +312,61 @@ units also show the same counts per unit; see
 **Open adaptive review** focuses and opens the existing Practice Quiz launcher
 with ADAPTIVE selected. It remains available when due_now is zero: ADAPTIVE is
 due-first, not due-only, ranking due, unseen, then other eligible questions.
+**Review due questions** is the due-only entry; see
+[mistakes, due review and mock exams](#mistakes-due-review-and-mock-exams-r5-r3).
 It does not start an attempt or change count, type or
 Study/Exam controls. Due now is not used as the requested quiz count because
 adaptive eligibility also excludes active-attempt sources and other ineligible
 questions. Phase 9A scheduling, transaction and idempotency rules and Phase 9B
 ranking and source eligibility remain unchanged.
+
+## Mistakes, due review and mock exams (R5, R3)
+
+`selection_mode` also accepts `MISTAKES`, `DUE` and `MOCK`. All three reuse practice
+eligibility, the question-type and unit/scope filters, snapshots, grading, scheduling
+and transaction boundaries, and, like ADAPTIVE, skip sources already in the student's
+ACTIVE attempts. When fewer questions qualify than requested, start returns the usual
+409 and never creates a shorter session. The mode is not stored with the quiz, and no
+migration is involved.
+
+| Mode | Selects | Order |
+| --- | --- | --- |
+| `MISTAKES` | Questions whose latest resolved review (`question_review_progress.last_result`) is INCORRECT | Oldest `last_reviewed_at`, then question ID |
+| `DUE` | Questions whose review is due: `due_at` at or before the start's single UTC selection time | Earliest `due_at`, then question ID |
+| `MOCK` | Questions in the units of `exam_scope_id`, which is required (422 without it) | Spread across the units, see below |
+
+Only resolved reviews write progress, so a pending short answer is never a mistake,
+and a later correct answer replaces `last_result` and removes the question from
+MISTAKES. Submitted results keep showing the earlier incorrect answers. Archived,
+rejected and another creator's unapproved questions keep their progress but are never
+selected.
+
+**Mock exams.** Each unit of the scope (course order, archived units included) ranks
+its eligible questions with the ADAPTIVE ranking: due, then unseen, then the rest.
+Selection then runs in rounds: in every round each unit, in unit order, contributes its
+best-ranked question not chosen yet. A question linked to several scope units is chosen
+once, by the first unit that reaches it. A unit with nothing left drops out while the
+others keep filling, so `count` is spread as evenly as availability allows: 7 questions
+over three well-stocked units are 3 + 2 + 2. The session lists the chosen questions unit
+by unit, each unit's in the order it chose them. Mock exams keep the 1–20 count limit,
+have no points or time limit, and use the requested feedback mode; the setup starts
+them as exam practice. Questions outside the scope's units are never selected.
+
+`GET /courses/{course_id}/practice-availability` accepts the same modes (MOCK only with
+`exam_scope_id`) and counts through the same `selection_filters`. Whatever the requested
+mode, it also returns `mistakes_total` and `due_total`: what MISTAKES and DUE would
+select with the same types and focus. The practice setup uses them to describe and
+disable **Mistakes** and **Due for review**; **Mock exam** is listed when the course has
+exam cycles and can be chosen once an exam cycle is selected under What to practice.
+Choosing another focus switches a mock exam back to Recommended practice.
+
+**Review due questions** on the course overview (shown when `due_total` > 0 and no
+session is open) and in Progress (when `due_now` > 0) starts a guided (IMMEDIATE) DUE
+session in one click: every question type, and as many due questions as a fresh
+`due_total` reports, at most 20. The session opens like a started past paper. If the
+count changed in between, the 409 is shown and nothing starts.
+
+Targeted tests: `python -m pytest tests/test_practice.py` and
+`RUN_DB_TESTS=1 python -m pytest tests/test_practice_modes_database.py` from backend;
+`npm test -- tests/practice-modes.test.tsx tests/course-overview.test.tsx tests/progress-panel.test.tsx tests/practice-api.test.ts`
+from frontend.

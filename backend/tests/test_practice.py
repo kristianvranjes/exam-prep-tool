@@ -4,6 +4,7 @@ from pydantic import TypeAdapter, ValidationError
 from app.schemas.question import OwnerQuestion
 from app.schemas.quiz import AnswerPayload, CheckAnswer, StartQuiz
 from app.services.grading import grade
+from app.services.quiz_selection import spread
 
 
 @pytest.mark.parametrize(
@@ -76,6 +77,41 @@ def test_deterministic_grading(payload, expected):
 def test_selection_mode_defaults_to_standard():
     assert StartQuiz().selection_mode == "STANDARD"
     assert StartQuiz(selection_mode="ADAPTIVE").selection_mode == "ADAPTIVE"
+
+
+@pytest.mark.parametrize("mode", ["MISTAKES", "DUE"])
+def test_review_modes_combine_with_any_focus(mode):
+    assert StartQuiz(selection_mode=mode).selection_mode == mode
+    unit = "00000000-0000-0000-0000-000000000001"
+    assert StartQuiz.model_validate({"selection_mode": mode, "unit_ids": [unit]}).unit_ids
+    assert StartQuiz.model_validate({"selection_mode": mode, "exam_scope_id": unit}).exam_scope_id
+
+
+def test_mock_exam_needs_an_exam_scope():
+    unit = "00000000-0000-0000-0000-000000000001"
+    for data in [{}, {"unit_ids": [unit]}]:
+        with pytest.raises(ValidationError, match="mock exam needs an exam scope"):
+            StartQuiz.model_validate({"selection_mode": "MOCK", **data})
+    mock = StartQuiz.model_validate({"selection_mode": "MOCK", "exam_scope_id": unit, "count": 20})
+    assert mock.count == 20
+    with pytest.raises(ValidationError):
+        StartQuiz.model_validate({"selection_mode": "MOCK", "exam_scope_id": unit, "count": 21})
+
+
+def test_spread_round_robins_units_in_order():
+    units = [["a1", "a2", "a3", "a4"], ["b1", "b2", "b3"], ["c1", "c2"]]
+    # Seven questions over three units: 3 + 2 + 2, listed unit by unit.
+    assert spread(units, 7) == ["a1", "a2", "a3", "b1", "b2", "c1", "c2"]
+    assert spread(units, 2) == ["a1", "b1"]
+    assert spread(units, 0) == []
+
+
+def test_spread_fills_from_remaining_units_and_counts_shared_questions_once():
+    units = [["shared", "a1"], ["shared", "b1", "b2", "b3", "b4"], []]
+    # Unit A takes the shared question first; B moves on, then fills once A runs out.
+    assert spread(units, 5) == ["shared", "a1", "b1", "b2", "b3"]
+    assert spread(units, 10) == ["shared", "a1", "b1", "b2", "b3", "b4"]
+    assert spread([[], []], 3) == []
 
 
 @pytest.mark.parametrize("mode", ["", "TUTOR", None, "immediate"])

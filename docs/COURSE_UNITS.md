@@ -69,9 +69,10 @@ until …"), the dates, the number of covered units, the coverage, and **Practic
 
 `POST /courses/{course_id}/attempts` accepts either `unit_ids` (unique units of the
 course, archived ones included) or `exam_scope_id`, never both. A scope expands to
-its units when the session starts. Both STANDARD and ADAPTIVE selection then keep
-only questions linked to at least one of those units; questions without a unit are
-left out. Existing eligibility, ordering, snapshots and the insufficient-question
+its units when the session starts. Every selection mode then keeps only questions
+linked to at least one of those units; questions without a unit are left out. A mock
+exam (`selection_mode: MOCK`) needs an exam scope and spreads its questions across the
+scope's units; see [mock exams](PRACTICE.md#mistakes-due-review-and-mock-exams-r5-r3). Existing eligibility, ordering, snapshots and the insufficient-question
 response are unchanged; the 409 message then mentions the unit filter.
 
 The quiz records `exam_scope_id`, `focus_unit_ids` and a frozen `focus_label`
@@ -88,8 +89,9 @@ selected units) only when the course has active units.
 same `selection_mode`, `question_types` and focus (`unit_ids` or `exam_scope_id`)
 could select right now. It shares one filter builder with session start
 (`selection_filters` in `app/services/quiz_selection.py`): practice eligibility,
-types, the unit filter, and ADAPTIVE's exclusion of questions in the caller's
-active attempts. Counts cover the whole bank, not one page, and a question linked
+types, the unit filter, MISTAKES' and DUE's review-progress conditions, and the
+exclusion of questions in the caller's active attempts that every mode except STANDARD
+applies. Counts cover the whole bank, not one page, and a question linked
 to several focused units counts once in `total` and once in each `by_unit` entry.
 A scope whose units were all removed counts zero, matching the 409 a start returns.
 Counts are advisory; starting a session stays authoritative under concurrent changes.

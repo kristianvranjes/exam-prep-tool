@@ -59,7 +59,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
         knownAttemptId={knownAttemptId} checkingSession={checkingSession} activeSession={activeSession} materials={materials} onResume={onResume}
         onRecommendedPractice={() => openPractice("ADAPTIVE")}
         onStandardPractice={() => openPractice("STANDARD")}
-        onScopePractice={scopeId => openPractice("ADAPTIVE", scopeId)}
+        onScopePractice={scopeId => openPractice("ADAPTIVE", scopeId)} onStartAttempt={onOpenAttempt}
         onProgress={() => navigate("progress")} onMaterials={() => navigate("materials")}
         onQuestions={() => { setMoreDestination("questions"); navigate("more"); }} />
     </section>
@@ -76,7 +76,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
       <Button variant="ghost" className="mb-4" onClick={goHome}>Back to Home</Button>
       {navigation}
     </details>}
-    <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} /></div>
+    <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} onStartAttempt={onOpenAttempt} /></div>
     <div id="course-materials" hidden={destination !== "materials"}><CourseMaterials courseId={course.id} currentUserId={currentUserId} onSummaryChange={setMaterials} /></div>
     <section id="course-more" hidden={destination !== "more"} aria-label="More course tools" className="mt-6">
       <h2 className="text-xl font-semibold">More</h2>
