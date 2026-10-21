@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { api, Concept, type CourseUnit, OwnerQuestion, Question, QuestionAction, QuestionCreate, QuestionEdit, QuestionStatus, QuestionType, QuestionVersion, type ReportReason } from "../lib/api";
 
 import { QuizImport } from "./quiz-import";
+import { FormattingHelp, RichText, RichTextPreview } from "./rich-text";
 import { SuggestQuestionEdit } from "./suggest-question-edit";
 import { DraftForm } from "./unsaved-changes";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
@@ -309,7 +310,7 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
           </label>}
           <Button type="button" variant="ghost" disabled={busy} aria-pressed={selected?.id === q.id} className="h-auto w-full min-w-0 flex-1 flex-col items-start gap-2 whitespace-normal p-3 text-left text-foreground" onClick={() => { setSelected(q); setError(""); }}>
             <span className="flex flex-wrap gap-2"><Badge>{label(q.type)}</Badge><Badge>{label(q.status)}</Badge>{unitNames(q.unit_ids, units).map((name, index) => <Badge key={index}>{name}</Badge>)}</span>
-            <span className="max-w-full break-words font-medium [overflow-wrap:anywhere]">{q.stem}</span>
+            <span className="max-w-full break-words font-medium [overflow-wrap:anywhere]"><RichText text={q.stem} /></span>
           </Button>
         </li>)}
       </ul>}
@@ -322,12 +323,12 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
 
     {selected && <article aria-label="Selected question" className="min-w-0 space-y-4 rounded-xl border border-line bg-surface p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <h4 className="min-w-0 break-words text-lg font-semibold [overflow-wrap:anywhere]">{selected.stem}</h4>
+        <h4 className="min-w-0 break-words text-lg font-semibold [overflow-wrap:anywhere]"><RichText text={selected.stem} /></h4>
         <Button type="button" variant="secondary" disabled={busy} onClick={() => setSelected(null)}>Close question</Button>
       </div>
       <div className="flex flex-wrap items-center gap-2"><Badge>{label(selected.type)}</Badge><Badge>{label(selected.status)}</Badge>{selected.difficulty && <span className="text-sm text-muted">Difficulty {selected.difficulty}/5</span>}</div>
       {units.length > 0 && <p className="break-words text-sm [overflow-wrap:anywhere]"><span className="font-medium">Units:</span> {unitNames(selected.unit_ids, units).join(", ") || "None"}</p>}
-      <ul className="list-inside list-disc space-y-1 text-sm">{selected.options.map((option) => <li key={option.position} className="break-words [overflow-wrap:anywhere]">{option.text}{selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (correct)" : ""}</li>)}</ul>
+      <ul className="list-inside list-disc space-y-1 text-sm">{selected.options.map((option) => <li key={option.position} className="break-words [overflow-wrap:anywhere]"><RichText text={option.text} />{selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (correct)" : ""}</li>)}</ul>
       {selected.visibility === "OWNER" && <OwnerReview key={selected.id + ":" + selected.updated_at} question={selected} creator={selected.created_by_user_id === userId} moderator={moderator} owner={owner} concepts={concepts} units={units} busy={busy} mutate={mutate} />}
       {(owner || moderator) && selected.status !== "ARCHIVED" && units.some((u) => !u.is_archived) && <QuestionUnitsEditor key={selected.id + ":" + (selected.unit_ids ?? []).join(",")} question={selected} units={units} busy={busy} save={(ids) => saveUnits(selected.id, ids)} />}
       {joined && selected.status === "APPROVED" && <ReportIssue key={"report:" + selected.id} questionId={selected.id} />}
@@ -434,8 +435,8 @@ function OwnerReview({ question: q, creator, moderator, owner, concepts, units, 
   return <div className="min-w-0 space-y-5 text-sm">
     <div className="space-y-2 break-words [overflow-wrap:anywhere]">
       {q.type === "TRUE_FALSE" && <p>Correct answer: {String(q.correct_boolean)}</p>}
-      {q.reference_answer && <p>Reference answer: {q.reference_answer}</p>}
-      {q.explanation && <p>Explanation: {q.explanation}</p>}
+      {q.reference_answer && <p>Reference answer: <RichText text={q.reference_answer} /></p>}
+      {q.explanation && <p>Explanation: <RichText text={q.explanation} /></p>}
       {q.rejection_reason && <p className="rounded-lg border border-danger/30 bg-danger-surface p-3 text-danger">Rejection reason: {q.rejection_reason}</p>}
       {q.reviewed_at && <p className="text-muted">Reviewed {new Date(q.reviewed_at).toLocaleString()}</p>}
     </div>
@@ -470,11 +471,11 @@ function OwnerReview({ question: q, creator, moderator, owner, concepts, units, 
         <details className="group">
           <summary className="min-w-0 break-words px-4 py-2 font-medium [overflow-wrap:anywhere]">Version {v.version_number} · {label(v.reason)} · {new Date(v.created_at).toLocaleString()}</summary>
           <div className="min-w-0 space-y-2 border-t border-line p-4 break-words [overflow-wrap:anywhere]">
-            <p className="font-medium">{v.snapshot.stem}</p>
-            {v.snapshot.explanation && <p>Explanation: {v.snapshot.explanation}</p>}
-            {v.snapshot.options.map((o) => <p key={o.position}>{o.text}{o.is_correct ? " (correct)" : ""}</p>)}
+            <p className="font-medium"><RichText text={v.snapshot.stem} /></p>
+            {v.snapshot.explanation && <p>Explanation: <RichText text={v.snapshot.explanation} /></p>}
+            {v.snapshot.options.map((o) => <p key={o.position}><RichText text={o.text} />{o.is_correct ? " (correct)" : ""}</p>)}
             {v.snapshot.type === "TRUE_FALSE" && <p>Answer: {String(v.snapshot.correct_boolean)}</p>}
-            {v.snapshot.reference_answer && <p>Reference answer: {v.snapshot.reference_answer}</p>}
+            {v.snapshot.reference_answer && <p>Reference answer: <RichText text={v.snapshot.reference_answer} /></p>}
             <p>Concepts: {v.snapshot.concept_ids.join(", ")}</p>
             <p>Source: {v.snapshot.source}</p>
             <p>Sources: {v.snapshot.source_chunks.map((s) => s.chunk_id).join(", ")}</p>
@@ -499,6 +500,8 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
   const [questionType, setQuestionType] = useState<QuestionType>(q?.type ?? "MULTIPLE_CHOICE");
   const [options, setOptions] = useState(q?.options.map((o) => ({ text: o.text, is_correct: o.is_correct })) ?? [{ text: "", is_correct: true }, { text: "", is_correct: false }]);
   const [selectedConceptIds, setSelectedConceptIds] = useState<string[]>(q?.concept_ids ?? []);
+  const [stem, setStem] = useState(q?.stem ?? "");
+  const formattingHelp = useId();
   const approved = concepts.filter((concept) => concept.status === "APPROVED");
   const approvedIds = new Set(approved.map((concept) => concept.id));
   // Keep edit associations that are not currently offered, including when concepts fail to load.
@@ -538,8 +541,10 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
         </Select>
       </label>}
       <label className="block font-medium">Question text
-        <textarea className={textareaClass + " mt-1"} name="stem" defaultValue={q?.stem ?? ""} required maxLength={400} />
+        <textarea className={textareaClass + " mt-1"} name="stem" defaultValue={q?.stem ?? ""} required maxLength={400} aria-describedby={formattingHelp} onChange={(e) => setStem(e.target.value)} />
       </label>
+      <FormattingHelp id={formattingHelp} />
+      <RichTextPreview text={stem} label="Question text preview" />
       <label className="block font-medium">Explanation
         <textarea className={textareaClass + " mt-1"} name="explanation" defaultValue={q?.explanation || ""} maxLength={2000} />
       </label>

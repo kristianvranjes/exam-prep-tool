@@ -1,11 +1,12 @@
 import type { ActiveQuestion, PracticeAnswer, QuestionFeedback } from "../lib/practice-api";
 import { cn } from "../lib/utils";
+import { RichText } from "./rich-text";
 
 /** Marks the key and a wrong choice once an answer is checked; text, not only color. */
 function choiceMark(correct: boolean, chosen: boolean, feedback?: QuestionFeedback | null) {
   if (!feedback) return { tone: "hover:border-line-strong hover:bg-subtle has-[:checked]:border-accent has-[:checked]:bg-accent-surface", note: null };
-  if (correct) return { tone: "border-success bg-success-surface [&>span]:text-success", note: chosen ? "Your answer · Correct" : "Correct answer" };
-  if (chosen) return { tone: "border-danger bg-danger-surface [&>span]:text-danger", note: "Your answer" };
+  if (correct) return { tone: "border-success bg-success-surface [&>span:last-child]:text-success", note: chosen ? "Your answer · Correct" : "Correct answer" };
+  if (chosen) return { tone: "border-danger bg-danger-surface [&>span:last-child]:text-danger", note: "Your answer" };
   return { tone: "text-muted", note: null };
 }
 
@@ -16,12 +17,12 @@ export function QuizAnswerEditor({ question, answer, change, disabled, feedback 
   const choice = (key: string, label: string, chosen: boolean, correct: boolean, select: () => void) => {
     const mark = choiceMark(correct, chosen, feedback);
     return <label key={key} className={cn("rounded-control border border-line-strong/50 bg-surface p-3 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent [&>input:focus-visible]:outline-none", mark.tone)}>
-      <input type="radio" name={question.id} checked={chosen} onChange={select} /> {label}
+      <input type="radio" name={question.id} checked={chosen} onChange={select} /> <RichText text={label} className="min-w-0" />
       {mark.note && <span className="ml-auto pl-3 text-sm font-medium">{mark.note}</span>}
     </label>;
   };
   return <fieldset disabled={disabled || Boolean(feedback)} className="flex min-w-0 flex-col gap-3">
-      <legend className="mb-5 max-w-prose break-words font-display text-xl font-medium leading-relaxed sm:text-2xl">{question.stem}</legend>
+      <legend className="mb-5 w-full max-w-prose break-words font-display text-xl font-medium leading-relaxed sm:text-2xl"><RichText text={question.stem} /></legend>
       {question.type === "MULTIPLE_CHOICE" && question.options.map(option => choice(String(option.position), option.text,
         answer?.type === "MULTIPLE_CHOICE" && answer.option_position === option.position,
         Boolean(feedback?.options.find(key => key.position === option.position)?.is_correct),

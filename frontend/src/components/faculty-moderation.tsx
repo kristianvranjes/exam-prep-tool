@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type Course, type Faculty, type ModeratorReport, type OwnerQuestion } from "../lib/api";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
 import { QuestionSuggestionsQueue } from "./question-suggestions-queue";
+import { RichText } from "./rich-text";
 
 type QuestionReasonMap = Record<string, string>;
 
@@ -34,7 +35,7 @@ function QuestionReviewCard({
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
         <p className="text-sm font-medium text-muted">{courseLabel(question)}</p>
-        <h3 className="mt-1 break-words text-lg font-semibold">{question.stem}</h3>
+        <h3 className="mt-1 break-words text-lg font-semibold"><RichText text={question.stem} /></h3>
       </div>
       <div className="flex flex-wrap gap-2">
         <Badge>{question.type}</Badge>
@@ -44,11 +45,11 @@ function QuestionReviewCard({
     <div className="grid gap-3 sm:grid-cols-2">
       {question.difficulty !== null && <p className="text-sm text-muted">Difficulty: {question.difficulty}</p>}
       <p className="text-sm text-muted">Course: {courseLabel(question)}</p>
-      {question.type === "MULTIPLE_CHOICE" && <p className="text-sm text-muted">Correct answer: {question.options.find(option => option.is_correct)?.text ?? "Unknown"}</p>}
+      {question.type === "MULTIPLE_CHOICE" && <p className="text-sm text-muted">Correct answer: <RichText text={question.options.find(option => option.is_correct)?.text ?? "Unknown"} /></p>}
       {question.type === "TRUE_FALSE" && <p className="text-sm text-muted">Answer: {question.correct_boolean === null ? "Unknown" : question.correct_boolean ? "True" : "False"}</p>}
-      {question.type === "SHORT_ANSWER" && <p className="text-sm text-muted">Reference answer: {question.reference_answer || "No reference answer"}</p>}
+      {question.type === "SHORT_ANSWER" && <p className="text-sm text-muted">Reference answer: <RichText text={question.reference_answer || "No reference answer"} /></p>}
     </div>
-    {question.explanation && <p className="text-sm text-muted">Explanation: {question.explanation}</p>}
+    {question.explanation && <p className="text-sm text-muted">Explanation: <RichText text={question.explanation} /></p>}
     {(question.concept_ids.length > 0 || question.source_chunks.length > 0) && <details className="rounded-lg border border-line p-3">
       <summary className="text-sm font-medium">Source details</summary>
       {question.concept_ids.length > 0 && <p className="mt-2 text-sm text-muted">Concepts: {question.concept_ids.join(", ")}</p>}
@@ -316,13 +317,13 @@ function ReportsQueue({ facultyId, courseId, courses }: { facultyId: string; cou
       const questionBusy = rows.some(row => row.question_id === report.question_id && busy[row.id]);
       return <Surface key={report.id} role="article" aria-label={`Report: ${question.stem}`} className="space-y-3">
         <p className="text-sm text-muted">{courses.find(course => course.id === question.course_id)?.name ?? question.course_id}</p>
-        <h3 className="break-words text-lg font-semibold">{question.stem}</h3>
+        <h3 className="break-words text-lg font-semibold"><RichText text={question.stem} /></h3>
         <div className="flex gap-2"><Badge>{question.type}</Badge><Badge>{question.source}</Badge></div>
-        {question.type === "MULTIPLE_CHOICE" && <p>Correct answer: {question.options.find(option => option.is_correct)?.text}</p>}
-        {question.type === "MULTIPLE_CHOICE" && <ul className="list-inside list-disc space-y-1">{question.options.map(option => <li key={option.position} className="break-words">{option.text}{option.is_correct ? " (correct)" : ""}</li>)}</ul>}
+        {question.type === "MULTIPLE_CHOICE" && <p>Correct answer: <RichText text={question.options.find(option => option.is_correct)?.text ?? ""} /></p>}
+        {question.type === "MULTIPLE_CHOICE" && <ul className="list-inside list-disc space-y-1">{question.options.map(option => <li key={option.position} className="break-words"><RichText text={option.text} />{option.is_correct ? " (correct)" : ""}</li>)}</ul>}
         {question.type === "TRUE_FALSE" && <p>Answer: {question.correct_boolean ? "True" : "False"}</p>}
-        {question.type === "SHORT_ANSWER" && <p>Reference answer: {question.reference_answer}</p>}
-        {question.explanation && <p>Explanation: {question.explanation}</p>}
+        {question.type === "SHORT_ANSWER" && <p>Reference answer: <RichText text={question.reference_answer ?? ""} /></p>}
+        {question.explanation && <p>Explanation: <RichText text={question.explanation} /></p>}
         <p>Reason: {report.reason}</p>
         {report.details && <p className="break-words">Details: {report.details}</p>}
         <p className="text-sm text-muted">Reported {new Date(report.created_at).toLocaleString()}</p>

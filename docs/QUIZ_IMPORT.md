@@ -47,6 +47,11 @@ The existing strict question-content schemas validate each item:
 | Short answer `reference_answer` | Required nonblank text, up to 2000 characters |
 | True/false `correct_answer` | Required JSON boolean |
 
+Text fields may use the [formula and code syntax](QUESTIONS.md#formulas-and-code)
+(`$…$`, `$$…$$`, backticks and code fences). It is plain text to the importer; in JSON,
+write each backslash twice (`"$\\frac{1}{2}$"`) and line breaks as `\n`. The prompt
+asks the external AI for exactly this.
+
 Only the answer fields for the selected type are allowed. There is no free-form
 source/reference field in v1: existing source references identify verified database
 chunks, which an external AI cannot supply. Human-readable page references may appear

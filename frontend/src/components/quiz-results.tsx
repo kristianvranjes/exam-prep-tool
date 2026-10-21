@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { formatPoints, penaltyText, pointsLabel } from "../lib/points";
 import type { Attempt, Confidence, PaperScore, PaperSession, ResultQuestion } from "../lib/practice-api";
 import { QuestionUnits } from "./question-units";
+import { RichText } from "./rich-text";
 import { Button, Surface } from "./ui";
 import { cn } from "../lib/utils";
 
@@ -48,11 +49,11 @@ export function ResultAnswers({ question }: { question: ResultQuestion }) {
     : question.options.find(option => option.is_correct)?.text;
   return <div className="space-y-4">
     <dl className="space-y-4">
-      <div><dt className="text-sm font-medium text-muted">Your answer</dt><dd className="mt-1 whitespace-pre-wrap">{studentAnswer ?? (question.grading_status === "UNANSWERED" ? "Left blank" : "No answer saved")}</dd></div>
-      {correctAnswer != null && <div><dt className="text-sm font-medium text-muted">{question.type === "SHORT_ANSWER" ? "Reference answer" : "Correct answer"}</dt><dd className="mt-1 whitespace-pre-wrap">{correctAnswer}</dd></div>}
+      <div><dt className="text-sm font-medium text-muted">Your answer</dt><dd className="mt-1 whitespace-pre-wrap"><RichText text={studentAnswer ?? (question.grading_status === "UNANSWERED" ? "Left blank" : "No answer saved")} /></dd></div>
+      {correctAnswer != null && <div><dt className="text-sm font-medium text-muted">{question.type === "SHORT_ANSWER" ? "Reference answer" : "Correct answer"}</dt><dd className="mt-1 whitespace-pre-wrap"><RichText text={correctAnswer} /></dd></div>}
     </dl>
     {question.type === "SHORT_ANSWER" && question.grading_status === "PENDING" && <p className="text-sm text-muted">Short answers are not graded automatically. Compare your answer with the reference answer.</p>}
-    {question.explanation && <div className="border-t border-line pt-4"><p className="text-sm font-medium text-muted">Explanation</p><p className="mt-1 whitespace-pre-wrap">{question.explanation}</p></div>}
+    {question.explanation && <div className="border-t border-line pt-4"><p className="text-sm font-medium text-muted">Explanation</p><p className="mt-1 whitespace-pre-wrap"><RichText text={question.explanation} /></p></div>}
   </div>;
 }
 
@@ -107,7 +108,7 @@ export function QuizResults({ attempt, busy = false, onPracticeAgain, onViewProg
       <div><h3 ref={reviewHeading} tabIndex={-1} className="text-lg font-semibold">{viewLabels[view]}</h3><p role="status" className="mt-1 text-sm text-muted">{visibleQuestions.length} {visibleQuestions.length === 1 ? "answer" : "answers"}</p></div>
       <div className="space-y-5">{visibleQuestions.map(({ question, number }) => {
         const correct = question.grading_status === "CORRECT";
-        const header = <div className="space-y-2"><h4 className="text-lg font-semibold">{number}. {question.stem}</h4><QuestionUnits units={question.units} /><p className={cn("text-sm", statusTones[question.grading_status])}>{[question.label, statusLabels[question.grading_status], itemPoints(question), question.confidence && confidenceNotes[question.confidence]].filter(Boolean).join(" · ")}</p></div>;
+        const header = <div className="space-y-2"><h4 className="text-lg font-semibold">{number}. <RichText text={question.stem} /></h4><QuestionUnits units={question.units} /><p className={cn("text-sm", statusTones[question.grading_status])}>{[question.label, statusLabels[question.grading_status], itemPoints(question), question.confidence && confidenceNotes[question.confidence]].filter(Boolean).join(" · ")}</p></div>;
         return <article key={question.id} aria-label={`Question ${number} result`} className="min-w-0">
           {correct ? <div className="space-y-3 border-b border-line py-4">
             {header}

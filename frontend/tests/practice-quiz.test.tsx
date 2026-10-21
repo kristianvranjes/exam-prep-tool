@@ -958,3 +958,19 @@ it("takes a past paper with points, skips and clears answers, and hands it in wi
   fireEvent.click(screen.getByRole("button", { name: "Confirm final submission" }));
   await waitFor(() => expect(mock.submit).toHaveBeenCalledWith("course", "attempt"));
 });
+
+it("renders formulas and code in the question and its options", async () => {
+  current.questions = [{ ...current.questions[0], stem: "Koliko je $\\frac{7}{2}$ u C-u?\n```c\nprintf(\"%d\", 7 / 2);\n```", options: [{ position: 0, text: "`3`" }, { position: 1, text: "$3{,}5$" }] }];
+  const view = render(<PracticeQuiz courseId="course" />);
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  // KaTeX loads lazily on the first formula.
+  await waitFor(() => expect(view.container.querySelectorAll("fieldset .katex")).toHaveLength(2), { timeout: 5000 });
+  const legend = view.container.querySelector("legend");
+  expect(legend?.querySelector("annotation")).toHaveTextContent("\\frac{7}{2}");
+  expect(legend?.querySelector("code[data-language='c']")).toHaveTextContent("printf(\"%d\", 7 / 2);");
+  expect(legend).not.toHaveTextContent("$");
+  // jsdom cannot compute accessible names across MathML, so find options by label text.
+  fireEvent.click(screen.getByLabelText("3"));
+  expect(screen.getByLabelText("3")).toBeChecked();
+}, 10000);
