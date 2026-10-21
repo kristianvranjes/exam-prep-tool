@@ -350,9 +350,9 @@ draft/published lifecycle are implemented (see [past exams](PAST_EXAMS.md)); the
 manager-only review step is a publish action by the owner or a faculty moderator.
 Paper sessions with frozen points and versioned negative-marking scores are
 implemented too, including blank answers, and so are generated mock exams for a
-scope (`selection_mode: MOCK`, see [practice rules](PRACTICE.md#mistakes-due-review-and-mock-exams-r5-r3)).
-The server-enforced deadline,
-material kinds and the past-paper count on questions remain open.
+scope (`selection_mode: MOCK`, see [practice rules](PRACTICE.md#mistakes-due-review-and-mock-exams-r5-r3))
+and the server-enforced deadline with countdown warnings and a pace indicator.
+Material kinds and the past-paper count on questions remain open.
 
 ### R4 — FER-ready question content
 

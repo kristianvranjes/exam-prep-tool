@@ -92,7 +92,7 @@ export const practiceApi = {
     if (!due_total) throw new Error("Nothing is due for review right now.");
     return practiceApi.start(course, Math.min(due_total, MAX_SESSION_QUESTIONS), allTypes, "DUE", undefined, "IMMEDIATE");
   },
-  startPaper: (paperId: string, feedback_mode: FeedbackMode = "END") => request<Attempt>(`/exam-papers/${paperId}/attempts`, { method: "POST", body: JSON.stringify({ feedback_mode }) }),
+  startPaper: (paperId: string, feedback_mode: FeedbackMode = "END", timed = true) => request<Attempt>(`/exam-papers/${paperId}/attempts`, { method: "POST", body: JSON.stringify({ feedback_mode, timed }) }),
   abandon: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/abandon`, { method: "POST" }),
   submit: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/submit`, { method: "POST" }),
 };
