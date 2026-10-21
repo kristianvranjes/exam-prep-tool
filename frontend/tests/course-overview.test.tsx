@@ -2,15 +2,15 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CourseOverview } from "../src/components/course-overview";
 import type { ExamScope, Material, ReviewProgressSummary } from "../src/lib/api";
-import type { PracticeAvailability } from "../src/lib/practice-api";
+import type { Attempt, PracticeAvailability } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ reviewProgressSummary: vi.fn(), availability: vi.fn(), examScopes: vi.fn(), examScopeCoverage: vi.fn() }));
+const mock = vi.hoisted(() => ({ reviewProgressSummary: vi.fn(), availability: vi.fn(), reviewDue: vi.fn(), examScopes: vi.fn(), examScopeCoverage: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 const summary: ReviewProgressSummary = { as_of: "2026-10-05", reviewed_questions: 3, due_now: 42, upcoming: 1,
   resolved_review_count: 4, correct_review_count: 3, incorrect_review_count: 1, last_reviewed_at: null,
   next_due_at: null, stage_counts: [{ review_stage: 5, question_count: 3 }] };
-const counts = (course_total: number): PracticeAvailability => ({ course_total, total: course_total, by_type: [], by_unit: [] });
+const counts = (course_total: number, due_total = 0): PracticeAvailability => ({ course_total, total: course_total, by_type: [], by_unit: [], mistakes_total: 0, due_total });
 const material: Material = { id: "m", course_id: "course", original_filename: "notes.pdf", uploaded_by_user_id: "student",
   created_at: "2026-10-01", updated_at: "2026-10-01", status: "READY", processing_error: null,
   media_type: "application/pdf", file_size_bytes: 100 };
@@ -153,4 +153,43 @@ it("passes the cycle to practice and hides the countdown without dated upcoming 
   render(<CourseOverview {...props()} onScopePractice={onScopePractice} />);
   await screen.findByText("75.0%");
   expect(screen.queryByText("Next exam")).not.toBeInTheDocument();
+});
+
+it("starts a guided review of due questions in one click", async () => {
+  mock.availability.mockResolvedValue(counts(30, 7));
+  const attempt = { id: "review", course_id: "course", status: "ACTIVE", questions: [] } as unknown as Attempt;
+  mock.reviewDue.mockResolvedValue(attempt);
+  const onStartAttempt = vi.fn();
+  render(<CourseOverview {...props()} onStartAttempt={onStartAttempt} />);
+  expect(await screen.findByRole("heading", { name: "Review due questions" })).toBeVisible();
+  expect(screen.getByText("7 questions are due for review. Starts a guided session with all of them, earliest due first.")).toBeVisible();
+  // One primary action at a time: due review leads, recommended practice steps back.
+  expect(screen.getByRole("button", { name: "Start recommended practice" })).not.toHaveClass("bg-accent");
+  fireEvent.click(screen.getByRole("button", { name: "Review due questions" }));
+  await waitFor(() => expect(onStartAttempt).toHaveBeenCalledExactlyOnceWith(attempt));
+  expect(mock.reviewDue).toHaveBeenCalledExactlyOnceWith("course");
+});
+
+it("reports a failed due review and keeps it available", async () => {
+  mock.availability.mockResolvedValue(counts(30, 25));
+  mock.reviewDue.mockRejectedValue(new Error("Only 3 eligible questions available; requested 20."));
+  const onStartAttempt = vi.fn();
+  render(<CourseOverview {...props()} onStartAttempt={onStartAttempt} />);
+  expect(await screen.findByText(/25 questions are due for review\. Starts a guided session with the 20 earliest/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Review due questions" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Only 3 eligible questions available");
+  expect(screen.getByRole("button", { name: "Review due questions" })).toBeEnabled();
+  expect(onStartAttempt).not.toHaveBeenCalled();
+});
+
+it("hides due review when nothing is due or a session is open", async () => {
+  mock.availability.mockResolvedValue(counts(30, 0));
+  const view = render(<CourseOverview {...props()} onStartAttempt={vi.fn()} />);
+  await screen.findByText("75.0%");
+  expect(screen.queryByRole("button", { name: "Review due questions" })).not.toBeInTheDocument();
+  view.unmount();
+  mock.availability.mockResolvedValue(counts(30, 4));
+  render(<CourseOverview {...props()} activeSession knownAttemptId="attempt" onStartAttempt={vi.fn()} />);
+  await screen.findByText("75.0%");
+  expect(screen.queryByRole("button", { name: "Review due questions" })).not.toBeInTheDocument();
 });

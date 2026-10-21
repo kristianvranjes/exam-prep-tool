@@ -50,3 +50,21 @@ it("sends the feedback mode with a start and checks one answer with optional con
   await practiceApi.check("course", "attempt", "q1", null);
   expect(mock).toHaveBeenLastCalledWith("/courses/course/attempts/attempt/answers/q1/check", { method: "POST", body: "{}" });
 });
+
+it("starts a one-click due review sized by the server's due count", async () => {
+  const types = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
+  mock.mockResolvedValueOnce({ due_total: 27 }).mockResolvedValueOnce({ id: "review" });
+  await expect(practiceApi.reviewDue("course")).resolves.toEqual({ id: "review" });
+  expect(mock).toHaveBeenNthCalledWith(1, "/courses/course/practice-availability?selection_mode=STANDARD&question_types=MULTIPLE_CHOICE&question_types=TRUE_FALSE&question_types=SHORT_ANSWER");
+  expect(mock).toHaveBeenLastCalledWith("/courses/course/attempts", {
+    method: "POST", body: JSON.stringify({ count: 20, question_types: types, selection_mode: "DUE", feedback_mode: "IMMEDIATE" }),
+  });
+  mock.mockResolvedValueOnce({ due_total: 3 }).mockResolvedValueOnce({ id: "short" });
+  await practiceApi.reviewDue("course");
+  expect(mock).toHaveBeenLastCalledWith("/courses/course/attempts", {
+    method: "POST", body: JSON.stringify({ count: 3, question_types: types, selection_mode: "DUE", feedback_mode: "IMMEDIATE" }),
+  });
+  mock.mockResolvedValueOnce({ due_total: 0 });
+  await expect(practiceApi.reviewDue("course")).rejects.toThrow("Nothing is due for review right now.");
+  expect(mock).toHaveBeenCalledTimes(5);
+});

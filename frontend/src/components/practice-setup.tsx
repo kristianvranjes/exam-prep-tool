@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { api, type CourseUnit, type ExamScope, type QuestionType } from "../lib/api";
 import { practiceApi, type PracticeAvailability, type PracticeFocus, type SelectionMode } from "../lib/practice-api";
 import { kindLabels } from "./exam-scopes";
@@ -24,6 +24,21 @@ export function focusRequest(focus: FocusChoice): PracticeFocus | undefined {
   return undefined;
 }
 
+function ModeChoice({ label, descriptionId, checked, disabled = false, onSelect, children }: {
+  label: string; descriptionId: string; checked: boolean; disabled?: boolean; onSelect: () => void; children: ReactNode;
+}) {
+  return <label className={`flex min-h-11 items-start gap-3 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
+    <input className="mt-1" type="radio" name="selection-mode" aria-label={label} aria-describedby={descriptionId} checked={checked} disabled={disabled} onChange={onSelect} />
+    <span><span className={disabled ? "font-semibold text-muted" : "font-semibold"}>{label}</span><span id={descriptionId} className="mt-1 block text-sm text-muted">{children}</span></span>
+  </label>;
+}
+
+/** How many questions a review choice could select; nothing while counts are unknown. */
+function reviewNote(count: number | undefined, some: (count: number) => string, none: string) {
+  if (count === undefined) return "";
+  return ` ${count ? some(count) : none}`;
+}
+
 export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSession, mode, setMode,
   count, setCount, length, setLength, selectedTypes, setSelectedTypes, experience, setExperience, start,
   focus = { kind: "COURSE" }, setFocus = () => {}, onOpenMaterials, onOpenQuestions }: {
@@ -36,6 +51,11 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
   onOpenMaterials?: () => void; onOpenQuestions?: () => void;
 }) {
   const id = useId();
+  // A mock exam needs an exam cycle, so focusing anything else ends that choice.
+  const chooseFocus = (next: FocusChoice) => {
+    setFocus(next);
+    if (mode === "MOCK" && next.kind !== "SCOPE") setMode("ADAPTIVE");
+  };
   const [revision, setRevision] = useState(0);
   const [availability, setAvailability] = useState<Availability>({ loading: true, error: false, data: null });
   const [catalog, setCatalog] = useState<Catalog>({ units: [], scopes: [] });
@@ -57,6 +77,8 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
   const typesKey = types.map(item => item.type).filter(type => selectedTypes.includes(type)).join(",");
   const scopeKey = focus.kind === "SCOPE" ? focus.scopeId : "";
   const unitsKey = focus.kind === "UNITS" ? focus.unitIds.join(",") : "";
+  // The server counts a mock exam only for an exam cycle; until one is chosen, count recommended practice.
+  const requestMode: SelectionMode = mode === "MOCK" && !scopeKey ? "ADAPTIVE" : mode;
   useEffect(() => {
     if (!active) return;
     let current = true;
@@ -67,14 +89,14 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
       setAvailability({ loading: true, error: false, data: null });
       // An empty unit choice counts the whole course until a unit is chosen.
       const request: PracticeFocus | undefined = scopeKey ? { exam_scope_id: scopeKey } : unitsKey ? { unit_ids: unitsKey.split(",") } : undefined;
-      void practiceApi.availability(courseId, typesKey.split(",") as QuestionType[], mode, request).then(data => {
+      void practiceApi.availability(courseId, typesKey.split(",") as QuestionType[], requestMode, request).then(data => {
         if (current) setAvailability({ loading: false, error: false, data });
       }).catch(() => {
         if (current) setAvailability({ loading: false, error: true, data: null });
       });
     });
     return () => { current = false; };
-  }, [active, courseId, mode, typesKey, scopeKey, unitsKey, revision]);
+  }, [active, courseId, requestMode, typesKey, scopeKey, unitsKey, revision]);
 
   const activeUnits = catalog.units.filter(unit => !unit.is_archived);
   const scope = focus.kind === "SCOPE" ? catalog.scopes.find(item => item.id === focus.scopeId) : undefined;
@@ -82,18 +104,27 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
   const counted = availability.data;
   const matching = counted?.total ?? 0;
   const focusHint = focusUnits ? " or the units you practice" : "";
+  const mistakes = counted?.mistakes_total;
+  const due = counted?.due_total;
+  const canMock = activeUnits.length > 0 && catalog.scopes.length > 0;
+  const matches = mode === "MISTAKES" ? `${matching} ${matching === 1 ? "mistake matches" : "mistakes match"}`
+    : mode === "DUE" ? `${matching} due ${matching === 1 ? "question matches" : "questions match"}`
+      : `${matching} course ${matching === 1 ? "question matches" : "questions match"}`;
   const noQuestions = ready && !busy && !availability.loading && !availability.error && counted?.course_total === 0;
   let help = "";
   if (availability.loading) help = "Checking practice questions…";
   else if (busy) help = "Loading practice…";
   else if (availability.error) help = "Load practice questions before starting.";
   else if (!ready) help = "Load practice history before starting.";
+  else if (mode === "MOCK" && focus.kind !== "SCOPE") help = "Choose an exam cycle for the mock exam.";
   else if (focus.kind === "SCOPE" && !scope) help = "Choose an exam cycle.";
   else if (focus.kind === "UNITS" && !focus.unitIds.length) help = "Choose at least one unit.";
   else if (!selectedTypes.length) help = "Choose at least one question type in More options.";
   else if (!Number.isInteger(count) || count < 1 || count > 20) help = "Enter a whole number from 1 to 20.";
+  else if (counted && matching === 0 && mode === "MISTAKES") help = "No mistakes to review with these options. Questions you answer incorrectly appear here after you finish a session.";
+  else if (counted && matching === 0 && mode === "DUE") help = "Nothing is due for review with these options. Choose Recommended practice to keep studying.";
   else if (counted && matching === 0) help = focusUnits ? "No questions match these units and types yet. Choose other units or change question types in More options." : "No questions match your selected types. Change question types in More options.";
-  else if (counted && count > matching) help = `Only ${matching} course ${matching === 1 ? "question matches" : "questions match"} your options. Choose Custom and enter ${matching} or fewer, or change question types in More options${focusHint}.`;
+  else if (counted && count > matching) help = `Only ${matches} your options. Choose Custom and enter ${matching} or fewer, or change question types in More options${focusHint}.`;
 
   if (noQuestions) return <div className="max-w-prose space-y-3">
     <p className="font-semibold">No practice questions are available for this course yet.</p>
@@ -113,32 +144,35 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
     </div>}
     <fieldset disabled={busy} className="space-y-3">
       <legend className="mb-2 font-semibold">Practice choice</legend>
-      <label className="flex min-h-11 cursor-pointer items-start gap-3">
-        <input className="mt-1" type="radio" name="selection-mode" aria-label="Recommended practice" aria-describedby={`${id}-recommended`} checked={mode === "ADAPTIVE"} onChange={() => setMode("ADAPTIVE")} />
-        <span><span className="font-semibold">Recommended practice</span><span id={`${id}-recommended`} className="mt-1 block text-sm text-muted">Prioritizes questions due for review, then other useful course questions.</span></span>
-      </label>
-      <label className="flex min-h-11 cursor-pointer items-start gap-3">
-        <input className="mt-1" type="radio" name="selection-mode" aria-label="Course questions" aria-describedby={`${id}-standard`} checked={mode === "STANDARD"} onChange={() => setMode("STANDARD")} />
-        <span><span className="font-semibold">Course questions</span><span id={`${id}-standard`} className="mt-1 block text-sm text-muted">Uses shared approved questions and your own drafts or questions awaiting review.</span></span>
-      </label>
+      <ModeChoice label="Recommended practice" descriptionId={`${id}-recommended`} checked={mode === "ADAPTIVE"} onSelect={() => setMode("ADAPTIVE")}>Prioritizes questions due for review, then other useful course questions.</ModeChoice>
+      <ModeChoice label="Course questions" descriptionId={`${id}-standard`} checked={mode === "STANDARD"} onSelect={() => setMode("STANDARD")}>Uses shared approved questions and your own drafts or questions awaiting review.</ModeChoice>
+      <ModeChoice label="Mistakes" descriptionId={`${id}-mistakes`} checked={mode === "MISTAKES"} disabled={mistakes === 0 && mode !== "MISTAKES"} onSelect={() => setMode("MISTAKES")}>
+        Questions you last answered incorrectly, oldest first. A correct answer removes them.{reviewNote(mistakes, n => `${n} to review with these options.`, "None with these options.")}
+      </ModeChoice>
+      <ModeChoice label="Due for review" descriptionId={`${id}-due`} checked={mode === "DUE"} disabled={due === 0 && mode !== "DUE"} onSelect={() => setMode("DUE")}>
+        Only questions whose review is due now, earliest first.{reviewNote(due, n => `${n} due with these options.`, "Nothing is due with these options.")}
+      </ModeChoice>
+      {canMock && <ModeChoice label="Mock exam" descriptionId={`${id}-mock`} checked={mode === "MOCK"} disabled={!scope && mode !== "MOCK"} onSelect={() => { setMode("MOCK"); setExperience("EXAM"); }}>
+        {scope ? `Spreads the questions evenly across the units of ${scope.name}, like a real exam. Starts as exam practice, with results at the end.` : "Spreads the questions evenly across the units of an exam cycle. Choose an exam cycle under What to practice first."}
+      </ModeChoice>}
     </fieldset>
     {activeUnits.length > 0 && <fieldset disabled={busy} className="space-y-3">
       <legend className="mb-2 font-semibold">What to practice</legend>
       <label className="flex min-h-11 cursor-pointer items-start gap-3">
-        <input className="mt-1" type="radio" name="practice-focus" aria-label="Whole course" checked={focus.kind === "COURSE"} onChange={() => setFocus({ kind: "COURSE" })} />
+        <input className="mt-1" type="radio" name="practice-focus" aria-label="Whole course" checked={focus.kind === "COURSE"} onChange={() => chooseFocus({ kind: "COURSE" })} />
         <span><span className="font-semibold">Whole course</span><span className="mt-1 block text-sm text-muted">Questions from every unit, including questions without a unit.</span></span>
       </label>
       {catalog.scopes.length > 0 && <label className="flex min-h-11 cursor-pointer items-start gap-3">
-        <input className="mt-1" type="radio" name="practice-focus" aria-label="Exam cycle" checked={focus.kind === "SCOPE"} onChange={() => setFocus({ kind: "SCOPE", scopeId: catalog.scopes[0].id })} />
+        <input className="mt-1" type="radio" name="practice-focus" aria-label="Exam cycle" checked={focus.kind === "SCOPE"} onChange={() => chooseFocus({ kind: "SCOPE", scopeId: catalog.scopes[0].id })} />
         <span><span className="font-semibold">Exam cycle</span><span className="mt-1 block text-sm text-muted">The units one exam covers, such as a midterm or final.</span></span>
       </label>}
       <label className="flex min-h-11 cursor-pointer items-start gap-3">
-        <input className="mt-1" type="radio" name="practice-focus" aria-label="Selected units" checked={focus.kind === "UNITS"} onChange={() => setFocus({ kind: "UNITS", unitIds: [] })} />
+        <input className="mt-1" type="radio" name="practice-focus" aria-label="Selected units" checked={focus.kind === "UNITS"} onChange={() => chooseFocus({ kind: "UNITS", unitIds: [] })} />
         <span><span className="font-semibold">Selected units</span><span className="mt-1 block text-sm text-muted">Only the units you choose.</span></span>
       </label>
       {focus.kind === "SCOPE" && catalog.scopes.length > 0 && <div>
         <label className="block text-sm font-medium">Exam cycle
-          <Select className="mt-1" value={scope?.id ?? ""} aria-describedby={scope ? `${id}-scope-units` : undefined} onChange={event => setFocus({ kind: "SCOPE", scopeId: event.target.value })}>
+          <Select className="mt-1" value={scope?.id ?? ""} aria-describedby={scope ? `${id}-scope-units` : undefined} onChange={event => chooseFocus({ kind: "SCOPE", scopeId: event.target.value })}>
             {!scope && <option value="">Choose an exam cycle</option>}
             {catalog.scopes.map(item => <option key={item.id} value={item.id}>{item.name} {item.academic_year} · {kindLabels[item.kind]}</option>)}
           </Select>
@@ -148,11 +182,11 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
       {focus.kind === "UNITS" && <fieldset>
         <legend className="text-sm font-medium">Units</legend>
         <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">{activeUnits.map(unit => <label key={unit.id} className="text-sm">
-          <input type="checkbox" checked={focus.unitIds.includes(unit.id)} onChange={event => setFocus({ kind: "UNITS", unitIds: event.target.checked ? [...focus.unitIds, unit.id] : focus.unitIds.filter(unitId => unitId !== unit.id) })} /> {unit.title}
+          <input type="checkbox" checked={focus.unitIds.includes(unit.id)} onChange={event => chooseFocus({ kind: "UNITS", unitIds: event.target.checked ? [...focus.unitIds, unit.id] : focus.unitIds.filter(unitId => unitId !== unit.id) })} /> {unit.title}
         </label>)}</div>
       </fieldset>}
     </fieldset>}
-    {hasUnfinishedSession && mode === "ADAPTIVE" && <p className="text-sm text-muted">Recommended practice excludes questions in unfinished sessions, so fewer questions may be available. You can resume above or choose Course questions.</p>}
+    {hasUnfinishedSession && mode !== "STANDARD" && <p className="text-sm text-muted">{mode === "ADAPTIVE" ? "Recommended practice" : "This choice"} excludes questions in unfinished sessions, so fewer questions may be available. You can resume above or choose Course questions.</p>}
     <fieldset disabled={busy}>
       <legend className="mb-2 font-semibold">Session length</legend>
       <div className="flex flex-wrap gap-2">{(["5", "10", "20", "custom"] as const).map(value => <label key={value} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm">
@@ -163,7 +197,7 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
     </fieldset>
     <div>
       {help && <p id={`${id}-start-help`} role={availability.loading || busy ? "status" : undefined} className="mb-3 max-w-prose text-sm text-muted">{help}</p>}
-      <Button type="submit" variant={hasUnfinishedSession ? "secondary" : "primary"} disabled={busy || Boolean(help)} aria-describedby={help ? `${id}-start-help` : undefined} className="w-full sm:w-auto">Start practice</Button>
+      <Button type="submit" variant={hasUnfinishedSession ? "secondary" : "primary"} disabled={busy || Boolean(help)} aria-describedby={help ? `${id}-start-help` : undefined} className="w-full sm:w-auto">{mode === "MOCK" ? "Start mock exam" : "Start practice"}</Button>
     </div>
     <details className="border-t border-line pt-3">
       <summary className="min-h-11 cursor-pointer py-2 font-medium">More options</summary>
