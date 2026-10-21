@@ -5,7 +5,7 @@ import { api, type PublicQuestion, type SuggestionChanges } from "../lib/api";
 import { Alert, Button, Input, Select } from "./ui";
 import { DraftForm } from "./unsaved-changes";
 
-const textareaClass = "mt-1 min-h-24 w-full rounded-lg border border-line bg-surface px-3 py-2 text-foreground";
+const textareaClass = "mt-1 min-h-24 w-full rounded-control border border-line-strong bg-surface px-3 py-2 text-foreground";
 
 // Only public fields cross into this form, including for an owner's question.
 type SuggestableQuestion = Pick<PublicQuestion, "id" | "type" | "stem" | "difficulty" | "options">;

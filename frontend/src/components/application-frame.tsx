@@ -8,7 +8,7 @@ import { Button } from "./ui";
 import { ThemeSelect } from "./theme";
 
 export function Brand() {
-  return <span className="inline-flex items-center gap-2.5 text-xl font-bold tracking-tight" translate="no"><GraduationCap aria-hidden="true" className="size-7 text-accent" />ExamPrep</span>;
+  return <span className="inline-flex items-center gap-2.5 font-display text-xl font-bold tracking-tight" translate="no"><GraduationCap aria-hidden="true" className="size-7 text-accent" />ExamPrep</span>;
 }
 
 export function ApplicationFrame({ user, courseName, logout, busy, onHome, homeActive, onManagement, managementActive, focusedPractice = false, children }: {

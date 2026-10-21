@@ -17,5 +17,8 @@ data/
 /frontend/test-results/
 # Local agent and tool state (machine-specific paths, scratch output)
 .codex/
+# Editor/agent hooks and design-tool caches stay local; see DESIGN.md (Tooling).
+.github/hooks/
+**/.impeccable/hook.cache.json
 .claude/settings.local.json
 .claude/launch.json

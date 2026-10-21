@@ -8,7 +8,7 @@ import { Alert, Badge, Button, EmptyState, Input, LoadingState, Surface } from "
 import { DraftForm } from "./unsaved-changes";
 
 const MAX_UNITS = 50;
-const textareaClass = "mt-1 min-h-20 w-full rounded-lg border border-line bg-surface px-3 py-2 text-foreground";
+const textareaClass = "mt-1 min-h-20 w-full rounded-control border border-line-strong bg-surface px-3 py-2 text-foreground";
 
 export function CourseUnits({ courseId, isOwner }: { courseId: string; isOwner: boolean }) {
   const [units, setUnits] = useState<CourseUnit[]>([]);
