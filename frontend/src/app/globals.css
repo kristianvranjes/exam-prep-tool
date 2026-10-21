@@ -2,50 +2,53 @@
 
 /* Palette, type and spacing are specified in DESIGN.md; keep both in sync. */
 :root {
-  --background: #f8f5f1;
-  --foreground: #181a1c;
-  --surface: #fefdfc;
-  --subtle: #ece9e3;
-  --muted: #5c5952;
-  --line: #d9d5cd;
-  --line-strong: #848077;
-  --accent: #215d99;
-  --accent-hover: #13497e;
-  --accent-foreground: #fefdfc;
-  --accent-surface: #e4eefa;
-  --success: #1f6a36;
-  --success-surface: #e0f4e3;
-  --danger: #b32926;
-  --danger-foreground: #fefdfc;
-  --danger-surface: #fee8e5;
-  --pending: #84550f;
-  --pending-surface: #fbebcb;
+  --background: #f5eee3;
+  --foreground: #201b16;
+  --surface: #fcf9f1;
+  --subtle: #ebe3d5;
+  --muted: #63594e;
+  --line: #dcd2c2;
+  --line-strong: #877969;
+  --accent: #225a93;
+  --accent-hover: #144678;
+  --accent-foreground: #fcf9f1;
+  --accent-surface: #dbeaf8;
+  --success: #256637;
+  --success-surface: #dcf0dc;
+  --danger: #ac2d26;
+  --danger-foreground: #fcf9f1;
+  --danger-surface: #fde3dc;
+  --pending: #805216;
+  --pending-surface: #f7e6c3;
   --info: var(--accent);
   --info-surface: var(--accent-surface);
-  --highlight: #f9e596;
+  --highlight: #f6e193;
   --focus: var(--accent);
+  /* Paper tooth: brown specks at 2–7 % alpha, a 180 px tile drawn once by the browser. */
+  --paper-grain: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .32 0 0 0 0 .24 0 0 0 0 .15 0 0 0 .09 0'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>");
   color-scheme: light;
 }
 [data-theme="dark"] {
-  --background: #141310;
-  --foreground: #ebe9e5;
-  --surface: #1f1e1b;
-  --subtle: #2d2b27;
-  --muted: #b3afa8;
-  --line: #3f3d38;
-  --line-strong: #7e7a72;
-  --accent: #84bbf0;
-  --accent-hover: #a6d1fb;
-  --accent-foreground: #051c30;
-  --accent-surface: #182d41;
-  --success: #7fd091;
-  --success-surface: #19301e;
-  --danger: #f49287;
-  --danger-foreground: #141310;
-  --danger-surface: #43201c;
-  --pending: #eabc6e;
-  --pending-surface: #382a10;
-  --highlight: #635418;
+  --background: #1b1611;
+  --foreground: #eee7d9;
+  --surface: #24201a;
+  --subtle: #312c25;
+  --muted: #bab1a3;
+  --line: #423c34;
+  --line-strong: #887f72;
+  --accent: #89bdef;
+  --accent-hover: #aad3fa;
+  --accent-foreground: #0b1c2c;
+  --accent-surface: #1d3246;
+  --success: #85cf95;
+  --success-surface: #1c3422;
+  --danger: #f2998a;
+  --danger-foreground: #1b1611;
+  --danger-surface: #48251f;
+  --pending: #e6bd77;
+  --pending-surface: #3c2e14;
+  --highlight: #68561b;
+  --paper-grain: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .95 0 0 0 0 .9 0 0 0 0 .8 0 0 0 .07 0'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>");
   color-scheme: dark;
 }
 @theme inline {
@@ -71,6 +74,7 @@
   --color-info-surface: var(--info-surface);
   --font-sans: var(--font-text), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-code), ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --font-display: var(--font-heading), Georgia, "Times New Roman", serif;
 }
 @theme {
   /* Type scale (~1.2 ratio). Line heights tighten as size grows. */
@@ -98,19 +102,22 @@
   --spacing-card-lg: 1.5rem;
   --spacing-group: 1.5rem;
   --spacing-section: 2.5rem;
-  /* Radius roles. */
+  /* Radius roles: soft paper corners, never pills on large shapes. */
   --radius-tag: 0.375rem;
-  --radius-control: 0.5rem;
-  --radius-card: 0.75rem;
+  --radius-control: 0.625rem;
+  --radius-card: 0.875rem;
 }
 @layer base {
   * { border-color: var(--line); }
   html { scrollbar-color: var(--line-strong) transparent; }
-  body { background: var(--background); color: var(--foreground); font-family: var(--font-text), ui-sans-serif, system-ui, sans-serif; font-size: 1rem; line-height: 1.625; font-optical-sizing: auto; overflow-wrap: anywhere; -webkit-font-smoothing: antialiased; }
-  h1, h2, h3, h4 { text-wrap: balance; line-height: 1.25; letter-spacing: -0.01em; }
+  body { background-color: var(--background); background-image: var(--paper-grain); color: var(--foreground); font-family: var(--font-text), ui-sans-serif, system-ui, sans-serif; font-size: 1rem; line-height: 1.625; font-optical-sizing: auto; overflow-wrap: anywhere; -webkit-font-smoothing: antialiased; }
+  @media (prefers-contrast: more), (forced-colors: active) { body { background-image: none; } }
+  /* Headings are set like a printed exam sheet: a book serif over a sans body. */
+  h1, h2, h3, h4 { font-family: var(--font-heading), Georgia, "Times New Roman", serif; text-wrap: balance; line-height: 1.25; letter-spacing: -0.005em; }
   p, li, dd { text-wrap: pretty; }
   code, kbd, samp, pre { font-family: var(--font-code), ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.9375em; }
   a { text-underline-offset: 0.2em; }
+  hr { border-color: var(--line); }
   :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   /* Headings receive focus after navigation; mark them with an ink underline, not a box. */
   :where(h1, h2, h3, h4)[tabindex="-1"]:focus-visible { outline: none; text-decoration: underline 2px var(--focus); text-underline-offset: 0.3em; }

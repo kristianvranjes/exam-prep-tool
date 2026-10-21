@@ -21,7 +21,7 @@ export function QuizAnswerEditor({ question, answer, change, disabled, feedback 
     </label>;
   };
   return <fieldset disabled={disabled || Boolean(feedback)} className="flex min-w-0 flex-col gap-3">
-      <legend className="mb-5 max-w-prose break-words text-xl font-medium leading-relaxed sm:text-2xl">{question.stem}</legend>
+      <legend className="mb-5 max-w-prose break-words font-display text-xl font-medium leading-relaxed sm:text-2xl">{question.stem}</legend>
       {question.type === "MULTIPLE_CHOICE" && question.options.map(option => choice(String(option.position), option.text,
         answer?.type === "MULTIPLE_CHOICE" && answer.option_position === option.position,
         Boolean(feedback?.options.find(key => key.position === option.position)?.is_correct),
