@@ -1,0 +1,72 @@
+name: Deploy backend (Azure VM)
+
+# Deploys main to the VM after the Checks workflow passes on a push to main, or on
+# demand. It stays inactive until the repository variable AZURE_DEPLOY_ENABLED is
+# "true" and the secrets below exist. See docs/DEPLOY_AZURE.md, step 9.
+on:
+  workflow_run:
+    workflows: [Checks]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit SHA or branch to deploy (default main)
+        required: false
+        default: origin/main
+
+concurrency:
+  group: deploy-azure
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >-
+      vars.AZURE_DEPLOY_ENABLED == 'true' && (
+        github.event_name == 'workflow_dispatch' || (
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push'
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Choose the revision
+        id: revision
+        env:
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_REF: ${{ inputs.ref }}
+        run: |
+          ref="${RUN_SHA:-${INPUT_REF:-origin/main}}"
+          if [[ ! "$ref" =~ ^[A-Za-z0-9._/-]{1,100}$ ]] || [[ "$ref" == -* ]]; then
+            echo "Unexpected revision: $ref" >&2
+            exit 1
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.AZURE_VM_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.AZURE_VM_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned host key: never accept an unknown server.
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          VM_HOST: ${{ secrets.AZURE_VM_HOST }}
+          VM_USER: ${{ secrets.AZURE_VM_USER }}
+          REF: ${{ steps.revision.outputs.ref }}
+        # The key is restricted on the VM to running deploy.sh, which receives REF.
+        run: ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes "$VM_USER@$VM_HOST" "$REF"
+
+      - name: Check the public health endpoint
+        env:
+          VM_HOST: ${{ secrets.AZURE_VM_HOST }}
+        run: curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors "https://$VM_HOST/health/db"

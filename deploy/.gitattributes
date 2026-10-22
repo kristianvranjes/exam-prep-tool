@@ -1,0 +1,6 @@
+# Files that run on the Linux VM keep LF line endings even in a Windows checkout,
+# so `scp` from a local clone still produces runnable scripts.
+*.sh text eol=lf
+Caddyfile text eol=lf
+*.yaml text eol=lf
+.env.example text eol=lf

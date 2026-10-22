@@ -22,8 +22,9 @@ configuration below applies when explicitly enabling that pipeline.
 Phase 6.5 prepares **Vercel + Railway + managed PostgreSQL/pgvector staging** without
 deploying resources. Follow [the exact staging guide](docs/STAGING.md) for required
 environment variables, HTTPS AI configuration, Secure/SameSite cookies, explicit
-origin/CSRF protection, storage, migrations, smoke tests and recovery. Local defaults
-remain unchanged. A complete generation demo needs the optional backend embedding
+origin/CSRF protection, storage, migrations, smoke tests and recovery. To host the
+backend on an always-on Azure for Students VM instead of Railway, see
+[DEPLOY_AZURE.md](docs/DEPLOY_AZURE.md). Local defaults remain unchanged. A complete generation demo needs the optional backend embedding
 runtime; no models run on Vercel.
 
 Stack: Next.js / TypeScript / Tailwind CSS (shadcn/ui-ready), FastAPI / Pydantic /

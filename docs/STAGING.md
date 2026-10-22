@@ -12,6 +12,9 @@ practice checks below include the Phase 7–8 student practice flow.
 
 ## Architecture and deployment order
 
+> To run the backend on an always-on Azure for Students VM instead of Railway, follow
+> [DEPLOY_AZURE.md](DEPLOY_AZURE.md); the database and frontend setup below still apply.
+
 Use Vercel for the Next.js frontend, Railway for the FastAPI Docker service, and
 Neon PostgreSQL 17 with pgvector for a managed database. Railway fits the existing
 long-running synchronous backend and persistent local material storage; Render

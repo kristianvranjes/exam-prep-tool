@@ -1,0 +1,65 @@
+# Production backend on one small VM: the FastAPI container behind Caddy (HTTPS).
+# The database stays on Neon and the frontend on Vercel. See docs/DEPLOY_AZURE.md.
+name: examprep
+
+services:
+  backend:
+    build:
+      context: ../../backend
+      args:
+        # The optional ML stack does not fit a 1 GB VM.
+        INSTALL_EMBEDDINGS: "0"
+    image: examprep-backend:local
+    restart: unless-stopped
+    # Secrets and settings live in deploy/azure/.env on the VM, never in Git.
+    env_file: .env
+    environment:
+      MATERIAL_STORAGE_DIR: /data/materials
+      PORT: "8000"
+    volumes:
+      - materials:/data
+    expose:
+      - "8000"
+    # The image runs `alembic upgrade head` before starting, so allow time for it.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/db', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 90s
+      retries: 3
+    mem_limit: 640m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?Set SITE_ADDRESS in deploy/azure/.env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in deploy/azure/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  # Uploaded PDFs; back it up together with the database (see the guide).
+  materials:
+  # Caddy's certificates and ACME account; keep it to avoid Let's Encrypt rate limits.
+  caddy_data:
+  caddy_config:
