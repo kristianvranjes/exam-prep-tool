@@ -16,6 +16,8 @@ export type AttemptSummary = {
   started_at: string; submitted_at: string | null;
   exam_scope_id?: string | null; focus_unit_ids?: string[]; focus_label?: string | null;
   feedback_mode?: FeedbackMode; paper?: PaperSession | null;
+  /** Timed paper sessions: answers freeze at `deadline_at`; `server_time` corrects the local clock. */
+  deadline_at?: string | null; server_time?: string | null;
 };
 /** A past-paper session's scoring rule, frozen when it started. */
 export type PaperSession = {
@@ -90,7 +92,7 @@ export const practiceApi = {
     if (!due_total) throw new Error("Nothing is due for review right now.");
     return practiceApi.start(course, Math.min(due_total, MAX_SESSION_QUESTIONS), allTypes, "DUE", undefined, "IMMEDIATE");
   },
-  startPaper: (paperId: string, feedback_mode: FeedbackMode = "END") => request<Attempt>(`/exam-papers/${paperId}/attempts`, { method: "POST", body: JSON.stringify({ feedback_mode }) }),
+  startPaper: (paperId: string, feedback_mode: FeedbackMode = "END", timed = true) => request<Attempt>(`/exam-papers/${paperId}/attempts`, { method: "POST", body: JSON.stringify({ feedback_mode, timed }) }),
   abandon: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/abandon`, { method: "POST" }),
   submit: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/submit`, { method: "POST" }),
 };

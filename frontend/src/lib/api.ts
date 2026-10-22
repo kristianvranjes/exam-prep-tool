@@ -89,6 +89,8 @@ export const api = {
   publishExamPaper: (id: string) => request<ExamPaperDetail>(`/exam-papers/${id}/publish`, { method: "POST" }),
   unpublishExamPaper: (id: string) => request<ExamPaperDetail>(`/exam-papers/${id}/unpublish`, { method: "POST" }),
   deleteExamPaper: (id: string) => request<void>(`/exam-papers/${id}`, { method: "DELETE" }),
+  itemAnalysis: (courseId: string, offset = 0) => request<ItemAnalysisList>(`/courses/${courseId}/item-analysis?limit=20&offset=${offset}`),
+  questionItemAnalysis: (courseId: string, questionId: string) => request<ItemAnalysis>(`/courses/${courseId}/item-analysis/${questionId}`),
   copyExamScopes: (courseId: string, fromYear: string, toYear: string) => request<ExamScope[]>(`/courses/${courseId}/exam-scopes/copy`, { method: "POST", body: JSON.stringify({ from_year: fromYear, to_year: toYear }) }),
   reorderUnits: (courseId: string, unitIds: string[]) => request<CourseUnit[]>(`/courses/${courseId}/units/order`, { method: "PATCH", body: JSON.stringify({ unit_ids: unitIds }) }),
   questionVersions: (id: string, offset = 0) => request<QuestionVersion[]>(`/questions/${id}/versions?limit=50&offset=${offset}`),
@@ -147,6 +149,22 @@ export type ExamPaperItemInput = { question_id: string; points: number; label: s
 export type ExamPaperItem = { position: number; label: string | null; points: number; type: QuestionType; question_id?: string; stem?: string; question_status?: QuestionStatus };
 export type ExamPaperDetail = ExamPaper & { can_manage: boolean; items: ExamPaperItem[] };
 export type ExamPaperList = { can_manage: boolean; papers: ExamPaper[] };
+
+/** Aggregates over students' first graded answers to an approved question's current version; never per student. */
+export type ItemAnalysisFlag = "NEGATIVE_DISCRIMINATION" | "STRONG_DISTRACTOR" | "TOO_HARD" | "TOO_EASY" | "UNUSED_DISTRACTOR";
+export type OptionAnalysis = {
+  position: number; text: string; is_key: boolean; count: number; share: number;
+  /** Shares within the top and bottom 27 % of ranked students; null while the groups are too small. */
+  upper_share: number | null; lower_share: number | null;
+  flag: "STRONG_DISTRACTOR" | "UNUSED_DISTRACTOR" | null;
+};
+/** Below the minimum sample only the counts are filled in. Difficulty is the share answered correctly. */
+export type ItemAnalysis = {
+  question_id: string; type: QuestionType; stem: string; sample_size: number; earlier_version_sample: number; enough_data: boolean;
+  difficulty: number | null; upper_correct: number | null; lower_correct: number | null; discrimination: number | null;
+  ranked_size: number; group_size: number | null; flags: ItemAnalysisFlag[]; options: OptionAnalysis[];
+};
+export type ItemAnalysisList = { analysis_version: string; min_sample_size: number; total: number; analysed: number; flagged: number; items: ItemAnalysis[] };
 
 export type Concept = { id: string; course_id: string; name: string; normalized_name: string; description: string | null; aliases: string[]; importance: 'LOW' | 'MEDIUM' | 'HIGH'; status: 'DRAFT' | 'APPROVED' | 'REJECTED'; created_by: string; created_at: string; updated_at: string };
 export type ConceptDetail = Concept & { source_chunks: { id: string; material_id: string; ordinal: number; content: string }[] };

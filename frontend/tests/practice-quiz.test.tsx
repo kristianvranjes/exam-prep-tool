@@ -974,3 +974,20 @@ it("renders formulas and code in the question and its options", async () => {
   fireEvent.click(screen.getByLabelText("3"));
   expect(screen.getByLabelText("3")).toBeChecked();
 }, 10000);
+
+it("shows the exam timer and hands in saved answers when the server deadline passes", async () => {
+  const now = Date.now();
+  current.feedback_mode = "END";
+  current.paper = { exam_paper_id: "p1", title: "MI 2025/26", total_points: 6, wrong_answer_penalty: 0.25, pass_threshold: 4, duration_minutes: 90 };
+  current.questions = current.questions.map((q, index) => ({ ...q, points: [2, 1, 3][index], label: null }));
+  current.deadline_at = new Date(now + 2_000).toISOString();
+  current.server_time = new Date(now).toISOString();
+  mock.history.mockResolvedValue([current]);
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Resume session" }));
+  await screen.findByText("Choose a number");
+  expect(await screen.findByRole("timer")).toHaveTextContent(/0:0[12]/);
+  await waitFor(() => expect(mock.submit).toHaveBeenCalledWith("course", "attempt"), { timeout: 4000 });
+  expect(await screen.findByRole("heading", { name: "Practice complete" })).toBeVisible();
+  expect(mock.submit).toHaveBeenCalledTimes(1);
+});

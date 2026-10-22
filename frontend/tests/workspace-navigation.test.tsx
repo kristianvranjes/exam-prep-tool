@@ -7,7 +7,7 @@ const mock = vi.hoisted(() => ({
   me: vi.fn(), login: vi.fn(), courses: vi.fn(), faculties: vi.fn(), membership: vi.fn(), course: vi.fn(),
   reviewProgressSummary: vi.fn(), moderatorStatus: vi.fn(), concepts: vi.fn(), questions: vi.fn(), logout: vi.fn(),
   history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), availability: vi.fn(),
-  examScopes: vi.fn(), examScopeCoverage: vi.fn(),
+  examScopes: vi.fn(), examScopeCoverage: vi.fn(), itemAnalysis: vi.fn(), question: vi.fn(), units: vi.fn(),
 }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
@@ -351,6 +351,37 @@ it("opens progress and materials from summaries and keeps contribution behind Mo
   expect(within(screen.getByRole("navigation", { name: "Course navigation" })).getByRole("button", { name: "More" })).toHaveAttribute("aria-current", "page");
   expect(screen.getByRole("button", { name: "Open question bank" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "Course settings" })).not.toBeInTheDocument();
+});
+
+it("offers item analysis to a faculty moderator only and opens a flagged question in the bank", async () => {
+  window.history.replaceState(null, "", "/");
+  const { unmount } = render(<AppShell />); await enterCourse(); navigate("More");
+  expect(screen.getByRole("button", { name: "Past exams" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Item analysis" })).not.toBeInTheDocument();
+  unmount();
+
+  window.history.replaceState(null, "", "/");
+  mock.faculties.mockResolvedValue([{ id: "faculty", name: "FER", slug: "fer", university_name: null }]);
+  mock.moderatorStatus.mockResolvedValue({ is_moderator: true });
+  mock.units.mockResolvedValue([]);
+  const stem = "Which grammar is ambiguous?";
+  mock.itemAnalysis.mockResolvedValue({ analysis_version: "item-analysis-v1", min_sample_size: 30, total: 1, analysed: 1, flagged: 1, items: [{
+    question_id: "flagged", type: "TRUE_FALSE", stem, sample_size: 40, earlier_version_sample: 0, enough_data: true, difficulty: 0.3,
+    upper_correct: 0.1, lower_correct: 0.6, discrimination: -0.5, ranked_size: 40, group_size: 11, flags: ["NEGATIVE_DISCRIMINATION"],
+    options: [{ position: 0, text: "True", is_key: true, count: 12, share: 0.3, upper_share: 0.1, lower_share: 0.6, flag: null },
+      { position: 1, text: "False", is_key: false, count: 28, share: 0.7, upper_share: 0.9, lower_share: 0.4, flag: null }],
+  }] });
+  mock.question.mockResolvedValue({ id: "flagged", course_id: "course", type: "TRUE_FALSE", stem, difficulty: null, visibility: "MEMBER", status: "APPROVED", options: [] });
+  render(<AppShell />); await enterCourse(); navigate("More");
+  fireEvent.click(await screen.findByRole("button", { name: "Item analysis" }));
+  expect(await screen.findByText(/The key may be wrong/)).toBeVisible();
+  expect(mock.itemAnalysis).toHaveBeenCalledWith("course", 0);
+  fireEvent.click(screen.getByRole("button", { name: `Open in question bank: ${stem}` }));
+  const opened = await screen.findByRole("article", { name: "Selected question" });
+  await waitFor(() => expect(within(opened).getByRole("heading", { name: stem })).toHaveFocus());
+  expect(mock.question).toHaveBeenCalledWith("flagged");
+  expect(screen.getByRole("button", { name: "Question bank" })).toHaveAttribute("aria-pressed", "true");
+  expect(within(opened).getByRole("button", { name: "Report issue" })).toBeVisible();
 });
 
 it("minimizes application navigation during answering and restores it after Save and leave", async () => {

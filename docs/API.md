@@ -336,11 +336,47 @@ members read published papers only. See [past exams](PAST_EXAMS.md).
 | POST `/exam-papers/{paper_id}/publish` | Managers. 409 without items or with an item no longer approved. Idempotent. |
 | POST `/exam-papers/{paper_id}/unpublish` | Managers. Back to DRAFT and hidden from members. Idempotent. |
 | DELETE `/exam-papers/{paper_id}` | Managers, DRAFT only (409 otherwise), 204. |
-| POST `/exam-papers/{paper_id}/attempts` | Enrolled members, published papers only (members 404, managers 409 for drafts). Optional `{feedback_mode}` (default `END`). 201 ACTIVE attempt with `paper` (frozen rule) and per-question `points` and `label`. |
+| POST `/exam-papers/{paper_id}/attempts` | Enrolled members, published papers only (members 404, managers 409 for drafts). Optional `{feedback_mode, timed}` (defaults `END`, `true`). 201 ACTIVE attempt with `paper` (frozen rule), per-question `points` and `label`, and `deadline_at` when timed. |
 | DELETE `/courses/{course_id}/attempts/{attempt_id}/answers/{quiz_question_id}` | Clears a saved, unchecked answer of an ACTIVE attempt and returns the attempt; idempotent; 409 once checked or closed. Paper sessions may then be submitted with blanks. |
+
+Attempt summaries include `deadline_at` (null when untimed) and, for active timed
+sessions, `server_time`. After the deadline, answer saves, clears and checks return 409;
+reads, submission and abandonment still work.
 
 Submitted paper sessions add `score` and each question's `earned_points`; blank
 questions have `grading_status: "UNANSWERED"`. See [past exams](PAST_EXAMS.md#taking-a-paper).
+
+### Item analysis (R14)
+
+Managers only: the course owner and the faculty's moderators (no enrollment needed).
+Members get 403, nonmembers and unknown courses 404, anonymous requests 401. Responses
+are aggregates and never identify a student. Rules and thresholds:
+[item analysis](COMMUNITY.md#item-analysis-r14).
+
+| Route | Contract |
+| --- | --- |
+| GET `/courses/{course_id}/item-analysis` | Optional `limit` (1–50, default 20) and `offset` (0–10000). Returns `{analysis_version, min_sample_size, total, analysed, flagged, items}`: every APPROVED question with a graded answer, flagged first, then by sample size. `total`, `analysed` and `flagged` count all such questions, before pagination. |
+| GET `/courses/{course_id}/item-analysis/{question_id}` | One question in the same shape as a list item. 404 unless the question is APPROVED and in this course. |
+
+An item:
+
+```json
+{"question_id": "…", "type": "MULTIPLE_CHOICE", "stem": "…",
+ "sample_size": 48, "earlier_version_sample": 3, "enough_data": true,
+ "difficulty": 0.54, "upper_correct": 0.31, "lower_correct": 0.62,
+ "discrimination": -0.31, "ranked_size": 46, "group_size": 12,
+ "flags": ["NEGATIVE_DISCRIMINATION", "STRONG_DISTRACTOR"],
+ "options": [{"position": 0, "text": "…", "is_key": true, "count": 26, "share": 0.54,
+              "upper_share": 0.31, "lower_share": 0.62, "flag": null},
+             {"position": 2, "text": "…", "is_key": false, "count": 15, "share": 0.31,
+              "upper_share": 0.58, "lower_share": 0.17, "flag": "STRONG_DISTRACTOR"}]}
+```
+
+Below `min_sample_size` (30) only `sample_size` and `earlier_version_sample` carry
+information: `enough_data` is false, the statistics are `null`, and `flags` and
+`options` are empty. `upper_correct`, `lower_correct`, `discrimination`, `group_size` and
+the options' group shares are `null` while fewer than five students fit in each group.
+`options` is empty for types without options.
 
 ### Moderated edit suggestions (Phase 12C)
 

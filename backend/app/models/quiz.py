@@ -75,6 +75,9 @@ class QuizAttempt(Base):
             "(status = 'ABANDONED' AND submitted_at IS NULL AND abandoned_at IS NOT NULL)",
             name="ck_attempt_submission",
         ),
+        CheckConstraint(
+            "deadline_at IS NULL OR deadline_at > started_at", name="ck_attempt_deadline"
+        ),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     quiz_id: Mapped[UUID] = mapped_column(ForeignKey("quizzes.id", ondelete="CASCADE"), unique=True)
@@ -82,6 +85,8 @@ class QuizAttempt(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     abandoned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Timed paper sessions: after this, answers are frozen and only submission remains.
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Answer(Base):
