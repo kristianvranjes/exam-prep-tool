@@ -4,6 +4,7 @@ import { useUnsavedChanges } from "./unsaved-changes";
 import { useEffect, useRef, useState } from "react";
 import { api, type Course, type ModeratorSuggestion, type OwnerQuestion, type QuestionContent } from "../lib/api";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Surface } from "./ui";
+import { RichText } from "./rich-text";
 
 function baseContent(question: OwnerQuestion): QuestionContent {
   const common = { stem: question.stem, explanation: question.explanation, difficulty: question.difficulty };
@@ -29,8 +30,8 @@ function SuggestionComparison({ suggestion }: { suggestion: ModeratorSuggestion 
     {base.map(([field, before]) => <div key={field} role="group" aria-label={`${field} comparison`} className="rounded-lg border border-line p-3">
       <h4 className="font-medium">{field} {before !== proposed.get(field) && <Badge>Changed</Badge>}</h4>
       <div className="mt-2 grid gap-3 sm:grid-cols-2">
-        <p className="min-w-0 break-words"><span className="block text-sm text-muted">Before · version {suggestion.base_version_number}</span>{before}</p>
-        <p className="min-w-0 break-words"><span className="block text-sm text-muted">Proposed</span>{proposed.get(field)}</p>
+        <p className="min-w-0 break-words"><span className="block text-sm text-muted">Before · version {suggestion.base_version_number}</span><RichText text={before} /></p>
+        <p className="min-w-0 break-words"><span className="block text-sm text-muted">Proposed</span><RichText text={proposed.get(field) ?? ""} /></p>
       </div>
     </div>)}
   </div>;
@@ -112,9 +113,9 @@ export function QuestionSuggestionsQueue({ facultyId, courseId, courses, current
       const questionBusy = rows.some(row => row.question_id === suggestion.question_id && busy[row.id]);
       return <Surface key={suggestion.id} role="article" aria-label={`Suggestion: ${question.stem}`} className="space-y-4">
         <p className="text-sm text-muted">{courses.find(course => course.id === question.course_id)?.name ?? question.course_id} · Base version {suggestion.base_version_number}</p>
-        <h3 className="break-words text-lg font-semibold">{question.stem}</h3>
+        <h3 className="break-words text-lg font-semibold"><RichText text={question.stem} /></h3>
         <div className="flex flex-wrap gap-2"><Badge>{question.type}</Badge><Badge>{question.source}</Badge><Badge>{suggestion.question.status === "PENDING_REVIEW" ? "Awaiting faculty review" : suggestion.question.status.toLowerCase().replaceAll("_", " ")}</Badge></div>
-        <p className="break-words text-sm text-muted">Current question: {suggestion.question.stem}</p>
+        <p className="break-words text-sm text-muted">Current question: <RichText text={suggestion.question.stem} /></p>
         {suggestion.note && <p className="break-words">Note: {suggestion.note}</p>}
         <SuggestionComparison suggestion={suggestion} />
         <p className="text-sm text-muted">Suggested {new Date(suggestion.created_at).toLocaleString()}</p>

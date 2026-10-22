@@ -347,6 +347,43 @@ props and leave behavior with feature components. No Radix/Base UI runtime or
 large shadcn collection is needed for these controls. Lucide supplies decorative
 icons, hidden from assistive technology. Reuse these primitives in later work.
 
+### Question text formatting
+
+`components/rich-text.tsx` exports `RichText`, which renders question content with the
+[formula and code syntax](QUESTIONS.md#formulas-and-code); the tokenizer and the
+keyword highlighter live in `lib/rich-text.ts`. Use `<RichText text={…} />` wherever a
+stem, option, explanation or reference answer is shown. It is used in the answer editor
+(stem and options), checked feedback, results and abandoned attempts, the question bank
+(list, detail, owner review and versions), faculty moderation (questions, reports and
+suggestion comparisons) and the past-paper editor and question picker. "Your answer" in
+results goes through it too, so a chosen option or a typed formula reads the same as the
+key. Accessible names
+(`aria-label`), `<option>` texts and placeholders keep the source text.
+
+- It renders phrasing content only (spans and `<code>`), so it fits in a `legend`,
+  heading, `label`, button or paragraph. Plain one-line text stays a bare text node;
+  otherwise a `whitespace-pre-wrap` span keeps line breaks. Pass `className` when the
+  text is a flex item (`min-w-0`), as in answer slips.
+- KaTeX is pinned (`katex@0.19.0`). Its stylesheet is imported once by the component;
+  the script (~75 kB gzipped) is loaded with a dynamic `import()` only when a text on
+  screen contains a formula, and the TeX source is shown until it arrives. Rendering
+  uses `output: "htmlAndMathml"`, `trust: false`, `strict: "ignore"`,
+  `throwOnError: false`, `maxSize: 20` and `maxExpand: 1000`. The only
+  `dangerouslySetInnerHTML` is KaTeX's own output; author text never becomes HTML.
+- Displayed formulas and code blocks scroll horizontally inside their own box, so a wide
+  formula or long code line never widens the page at 375 px. Inline code wraps.
+- Code blocks use the monospace face at 14–16 px whatever the surrounding size, with
+  semibold keywords and muted comments for known languages (no colours, no library).
+- Component tests: KaTeX arrives asynchronously, so wait for `.katex` markup. jsdom cannot
+  compute styles for MathML elements, so role queries whose match or accessible name
+  includes a formula throw; use `getByLabelText` or markup queries there.
+
+Authors get `FormattingHelp` (syntax line plus a table of examples rendered by
+`RichText`) under the question text in the question form, linked with
+`aria-describedby`, and `RichTextPreview`, which shows the stem as students will see it
+once the stem uses formatting. The JSON import help shows the same `FormattingHelp`
+with the JSON escaping note, and the external AI prompt asks for the same syntax.
+
 `ApplicationFrame` owns responsive layout and account/navigation controls;
 `AuthScreen` is presentational. `AppShell` keeps the existing API orchestration and
 permission-derived faculty list. API contracts and backend authority are unchanged.

@@ -6,6 +6,7 @@ import { formatExamDate } from "../lib/exam-dates";
 import { formatPoints, penaltyLabels, penaltyText, pointsLabel } from "../lib/points";
 import { practiceApi, type Attempt } from "../lib/practice-api";
 import { currentAcademicYear, kindLabels } from "./exam-scopes";
+import { RichText } from "./rich-text";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
 import { DraftForm } from "./unsaved-changes";
 
@@ -236,7 +237,7 @@ function PaperEditor({ paperId, courseId, onChanged, onDeleted }: {
       {items.length === 0 && <p className="text-sm text-muted">No questions yet. Add approved questions below in the order they appeared on the exam.</p>}
       <ol className="space-y-2">
         {items.map((item, index) => <li key={item.question_id} className="rounded-lg border border-line p-3">
-          <p className="break-words text-sm [overflow-wrap:anywhere]"><span className="font-medium">{index + 1}.</span> {item.stem}</p>
+          <p className="break-words text-sm [overflow-wrap:anywhere]"><span className="font-medium">{index + 1}.</span> <RichText text={item.stem} /></p>
           <p className="mt-1 text-xs text-muted">{typeLabels[item.type]}</p>
           <div className="mt-2 flex flex-wrap items-end gap-3">
             <label className="block text-sm font-medium">Points<Input type="number" min={0.01} step={0.01} className="mt-1 w-28" disabled={!draft || busy} value={Number.isFinite(item.points) ? item.points : ""} onChange={(event) => change(index, { points: event.target.value === "" ? Number.NaN : Number(event.target.value) })} /></label>
@@ -315,7 +316,7 @@ function QuestionPicker({ courseId, chosen, disabled, onAdd }: {
     {error && <Alert>{error}</Alert>}
     <ul className="max-h-96 space-y-1 overflow-y-auto">
       {visible.map((question) => <li key={question.id} className="flex items-start justify-between gap-3 border-b border-line py-2 last:border-b-0">
-        <span className="min-w-0 break-words text-sm [overflow-wrap:anywhere]">{question.stem}<span className="block text-xs text-muted">{typeLabels[question.type]}</span></span>
+        <span className="min-w-0 break-words text-sm [overflow-wrap:anywhere]"><RichText text={question.stem} /><span className="block text-xs text-muted">{typeLabels[question.type]}</span></span>
         <Button variant="secondary" disabled={disabled} aria-label={`Add ${question.stem}`} onClick={() => onAdd(question)}>Add</Button>
       </li>)}
     </ul>

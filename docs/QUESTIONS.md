@@ -35,6 +35,40 @@ clears reviewer, timestamp and reason. APPROVED content changes only through a
 moderated edit suggestion or archival. ARCHIVED is terminal. Submit/approve
 revalidate answer and provenance.
 
+## Formulas and code
+
+Stems, options, explanations and reference answers are stored as plain text. The
+frontend renders a small formatting syntax in them (R4); the API, validation, limits
+and duplicate detection are unchanged and see the source text.
+
+| You type | Shown as |
+| --- | --- |
+| `$f(x) = x^2$` | Inline formula (LaTeX, rendered with KaTeX) |
+| `$$\sum_{i=1}^{n} i$$`, usually on its own lines | Displayed formula, centred, scrolls sideways when wide |
+| `` `printf("%d", n)` `` | Inline code in the monospace face |
+| A line ```` ```c ````, the code, then a line ```` ``` ```` | Code block; the language (optional) lightly highlights C, C++, Java, JavaScript/TypeScript, Python and SQL keywords and comments |
+| `\$5` | A literal dollar sign |
+
+Rules:
+
+- An inline formula needs a non-space character right after the opening `$` and right
+  before the closing `$`, stays on one line, and the closing `$` must not be followed by
+  a digit. So `$5 and $10` stays text.
+- Unmatched or empty delimiters stay literal text. Inside code nothing is interpreted,
+  so `$` and backslashes in code need no escaping.
+- Everything else is plain text with its line breaks. There is no Markdown (no bold,
+  lists or links) and HTML is always shown as text, never rendered.
+- Write a Croatian decimal comma as `{,}` inside a formula (`$3{,}5$`), otherwise TeX adds
+  a space after the comma.
+- KaTeX runs with `trust: false` (no `\href`, `\url`, `\includegraphics` or `\html…`),
+  bounded sizes and macro expansion, and `throwOnError: false`: invalid TeX shows its
+  source in the danger colour with the parse error as a tooltip. Formulas are output as
+  HTML plus MathML for screen readers.
+- In JSON import files every backslash is written twice (`"$\\frac{1}{2}$"`) and a line
+  break as `\n`.
+
+The stem limit (400 characters) counts the source, including delimiters.
+
 ## Moderated corrections (Phase 12C)
 
 Joined users propose sparse content replacements for APPROVED questions; the live

@@ -56,8 +56,9 @@ to Tailwind's `font-display` / `font-sans` / `font-mono`.
 - The question stem (`legend` in `quiz-answer-editor.tsx`) and the brand mark use
   `font-display`.
 - Body text, controls and labels stay in Atkinson.
-- Mathematical operators (∪, ⁿ) outside these subsets fall back to the system font until
-  formula rendering arrives with R4.
+- Formulas inside `$…$` are set by KaTeX in its own Computer Modern faces (loaded only
+  when a page shows a formula). Operators typed as plain text (∪, ⁿ) outside these
+  subsets still fall back to the system font.
 
 ### Scale
 
@@ -240,6 +241,15 @@ Elevation is a 1 px hairline, never a shadow. Tabs are square with a 2 px underl
 - **LoadingState / EmptyState**: muted text, `subtle` skeleton bars, dashed
   `line-strong` border.
 
+- **RichText** (`rich-text.tsx`): question content with formulas and code.
+  - Inline code: mono face on a 7 % ink tint, `rounded-tag`, wraps with the line.
+  - Code block: mono at 14–16 px (`clamp(0.875rem, 0.75em, 1rem)`) on a 5 % ink tint,
+    `rounded-control`, no border; it scrolls sideways instead of wrapping. Highlighting is
+    listings-style: semibold keywords, `muted` comments, no colour, so the semantic
+    palette keeps its meaning.
+  - Displayed formula: centred, scrolls sideways inside its own box. Invalid TeX shows its
+    source in `danger`, with the parse error as a tooltip.
+
 Answer options (`quiz-answer-editor.tsx`) are full-width paper slips.
 
 - While answering, the chosen slip turns `accent-surface` with an accent border, and
@@ -284,5 +294,3 @@ These need markup changes and are left for the practice/results redesign (R13 fo
   "practise these mistakes" action.
 - Checked feedback repeats the chosen and correct answers already marked on the options.
   Make the explanation the focus.
-- Backtick code in question text is shown literally. Render it as `<code>` once R4 adds
-  formatting.

@@ -35,6 +35,7 @@ does not complete their implementation or hosted verification. Record completion
   server-side practice availability, per-unit progress, and bulk unit assignment (R2).
 - Mistakes and due-only review sessions with one-click due review (R5 selection), and
   generated mock exams spread across an exam scope's units (R3).
+- Formulas (KaTeX) and code blocks in question text, with an authoring preview (R4).
 - Deterministic item analysis for course managers (part of R14): difficulty, upper/lower
   27 % discrimination, option distribution and review flags, shown after 30 students.
 
@@ -412,6 +413,14 @@ questions, question-image upload and retrieval, and the new import schema versio
 **Dependencies:** none on R3 for the types themselves; R3 paper scoring uses them once
 both exist. Ship numeric first, then multiple-select, then formulas/images, then longer
 stems and rubrics.
+
+**Status (formulas):** LaTeX in stems, options, explanations and reference answers is
+rendered with KaTeX (HTML plus MathML, `trust: false`, never raw HTML), together with
+inline code and fenced code blocks with light keyword highlighting, in practice,
+results, the question bank, moderation and the past-paper editor. Authors get a syntax
+help, examples and a live stem preview; the import prompt uses the same syntax (see
+[formulas and code](QUESTIONS.md#formulas-and-code)). This is frontend-only; question
+images remain open.
 
 ### R5 — Close the personal learning loop: mistakes and favorites
 
