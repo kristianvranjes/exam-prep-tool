@@ -66,10 +66,11 @@ function Segment({ segment }: { segment: RichSegment }) {
  * Question content (stems, options, explanations, reference answers) with formulas and
  * code; see `lib/rich-text.ts` for the syntax. Renders phrasing content only, so it fits
  * inside a legend, heading, label, button or paragraph. Plain one-line text stays a bare
- * text node.
+ * text node; missing or empty text renders nothing.
  */
-export function RichText({ text, className }: { text: string; className?: string }) {
+export function RichText({ text, className }: { text: string | null | undefined; className?: string }) {
   const segments = useMemo(() => parseRichText(text), [text]);
+  if (!text) return null;
   if (!className && !text.includes("\n") && segments.every(segment => segment.kind === "text")) return segments[0]?.kind === "text" ? segments[0].text : text;
   return <span className={cn("whitespace-pre-wrap", className)}>
     {segments.map((segment, index) => <Segment key={index} segment={segment} />)}
@@ -110,7 +111,7 @@ export function FormattingHelp({ id, children }: { id?: string; children?: React
 }
 
 /** How students will see `text`; shown only once the text uses formatting. */
-export function RichTextPreview({ text, label }: { text: string; label: string }) {
+export function RichTextPreview({ text, label }: { text: string | null | undefined; label: string }) {
   const formatted = useMemo(() => hasFormatting(parseRichText(text)), [text]);
   if (!formatted) return null;
   return <div role="group" aria-label={label} className="rounded-control border border-line bg-surface p-3">

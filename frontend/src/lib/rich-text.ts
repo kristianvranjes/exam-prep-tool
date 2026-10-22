@@ -68,7 +68,8 @@ function inlineCodeEnd(input: string, from: number, length: number) {
   return -1;
 }
 
-export function parseRichText(input: string): RichSegment[] {
+export function parseRichText(input: string | null | undefined): RichSegment[] {
+  if (!input) return [];
   const segments: RichSegment[] = [];
   let text = "";
   const flush = () => { if (text) segments.push({ kind: "text", text }); text = ""; };

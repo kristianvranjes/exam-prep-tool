@@ -87,6 +87,14 @@ const formulas = (container: HTMLElement) => waitFor(() => {
 }, { timeout: 5000 });
 
 describe("RichText", () => {
+  it("renders nothing for missing or empty text", () => {
+    expect(parseRichText(undefined)).toEqual([]);
+    expect(parseRichText(null)).toEqual([]);
+    expect(parseRichText("")).toEqual([]);
+    const { container } = render(<p><RichText text={undefined} /><RichText text={null} className="min-w-0" /><RichText text="" /></p>);
+    expect(container.innerHTML).toBe("<p></p>");
+  });
+
   it("renders plain one-line text as a bare text node", () => {
     const { container } = render(<p><RichText text="Plain stem" /></p>);
     expect(container.innerHTML).toBe("<p>Plain stem</p>");
