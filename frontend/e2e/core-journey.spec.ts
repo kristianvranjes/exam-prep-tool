@@ -6,6 +6,9 @@ const courseName = "E2E Exam Preparation";
 const questionStem = "Which city is the capital of France?";
 const correctOption = "Paris";
 const password = "ExamPrepE2E!2026";
+// The primary button fill as a whole class; secondary and ghost variants carry
+// prefixed accent classes such as `aria-pressed:bg-accent-surface`.
+const primaryFill = /(?:^|\s)bg-accent(?:\s|$)/;
 
 async function login(page: Page, email: string) {
   await page.goto("/");
@@ -207,8 +210,8 @@ test("moderator and student complete the core exam-preparation journey", async (
     await student.getByText("Course navigation", { exact: true }).click();
     await studentNavigation.getByRole("button", { name: "Overview", exact: true }).click();
     await expect(student.getByRole("heading", { name: "Continue studying" })).toBeVisible();
-    await expect(student.getByRole("button", { name: "Resume session" })).toHaveClass(/bg-accent/);
-    await expect(student.getByRole("button", { name: "Return to session" })).not.toHaveClass(/bg-accent/);
+    await expect(student.getByRole("button", { name: "Resume session" })).toHaveClass(primaryFill);
+    await expect(student.getByRole("button", { name: "Return to session" })).not.toHaveClass(primaryFill);
     await test.info().attach("overview-resume", { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
     await student.getByRole("button", { name: "Resume session" }).click();
     await expect(student.getByRole("radio", { name: correctOption })).toBeChecked();
@@ -235,7 +238,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     const results = student.getByRole("region", { name: "Practice results" });
     await expect(results.getByRole("heading", { name: "Practice complete" })).toBeFocused();
     await expect(results.getByLabel("Results summary")).toContainText("Correct1Incorrect0Self-review required0");
-    await expect(results.getByRole("button", { name: "Practice again" })).toHaveClass(/bg-accent/);
+    await expect(results.getByRole("button", { name: "Practice again" })).toHaveClass(primaryFill);
     await expect(results.getByRole("button", { name: "All answers" })).toHaveAttribute("aria-pressed", "true");
     await expect(results.getByRole("button", { name: "Mistakes", exact: true })).toBeDisabled();
     for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
@@ -265,7 +268,7 @@ test("moderator and student complete the core exam-preparation journey", async (
       const overview = student.locator("#course-overview");
       await expect(overview.getByRole("heading", { name: "What to study next" })).toBeVisible();
       await expect(overview.getByRole("button", { name: "Resume session" })).toHaveCount(0);
-      await expect(overview.getByRole("button", { name: "Start recommended practice" })).toHaveClass(/bg-accent/);
+      await expect(overview.getByRole("button", { name: "Start recommended practice" })).toHaveClass(primaryFill);
       await expect(overview.getByRole("region", { name: "Progress summary" })).toContainText("100.0%");
       await expect(overview.getByRole("list", { name: "Recent materials" })).toContainText("e2e-notes.pdf");
       await expect.poll(() => student.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
