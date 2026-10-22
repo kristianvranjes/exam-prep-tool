@@ -35,6 +35,8 @@ does not complete their implementation or hosted verification. Record completion
   server-side practice availability, per-unit progress, and bulk unit assignment (R2).
 - Mistakes and due-only review sessions with one-click due review (R5 selection), and
   generated mock exams spread across an exam scope's units (R3).
+- Deterministic item analysis for course managers (part of R14): difficulty, upper/lower
+  27 % discrimination, option distribution and review flags, shown after 30 students.
 
 **Important boundaries:** short answers remain ungraded for self-review. Study and Exam
 experiences currently reveal results after final submission; the choice is not stored
@@ -125,6 +127,9 @@ each item as its own pull request, in this order:
    readiness range for an exam scope, its three weakest units, and a practice shortcut.
 4. **Item analysis for moderators** (part of R14): difficulty, upper/lower 27 %
    discrimination, option distribution and median time, shown only after 30 answers.
+   *Implemented* for course owners and faculty moderators (see
+   [item analysis](COMMUNITY.md#item-analysis-r14)), except median time, which needs
+   time per question (item 6).
 5. **R4** numeric and multiple-select questions, KaTeX, code highlighting.
 6. Practice keyboard shortcuts, “continue where you left off”, and time per question.
 7. **R6** pilot evaluation right after the midterms, before the finals.

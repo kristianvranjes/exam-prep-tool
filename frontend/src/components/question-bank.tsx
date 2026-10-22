@@ -24,21 +24,31 @@ const unitNames = (ids: string[] | undefined, units: CourseUnit[]) => (ids ?? []
   return unit ? unit.title + (unit.is_archived ? " (archived)" : "") : "Unavailable unit";
 });
 
-export function QuestionBank({ courseId, onOpenMaterials }: { courseId: string; onOpenMaterials?: () => void }) {
+/** A request to open the bank on one question, for example from item analysis. */
+export type QuestionFocus = { id: string; request: number };
+
+export function QuestionBank({ courseId, onOpenMaterials, focus }: { courseId: string; onOpenMaterials?: () => void; focus?: QuestionFocus | null }) {
   const [open, setOpen] = useState(false);
+  const [target, setTarget] = useState<QuestionFocus | null>(null);
+  useEffect(() => {
+    if (!focus) return;
+    let active = true;
+    queueMicrotask(() => { if (active) { setTarget(focus); setOpen(true); } });
+    return () => { active = false; };
+  }, [focus]);
   return <section className="mt-8 min-w-0 border-t border-line pt-6" aria-label="Question bank">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="max-w-prose">
         <h3 className="text-xl font-semibold">Question bank</h3>
         <p className="mt-2 text-sm text-muted">Create private drafts, practice them, and submit questions for faculty review.</p>
       </div>
-      <Button type="button" variant="secondary" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Close question bank" : "Open question bank"}</Button>
+      <Button type="button" variant="secondary" aria-expanded={open} onClick={() => { setOpen(!open); setTarget(null); }}>{open ? "Close question bank" : "Open question bank"}</Button>
     </div>
-    {open && <BankContents key={courseId} courseId={courseId} onOpenMaterials={onOpenMaterials} />}
+    {open && <BankContents key={courseId} courseId={courseId} onOpenMaterials={onOpenMaterials} focus={target} />}
   </section>;
 }
 
-function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenMaterials?: () => void }) {
+function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; onOpenMaterials?: () => void; focus: QuestionFocus | null }) {
   const [joined, setJoined] = useState(false);
   const [owner, setOwner] = useState(false);
   const [userId, setUserId] = useState("");
@@ -67,6 +77,8 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
   const [createError, setCreateError] = useState("");
   const [createNotice, setCreateNotice] = useState("");
   const createInFlight = useRef(false);
+  const selectedHeading = useRef<HTMLHeadingElement>(null);
+  const [revealed, setRevealed] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -93,6 +105,16 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [courseId, status, type, unit, offset, revision]);
+
+  useEffect(() => {
+    if (!focus) return;
+    let active = true;
+    api.question(focus.id).then((question) => { if (active) { setSelected(question); setError(""); setRevealed(focus.request); } })
+      .catch(() => { if (active) setError("Could not open that question. Try again."); });
+    return () => { active = false; };
+  }, [focus]);
+  // Move focus to a question opened from elsewhere once it has rendered.
+  useEffect(() => { if (revealed) selectedHeading.current?.focus(); }, [revealed]);
 
   const canOrganize = (owner || moderator) && units.length > 0;
   const own = (q: Question) => q.visibility === "OWNER" && q.created_by_user_id === userId;
@@ -322,7 +344,7 @@ function BankContents({ courseId, onOpenMaterials }: { courseId: string; onOpenM
 
     {selected && <article aria-label="Selected question" className="min-w-0 space-y-4 rounded-xl border border-line bg-surface p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <h4 className="min-w-0 break-words text-lg font-semibold [overflow-wrap:anywhere]">{selected.stem}</h4>
+        <h4 ref={selectedHeading} tabIndex={-1} className="min-w-0 break-words text-lg font-semibold [overflow-wrap:anywhere]">{selected.stem}</h4>
         <Button type="button" variant="secondary" disabled={busy} onClick={() => setSelected(null)}>Close question</Button>
       </div>
       <div className="flex flex-wrap items-center gap-2"><Badge>{label(selected.type)}</Badge><Badge>{label(selected.status)}</Badge>{selected.difficulty && <span className="text-sm text-muted">Difficulty {selected.difficulty}/5</span>}</div>

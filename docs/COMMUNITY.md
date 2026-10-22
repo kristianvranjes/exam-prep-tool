@@ -1,5 +1,77 @@
 # Community contributions and faculty moderation (Phase 10B / #31)
 
+## Item analysis (R14)
+
+Course owners and the faculty's moderators (no enrollment needed, as with past papers)
+can see how students answer each approved question, to find a wrong key, an option
+nobody believes, or a question far too easy or too hard for the course. The analysis is
+deterministic (`item-analysis-v1` in `backend/app/services/item_statistics.py`), uses no
+AI and adds no migration: it is computed on request from stored attempts.
+
+**What counts.** For every APPROVED question of the course, the analysis uses graded
+(CORRECT or INCORRECT) answers to its *current version*: answers in submitted attempts,
+plus checked immediate-feedback answers in any attempt, because a checked answer is
+final even if the session is later abandoned. Unchecked answers in active or abandoned
+sessions, pending short answers and answers to earlier versions are left out. An edited
+question therefore starts again from zero; `earlier_version_sample` reports how many
+students have graded answers to earlier versions. Each student contributes one data point per
+question, their **first** graded answer (ordered by check time, otherwise submission
+time, then answer id): later repeats measure practice with the question, not the
+question.
+
+**Threshold.** Statistics are reported only once at least **30 students**
+(`MIN_SAMPLE_SIZE`) have a counted answer. Below that a question returns its count and
+nothing else: no shares, groups, options or flags.
+
+**Statistics.**
+
+- *Difficulty*: the share of counted answers that are correct (higher is easier).
+- *Ability*: for each question, a student's share correct on their counted answers to
+  the course's **other** questions (the rest score), so a question never judges itself.
+  Students with no other counted answer are not ranked.
+- *Groups*: the top and bottom 27 % of ranked students (Kelley), `round_half_up(0.27 ×
+  ranked)` students each. Students tied at the cut share the remaining places equally
+  (fractional weights), so ties never depend on answer order or identifiers; if everyone
+  is tied, both groups equal the whole class. With fewer than **5** students per group,
+  discrimination and group shares stay empty and the related flags are not raised.
+- *Discrimination*: the top group's share correct minus the bottom group's, from −1 to 1.
+- *Option distribution* (multiple choice and true/false): the share of counted answers
+  choosing each snapshot option, keyed by position and text (True is position 0, False
+  1), overall and within each group. Other answer types, including future numeric or
+  multiple-select payloads, get difficulty and discrimination but no distribution.
+
+**Flags**, in the order the list ranks them:
+
+| Flag | Rule | Suggests |
+| --- | --- | --- |
+| `NEGATIVE_DISCRIMINATION` | discrimination ≤ −0.10 | Weaker students do better: the key is probably wrong. One student moves a group of eight by 0.125, so smaller reversals are treated as noise. |
+| `STRONG_DISTRACTOR` | a wrong option's top-group share exceeds the key's | Strong students prefer another option: check the key and the wording. |
+| `TOO_HARD` | difficulty below 20 % | Check the key, the wording, and whether the course covers it. |
+| `TOO_EASY` | difficulty above 95 % | The question may give its answer away. |
+| `UNUSED_DISTRACTOR` | a wrong option chosen by under 5 % of students, unless `TOO_EASY` already applies | Replace it with a plausible wrong answer. |
+
+The course list shows flagged questions first (most serious flag, then more flags), then
+larger samples. Flags are advice: moderators keep every decision, and nothing is
+quarantined automatically. Thresholds are constants to calibrate on the pilot.
+
+**Privacy.** Responses contain aggregates only: counts and shares per question and
+option. They never include a student, attempt or answer identifier, nothing is shown
+below 30 students, and group shares cover at least five. Totals change as students
+submit, so someone watching one question while a known student practises could infer
+that student's answer; the threshold limits this but cannot prevent it, which is one
+reason the view is limited to course managers. The view shows answer keys, which owners
+otherwise see only in results after answering; an owner who also practises the course
+will see keys here.
+
+**Interface.** More → Item analysis, for owners and for faculty moderators who joined the
+course. Each question has plain-language notes ("Strong students often choose option C
+— check the key."), its counts, an answer table, and **Open in question bank**, which
+opens the question where it can be reported, corrected through a suggestion, or archived
+by a moderator. See [the API](API.md#item-analysis-r14).
+
+Not covered yet: median answer time (no per-question time is stored), automatic
+quarantine, and per-unit or per-exam views.
+
 ## Moderated question edit suggestions (Phase 12C / #66)
 
 Joined students, owners and creators can suggest sparse corrections to APPROVED

@@ -342,6 +342,38 @@ members read published papers only. See [past exams](PAST_EXAMS.md).
 Submitted paper sessions add `score` and each question's `earned_points`; blank
 questions have `grading_status: "UNANSWERED"`. See [past exams](PAST_EXAMS.md#taking-a-paper).
 
+### Item analysis (R14)
+
+Managers only: the course owner and the faculty's moderators (no enrollment needed).
+Members get 403, nonmembers and unknown courses 404, anonymous requests 401. Responses
+are aggregates and never identify a student. Rules and thresholds:
+[item analysis](COMMUNITY.md#item-analysis-r14).
+
+| Route | Contract |
+| --- | --- |
+| GET `/courses/{course_id}/item-analysis` | Optional `limit` (1–50, default 20) and `offset` (0–10000). Returns `{analysis_version, min_sample_size, total, analysed, flagged, items}`: every APPROVED question with a graded answer, flagged first, then by sample size. `total`, `analysed` and `flagged` count all such questions, before pagination. |
+| GET `/courses/{course_id}/item-analysis/{question_id}` | One question in the same shape as a list item. 404 unless the question is APPROVED and in this course. |
+
+An item:
+
+```json
+{"question_id": "…", "type": "MULTIPLE_CHOICE", "stem": "…",
+ "sample_size": 48, "earlier_version_sample": 3, "enough_data": true,
+ "difficulty": 0.54, "upper_correct": 0.31, "lower_correct": 0.62,
+ "discrimination": -0.31, "ranked_size": 46, "group_size": 12,
+ "flags": ["NEGATIVE_DISCRIMINATION", "STRONG_DISTRACTOR"],
+ "options": [{"position": 0, "text": "…", "is_key": true, "count": 26, "share": 0.54,
+              "upper_share": 0.31, "lower_share": 0.62, "flag": null},
+             {"position": 2, "text": "…", "is_key": false, "count": 15, "share": 0.31,
+              "upper_share": 0.58, "lower_share": 0.17, "flag": "STRONG_DISTRACTOR"}]}
+```
+
+Below `min_sample_size` (30) only `sample_size` and `earlier_version_sample` carry
+information: `enough_data` is false, the statistics are `null`, and `flags` and
+`options` are empty. `upper_correct`, `lower_correct`, `discrimination`, `group_size` and
+the options' group shares are `null` while fewer than five students fit in each group.
+`options` is empty for types without options.
+
 ### Moderated edit suggestions (Phase 12C)
 
 - `POST /questions/{question_id}/suggestions`: joined MEMBER/OWNER, including the

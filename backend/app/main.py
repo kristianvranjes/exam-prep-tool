@@ -12,6 +12,7 @@ from app.api.exam_papers import router as exam_papers_router
 from app.api.exam_scopes import router as exam_scopes_router
 from app.api.faculties import router as faculties_router
 from app.api.health import router as health_router
+from app.api.item_analysis import router as item_analysis_router
 from app.api.materials import router as materials_router
 from app.api.moderation import router as moderation_router
 from app.api.progress import router as progress_router
@@ -63,6 +64,7 @@ app.include_router(retrieval_router)
 app.include_router(questions_router)
 app.include_router(reports_router)
 app.include_router(suggestions_router)
+app.include_router(item_analysis_router)
 app.include_router(quizzes_router)
 app.include_router(availability_router)
 

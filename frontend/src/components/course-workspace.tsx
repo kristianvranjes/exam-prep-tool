@@ -9,9 +9,10 @@ import { CourseOverview } from "./course-overview";
 import { CourseSettings } from "./course-settings";
 import { CourseUnits } from "./course-units";
 import { ExamPapers } from "./exam-papers";
+import { ItemAnalysisView } from "./item-analysis";
 import { PracticeQuiz, type PracticeSetupRequest } from "./practice-quiz";
 import { ProgressPanel } from "./progress-panel";
-import { QuestionBank } from "./question-bank";
+import { QuestionBank, type QuestionFocus } from "./question-bank";
 import { Button } from "./ui";
 
 export type { CourseDestination } from "../lib/workspace-route";
@@ -20,9 +21,11 @@ const destinations: { id: CourseDestination; label: string }[] = [
   { id: "progress", label: "Progress" }, { id: "materials", label: "Materials" }, { id: "more", label: "More" },
 ];
 
-export function CourseWorkspace({ course, currentUserId, isOwner, visible, destination, navigate, goHome, checkingSession,
+export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = false, visible, destination, navigate, goHome, checkingSession,
   adaptiveReviewRequest, onOpenAdaptiveReview, knownAttemptId, onResume, onResumableAttemptChange, activeSession, routeAttemptId, routeResults, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onUpdated, onDeleted, onOpenAttempt }: {
   course: Course; currentUserId: string; isOwner: boolean; visible: boolean; destination: CourseDestination;
+  /** A moderator of the course's faculty; with owners, they manage papers and see item analysis. */
+  isModerator?: boolean;
   navigate: (destination: CourseDestination, setup?: boolean) => void; goHome: () => void; checkingSession?: boolean;
   adaptiveReviewRequest: number; onOpenAdaptiveReview: () => void; knownAttemptId: string | null;
   onResume: () => void; onResumableAttemptChange: (id: string | null) => void;
@@ -33,12 +36,18 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
   onAnswerDirtyChange: (dirty: boolean) => void;
   onUpdated: (course: Course) => void; onDeleted: (course: Course) => void;
 }) {
-  const [moreDestination, setMoreDestination] = useState<"questions" | "units" | "papers" | "settings" | null>(null);
+  const [moreDestination, setMoreDestination] = useState<"questions" | "units" | "papers" | "analysis" | "settings" | null>(null);
+  const [questionFocus, setQuestionFocus] = useState<QuestionFocus | null>(null);
+  const manager = isOwner || isModerator;
   // Mount units on first use, then keep them mounted like other destinations.
   const [unitsOpened, setUnitsOpened] = useState(false);
   const [materials, setMaterials] = useState<MaterialsSummary>({ materials: [], loading: true, error: false });
   const [setupRequest, setSetupRequest] = useState<PracticeSetupRequest | null>(null);
   const focused = destination === "practice" && activeSession;
+  function openQuestion(id: string) {
+    setQuestionFocus(current => ({ id, request: (current?.request ?? 0) + 1 }));
+    setMoreDestination("questions");
+  }
   function openPractice(mode: PracticeSetupRequest["mode"], scopeId?: string) {
     setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode, scopeId }));
     navigate("practice", true);
@@ -84,11 +93,13 @@ export function CourseWorkspace({ course, currentUserId, isOwner, visible, desti
         <Button variant="secondary" aria-pressed={moreDestination === "questions"} onClick={() => setMoreDestination("questions")}>Question bank</Button>
         <Button variant="secondary" aria-pressed={moreDestination === "units"} onClick={() => { setUnitsOpened(true); setMoreDestination("units"); }}>Course units</Button>
         <Button variant="secondary" aria-pressed={moreDestination === "papers"} onClick={() => setMoreDestination("papers")}>Past exams</Button>
+        {manager && <Button variant="secondary" aria-pressed={moreDestination === "analysis"} onClick={() => setMoreDestination("analysis")}>Item analysis</Button>}
         {isOwner && <Button variant="secondary" aria-pressed={moreDestination === "settings"} onClick={() => setMoreDestination("settings")}>Course settings</Button>}
       </div>
-      <div hidden={moreDestination !== "questions"}><QuestionBank courseId={course.id} onOpenMaterials={() => navigate("materials")} /></div>
+      <div hidden={moreDestination !== "questions"}><QuestionBank courseId={course.id} focus={questionFocus} onOpenMaterials={() => navigate("materials")} /></div>
       {unitsOpened && <div hidden={moreDestination !== "units"}><CourseUnits courseId={course.id} isOwner={isOwner} /></div>}
       {moreDestination === "papers" && <ExamPapers courseId={course.id} onStartAttempt={onOpenAttempt} />}
+      {manager && moreDestination === "analysis" && <ItemAnalysisView courseId={course.id} onOpenQuestion={openQuestion} />}
       {isOwner && <div hidden={moreDestination !== "settings"}><CourseSettings course={course} onUpdated={onUpdated} onDeleted={onDeleted} /></div>}
     </section>
   </section>;
