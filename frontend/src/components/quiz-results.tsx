@@ -31,7 +31,7 @@ function PaperScoreSummary({ score, paper }: { score: PaperScore; paper: PaperSe
     {verdict && <p className={score.passed === true ? "text-success" : score.passed === false ? "text-danger" : "text-muted"}>{verdict}</p>}
     <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
       <div><dt className="text-muted">Correct answers</dt><dd className="font-semibold tabular-nums">+{formatPoints(score.correct_points)}</dd></div>
-      {paper.wrong_answer_penalty > 0 && <div><dt className="text-muted">Wrong answers ({penaltyText(paper.wrong_answer_penalty)})</dt><dd className="font-semibold tabular-nums">−{formatPoints(score.penalty_points)}</dd></div>}
+      {score.penalty_points > 0 && <div><dt className="text-muted">Wrong answers ({penaltyText(paper.wrong_answer_penalty)})</dt><dd className="font-semibold tabular-nums">−{formatPoints(score.penalty_points)}</dd></div>}
       {score.pending_points > 0 && <div><dt className="text-muted">Awaiting your self-review</dt><dd className="font-semibold tabular-nums">up to {formatPoints(score.pending_points)}</dd></div>}
       {score.unanswered_count > 0 && <div><dt className="text-muted">Left blank</dt><dd className="font-semibold tabular-nums">{score.unanswered_count} · 0 points</dd></div>}
     </dl>

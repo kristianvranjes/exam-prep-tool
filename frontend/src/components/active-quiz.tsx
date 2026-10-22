@@ -5,6 +5,7 @@ import { penaltyText, pointsLabel } from "../lib/points";
 import { practiceApi, type Attempt, type Confidence, type PracticeAnswer } from "../lib/practice-api";
 import { Alert, Button } from "./ui";
 import { QuizAnswerEditor } from "./quiz-answer-editor";
+import { ExamTimer } from "./exam-timer";
 import { CheckedFeedback, ConfidencePicker } from "./quiz-feedback";
 import { QuestionUnits } from "./question-units";
 import { ExperiencePicker, QuizNavigator, type QuizExperience } from "./quiz-navigation";
@@ -47,6 +48,8 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
   // A past paper can be handed in with blanks, which score 0 instead of a penalty.
   const paper = attempt.paper ?? null;
   const blocked = !paper && unanswered > 0;
+  const [timeUp, setTimeUp] = useState(false);
+  const answeredPoints = attempt.questions.reduce((sum, item) => sum + (item.answer !== null ? item.points ?? 0 : 0), 0);
   const blankNote = paper && unanswered > 0 ? `${unanswered} ${unanswered === 1 ? "question is" : "questions are"} blank and will score 0 points.` : null;
   const finalQuestion = index === attempt.questions.length - 1;
   const saveState = saving ? "Saving…" : saveFailed ? "Save failed" : dirty ? "Unsaved changes" : question.answer ? "Saved" : "No answer saved";
@@ -101,6 +104,11 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
       if (checked.status === "ACTIVE") setAnswer(checked.questions[index].answer);
     });
   }
+  // At the deadline the server freezes answers, so hand in what was saved.
+  function handInAtDeadline() {
+    setTimeUp(true); setConfirmation(null); setReview(false);
+    void run(async () => { update(await practiceApi.submit(attempt.course_id, attempt.id)); });
+  }
   function leaveBlank() {
     if (question.answer === null) { setAnswer(null); setSaveFailed(false); return; }
     void run(async () => {
@@ -144,6 +152,13 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
   }
 
   return <div className="flex min-w-0 flex-col gap-6">
+    {attempt.deadline_at && paper && <ExamTimer deadline={attempt.deadline_at} serverTime={attempt.server_time} durationMinutes={paper.duration_minutes}
+      answeredPoints={answeredPoints} totalPoints={paper.total_points} onExpire={handInAtDeadline} />}
+    {timeUp && <section aria-label="Time is up" className="rounded-xl border border-line bg-surface p-5">
+      <h2 className="text-lg font-semibold">Time is up</h2>
+      <p className="mt-2">Your saved answers are being handed in. Unsaved changes were not included.</p>
+      {!busy && <Button className="mt-4" onClick={handInAtDeadline}>Hand in now</Button>}
+    </section>}
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="text-sm text-muted">{experience === "EXAM" ? "Exam practice" : "Guided practice"}</p>
       <Button variant="secondary" disabled={busy} onClick={saveAndLeave}>Save and leave</Button>
@@ -188,7 +203,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
       {blocked && <p id="finish-help" className="text-sm text-muted">Finish practice becomes available when every answer is saved.</p>}
       <p className="text-sm text-muted">{immediate ? "Unchecked answers are graded when you finish." : "Results appear after final submission."} Short answers require self-review.</p>
     </section>}
-    <div hidden={confirmation !== null || review}>
+    <div hidden={confirmation !== null || review || timeUp}>
       <form className="flex min-w-0 flex-col gap-6" onSubmit={event => { event.preventDefault(); if (busy) return; if (immediate && !feedback) check(); else forward(); }}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 ref={questionHeading} tabIndex={-1} className="text-base font-semibold">Question {index + 1} of {attempt.questions.length}</h2>

@@ -120,10 +120,13 @@ it("starts a published paper as a session and reports a failed start", async () 
   practice.startPaper.mockRejectedValueOnce(new Error("Only published papers can be taken")).mockResolvedValue(attempt);
   const onStartAttempt = vi.fn();
   render(<ExamPapers courseId="course" onStartAttempt={onStartAttempt} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Take Međuispit 2025/26" }));
+  expect(await screen.findByRole("button", { name: "Take Međuispit 2025/26" })).toHaveTextContent("Take this exam · 90 min");
+  fireEvent.click(screen.getByRole("button", { name: "Take Međuispit 2025/26" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Only published papers can be taken");
   expect(screen.queryByRole("button", { name: "Take Draft only" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Take Međuispit 2025/26" }));
   await waitFor(() => expect(onStartAttempt).toHaveBeenCalledWith(attempt));
-  expect(practice.startPaper).toHaveBeenLastCalledWith("p1");
+  expect(practice.startPaper).toHaveBeenLastCalledWith("p1", "END", true);
+  fireEvent.click(screen.getByRole("button", { name: "Practice Međuispit 2025/26 without a time limit" }));
+  await waitFor(() => expect(practice.startPaper).toHaveBeenLastCalledWith("p1", "END", false));
 });

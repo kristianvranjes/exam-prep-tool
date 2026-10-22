@@ -311,3 +311,10 @@ and `label` (at most 40 characters). Existing sessions stay ordinary practice.
 
 `alembic downgrade 0020` drops these columns; paper sessions then read as ordinary
 practice without points or scores. Back up first if paper results matter.
+
+## Attempt deadlines migration 0022
+
+Revision 0022 follows 0021. `quiz_attempts` gains nullable `deadline_at` with
+`ck_attempt_deadline` (`deadline_at > started_at`). Only timed paper sessions set it;
+every other attempt stays untimed. `alembic downgrade 0021` drops the column, after
+which timed sessions accept answers again. Back up first if deadlines matter.

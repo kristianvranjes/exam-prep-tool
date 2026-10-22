@@ -31,10 +31,10 @@ export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onS
   const [starting, setStarting] = useState<string | null>(null);
   const [startError, setStartError] = useState("");
 
-  async function take(paper: ExamPaper) {
+  async function take(paper: ExamPaper, timed: boolean) {
     if (!onStartAttempt || starting) return;
     setStarting(paper.id); setStartError("");
-    try { onStartAttempt(await practiceApi.startPaper(paper.id)); }
+    try { onStartAttempt(await practiceApi.startPaper(paper.id, "END", timed)); }
     catch (cause) { setStartError(cause instanceof Error ? cause.message : "Could not start this past exam. Try again."); }
     finally { setStarting(null); }
   }
@@ -77,7 +77,10 @@ export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onS
               {list.canManage && <Badge tone={paper.status === "PUBLISHED" ? "success" : "neutral"}>{paper.status === "PUBLISHED" ? "Published" : "Draft"}</Badge>}
             </div>
           </div>
-          {onStartAttempt && paper.status === "PUBLISHED" && <Button className="mt-3 mr-2" disabled={starting !== null} aria-label={`Take ${paper.title}`} onClick={() => void take(paper)}>{starting === paper.id ? "Starting…" : "Take this exam"}</Button>}
+          {onStartAttempt && paper.status === "PUBLISHED" && <>
+            <Button className="mt-3 mr-2" disabled={starting !== null} aria-label={`Take ${paper.title}`} onClick={() => void take(paper, true)}>{starting === paper.id ? "Starting…" : paper.duration_minutes ? `Take this exam · ${paper.duration_minutes} min` : "Take this exam"}</Button>
+            {paper.duration_minutes && <Button variant="ghost" className="mt-3 mr-2" disabled={starting !== null} aria-label={`Practice ${paper.title} without a time limit`} onClick={() => void take(paper, false)}>Practice without the timer</Button>}
+          </>}
           {list.canManage && <Button variant="secondary" className="mt-3" aria-label={`Open ${paper.title}`} aria-expanded={selected === paper.id} onClick={() => { setNotice(""); setSelected(selected === paper.id ? null : paper.id); }}>{selected === paper.id ? "Close" : "Open"}</Button>}
           {selected === paper.id && <PaperEditor paperId={paper.id} courseId={courseId} onChanged={refresh} onDeleted={(title) => { setSelected(null); refresh(`Deleted ${title}.`); }} />}
         </li>)}

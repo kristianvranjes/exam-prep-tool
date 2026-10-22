@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Literal, cast
 from uuid import UUID
@@ -84,6 +84,10 @@ def summary(attempt: QuizAttempt, quiz: Quiz) -> AttemptSummary:
         focus_label=quiz.focus_label,
         feedback_mode=cast(FeedbackMode, quiz.feedback_mode),
         paper=paper_session(quiz),
+        deadline_at=attempt.deadline_at,
+        server_time=datetime.now(UTC)
+        if attempt.deadline_at and attempt.status == "ACTIVE"
+        else None,
     )
 
 
@@ -368,7 +372,15 @@ def start_paper(db: Session, user: User, paper_id: UUID, data: StartPaper) -> At
         db.flush()
         for position, (item, question) in enumerate(items):
             db.add(snapshot_row(db, quiz, position, question, item.points, item.label))
-        attempt = QuizAttempt(quiz_id=quiz.id)
+        started_at = datetime.now(UTC)
+        timed = data.timed and paper.duration_minutes is not None
+        attempt = QuizAttempt(
+            quiz_id=quiz.id,
+            started_at=started_at,
+            deadline_at=started_at + timedelta(minutes=paper.duration_minutes)
+            if timed and paper.duration_minutes
+            else None,
+        )
         db.add(attempt)
         db.flush()
         result = representation(db, attempt, paper.course_id)
@@ -403,6 +415,15 @@ def require_active(attempt: QuizAttempt) -> None:
         raise HTTPException(409, "Quiz already submitted; answers are frozen")
 
 
+def require_writable(attempt: QuizAttempt) -> None:
+    """Answers may change only while the attempt is active and before any deadline."""
+    require_active(attempt)
+    if attempt.deadline_at is not None and datetime.now(UTC) >= attempt.deadline_at:
+        raise HTTPException(
+            409, "Time is up; hand in the exam. Answers saved before the deadline count."
+        )
+
+
 def attempt_question(db: Session, attempt: QuizAttempt, question_id: UUID) -> QuizQuestion:
     question = db.scalar(
         select(QuizQuestion).where(
@@ -431,7 +452,7 @@ def save_answer(
     data: AnswerPayload,
 ) -> AttemptResponse:
     attempt = load_attempt(db, user, course_id, attempt_id)
-    require_active(attempt)
+    require_writable(attempt)
     question = attempt_question(db, attempt, question_id)
     content = OwnerQuestion.model_validate(question.snapshot)
     if data.type != content.type or (
@@ -461,7 +482,7 @@ def clear_answer(
 ) -> AttemptResponse:
     """Leave a question blank again; on a paper a blank scores 0 instead of a penalty."""
     attempt = load_attempt(db, user, course_id, attempt_id)
-    require_active(attempt)
+    require_writable(attempt)
     question = attempt_question(db, attempt, question_id)
     try:
         answer = saved_answer(db, attempt, question)
@@ -488,7 +509,7 @@ def check_answer(
 ) -> AttemptResponse:
     """Grade one saved IMMEDIATE answer now and freeze it; scheduling waits for submission."""
     attempt = load_attempt(db, user, course_id, attempt_id)
-    require_active(attempt)
+    require_writable(attempt)
     quiz = db.get(Quiz, attempt.quiz_id)
     assert quiz is not None
     if quiz.feedback_mode != "IMMEDIATE":

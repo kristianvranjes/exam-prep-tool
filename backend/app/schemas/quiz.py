@@ -109,6 +109,8 @@ ResultGrade = Literal["PENDING", "CORRECT", "INCORRECT", "UNANSWERED"]
 class StartPaper(StrictModel):
     # A past paper is usually an exam simulation, so results come at the end.
     feedback_mode: FeedbackMode = "END"
+    # Enforce the paper's time limit, when it has one.
+    timed: bool = True
 
 
 class PaperSession(BaseModel):
@@ -150,6 +152,9 @@ class AttemptSummary(BaseModel):
     focus_label: str | None = None
     feedback_mode: FeedbackMode = "END"
     paper: PaperSession | None = None
+    deadline_at: datetime | None = None
+    # Active timed sessions only: lets clients count down against the server clock.
+    server_time: datetime | None = None
 
 
 class QuestionUnitLabel(BaseModel):
