@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # One-time preparation of a fresh Ubuntu 24.04 VM for the ExamPrep backend.
-# Run it as the VM's admin user (e.g. azureuser), not as root:
+# Run it as the VM's admin user (ubuntu on Oracle Cloud), not as root:
 #   bash setup.sh
-# It is safe to run again; finished steps are skipped. See docs/DEPLOY_AZURE.md.
+# It is safe to run again; finished steps are skipped. See docs/DEPLOY_VM.md.
 set -euo pipefail
 
 REPO="${REPO:-git@github.com:kristianvranjes/exam-prep-tool.git}"
@@ -16,13 +16,24 @@ fi
 
 step() { printf '\n==> %s\n' "$1"; }
 
+# Oracle Cloud's Ubuntu images keep their firewall in /etc/iptables/rules.v4
+# (netfilter-persistent), which rejects everything except SSH. Installing ufw there
+# would remove that package, so on such images the ports are opened in its rules.
+if [ -f /etc/iptables/rules.v4 ]; then
+  FIREWALL=iptables
+else
+  FIREWALL=ufw
+fi
+
 step "System packages and automatic security updates"
+packages=(ca-certificates curl git unattended-upgrades)
+[ "$FIREWALL" = ufw ] && packages+=(ufw)
 sudo apt-get update
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl git ufw unattended-upgrades
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
 echo 'unattended-upgrades unattended-upgrades/enable_auto_updates boolean true' | sudo debconf-set-selections
 sudo DEBIAN_FRONTEND=noninteractive dpkg-reconfigure -f noninteractive unattended-upgrades
 
-step "Swap file (the B1s VM has 1 GB RAM; image builds need more)"
+step "Swap file (small VMs have 1-2 GB RAM; image builds need more)"
 if ! swapon --show | grep -q '/swapfile'; then
   sudo fallocate -l 2G /swapfile
   sudo chmod 600 /swapfile
@@ -49,11 +60,33 @@ fi
 sudo usermod -aG docker "$USER"
 
 step "Firewall: SSH, HTTP and HTTPS only"
-sudo ufw allow OpenSSH
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw allow 443/udp
-sudo ufw --force enable
+if [ "$FIREWALL" = iptables ]; then
+  # Accept the port now, before the image's catch-all REJECT rule, and record the
+  # same rule in rules.v4 so it survives a reboot. Saving the whole table instead
+  # would also persist Docker's own chains.
+  open_port() {
+    local spec=(-p "$1" -m state --state NEW -m "$1" --dport "$2" -j ACCEPT)
+    if ! sudo iptables -C INPUT "${spec[@]}" 2>/dev/null; then
+      local reject
+      reject="$(sudo iptables -L INPUT -n --line-numbers | awk '$2 == "REJECT" { print $1; exit }')"
+      sudo iptables -I INPUT "${reject:-1}" "${spec[@]}"
+    fi
+    local line="-A INPUT ${spec[*]}"
+    if ! sudo grep -qxF -- "$line" /etc/iptables/rules.v4; then
+      sudo sed -i "/^-A INPUT -j REJECT/i $line" /etc/iptables/rules.v4
+    fi
+  }
+  open_port tcp 80
+  open_port tcp 443
+  open_port udp 443
+  echo "Opened 80/tcp, 443/tcp and 443/udp in iptables; SSH stays as the image set it."
+else
+  sudo ufw allow OpenSSH
+  sudo ufw allow 80/tcp
+  sudo ufw allow 443/tcp
+  sudo ufw allow 443/udp
+  sudo ufw --force enable
+fi
 
 step "Read-only GitHub deploy key for this VM"
 mkdir -p "$HOME/.ssh"
@@ -93,20 +126,20 @@ else
 fi
 
 step "Settings file"
-ENV_FILE="$APP_DIR/deploy/azure/.env"
+ENV_FILE="$APP_DIR/deploy/vm/.env"
 if [ ! -f "$ENV_FILE" ]; then
-  cp "$APP_DIR/deploy/azure/.env.example" "$ENV_FILE"
+  cp "$APP_DIR/deploy/vm/.env.example" "$ENV_FILE"
   chmod 600 "$ENV_FILE"
   echo "Created $ENV_FILE from the example."
 else
   echo "$ENV_FILE already exists; left unchanged."
 fi
-chmod +x "$APP_DIR/deploy/azure/deploy.sh"
+chmod +x "$APP_DIR/deploy/vm/deploy.sh"
 
 cat <<EOF
 
-Done. Next steps (docs/DEPLOY_AZURE.md, step 5 onwards):
+Done. Next steps (docs/DEPLOY_VM.md, step 5 onwards):
   1. Log out and back in so the docker group applies:  exit
   2. Fill in the settings:                             nano $ENV_FILE
-  3. First start:                                      $APP_DIR/deploy/azure/deploy.sh origin/main
+  3. First start:                                      $APP_DIR/deploy/vm/deploy.sh origin/main
 EOF

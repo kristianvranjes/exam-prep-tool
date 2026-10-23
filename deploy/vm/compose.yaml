@@ -1,5 +1,5 @@
 # Production backend on one small VM: the FastAPI container behind Caddy (HTTPS).
-# The database stays on Neon and the frontend on Vercel. See docs/DEPLOY_AZURE.md.
+# The database stays on Neon and the frontend on Vercel. See docs/DEPLOY_VM.md.
 name: examprep
 
 services:
@@ -7,11 +7,11 @@ services:
     build:
       context: ../../backend
       args:
-        # The optional ML stack does not fit a 1 GB VM.
+        # The optional ML stack needs far more memory than a small VM has.
         INSTALL_EMBEDDINGS: "0"
     image: examprep-backend:local
     restart: unless-stopped
-    # Secrets and settings live in deploy/azure/.env on the VM, never in Git.
+    # Secrets and settings live in deploy/vm/.env on the VM, never in Git.
     env_file: .env
     environment:
       MATERIAL_STORAGE_DIR: /data/materials
@@ -44,8 +44,8 @@ services:
       - "443:443"
       - "443:443/udp"
     environment:
-      SITE_ADDRESS: ${SITE_ADDRESS:?Set SITE_ADDRESS in deploy/azure/.env}
-      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in deploy/azure/.env}
+      SITE_ADDRESS: ${SITE_ADDRESS:?Set SITE_ADDRESS in deploy/vm/.env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in deploy/vm/.env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

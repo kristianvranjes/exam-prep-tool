@@ -2,7 +2,7 @@
 # Build and (re)start the backend at a Git revision, then wait until it is healthy.
 #   deploy.sh [revision]     # default origin/main; a commit SHA in automatic deploys
 # GitHub Actions calls it through a restricted SSH key, so the revision arrives in
-# SSH_ORIGINAL_COMMAND and is validated before use. See docs/DEPLOY_AZURE.md.
+# SSH_ORIGINAL_COMMAND and is validated before use. See docs/DEPLOY_VM.md.
 set -euo pipefail
 
 # Everything runs inside main(): checking out a new revision may replace this very
@@ -17,8 +17,8 @@ main() {
   local root
   root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
   cd "$root"
-  if [ ! -f deploy/azure/.env ]; then
-    echo "Missing deploy/azure/.env; copy .env.example and fill it in first." >&2
+  if [ ! -f deploy/vm/.env ]; then
+    echo "Missing deploy/vm/.env; copy .env.example and fill it in first." >&2
     exit 1
   fi
 
@@ -27,7 +27,7 @@ main() {
   git -c advice.detachedHead=false checkout --quiet --detach "$ref"
   echo "==> Deploying $(git log -1 --format='%h %s')"
 
-  cd deploy/azure
+  cd deploy/vm
   docker compose build --pull backend
   docker compose up -d --remove-orphans
 

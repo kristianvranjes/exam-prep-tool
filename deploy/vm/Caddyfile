@@ -3,7 +3,7 @@
 	email {$ACME_EMAIL}
 }
 
-# For example examprep-api.westeurope.cloudapp.azure.com; Caddy obtains and
+# For example examprep-api.duckdns.org; Caddy obtains and
 # renews the HTTPS certificate on its own once ports 80 and 443 are reachable.
 {$SITE_ADDRESS} {
 	encode zstd gzip
