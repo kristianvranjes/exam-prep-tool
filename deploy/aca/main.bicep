@@ -86,12 +86,15 @@ resource share 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-05-01
 
 // --- Container Apps --------------------------------------------------------------
 
-// No Log Analytics workspace, which would add cost; console and system logs can still
-// be streamed with `az containerapp logs show`.
-resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
+// A workload profiles environment, set explicitly: newer API versions can otherwise
+// create an "Express" environment, which cannot mount Azure Files. No Log Analytics
+// workspace, which would add cost; console and system logs can still be streamed with
+// `az containerapp logs show`.
+resource environment 'Microsoft.App/managedEnvironments@2026-07-01' = {
   name: environmentName
   location: location
   properties: {
+    environmentMode: 'WorkloadProfiles'
     workloadProfiles: [
       {
         name: 'Consumption'
@@ -101,7 +104,7 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-resource environmentStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
+resource environmentStorage 'Microsoft.App/managedEnvironments/storages@2026-07-01' = {
   parent: environment
   name: shareName
   properties: {
