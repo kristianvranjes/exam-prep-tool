@@ -2,7 +2,7 @@ name: Deploy backend (VM)
 
 # Deploys main to the VM after the Checks workflow passes on a push to main, or on
 # demand. It stays inactive until the repository variable VM_DEPLOY_ENABLED is
-# "true" and the secrets below exist. See docs/DEPLOY_VM.md, step 11.
+# "true" and the secrets below exist. See docs/DEPLOY_VM.md, step 12.
 on:
   workflow_run:
     workflows: [Checks]

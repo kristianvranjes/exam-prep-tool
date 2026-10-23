@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One-time preparation of a fresh Ubuntu 24.04 VM for the ExamPrep backend.
-# Run it as the VM's admin user (ubuntu on Oracle Cloud), not as root:
+# Run it as a normal admin user with sudo (examprep on DigitalOcean, ubuntu on
+# Oracle Cloud), not as root:
 #   bash setup.sh
 # It is safe to run again; finished steps are skipped. See docs/DEPLOY_VM.md.
 set -euo pipefail

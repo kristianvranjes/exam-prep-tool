@@ -12,7 +12,8 @@ practice checks below include the Phase 7–8 student practice flow.
 
 ## Architecture and deployment order
 
-> To run the backend on an always-on Ubuntu VM (Oracle Cloud Always Free) instead of Railway, follow
+> To run the backend on Azure Container Apps instead of Railway, follow
+> [DEPLOY_CONTAINER_APPS.md](DEPLOY_CONTAINER_APPS.md), or for any always-on Ubuntu VM
 > [DEPLOY_VM.md](DEPLOY_VM.md); the database and frontend setup below still apply.
 
 Use Vercel for the Next.js frontend, Railway for the FastAPI Docker service, and

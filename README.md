@@ -23,7 +23,8 @@ Phase 6.5 prepares **Vercel + Railway + managed PostgreSQL/pgvector staging** wi
 deploying resources. Follow [the exact staging guide](docs/STAGING.md) for required
 environment variables, HTTPS AI configuration, Secure/SameSite cookies, explicit
 origin/CSRF protection, storage, migrations, smoke tests and recovery. To host the
-backend on an always-on Ubuntu VM (Oracle Cloud Always Free) instead of Railway, see
+backend on Azure Container Apps (paid from the Azure for Students credit) instead of
+Railway, see [DEPLOY_CONTAINER_APPS.md](docs/DEPLOY_CONTAINER_APPS.md); for any always-on Ubuntu VM, see
 [DEPLOY_VM.md](docs/DEPLOY_VM.md). Local defaults remain unchanged. A complete generation demo needs the optional backend embedding
 runtime; no models run on Vercel.
 
