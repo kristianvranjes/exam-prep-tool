@@ -1,0 +1,23 @@
+{
+	# Let's Encrypt account contact for certificate expiry and problem notices.
+	email {$ACME_EMAIL}
+}
+
+# For example examprep-api.duckdns.org; Caddy obtains and
+# renews the HTTPS certificate on its own once ports 80 and 443 are reachable.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# PDF uploads are capped at 20 MiB by the backend; leave room for the form encoding.
+	request_body {
+		max_size 25MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# No access log, matching the backend's `--no-access-log`.
+	reverse_proxy backend:8000
+}
