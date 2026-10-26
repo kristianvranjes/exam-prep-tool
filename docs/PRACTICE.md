@@ -371,3 +371,80 @@ Targeted tests: `python -m pytest tests/test_practice.py` and
 `RUN_DB_TESTS=1 python -m pytest tests/test_practice_modes_database.py` from backend;
 `npm test -- tests/practice-modes.test.tsx tests/course-overview.test.tsx tests/progress-panel.test.tsx tests/practice-api.test.ts`
 from frontend.
+
+## Exam readiness (readiness-v1)
+
+`GET /exam-scopes/{scope_id}/readiness` gives the calling member a deterministic picture
+of how ready they are for one exam cycle: a MI, ZI, full exam term, LAB or QUIZ. It reads
+only the caller's stored review progress. It makes no AI calls, writes nothing and
+needs no migration. The rule is versioned as `readiness-v1`. Its retention proxy is
+built on `leitner-v1` stages; FSRS retrievability will replace it once `fsrs-v1`
+scheduling exists (Phase B item 2 of the [roadmap](ROADMAP.md)).
+
+**Which questions count.** APPROVED multiple-choice and true/false questions linked to
+the scope's units, archived units included as in scope practice. This is the shared bank
+every member may practise.
+
+- Short answers are left out. They are self-reviewed and never stored as graded reviews,
+  so they could never count as answered.
+- The caller's own drafts, archived or rejected questions and questions outside the
+  scope's units are left out, even when the caller has progress for them.
+- Other users' progress never counts.
+- A question linked to several scope units counts in each of those units, and once in
+  the scope totals.
+
+**Per unit.**
+
+| Metric | Rule | Sample shown |
+| --- | --- | --- |
+| Coverage | Answered questions / questions. A question is answered once the caller has at least one graded answer (a progress row). | Questions |
+| Accuracy | `correct_review_count / resolved_review_count`, summed over the unit's questions, repeats included | Graded answers |
+| Retention | Retained questions / answered questions | Answered questions |
+
+A question counts as **retained** when its last answer was correct and it has not been
+overdue for longer than its own `leitner-v1` interval: `as_of < due_at + interval`, with
+intervals of 1, 3, 7, 14 and 30 days for stages 1–5. In other words, at most twice the
+interval has passed since the last answer. A wrong last answer (stage 0) is never
+retained.
+
+**Readiness range.** For a unit with N questions, A answered and R retained, take the
+90 % Wilson score interval [l, u] of R / A (z = 1.645; [0, 1] when A = 0).
+
+- Answered questions count as they stand: retained or not.
+- The N − A unanswered questions are assumed to go like the answered ones, within that
+  interval: `low = (R + (N − A) · l) / N` and `high = (R + (N − A) · u) / N`.
+- The scope range averages the units' ranges, weighted by N.
+
+So full coverage closes the range to R / N, few answers widen it, and an untouched unit
+spans 0–100 %. Example: 40 questions, 25 answered and 18 retained. The Wilson interval
+of 18/25 is 0.557–0.841, so the unit's range is 66–77 %.
+
+The scope range is null until the caller has answered `min_answered` distinct scope
+questions: 10, or every question when the scope has fewer.
+
+**Weakest units.** Up to three units, ordered by the lower bound of their range, then
+the upper bound, then course position. A unit answered mostly wrong therefore ranks
+before an untouched one, and both rank before a well-practised unit. Units are skipped
+when they are archived (practice setup cannot choose them), have no questions, or have
+every question retained.
+
+**Course overview.** The [Next exam](COURSE_UNITS.md#exam-countdown) card gains a
+Readiness section. It shows:
+
+- the range ("55–70%"), announced to screen readers as "Estimated readiness: 55 to 70
+  percent";
+- the evidence behind it (graded answers and answered questions);
+- a note when the range is 30 points wide or more;
+- the weakest units, each with **Practice this**, which opens practice setup with
+  Recommended practice focused on that unit;
+- a collapsed **Readiness by unit** list with every unit's evidence and the rule in words.
+
+**Practice this** is hidden while a session is open. Below the threshold the section
+says "Not enough answers yet" and how many more answers are needed, and lists the
+weakest units under "Start with". A scope without automatically graded questions says
+so instead of showing zeros. If readiness fails to load, the section is left out, like
+coverage.
+
+Targeted tests: `python -m pytest tests/test_readiness.py` and
+`RUN_DB_TESTS=1 python -m pytest tests/test_readiness_database.py` from backend;
+`npm test -- tests/exam-readiness.test.tsx tests/course-overview.test.tsx` from frontend.

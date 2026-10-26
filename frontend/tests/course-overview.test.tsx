@@ -1,10 +1,10 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CourseOverview } from "../src/components/course-overview";
-import type { ExamScope, Material, ReviewProgressSummary } from "../src/lib/api";
+import type { ExamScope, ExamScopeReadiness, Material, ReviewProgressSummary } from "../src/lib/api";
 import type { Attempt, PracticeAvailability } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ reviewProgressSummary: vi.fn(), availability: vi.fn(), reviewDue: vi.fn(), examScopes: vi.fn(), examScopeCoverage: vi.fn() }));
+const mock = vi.hoisted(() => ({ reviewProgressSummary: vi.fn(), availability: vi.fn(), reviewDue: vi.fn(), examScopes: vi.fn(), examScopeCoverage: vi.fn(), examScopeReadiness: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 const summary: ReviewProgressSummary = { as_of: "2026-10-05", reviewed_questions: 3, due_now: 42, upcoming: 1,
@@ -20,7 +20,7 @@ const props = () => ({ courseId: "course", active: true, knownAttemptId: null as
 
 beforeEach(() => {
   vi.resetAllMocks(); mock.reviewProgressSummary.mockResolvedValue(summary); mock.availability.mockResolvedValue(counts(1));
-  mock.examScopes.mockResolvedValue([]);
+  mock.examScopes.mockResolvedValue([]); mock.examScopeReadiness.mockRejectedValue(new Error("Offline"));
 });
 
 it("shows a default recommendation, two trustworthy progress metrics and recent materials without management tools", async () => {
@@ -153,6 +153,33 @@ it("passes the cycle to practice and hides the countdown without dated upcoming 
   render(<CourseOverview {...props()} onScopePractice={onScopePractice} />);
   await screen.findByText("75.0%");
   expect(screen.queryByText("Next exam")).not.toBeInTheDocument();
+});
+
+const readiness: ExamScopeReadiness = { scope_id: "mi", rule: "readiness-v1", as_of: "2026-10-20T12:00:00Z", question_count: 40,
+  answered_count: 4, retained_count: 2, answer_count: 5, correct_answer_count: 3, min_answered: 10, readiness: null,
+  units: [{ unit_id: "u2", title: "Skupovi", position: 1, is_archived: false, question_count: 20, answered_count: 4, retained_count: 2,
+    answer_count: 5, correct_answer_count: 3, coverage: 0.2, accuracy: 0.6, retention: 0.5, readiness: { low: 0.15, high: 0.9 } }],
+  weakest_unit_ids: ["u2"] };
+
+it("shows readiness for the next exam cycle and opens practice for a weak unit", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 9, 20, 12));
+  mock.examScopes.mockResolvedValue([dated("mi", "2026-11-23")]);
+  mock.examScopeCoverage.mockResolvedValue({ scope_id: "mi", question_count: 40, reviewed_count: 4 });
+  mock.examScopeReadiness.mockResolvedValue(readiness);
+  const onUnitPractice = vi.fn();
+  const view = render(<CourseOverview {...props()} onScopePractice={vi.fn()} onUnitPractice={onUnitPractice} />);
+  const exam = await screen.findByRole("region", { name: "Međuispit" });
+  const card = await within(exam).findByRole("region", { name: "Readiness" });
+  expect(mock.examScopeReadiness).toHaveBeenCalledExactlyOnceWith("mi");
+  expect(within(card).getByText("Not enough answers yet")).toBeVisible();
+  fireEvent.click(within(card).getByRole("button", { name: "Practice this unit: Skupovi" }));
+  expect(onUnitPractice).toHaveBeenCalledExactlyOnceWith("u2");
+  expect(await within(exam).findByText(/practiced 4 of 40 approved questions/)).toBeVisible();
+  view.unmount();
+  // An open session keeps the evidence but hides practice shortcuts.
+  render(<CourseOverview {...props()} activeSession knownAttemptId="attempt" onScopePractice={vi.fn()} onUnitPractice={onUnitPractice} />);
+  const busy = await screen.findByRole("region", { name: "Readiness" });
+  expect(within(busy).queryByRole("button", { name: /Practice this/ })).not.toBeInTheDocument();
 });
 
 it("starts a guided review of due questions in one click", async () => {

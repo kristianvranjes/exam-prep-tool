@@ -38,6 +38,9 @@ does not complete their implementation or hosted verification. Record completion
 - Formulas (KaTeX) and code blocks in question text, with an authoring preview (R4).
 - Deterministic item analysis for course managers (part of R14): difficulty, upper/lower
   27 % discrimination, option distribution and review flags, shown after 30 students.
+- Exam readiness (`readiness-v1`) on the course overview: per unit coverage, accuracy and
+  a Leitner-based retention proxy with sample counts, a Wilson-based readiness range for
+  the next exam cycle, and its three weakest units with a practice shortcut.
 
 **Important boundaries:** short answers remain ungraded for self-review. Study and Exam
 experiences currently reveal results after final submission; the choice is not stored
@@ -126,6 +129,8 @@ each item as its own pull request, in this order:
    Leitner records keep working until then; no bulk rewrite.
 3. **Exam readiness:** per unit coverage, retention and accuracy with sample counts; a
    readiness range for an exam scope, its three weakest units, and a practice shortcut.
+   *Implemented* as `readiness-v1` (see [exam readiness](PRACTICE.md#exam-readiness-readiness-v1)).
+   Its retention proxy uses `leitner-v1` stages; FSRS retrievability replaces it with item 2.
 4. **Item analysis for moderators** (part of R14): difficulty, upper/lower 27 %
    discrimination, option distribution and median time, shown only after 30 answers.
    *Implemented* for course owners and faculty moderators (see

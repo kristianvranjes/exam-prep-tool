@@ -1,21 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type ExamScopeCoverage, type ReviewProgressSummary } from "../lib/api";
+import { api, type ExamScopeCoverage, type ExamScopeReadiness, type ReviewProgressSummary } from "../lib/api";
 import { countdownLabel, formatScopeDates, localIsoDate, nextExam, type NextExam } from "../lib/exam-dates";
 import { practiceApi, type Attempt } from "../lib/practice-api";
 import type { MaterialsSummary } from "./course-materials";
+import { ExamReadiness } from "./exam-readiness";
 import { Alert, Button, Surface } from "./ui";
 
 type ProgressState = { loading: boolean; summary: ReviewProgressSummary | null; error: boolean };
 type Availability = "loading" | "available" | "empty" | "unknown";
-type Countdown = { exam: NextExam; coverage: ExamScopeCoverage | null };
+type Countdown = { exam: NextExam; coverage: ExamScopeCoverage | null; readiness: ExamScopeReadiness | null };
 
 export function CourseOverview({ courseId, active, knownAttemptId, checkingSession, activeSession, materials, onResume,
-  onRecommendedPractice, onStandardPractice, onScopePractice, onStartAttempt, onProgress, onMaterials, onQuestions }: {
+  onRecommendedPractice, onStandardPractice, onScopePractice, onUnitPractice, onStartAttempt, onProgress, onMaterials, onQuestions }: {
   courseId: string; active: boolean; knownAttemptId: string | null;
   checkingSession?: boolean; activeSession?: boolean; materials: MaterialsSummary; onResume: () => void; onRecommendedPractice: () => void;
   onStandardPractice: () => void; onScopePractice?: (scopeId: string) => void; onProgress: () => void; onMaterials: () => void; onQuestions: () => void;
+  /** Opens practice setup focused on one unit, from the readiness card. */
+  onUnitPractice?: (unitId: string) => void;
   /** Opens a session started here, such as the one-click due review. */
   onStartAttempt?: (attempt: Attempt) => void;
 }) {
@@ -53,8 +56,12 @@ export function CourseOverview({ courseId, active, knownAttemptId, checkingSessi
       void api.examScopes(courseId).then(scopes => {
         const exam = nextExam(scopes, localIsoDate());
         if (!current || !exam) return;
-        setCountdown({ exam, coverage: null });
-        return api.examScopeCoverage(exam.scope.id).then(coverage => { if (current) setCountdown({ exam, coverage }); });
+        setCountdown({ exam, coverage: null, readiness: null });
+        // Each part appears when it arrives; a failed one is left out.
+        void api.examScopeReadiness(exam.scope.id).then(readiness => {
+          if (current) setCountdown(value => value && { ...value, readiness });
+        }).catch(() => undefined);
+        return api.examScopeCoverage(exam.scope.id).then(coverage => { if (current) setCountdown(value => value && { ...value, coverage }); });
       }).catch(() => undefined);
     });
     return () => { current = false; };
@@ -88,6 +95,7 @@ export function CourseOverview({ courseId, active, knownAttemptId, checkingSessi
         <p className="mt-2 text-sm text-muted">Covers {countdown.exam.scope.unit_ids.length} {countdown.exam.scope.unit_ids.length === 1 ? "unit" : "units"}
           {countdown.coverage && countdown.coverage.question_count > 0 && ` · You have practiced ${countdown.coverage.reviewed_count} of ${countdown.coverage.question_count} approved questions (${Math.round(countdown.coverage.reviewed_count / countdown.coverage.question_count * 100)}%)`}</p>
         {onScopePractice && !activeSession && <Button className="mt-4 w-full sm:w-auto" variant="secondary" onClick={() => onScopePractice(countdown.exam.scope.id)}>Practice for {countdown.exam.scope.name}</Button>}
+        {countdown.readiness && <ExamReadiness readiness={countdown.readiness} onPracticeUnit={activeSession ? undefined : onUnitPractice} />}
       </Surface>
     </section>}
 

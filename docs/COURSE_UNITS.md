@@ -63,7 +63,9 @@ The course overview picks the dated cycle that is in progress or starts next in 
 viewer's local calendar (undated and finished cycles are ignored) and shows a
 **Next exam** card: the countdown ("In 34 days", "Tomorrow", "Today" or "In progress
 until …"), the dates, the number of covered units, the coverage, and **Practice for
-…**, which opens practice setup focused on that cycle.
+…**, which opens practice setup focused on that cycle. Below it, a Readiness section
+shows the caller's readiness range for the cycle and its weakest units, each with
+**Practice this**; see [exam readiness](PRACTICE.md#exam-readiness-readiness-v1).
 
 ## Practice by unit or exam cycle
 
