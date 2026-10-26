@@ -26,7 +26,7 @@ requests return 401. Payload ownership, status, timestamp and score fields are f
 
 | Method / path | Contract |
 | --- | --- |
-| `POST /courses/{course_id}/attempts` | `{ "count": 5, "question_types": ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"] }`; 201 ACTIVE attempt. Omitted types means all three. Optional `unit_ids` or `exam_scope_id` (not both) limit selection to questions in those units; see [practice by unit](COURSE_UNITS.md#practice-by-unit-or-exam-cycle). Optional `selection_mode`: `STANDARD` (default), `ADAPTIVE`, `MISTAKES`, `DUE` or `MOCK`; see [adaptive selection](#adaptive-quiz-selection-phase-9b) and [mistakes, due review and mock exams](#mistakes-due-review-and-mock-exams-r5-r3). |
+| `POST /courses/{course_id}/attempts` | `{ "count": 5, "question_types": ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"] }`; 201 ACTIVE attempt. Omitted types means all three. Optional `unit_ids` or `exam_scope_id` (not both) limit selection to questions in those units; see [practice by unit](COURSE_UNITS.md#practice-by-unit-or-exam-cycle). Optional `selection_mode`: `STANDARD` (default), `ADAPTIVE`, `MISTAKES`, `DUE`, `FAVORITES` or `MOCK`; see [adaptive selection](#adaptive-quiz-selection-phase-9b), [mistakes, due review and mock exams](#mistakes-due-review-and-mock-exams-r5-r3) and [favorites](#favorites-and-the-quick-quiz-r5). |
 | `GET /courses/{course_id}/practice-availability` | Advisory counts of what a start with the same mode, types and focus could select now, using the same selection filters; see [practice availability](COURSE_UNITS.md#practice-availability). |
 | `GET /courses/{course_id}/attempts?limit=20&offset=0` | Own attempt summaries, newest first; limit 1–50, offset 0–10000. |
 | `GET /courses/{course_id}/attempts/{id}` | Saved ACTIVE attempt, frozen SUBMITTED result, or read-only ABANDONED history. |
@@ -123,6 +123,7 @@ existing control's action, so grading, saving and locking stay where they were.
 | `T` / `F`, or `1` / `2` | Answer true or false |
 | `Enter` | The primary button: save and next, *Check answer* in guided practice, or *Next question* after the check |
 | `N` / `J`, `P` / `K` | Next and previous question |
+| `S` | Favorite or unfavorite the question (see [favorites](#favorites-and-the-quick-quiz-r5)); `F` already answers false |
 | `?` | Open the shortcut list (a modal dialog; Escape or Close returns focus) |
 
 - Keys never fire while focus is in a text field, textarea or editable region (short
@@ -135,7 +136,8 @@ existing control's action, so grading, saving and locking stay where they were.
   and in paper sessions (*Skip for now*); in guided practice only once the answer is
   checked; otherwise once an answer is entered, which it saves first like *Save and next*.
 - Arrow keys are left to the radio group, where they change the chosen option.
-- Options, Previous, the primary button and the hint carry `aria-keyshortcuts`. The
+- Options, Previous, the primary button, the **Favorite** star and the hint carry
+  `aria-keyshortcuts`. The
   “Press ? for shortcuts” hint shows only with a fine pointer, not on touch screens.
 - A new shortcut adds a case to `shortcutAction` and a row to `PRACTICE_SHORTCUTS`.
 
@@ -488,3 +490,54 @@ coverage.
 Targeted tests: `python -m pytest tests/test_readiness.py` and
 `RUN_DB_TESTS=1 python -m pytest tests/test_readiness_database.py` from backend;
 `npm test -- tests/exam-readiness.test.tsx tests/course-overview.test.tsx` from frontend.
+
+## Favorites and the quick quiz (R5)
+
+**Favorites.** A student can favorite any question they may practice: approved
+questions and their own drafts or questions awaiting review. Favorites are private
+and course-scoped. They are stored on the server, one row per student and source
+question in `question_favorites` ([migration 0023](DATABASE.md#question-favorites-migration-0023)),
+so they follow the student to every device. They never touch grades, review progress,
+scheduling or attempt history: snapshots stay frozen, and an attempt only reads the
+live favorite flag, as it reads current unit labels.
+
+- Adding and removing are idempotent `POST` and `DELETE` requests (see
+  [favorites](API.md#favorites-r5)). Repeating an add keeps the first favorite and its
+  time.
+- Archiving or rejecting a question keeps the favorite but makes it unavailable: the
+  favorites list reports `available: false`, FAVORITES never selects it, and it cannot
+  be added again while it is ineligible. Removing it still works. Deleting a question
+  removes its favorites.
+- Editing a draft keeps its favorite; the next session snapshots the edited version.
+- Attempt questions carry `source_question_id` and a boolean `favorite`, read only
+  from the student's own favorite rows. Archiving, rejecting or editing the question
+  never changes it, so submitted results stay exactly as frozen. The star is shown for
+  every question; adding a favorite to a question that is no longer eligible explains
+  why it was refused.
+
+The star is a **Favorite** toggle button with `aria-pressed`. It sits under the active
+question next to **Mark to revisit** (shortcut `S`), and in each submitted result as **Favorite
+question N**. It saves on its own, never waits for or blocks an answer save, and keeps
+the choice while the student moves between questions or result filters. A refused
+change is announced next to the star.
+
+**FAVORITES selection.** `selection_mode: "FAVORITES"` selects practice-eligible
+favorites and combines with the question-type and unit or exam-scope filters, so a
+student can review the favorites of one midterm. It orders by the oldest favorite
+time, then question ID. Like the review modes, it skips sources in the student's
+ACTIVE attempts and returns the usual 409 when fewer questions qualify. Practice
+availability reports `favorites_total` whatever the requested mode; the setup lists
+**Favorites** with that count and disables it while there are none.
+
+**Quick quiz.** **Start quick quiz** on the course overview starts a guided
+(IMMEDIATE) recommended (ADAPTIVE) session of five questions of every type in one
+click. The optional **Questions from** picker limits it to one exam cycle or one unit.
+It is a client preset over existing options, not a new engine: it reads ADAPTIVE
+availability for that focus and starts `min(total, 5)` questions, so a unit with three
+eligible questions gives a three-question quiz. With none it shows the reason and
+starts nothing. The session opens like a due review, and the overview hides the quick
+quiz while a session is open.
+
+Targeted tests: `RUN_DB_TESTS=1 python -m pytest tests/test_favorites_database.py`
+from backend; `npm test -- tests/favorites.test.tsx tests/practice-modes.test.tsx tests/course-overview.test.tsx tests/practice-api.test.ts`
+from frontend.

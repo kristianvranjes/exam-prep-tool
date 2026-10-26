@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatPoints, penaltyText, pointsLabel } from "../lib/points";
 import type { Attempt, Confidence, PaperScore, PaperSession, ResultQuestion } from "../lib/practice-api";
+import { FavoriteToggle, useFavorites } from "./favorite-toggle";
 import { QuestionUnits } from "./question-units";
 import { RichText } from "./rich-text";
 import { Button, Surface } from "./ui";
@@ -63,6 +64,7 @@ export function QuizResults({ attempt, busy = false, onPracticeAgain, onViewProg
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const reviewHeading = useRef<HTMLHeadingElement>(null);
+  const favorites = useFavorites(attempt.course_id);
   useEffect(() => { heading.current?.focus(); }, []);
   const counts = { CORRECT: 0, INCORRECT: 0, PENDING: 0, UNANSWERED: 0 };
   for (const question of attempt.questions) counts[question.grading_status]++;
@@ -108,7 +110,9 @@ export function QuizResults({ attempt, busy = false, onPracticeAgain, onViewProg
       <div><h3 ref={reviewHeading} tabIndex={-1} className="text-lg font-semibold">{viewLabels[view]}</h3><p role="status" className="mt-1 text-sm text-muted">{visibleQuestions.length} {visibleQuestions.length === 1 ? "answer" : "answers"}</p></div>
       <div className="space-y-5">{visibleQuestions.map(({ question, number }) => {
         const correct = question.grading_status === "CORRECT";
-        const header = <div className="space-y-2"><h4 className="text-lg font-semibold">{number}. <RichText text={question.stem} /></h4><QuestionUnits units={question.units} /><p className={cn("text-sm", statusTones[question.grading_status])}>{[question.label, statusLabels[question.grading_status], itemPoints(question), question.confidence && confidenceNotes[question.confidence]].filter(Boolean).join(" · ")}</p></div>;
+        const header = <div className="space-y-2"><h4 className="text-lg font-semibold">{number}. <RichText text={question.stem} /></h4><QuestionUnits units={question.units} />
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"><p className={cn("text-sm", statusTones[question.grading_status])}>{[question.label, statusLabels[question.grading_status], itemPoints(question), question.confidence && confidenceNotes[question.confidence]].filter(Boolean).join(" · ")}</p>
+            <FavoriteToggle favorites={favorites} question={question} label={`Favorite question ${number}`} /></div></div>;
         return <article key={question.id} aria-label={`Question ${number} result`} className="min-w-0">
           {correct ? <div className="space-y-3 border-b border-line py-4">
             {header}

@@ -318,3 +318,13 @@ Revision 0022 follows 0021. `quiz_attempts` gains nullable `deadline_at` with
 `ck_attempt_deadline` (`deadline_at > started_at`). Only timed paper sessions set it;
 every other attempt stays untimed. `alembic downgrade 0021` drops the column, after
 which timed sessions accept answers again. Back up first if deadlines matter.
+
+## Question favorites migration 0023
+
+Revision 0023 follows 0022 and creates `question_favorites`: UUID `id`, `user_id`
+(users, ON DELETE CASCADE), `question_id` (questions, ON DELETE CASCADE, indexed) and
+`created_at` (TIMESTAMPTZ, default `now()`), with `uq_question_favorite_user_question`
+on `(user_id, question_id)`. Course scope comes from the question. No existing table
+changes and there is no backfill, so attempts, answers, snapshots and review progress
+are untouched. `alembic downgrade 0022` drops the table and every favorite; upgrading
+again starts empty. Back up first if favorites matter.

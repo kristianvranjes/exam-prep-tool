@@ -14,11 +14,12 @@ const midterm = { id: "mi", course_id: "course", academic_year: "2026/27", kind:
 const attempt: Attempt = { id: "attempt", course_id: "course", status: "ACTIVE", started_at: "2026-10-21T10:00:00Z", submitted_at: null,
   questions: [{ id: "tf", position: 0, type: "TRUE_FALSE", stem: "The sky is green", difficulty: null, options: [], answer: null }] };
 
-/** Thirty questions in the course, three past mistakes and nothing due, whatever the focus. */
-function serve(review: { mistakes: number; due: number } = { mistakes: 3, due: 0 }) {
+/** Thirty questions in the course, three past mistakes, nothing due and no favorites, whatever the focus. */
+function serve(review: { mistakes: number; due: number; favorites?: number } = { mistakes: 3, due: 0 }) {
+  const favorites = review.favorites ?? 0;
   mock.availability.mockImplementation(async (_course: string, types: QuestionType[], mode: SelectionMode, focus?: PracticeFocus): Promise<PracticeAvailability> => {
-    const total = mode === "MISTAKES" ? review.mistakes : mode === "DUE" ? review.due : focus ? 20 : 30;
-    return { course_total: 30, total, by_type: [{ type: types[0], count: total }], by_unit: [], mistakes_total: review.mistakes, due_total: review.due };
+    const total = mode === "MISTAKES" ? review.mistakes : mode === "DUE" ? review.due : mode === "FAVORITES" ? favorites : focus ? 20 : 30;
+    return { course_total: 30, total, by_type: [{ type: types[0], count: total }], by_unit: [], mistakes_total: review.mistakes, due_total: review.due, favorites_total: favorites };
   });
 }
 
@@ -63,6 +64,32 @@ it("explains an empty review choice that is already selected", async () => {
   expect(await screen.findByText(/Nothing is due for review with these options\./)).toBeVisible();
   expect(screen.getByRole("radio", { name: "Due for review" })).toBeEnabled();
   expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
+});
+
+it("starts a focus session from favorites within the chosen units", async () => {
+  serve({ mistakes: 0, due: 0, favorites: 4 });
+  mock.units.mockResolvedValue(units);
+  render(<PracticeQuiz courseId="course" />);
+  const favorites = await screen.findByRole("radio", { name: "Favorites" });
+  await waitFor(() => expect(favorites).toHaveAccessibleDescription(/in the order you saved them\. 4 saved with these options\./));
+  fireEvent.click(screen.getByRole("radio", { name: "Selected units" }));
+  fireEvent.click(await screen.findByRole("checkbox", { name: "Unit 1" }));
+  fireEvent.click(favorites);
+  await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", allTypes, "FAVORITES", { unit_ids: ["u1"] }));
+  expect(await screen.findByText(/Only 4 favorites match your options\. Choose Custom and enter 4 or fewer/)).toBeVisible();
+  fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+  fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value: "4" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  await screen.findByText("The sky is green");
+  expect(mock.start).toHaveBeenCalledWith("course", 4, allTypes, "FAVORITES", { unit_ids: ["u1"] }, "IMMEDIATE");
+});
+
+it("keeps favorites unavailable until a question is starred", async () => {
+  render(<PracticeQuiz courseId="course" />);
+  const favorites = await screen.findByRole("radio", { name: "Favorites" });
+  await waitFor(() => expect(favorites).toBeDisabled());
+  expect(favorites).toHaveAccessibleDescription(/None with these options yet\. Star a question while you practice or in its results\./);
 });
 
 it("starts a mock exam for a chosen exam cycle as exam practice", async () => {

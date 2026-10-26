@@ -21,6 +21,7 @@ from app.models import (  # noqa: E402,F401
     material_storage_cleanup,
     question,
     question_edit_suggestion,
+    question_favorite,
     question_report,
     quiz,
     user,

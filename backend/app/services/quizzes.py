@@ -42,6 +42,7 @@ from app.schemas.quiz import (
 from app.services.courses import get_member_course
 from app.services.exam_papers import load_paper
 from app.services.exam_scopes import resolve_focus
+from app.services.favorites import favorited
 from app.services.grading import grade
 from app.services.paper_scoring import SCORING_VERSION, ItemResult, item_points, score
 from app.services.progress import apply_reviews
@@ -156,9 +157,11 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
         for a in db.scalars(select(Answer).where(Answer.attempt_id == attempt.id))
     }
     rows = question_rows(db, attempt)
-    units = unit_labels(db, course_id, [row.source_question_id for row in rows])
+    sources = [row.source_question_id for row in rows]
+    units = unit_labels(db, course_id, sources)
     quiz = db.get(Quiz, attempt.quiz_id)
     assert quiz is not None and quiz.course_id == course_id
+    favorites = favorited(db, quiz.user_id, sources)
     penalty = Decimal(str(quiz.scoring["wrong_answer_penalty"])) if quiz.scoring else None
     active: list[ActiveQuestion] = []
     results: list[ResultQuestion] = []
@@ -168,6 +171,7 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
         answer = answers.get(row.id)
         public = ActiveQuestion(
             id=row.id,
+            source_question_id=row.source_question_id,
             position=row.position,
             type=content.type,
             stem=content.stem,
@@ -175,6 +179,7 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
             options=[PublicOption(position=o.position, text=o.text) for o in content.options],
             answer=answer_adapter.validate_python(answer.payload) if answer else None,
             units=units.get(row.source_question_id, []),
+            favorite=row.source_question_id in favorites,
             points=None if row.points is None else float(row.points),
             label=row.label,
         )
@@ -238,14 +243,16 @@ def availability(
     course_total = count_eligible(db, user.id, course_id)
     mistakes = data.model_copy(update={"selection_mode": "MISTAKES"})
     due = data.model_copy(update={"selection_mode": "DUE"})
+    favorites = data.model_copy(update={"selection_mode": "FAVORITES"})
     if scope_id and not unit_ids:
         # Starting such a scope is refused, so nothing is available.
         by_type = dict.fromkeys(data.question_types, 0)
-        mistakes_total = due_total = 0
+        mistakes_total = due_total = favorites_total = 0
     else:
         by_type = count_by_type(db, user.id, course_id, data, unit_ids, as_of)
         mistakes_total = count_total(db, user.id, course_id, mistakes, unit_ids, as_of)
         due_total = count_total(db, user.id, course_id, due, unit_ids, as_of)
+        favorites_total = count_total(db, user.id, course_id, favorites, unit_ids, as_of)
     by_unit = count_by_unit(db, user.id, course_id, data, unit_ids, as_of)
     return PracticeAvailability(
         course_total=course_total,
@@ -254,6 +261,7 @@ def availability(
         by_unit=[UnitAvailability(unit_id=id_, count=count) for id_, count in by_unit.items()],
         mistakes_total=mistakes_total,
         due_total=due_total,
+        favorites_total=favorites_total,
     )
 
 

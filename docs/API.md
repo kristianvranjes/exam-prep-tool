@@ -296,7 +296,7 @@ OWNER rules as units.
 
 GET `/courses/{course_id}/practice-availability` — members. Query parameters match
 `StartQuiz` without `count`: `selection_mode` (`STANDARD` default, `ADAPTIVE`,
-`MISTAKES`, `DUE`, or `MOCK`, which requires `exam_scope_id`),
+`MISTAKES`, `DUE`, `FAVORITES`, or `MOCK`, which requires `exam_scope_id`),
 repeated `question_types` (default all three, unique), repeated `unit_ids` or one
 `exam_scope_id` (not both). Unknown parameters return 422; foreign units 422; an
 unknown scope 404. Response:
@@ -305,22 +305,50 @@ unknown scope 404. Response:
 {"course_total": 64, "total": 12,
  "by_type": [{"type": "TRUE_FALSE", "count": 12}],
  "by_unit": [{"unit_id": "…", "count": 7}],
- "mistakes_total": 3, "due_total": 5}
+ "mistakes_total": 3, "due_total": 5, "favorites_total": 2}
 ```
 
 `by_type` lists the requested types; `by_unit` lists the focused units in unit order
-(empty for the whole course). `mistakes_total` and `due_total` count what `MISTAKES`
-and `DUE` would select with the same types and focus, whatever the requested mode. See
+(empty for the whole course). `mistakes_total`, `due_total` and `favorites_total`
+count what `MISTAKES`, `DUE` and `FAVORITES` would select with the same types and
+focus, whatever the requested mode. See
 [practice availability](COURSE_UNITS.md#practice-availability).
 
 ### Selection modes (R5, R3)
 
 `POST /courses/{course_id}/attempts` accepts the same `selection_mode` values.
 `MISTAKES` selects questions whose latest resolved review was incorrect (oldest review
-first), `DUE` questions due now (earliest due first), and `MOCK` spreads `count` evenly
-across the units of the required `exam_scope_id` (422 without one). All three exclude
+first), `DUE` questions due now (earliest due first), `FAVORITES` the caller's
+practice-eligible favorites (oldest favorite first), and `MOCK` spreads `count` evenly
+across the units of the required `exam_scope_id` (422 without one). All four exclude
 questions in the caller's active attempts and return 409 when fewer than `count`
-qualify. See [mistakes, due review and mock exams](PRACTICE.md#mistakes-due-review-and-mock-exams-r5-r3).
+qualify. See [mistakes, due review and mock exams](PRACTICE.md#mistakes-due-review-and-mock-exams-r5-r3)
+and [favorites](PRACTICE.md#favorites-and-the-quick-quiz-r5).
+
+### Favorites (R5)
+
+Members only; every route returns only the caller's own favorites, and unknown or
+other-course questions return 404. Favorites never change attempts, grades or
+scheduling.
+
+- `POST /courses/{course_id}/favorites/{question_id}` adds a favorite and returns
+  `{"question_id": "…", "favorite": true, "favorited_at": "…"}`. It is idempotent:
+  repeating it returns the same `favorited_at`. Only practice-eligible questions can be
+  added: approved ones and the caller's own DRAFT or PENDING_REVIEW questions. The
+  caller's own rejected or archived question, or one a moderator can see but not
+  practice, returns 409; a question the caller cannot see returns 404.
+- `DELETE /courses/{course_id}/favorites/{question_id}` removes it and returns
+  `{"question_id": "…", "favorite": false, "favorited_at": null}`, also when there was
+  none and also for a question that is no longer eligible. There is no PUT.
+- `GET /courses/{course_id}/favorites?limit=20&offset=0` lists the caller's favorites
+  in the course, newest first (limit 1–100): `question_id`, `favorited_at`, `type`,
+  `stem`, `difficulty` and `available`, which is false once the question is archived,
+  rejected or otherwise not practice-eligible.
+
+Attempt questions (active, submitted and abandoned) also return `source_question_id`
+and a boolean `favorite`: whether the caller has a favorite for that source question.
+It depends only on the caller's favorites, never on the question's current status, so
+bank changes leave submitted results unchanged. Neither is part of the frozen snapshot.
 
 ### Past exam papers (R3)
 

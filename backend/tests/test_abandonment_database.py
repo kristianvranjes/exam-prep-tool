@@ -126,6 +126,7 @@ def test_abandon_authorization_and_detail_privacy(bank):
     for question in abandoned["questions"]:
         assert set(question) == {
             "id",
+            "source_question_id",
             "position",
             "type",
             "stem",
@@ -133,12 +134,15 @@ def test_abandon_authorization_and_detail_privacy(bank):
             "options",
             "answer",
             "units",
+            "favorite",
             "feedback",
             "points",
             "label",
         }
         # An END session never checks answers, so nothing is revealed.
         assert question["feedback"] is None
+        # Live, not frozen: approved bank questions can still be favorited.
+        assert question["favorite"] is False
         # Only paper sessions carry points and labels.
         assert question["points"] is None and question["label"] is None
     with SessionLocal() as db:
@@ -343,6 +347,6 @@ def test_0015_downgrade_refuses_to_erase_abandoned_history(bank):
     with pytest.raises(RuntimeError, match="abandoned attempts exist"):
         command.downgrade(Config("alembic.ini"), "0014")
     with engine.connect() as conn:
-        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0022"
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0023"
     assert member.get(path).json() == abandoned
     assert retained_rows() == before

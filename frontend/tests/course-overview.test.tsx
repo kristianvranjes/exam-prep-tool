@@ -4,7 +4,7 @@ import { CourseOverview } from "../src/components/course-overview";
 import type { ExamScope, ExamScopeReadiness, Material, ReviewProgressSummary } from "../src/lib/api";
 import type { Attempt, PracticeAvailability } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ reviewProgressSummary: vi.fn(), availability: vi.fn(), reviewDue: vi.fn(), examScopes: vi.fn(), examScopeCoverage: vi.fn(), examScopeReadiness: vi.fn() }));
+const mock = vi.hoisted(() => ({ reviewProgressSummary: vi.fn(), availability: vi.fn(), reviewDue: vi.fn(), quickQuiz: vi.fn(), examScopes: vi.fn(), examScopeCoverage: vi.fn(), examScopeReadiness: vi.fn(), units: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 const summary: ReviewProgressSummary = { as_of: "2026-10-05", reviewed_questions: 3, due_now: 42, upcoming: 1,
@@ -207,6 +207,53 @@ it("reports a failed due review and keeps it available", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent("Only 3 eligible questions available");
   expect(screen.getByRole("button", { name: "Review due questions" })).toBeEnabled();
   expect(onStartAttempt).not.toHaveBeenCalled();
+});
+
+it("starts a five-question quick quiz in one click, optionally for one unit or exam cycle", async () => {
+  mock.availability.mockResolvedValue(counts(30));
+  mock.units.mockResolvedValue([{ id: "u1", course_id: "course", position: 0, title: "Logika", description: null, is_archived: false,
+    approved_question_count: 12, created_at: "2026-10-01", updated_at: "2026-10-01" }]);
+  const midterm: ExamScope = { id: "mi", course_id: "course", academic_year: "2026/27", kind: "MIDTERM", name: "MI", unit_ids: ["u1"],
+    starts_on: null, ends_on: null, approved_question_count: 12, created_at: "2026-10-01", updated_at: "2026-10-01" };
+  mock.examScopes.mockResolvedValue([midterm]);
+  const attempt = { id: "quick", course_id: "course", status: "ACTIVE", questions: [] } as unknown as Attempt;
+  mock.quickQuiz.mockResolvedValue(attempt);
+  const onStartAttempt = vi.fn();
+  render(<CourseOverview {...props()} onStartAttempt={onStartAttempt} />);
+  expect(await screen.findByRole("heading", { name: "Quick quiz" })).toBeVisible();
+  expect(screen.getByText(/Five questions, each checked as you answer/)).toBeVisible();
+  // One primary action at a time: the quick quiz stays secondary to recommended practice.
+  expect(screen.getByRole("button", { name: "Start quick quiz" })).not.toHaveClass("bg-accent");
+  fireEvent.click(screen.getByRole("button", { name: "Start quick quiz" }));
+  await waitFor(() => expect(onStartAttempt).toHaveBeenCalledExactlyOnceWith(attempt));
+  expect(mock.quickQuiz).toHaveBeenLastCalledWith("course", undefined);
+
+  const target = await screen.findByRole("combobox", { name: "Questions from" });
+  await waitFor(() => expect(within(target).getByRole("option", { name: /^MI 2026\/27/ })).toBeInTheDocument());
+  fireEvent.change(target, { target: { value: "unit:u1" } });
+  fireEvent.click(screen.getByRole("button", { name: "Start quick quiz" }));
+  await waitFor(() => expect(mock.quickQuiz).toHaveBeenLastCalledWith("course", { unit_ids: ["u1"] }));
+  fireEvent.change(target, { target: { value: "scope:mi" } });
+  fireEvent.click(screen.getByRole("button", { name: "Start quick quiz" }));
+  await waitFor(() => expect(mock.quickQuiz).toHaveBeenLastCalledWith("course", { exam_scope_id: "mi" }));
+  expect(onStartAttempt).toHaveBeenCalledTimes(3);
+});
+
+it("reports a quick quiz that cannot start and hides it while a session is open", async () => {
+  mock.availability.mockResolvedValue(counts(30));
+  mock.quickQuiz.mockRejectedValue(new Error("No questions are available for a quick quiz here yet."));
+  const onStartAttempt = vi.fn();
+  const view = render(<CourseOverview {...props()} onStartAttempt={onStartAttempt} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Start quick quiz" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("No questions are available for a quick quiz here yet.");
+  expect(screen.getByRole("button", { name: "Start quick quiz" })).toBeEnabled();
+  // Without units or exam cycles there is nothing to choose: the quiz covers the whole course.
+  expect(screen.queryByRole("combobox", { name: "Questions from" })).not.toBeInTheDocument();
+  expect(onStartAttempt).not.toHaveBeenCalled();
+  view.unmount();
+  render(<CourseOverview {...props()} activeSession knownAttemptId="attempt" onStartAttempt={vi.fn()} />);
+  await screen.findByText("75.0%");
+  expect(screen.queryByRole("heading", { name: "Quick quiz" })).not.toBeInTheDocument();
 });
 
 it("hides due review when nothing is due or a session is open", async () => {

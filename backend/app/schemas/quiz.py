@@ -13,9 +13,9 @@ def default_types() -> list[QuestionType]:
     return ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]
 
 
-# MISTAKES and DUE narrow selection to the student's review progress; MOCK spreads a
-# session evenly across an exam scope's units. See docs/PRACTICE.md.
-SelectionMode = Literal["STANDARD", "ADAPTIVE", "MISTAKES", "DUE", "MOCK"]
+# MISTAKES and DUE narrow selection to the student's review progress, FAVORITES to their
+# favorites; MOCK spreads a session evenly across an exam scope's units. See docs/PRACTICE.md.
+SelectionMode = Literal["STANDARD", "ADAPTIVE", "MISTAKES", "DUE", "FAVORITES", "MOCK"]
 FeedbackMode = Literal["END", "IMMEDIATE"]
 Confidence = Literal["SURE", "UNSURE", "GUESS"]
 
@@ -71,9 +71,11 @@ class PracticeAvailability(BaseModel):
     by_type: list[TypeAvailability]
     # Per focused unit in unit order; a multi-unit question counts in each unit.
     by_unit: list[UnitAvailability]
-    # What MISTAKES and DUE would select with the same types and focus, whatever the mode.
+    # What MISTAKES, DUE and FAVORITES would select with the same types and focus,
+    # whatever the mode.
     mistakes_total: int = 0
     due_total: int = 0
+    favorites_total: int = 0
 
 
 class MCQAnswer(StrictModel):
@@ -175,6 +177,8 @@ class QuestionFeedback(BaseModel):
 
 class ActiveQuestion(BaseModel):
     id: UUID
+    # The bank question this snapshot was taken from; favorites refer to it.
+    source_question_id: UUID
     position: int
     type: QuestionType
     stem: str
@@ -183,6 +187,9 @@ class ActiveQuestion(BaseModel):
     answer: AnswerPayload | None
     # Live organization, not part of the snapshot: current active units in course order.
     units: list[QuestionUnitLabel] = []
+    # Live too, but read only from the student's own favorites: bank edits and archiving
+    # never change it.
+    favorite: bool = False
     # Only for IMMEDIATE answers that were checked; unchecked questions never carry keys.
     feedback: QuestionFeedback | None = None
     # Paper sessions only: the item's frozen points and original label.

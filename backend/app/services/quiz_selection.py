@@ -11,6 +11,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.course_unit import QuestionUnit
 from app.models.question import Question
+from app.models.question_favorite import QuestionFavorite
 from app.models.quiz import Quiz, QuizAttempt, QuizQuestion
 from app.models.user_question_progress import UserQuestionProgress
 from app.schemas.question import QuestionType
@@ -35,6 +36,16 @@ def _progress(user_id: UUID) -> Select[Any]:
     return (
         select(progress.id)
         .where(progress.user_id == user_id, progress.question_id == Question.id)
+        .correlate(Question)
+    )
+
+
+def _favorite(user_id: UUID) -> Select[Any]:
+    """This user's favorite on the correlated source question."""
+    favorite = QuestionFavorite
+    return (
+        select(favorite.id)
+        .where(favorite.user_id == user_id, favorite.question_id == Question.id)
         .correlate(Question)
     )
 
@@ -67,6 +78,9 @@ def selection_filters(
         filters.append(_progress(user_id).where(progress.last_result == "INCORRECT").exists())
     elif data.selection_mode == "DUE":
         filters.append(_progress(user_id).where(progress.due_at <= as_of).exists())
+    elif data.selection_mode == "FAVORITES":
+        # Ineligible favorites stay saved but are never selected.
+        filters.append(_favorite(user_id).exists())
     if data.selection_mode != "STANDARD":
         # Review and mock sessions skip questions already waiting in an unfinished session.
         active = (
@@ -85,6 +99,11 @@ def _ranked(
     """Order a selection query by the mode's ranking; question ID always breaks ties."""
     if mode == "STANDARD":
         return query.order_by(Question.created_at, Question.id)
+    if mode == "FAVORITES":
+        favorite = QuestionFavorite
+        return query.join(
+            favorite, and_(favorite.question_id == Question.id, favorite.user_id == user_id)
+        ).order_by(favorite.created_at, Question.id)
     progress = UserQuestionProgress
     query = query.outerjoin(
         progress, and_(progress.question_id == Question.id, progress.user_id == user_id)

@@ -106,9 +106,11 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
   const focusHint = focusUnits ? " or the units you practice" : "";
   const mistakes = counted?.mistakes_total;
   const due = counted?.due_total;
+  const favorites = counted?.favorites_total;
   const canMock = activeUnits.length > 0 && catalog.scopes.length > 0;
   const matches = mode === "MISTAKES" ? `${matching} ${matching === 1 ? "mistake matches" : "mistakes match"}`
     : mode === "DUE" ? `${matching} due ${matching === 1 ? "question matches" : "questions match"}`
+    : mode === "FAVORITES" ? `${matching} ${matching === 1 ? "favorite matches" : "favorites match"}`
       : `${matching} course ${matching === 1 ? "question matches" : "questions match"}`;
   const noQuestions = ready && !busy && !availability.loading && !availability.error && counted?.course_total === 0;
   let help = "";
@@ -123,6 +125,7 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
   else if (!Number.isInteger(count) || count < 1 || count > 20) help = "Enter a whole number from 1 to 20.";
   else if (counted && matching === 0 && mode === "MISTAKES") help = "No mistakes to review with these options. Questions you answer incorrectly appear here after you finish a session.";
   else if (counted && matching === 0 && mode === "DUE") help = "Nothing is due for review with these options. Choose Recommended practice to keep studying.";
+  else if (counted && matching === 0 && mode === "FAVORITES") help = "No favorites match these options. Star a question while you practice or in its results to add it.";
   else if (counted && matching === 0) help = focusUnits ? "No questions match these units and types yet. Choose other units or change question types in More options." : "No questions match your selected types. Change question types in More options.";
   else if (counted && count > matching) help = `Only ${matches} your options. Choose Custom and enter ${matching} or fewer, or change question types in More options${focusHint}.`;
 
@@ -151,6 +154,9 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
       </ModeChoice>
       <ModeChoice label="Due for review" descriptionId={`${id}-due`} checked={mode === "DUE"} disabled={due === 0 && mode !== "DUE"} onSelect={() => setMode("DUE")}>
         Only questions whose review is due now, earliest first.{reviewNote(due, n => `${n} due with these options.`, "Nothing is due with these options.")}
+      </ModeChoice>
+      <ModeChoice label="Favorites" descriptionId={`${id}-favorites`} checked={mode === "FAVORITES"} disabled={favorites === 0 && mode !== "FAVORITES"} onSelect={() => setMode("FAVORITES")}>
+        Questions you starred, in the order you saved them.{reviewNote(favorites, n => `${n} saved with these options.`, "None with these options yet. Star a question while you practice or in its results.")}
       </ModeChoice>
       {canMock && <ModeChoice label="Mock exam" descriptionId={`${id}-mock`} checked={mode === "MOCK"} disabled={!scope && mode !== "MOCK"} onSelect={() => { setMode("MOCK"); setExperience("EXAM"); }}>
         {scope ? `Spreads the questions evenly across the units of ${scope.name}, like a real exam. Starts as exam practice, with results at the end.` : "Spreads the questions evenly across the units of an exam cycle. Choose an exam cycle under What to practice first."}

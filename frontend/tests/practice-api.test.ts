@@ -51,6 +51,34 @@ it("sends the feedback mode with a start and checks one answer with optional con
   expect(mock).toHaveBeenLastCalledWith("/courses/course/attempts/attempt/answers/q1/check", { method: "POST", body: "{}" });
 });
 
+it("starts a guided five-question quick quiz, fewer when fewer are available", async () => {
+  const types = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
+  const counted = "/courses/course/practice-availability?selection_mode=ADAPTIVE&question_types=MULTIPLE_CHOICE&question_types=TRUE_FALSE&question_types=SHORT_ANSWER";
+  mock.mockResolvedValueOnce({ total: 40 }).mockResolvedValueOnce({ id: "quick" });
+  await expect(practiceApi.quickQuiz("course")).resolves.toEqual({ id: "quick" });
+  expect(mock).toHaveBeenNthCalledWith(1, counted);
+  expect(mock).toHaveBeenLastCalledWith("/courses/course/attempts", {
+    method: "POST", body: JSON.stringify({ count: 5, question_types: types, selection_mode: "ADAPTIVE", feedback_mode: "IMMEDIATE" }),
+  });
+  mock.mockResolvedValueOnce({ total: 3 }).mockResolvedValueOnce({ id: "unit" });
+  await practiceApi.quickQuiz("course", { unit_ids: ["u1"] });
+  expect(mock).toHaveBeenNthCalledWith(3, `${counted}&unit_ids=u1`);
+  expect(mock).toHaveBeenLastCalledWith("/courses/course/attempts", {
+    method: "POST", body: JSON.stringify({ count: 3, question_types: types, selection_mode: "ADAPTIVE", unit_ids: ["u1"], feedback_mode: "IMMEDIATE" }),
+  });
+  mock.mockResolvedValueOnce({ total: 0 });
+  await expect(practiceApi.quickQuiz("course", { exam_scope_id: "mi" })).rejects.toThrow("No questions are available for a quick quiz here yet.");
+  expect(mock).toHaveBeenLastCalledWith(`${counted}&exam_scope_id=mi`);
+  expect(mock).toHaveBeenCalledTimes(5);
+});
+
+it("adds and removes a favorite with idempotent POST and DELETE", async () => {
+  await practiceApi.favorite("course", "question");
+  expect(mock).toHaveBeenLastCalledWith("/courses/course/favorites/question", { method: "POST" });
+  await practiceApi.unfavorite("course", "question");
+  expect(mock).toHaveBeenLastCalledWith("/courses/course/favorites/question", { method: "DELETE" });
+});
+
 it("starts a one-click due review sized by the server's due count", async () => {
   const types = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
   mock.mockResolvedValueOnce({ due_total: 27 }).mockResolvedValueOnce({ id: "review" });
