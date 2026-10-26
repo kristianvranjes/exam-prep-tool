@@ -154,7 +154,8 @@ it("preserves an actual unsaved answer through destinations, Home, same-course r
   navigate("Practice"); expect(screen.getByLabelText("Your short answer")).toHaveValue("My unsaved explanation");
   fireEvent.click(screen.getByRole("button", { name: "Back to Home" }));
   expect(await screen.findByRole("heading", { name: "Continue studying" })).toBeVisible();
-  expect(within(screen.getByRole("heading", { name: "Continue studying" }).parentElement!).getByText("You have an unfinished practice session.")).toBeVisible();
+  // The open session reports its saved progress; the unsaved draft does not count yet.
+  expect(within(screen.getByRole("heading", { name: "Continue studying" }).parentElement!).getByText("0 of 1 answered")).toBeVisible();
   await enterCourse();
   expect(screen.getByRole("heading", { name: "Overview" })).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Resume session" }));
@@ -173,7 +174,8 @@ it("resumes a reliably known history entry directly from Home without starting a
   fireEvent.click(screen.getByRole("button", { name: "Back to Home" }));
   fireEvent.click(await screen.findByRole("button", { name: "Resume session" }));
   expect(await screen.findByLabelText("Your short answer")).toBeVisible();
-  expect(mock.read).toHaveBeenCalledExactlyOnceWith("course", "attempt"); expect(mock.start).not.toHaveBeenCalled();
+  // One read gives the continue card its progress, the other opens the session.
+  expect(mock.read.mock.calls).toEqual([["course", "attempt"], ["course", "attempt"]]); expect(mock.start).not.toHaveBeenCalled();
 });
 
 it("guards unsaved answers on course switching and logout, including failed saves", async () => {

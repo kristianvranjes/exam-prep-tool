@@ -9,6 +9,7 @@ import { ExamTimer } from "./exam-timer";
 import { CheckedFeedback, ConfidencePicker } from "./quiz-feedback";
 import { QuestionUnits } from "./question-units";
 import { ExperiencePicker, QuizNavigator, type QuizExperience } from "./quiz-navigation";
+import { shortcutAnswer, ShortcutsDialog, usePracticeShortcuts } from "./practice-shortcuts";
 import { useUnsavedChanges } from "./unsaved-changes";
 
 type Confirmation = "submit" | "reload" | "back" | "abandon";
@@ -36,6 +37,9 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
   const feedbackHeading = useRef<HTMLHeadingElement>(null);
   const focusFeedback = useRef(false);
   const confirmationHeading = useRef<HTMLHeadingElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const form = useRef<HTMLFormElement>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const question = attempt.questions[index];
   // Guided sessions started in IMMEDIATE mode check each answer before moving on.
   const immediate = attempt.feedback_mode === "IMMEDIATE";
@@ -54,6 +58,8 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
   const finalQuestion = index === attempt.questions.length - 1;
   const saveState = saving ? "Saving…" : saveFailed ? "Save failed" : dirty ? "Unsaved changes" : question.answer ? "Saved" : "No answer saved";
   const sessionClosed = /already submitted|not active|frozen/i.test(error);
+  // Moving ahead without answering follows the visible controls: the navigator, Skip for now, or the primary button.
+  const canMoveAhead = !finalQuestion && (experience === "EXAM" || Boolean(paper) || (valid && (!immediate || Boolean(feedback))));
   useUnsavedChanges(dirty, onDirtyChange);
 
   useEffect(() => { (confirmation ? confirmationHeading : review ? reviewHeading : questionHeading).current?.focus(); }, [confirmation, index, review]);
@@ -122,6 +128,12 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
     if (finalQuestion) openReview();
     else navigate(index + 1);
   }
+  /** The submit button's action: check in guided practice, otherwise save and move on. */
+  function primary() {
+    if (busy) return;
+    if (immediate && !feedback) check(); else forward();
+  }
+  function changeAnswer(value: PracticeAnswer) { setAnswer(value); setSaveFailed(false); setError(""); }
   function reviewUnanswered() {
     const next = attempt.questions.findIndex(item => item.answer === null);
     if (next < 0) return;
@@ -150,8 +162,22 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
     if (dirty && !valid) { requestLeave("back"); return; }
     void run(async () => { const saved = await persist(); if (saved.status === "ACTIVE") await leave("back"); });
   }
+  usePracticeShortcuts(root, !shortcutsOpen, (action, target) => {
+    if (action.kind === "help") { setShortcutsOpen(true); return true; }
+    // Only the question view takes shortcuts, and never while a request is running.
+    if (busy || confirmation || review || timeUp) return false;
+    if (action.kind === "primary") { if (target !== document.body && !form.current?.contains(target)) return false; primary(); return true; }
+    if (action.kind === "next") { if (!canMoveAhead) return false; navigate(index + 1); return true; }
+    if (action.kind === "previous") { if (index === 0) return false; navigate(index - 1); return true; }
+    // A checked answer is final, and a closed session cannot save one.
+    const choice = feedback || sessionClosed ? null : shortcutAnswer(question, action.key);
+    if (!choice) return false;
+    changeAnswer(choice.answer);
+    Array.from(form.current?.querySelectorAll<HTMLInputElement>("input[type=radio]") ?? []).filter(input => input.name === question.id)[choice.index]?.focus();
+    return true;
+  });
 
-  return <div className="flex min-w-0 flex-col gap-6">
+  return <div ref={root} className="flex min-w-0 flex-col gap-6">
     {attempt.deadline_at && paper && <ExamTimer deadline={attempt.deadline_at} serverTime={attempt.server_time} durationMinutes={paper.duration_minutes}
       answeredPoints={answeredPoints} totalPoints={paper.total_points} onExpire={handInAtDeadline} />}
     {timeUp && <section aria-label="Time is up" className="rounded-xl border border-line bg-surface p-5">
@@ -204,29 +230,30 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
       <p className="text-sm text-muted">{immediate ? "Unchecked answers are graded when you finish." : "Results appear after final submission."} Short answers require self-review.</p>
     </section>}
     <div hidden={confirmation !== null || review || timeUp}>
-      <form className="flex min-w-0 flex-col gap-6" onSubmit={event => { event.preventDefault(); if (busy) return; if (immediate && !feedback) check(); else forward(); }}>
+      <form ref={form} className="flex min-w-0 flex-col gap-6" onSubmit={event => { event.preventDefault(); primary(); }}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 ref={questionHeading} tabIndex={-1} className="text-base font-semibold">Question {index + 1} of {attempt.questions.length}</h2>
           <p role="status" className="text-sm text-muted">{saveState}</p>
         </div>
         {paper && question.points != null && <p className="-mt-4 text-sm text-muted">{[question.label, pointsLabel(question.points)].filter(Boolean).join(" · ")}</p>}
         <QuestionUnits units={question.units} />
-        <QuizAnswerEditor question={question} answer={answer} change={value => { setAnswer(value); setSaveFailed(false); setError(""); }} disabled={busy} feedback={feedback} />
+        <QuizAnswerEditor question={question} answer={answer} change={changeAnswer} disabled={busy} feedback={feedback} shortcuts />
         {immediate && !feedback && <ConfidencePicker name={question.id} value={confidence} onChange={setConfidence} disabled={busy} />}
         <div aria-live="polite">{feedback && <CheckedFeedback question={question} feedback={feedback} headingRef={feedbackHeading} />}</div>
         <div className="flex flex-col gap-3">
           {!valid && <p id="answer-help" className="text-sm text-muted">{paper ? "Answer, or skip and leave this question blank." : question.type === "SHORT_ANSWER" ? "Enter your answer to continue." : "Choose an answer to continue."}</p>}
           <div className="flex flex-wrap justify-between gap-3">
-            <Button variant="secondary" disabled={busy || index === 0} onClick={() => navigate(index - 1)}>Previous</Button>
+            <Button variant="secondary" disabled={busy || index === 0} aria-keyshortcuts="P K" onClick={() => navigate(index - 1)}>Previous</Button>
             {paper && !feedback && (question.answer !== null || answer !== null) && <Button variant="ghost" disabled={busy} onClick={leaveBlank}>Leave blank</Button>}
             {paper && !valid && !finalQuestion && <Button variant="secondary" disabled={busy} onClick={() => navigate(index + 1)}>Skip for now</Button>}
-            <Button type="submit" disabled={busy || !valid} aria-describedby={!valid ? "answer-help" : undefined}>{saving ? "Saving…" : immediate && !feedback ? (busy ? "Checking…" : "Check answer") : immediate ? (finalQuestion ? "Continue to review" : "Next question") : finalQuestion ? "Save and review" : "Save and next"}</Button>
+            <Button type="submit" disabled={busy || !valid} aria-describedby={!valid ? "answer-help" : undefined} aria-keyshortcuts="Enter">{saving ? "Saving…" : immediate && !feedback ? (busy ? "Checking…" : "Check answer") : immediate ? (finalQuestion ? "Continue to review" : "Next question") : finalQuestion ? "Save and review" : "Save and next"}</Button>
           </div>
         </div>
       </form>
       <div className="mt-4 flex flex-wrap gap-2">
         <Button variant="ghost" disabled={busy} aria-pressed={flags.has(question.id)} onClick={() => setFlags(current => { const next = new Set(current); if (next.has(question.id)) next.delete(question.id); else next.add(question.id); return next; })}>{flags.has(question.id) ? "Remove revisit mark" : "Mark to revisit"}</Button>
         <Button variant="ghost" disabled={busy} onClick={openReview}>Review and finish</Button>
+        <Button variant="ghost" aria-keyshortcuts="?" aria-haspopup="dialog" className="ml-auto hidden text-muted pointer-fine:inline-flex" onClick={() => setShortcutsOpen(true)}>Press <kbd>?</kbd> for shortcuts</Button>
       </div>
       {paper && <p className="mt-3 text-sm text-muted">{paper.wrong_answer_penalty > 0 ? `Wrong answers lose ${penaltyText(paper.wrong_answer_penalty).slice(1)}; blank answers score 0.` : "Wrong and blank answers score 0."}{paper.duration_minutes ? ` The original time limit was ${paper.duration_minutes} minutes.` : ""}</p>}
       <p className="mt-3 text-sm text-muted">{immediate ? `Check each answer to see the key and explanation; a checked answer can no longer change. ${checkedCount} of ${attempt.questions.length} checked. Review progress updates when you finish.` : "Edited answers are saved before moving to another question. Results appear after final submission."}</p>
@@ -249,5 +276,6 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
         {sessionClosed && <Button variant="ghost" disabled={busy} onClick={() => requestLeave("back")}>Return to Practice history</Button>}
       </div>
     </details>
+    <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
   </div>;
 }
