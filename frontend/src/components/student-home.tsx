@@ -3,12 +3,17 @@
 import { useState } from "react";
 import type { Course } from "../lib/api";
 import { CourseBrowser } from "./course-browser";
+import { ResumeSession } from "./resume-session";
 import { Badge, Button, EmptyState, LoadingState, Surface } from "./ui";
+import type { ResumableAttempt } from "./use-resumable-sessions";
 
-export function StudentHome({ courses, loading, onOpen, onJoined, catalogRevision, resumableCourse, onResume, checkingSessions }: {
+/** A course with an unfinished practice session; details arrive after the session is read. */
+export type ResumableCourse = { course: Course; attempt?: ResumableAttempt };
+
+export function StudentHome({ courses, loading, onOpen, onJoined, catalogRevision, resumable, onResume, checkingSessions }: {
   courses: Course[]; loading: boolean; onOpen: (course: Course) => void;
   onJoined: (course: Course) => void; catalogRevision: number;
-  resumableCourse: Course | null; onResume: () => void; checkingSessions?: boolean;
+  resumable: ResumableCourse[]; onResume: (course: Course) => void; checkingSessions?: boolean;
 }) {
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
   const [discoveryVisited, setDiscoveryVisited] = useState(false);
@@ -16,12 +21,12 @@ export function StudentHome({ courses, loading, onOpen, onJoined, catalogRevisio
 
   return <>
     <h1 id="home-heading" tabIndex={-1} className="text-3xl font-semibold tracking-tight">Home</h1>
-    {checkingSessions && !resumableCourse && <p role="status" className="mt-4 text-sm text-muted">Checking unfinished sessions…</p>}
-    {resumableCourse && <Surface className="mt-6">
+    {checkingSessions && !resumable.length && <p role="status" className="mt-4 text-sm text-muted">Checking unfinished sessions…</p>}
+    {resumable.length > 0 && <Surface className="mt-6">
       <h2 className="text-xl font-semibold">Continue studying</h2>
-      <p className="mt-2 font-medium">{resumableCourse.name}</p>
-      <p className="mt-1 text-sm text-muted">You have an unfinished practice session.</p>
-      <Button className="mt-4" onClick={onResume}>Resume session</Button>
+      <ul aria-label="Unfinished practice sessions" className="divide-y divide-line">{resumable.map(({ course, attempt }, index) => <li key={course.id} className="py-4 last:pb-0">
+        <ResumeSession attempt={attempt} name={course.name} nameId={`resume-${course.id}`} primary={index === 0} onResume={() => onResume(course)} />
+      </li>)}</ul>
     </Surface>}
     <section aria-labelledby="courses-heading" className="mt-8">
       <div className="flex flex-wrap items-center justify-between gap-3">

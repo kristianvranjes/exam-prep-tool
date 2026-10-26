@@ -5,15 +5,17 @@ import { api, type ExamScopeCoverage, type ReviewProgressSummary } from "../lib/
 import { countdownLabel, formatScopeDates, localIsoDate, nextExam, type NextExam } from "../lib/exam-dates";
 import { practiceApi, type Attempt } from "../lib/practice-api";
 import type { MaterialsSummary } from "./course-materials";
+import { ResumeSession } from "./resume-session";
+import type { ResumableAttempt } from "./use-resumable-sessions";
 import { Alert, Button, Surface } from "./ui";
 
 type ProgressState = { loading: boolean; summary: ReviewProgressSummary | null; error: boolean };
 type Availability = "loading" | "available" | "empty" | "unknown";
 type Countdown = { exam: NextExam; coverage: ExamScopeCoverage | null };
 
-export function CourseOverview({ courseId, active, knownAttemptId, checkingSession, activeSession, materials, onResume,
+export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt, checkingSession, activeSession, materials, onResume,
   onRecommendedPractice, onStandardPractice, onScopePractice, onStartAttempt, onProgress, onMaterials, onQuestions }: {
-  courseId: string; active: boolean; knownAttemptId: string | null;
+  courseId: string; active: boolean; knownAttemptId: string | null; knownAttempt?: ResumableAttempt;
   checkingSession?: boolean; activeSession?: boolean; materials: MaterialsSummary; onResume: () => void; onRecommendedPractice: () => void;
   onStandardPractice: () => void; onScopePractice?: (scopeId: string) => void; onProgress: () => void; onMaterials: () => void; onQuestions: () => void;
   /** Opens a session started here, such as the one-click due review. */
@@ -76,8 +78,7 @@ export function CourseOverview({ courseId, active, knownAttemptId, checkingSessi
     {checkingSession && !knownAttemptId && <p role="status" className="text-sm text-muted">Checking unfinished sessions…</p>}
     {knownAttemptId && <Surface>
       <h3 className="text-xl font-semibold">Continue studying</h3>
-      <p className="mt-2 text-muted">You have an unfinished practice session.</p>
-      <Button className="mt-4 w-full sm:w-auto" onClick={onResume}>Resume session</Button>
+      <ResumeSession className="mt-2" attempt={knownAttempt?.id === knownAttemptId ? knownAttempt : undefined} onResume={onResume} />
     </Surface>}
 
     {countdown && <section aria-labelledby="overview-exam-heading">
