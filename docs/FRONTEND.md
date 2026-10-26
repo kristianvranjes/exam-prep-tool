@@ -198,8 +198,8 @@ Reference answer and comparison guidance. Even exact text equality is not graded
 PENDING is never counted as incorrect. These answers do not affect Progress or scheduling.
 There is no student self-score, AI grading or generated explanation.
 
-Each result has a **Favorite question N** star toggle (`aria-pressed`) when the
-question can be favorited or already is; the active question has the same
+Each result has a **Favorite question N** star toggle (`aria-pressed`); the active
+question has the same
 **Favorite** toggle next to **Mark to revisit**. See
 [favorites](PRACTICE.md#favorites-and-the-quick-quiz-r5).
 

@@ -19,9 +19,9 @@ export function useFavorites(courseId: string) {
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const inFlight = useRef(new Set<string>());
-  function value(question: Favoritable): boolean | null {
+  function value(question: Favoritable): boolean {
     const id = question.source_question_id;
-    return id && id in saved ? saved[id] : question.favorite ?? null;
+    return id && id in saved ? saved[id] : Boolean(question.favorite);
   }
   async function toggle(question: Favoritable) {
     const id = question.source_question_id;
@@ -32,7 +32,9 @@ export function useFavorites(courseId: string) {
       const state = value(question) ? await practiceApi.unfavorite(courseId, id) : await practiceApi.favorite(courseId, id);
       setSaved(current => ({ ...current, [id]: state.favorite }));
     } catch (cause) {
-      setErrors(current => ({ ...current, [id]: cause instanceof Error ? cause.message : "Could not update your favorites. Try again." }));
+      const message = cause instanceof Error ? cause.message : "Could not update your favorites. Try again.";
+      // An archived question is no longer in the bank you can see.
+      setErrors(current => ({ ...current, [id]: message === "Question not found" ? "This question is no longer in the question bank, so it cannot be favorited." : message }));
     } finally {
       inFlight.current.delete(id);
     }
@@ -42,14 +44,14 @@ export function useFavorites(courseId: string) {
 
 /**
  * The star for one question's private favorite. The name stays the same and `aria-pressed`
- * carries the state; nothing renders when the question can no longer be favorited.
+ * carries the state. A question that can no longer be favorited explains why when tried.
  */
 export function FavoriteToggle({ favorites, question, label, keyshortcuts }: {
   favorites: Favorites; question: Favoritable; label?: string; keyshortcuts?: string;
 }) {
   const id = question.source_question_id;
   const favorite = favorites.value(question);
-  if (!id || favorite === null) return null;
+  if (!id) return null;
   const error = favorites.error(id);
   return <div className="flex flex-col items-start gap-1">
     <Button variant="ghost" aria-pressed={favorite} aria-label={label} aria-keyshortcuts={keyshortcuts} className="px-3" onClick={() => void favorites.toggle(question)}>

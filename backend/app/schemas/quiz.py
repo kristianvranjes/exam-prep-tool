@@ -187,9 +187,9 @@ class ActiveQuestion(BaseModel):
     answer: AnswerPayload | None
     # Live organization, not part of the snapshot: current active units in course order.
     units: list[QuestionUnitLabel] = []
-    # Live too: favorited, can be favorited (False), or neither because the source is no
-    # longer practice-eligible (None).
-    favorite: bool | None = None
+    # Live too, but read only from the student's own favorites: bank edits and archiving
+    # never change it.
+    favorite: bool = False
     # Only for IMMEDIATE answers that were checked; unchecked questions never carry keys.
     feedback: QuestionFeedback | None = None
     # Paper sessions only: the item's frozen points and original label.

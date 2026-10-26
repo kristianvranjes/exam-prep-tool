@@ -230,13 +230,19 @@ def test_favorites_survive_edits_and_leave_history_unchanged(clients):
     assert member.get(path).json() == submitted
     assert history() == before
 
-    # An archived source keeps its favorite; an archived source without one has no star.
+    # Archiving the sources changes nothing in the attempt: the flag follows only the
+    # student's own favorites.
     assert add(member, course, target["source_question_id"]).status_code == 200
+    favored = member.get(path).json()
     for question in ids.values():
         assert review_question(owner, f"/questions/{question}/archive").status_code == 200
-    archived = member.get(path).json()
-    assert [question["favorite"] for question in archived["questions"]] == [True, None]
+    assert member.get(path).json() == favored
+    assert [question["favorite"] for question in favored["questions"]] == [True, False]
     assert history() == before
+    # An archived favorite can still be removed, but not added again.
+    assert remove(member, course, target["source_question_id"]).status_code == 200
+    assert member.get(path).json() == submitted
+    assert add(member, course, target["source_question_id"]).status_code == 404
 
     # Editing your own draft keeps its favorite and only changes the live bank text.
     own = draft(member, course, "Before edit?", [])

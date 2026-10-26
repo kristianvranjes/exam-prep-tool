@@ -509,9 +509,11 @@ live favorite flag, as it reads current unit labels.
   be added again while it is ineligible. Removing it still works. Deleting a question
   removes its favorites.
 - Editing a draft keeps its favorite; the next session snapshots the edited version.
-- Attempt questions carry `source_question_id` and the live `favorite`: `true`,
-  `false` (it can be favorited) or `null` (not a favorite and no longer
-  practice-eligible, so no star is shown).
+- Attempt questions carry `source_question_id` and a boolean `favorite`, read only
+  from the student's own favorite rows. Archiving, rejecting or editing the question
+  never changes it, so submitted results stay exactly as frozen. The star is shown for
+  every question; adding a favorite to a question that is no longer eligible explains
+  why it was refused.
 
 The star is a **Favorite** toggle button with `aria-pressed`. It sits under the active
 question next to **Mark to revisit** (shortcut `S`), and in each submitted result as **Favorite

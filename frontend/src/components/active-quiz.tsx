@@ -172,7 +172,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
     if (action.kind === "primary") { if (target !== document.body && !form.current?.contains(target)) return false; primary(); return true; }
     if (action.kind === "next") { if (!canMoveAhead) return false; navigate(index + 1); return true; }
     if (action.kind === "previous") { if (index === 0) return false; navigate(index - 1); return true; }
-    if (action.kind === "favorite") { if (favorites.value(question) === null) return false; void favorites.toggle(question); return true; }
+    if (action.kind === "favorite") { if (!question.source_question_id) return false; void favorites.toggle(question); return true; }
     // A checked answer is final, and a closed session cannot save one.
     const choice = feedback || sessionClosed ? null : shortcutAnswer(question, action.key);
     if (!choice) return false;

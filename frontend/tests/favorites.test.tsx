@@ -8,18 +8,18 @@ import type { ActiveQuestion, Attempt, ResultQuestion } from "../src/lib/practic
 const mock = vi.hoisted(() => ({ favorite: vi.fn(), unfavorite: vi.fn(), save: vi.fn(), read: vi.fn() }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 
-function question(id: string, position: number, favorite: boolean | null): ActiveQuestion {
+function question(id: string, position: number, favorite: boolean): ActiveQuestion {
   return { id, source_question_id: `source-${id}`, position, type: "TRUE_FALSE", stem: `Statement ${id}`, difficulty: null,
     options: [], answer: { type: "TRUE_FALSE", value: true }, favorite };
 }
-function result(id: string, position: number, favorite: boolean | null, grading_status: ResultQuestion["grading_status"]): ResultQuestion {
+function result(id: string, position: number, favorite: boolean, grading_status: ResultQuestion["grading_status"]): ResultQuestion {
   return { ...question(id, position, favorite), options: [], explanation: null, correct_boolean: true, reference_answer: null, grading_status };
 }
 const active: Extract<Attempt, { status: "ACTIVE" }> = { id: "attempt", course_id: "course", status: "ACTIVE",
-  started_at: "2026-10-26T10:00:00Z", submitted_at: null, questions: [question("a", 0, false), question("b", 1, true), question("c", 2, null)] };
+  started_at: "2026-10-26T10:00:00Z", submitted_at: null, questions: [question("a", 0, false), question("b", 1, true), { ...question("c", 2, false), source_question_id: undefined }] };
 const submitted: Extract<Attempt, { status: "SUBMITTED" }> = { id: "attempt", course_id: "course", status: "SUBMITTED",
   started_at: "2026-10-26T10:00:00Z", submitted_at: "2026-10-26T10:05:00Z",
-  questions: [result("a", 0, false, "INCORRECT"), result("b", 1, true, "CORRECT"), result("c", 2, null, "CORRECT")] };
+  questions: [result("a", 0, false, "INCORRECT"), result("b", 1, true, "CORRECT"), { ...result("c", 2, false, "CORRECT"), source_question_id: undefined }] };
 const state = (id: string, favorite: boolean) => ({ question_id: id, favorite, favorited_at: favorite ? "2026-10-26T10:01:00Z" : null });
 
 beforeEach(() => {
@@ -42,7 +42,7 @@ it("stars the active question and keeps the choice while moving between question
   expect(star()).toHaveAttribute("aria-pressed", "true");
   fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
   await screen.findByRole("heading", { name: "Question 3 of 3" });
-  // No longer practice-eligible and not a favorite: there is nothing to star.
+  // Without a source question (an older server) there is nothing to star.
   expect(screen.queryByRole("button", { name: "Favorite" })).not.toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: "Previous" }));
@@ -74,10 +74,15 @@ it("toggles the star with S, which no answer key uses", async () => {
 });
 
 it("explains a refused favorite and leaves the star unpressed", async () => {
-  mock.favorite.mockRejectedValue(new Error("Only approved questions and your own drafts can be favorited"));
+  mock.favorite.mockRejectedValueOnce(new Error("Only approved questions and your own drafts can be favorited"));
   render(<ActiveQuiz attempt={structuredClone(active)} experience="STUDY" setExperience={vi.fn()} update={vi.fn()} back={vi.fn(async () => {})} />);
   fireEvent.click(star());
   expect(await screen.findByRole("alert")).toHaveTextContent("Only approved questions and your own drafts can be favorited");
+  expect(star()).toHaveAttribute("aria-pressed", "false");
+  // Another student's archived question is hidden from the bank, which the message says plainly.
+  mock.favorite.mockRejectedValueOnce(new Error("Question not found"));
+  fireEvent.click(star());
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("This question is no longer in the question bank, so it cannot be favorited."));
   expect(star()).toHaveAttribute("aria-pressed", "false");
 });
 

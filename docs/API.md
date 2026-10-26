@@ -346,8 +346,9 @@ scheduling.
   rejected or otherwise not practice-eligible.
 
 Attempt questions (active, submitted and abandoned) also return `source_question_id`
-and the live `favorite`: `true`, `false` when it can be favorited, or `null` when it is
-neither a favorite nor practice-eligible. Neither is part of the frozen snapshot.
+and a boolean `favorite`: whether the caller has a favorite for that source question.
+It depends only on the caller's favorites, never on the question's current status, so
+bank changes leave submitted results unchanged. Neither is part of the frozen snapshot.
 
 ### Past exam papers (R3)
 

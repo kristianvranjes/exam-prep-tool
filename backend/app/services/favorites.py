@@ -104,23 +104,19 @@ def list_favorites(
     ]
 
 
-def favorite_states(
-    db: Session, user_id: UUID, question_ids: list[UUID]
-) -> dict[UUID, bool | None]:
-    """Per source question: favorited, can be favorited (False), or neither (None)."""
+def favorited(db: Session, user_id: UUID, question_ids: list[UUID]) -> set[UUID]:
+    """Which of these source questions the user has favorited.
+
+    Only the user's own favorite rows decide it, never the question's current status, so
+    archiving or editing a question cannot change a frozen attempt's representation.
+    """
     if not question_ids:
-        return {}
-    favorited = (
-        select(QuestionFavorite.id)
-        .where(QuestionFavorite.user_id == user_id, QuestionFavorite.question_id == Question.id)
-        .correlate(Question)
-        .exists()
-    )
-    states: dict[UUID, bool | None] = {}
-    for id_, eligible, is_favorite in db.execute(
-        select(Question.id, practice_eligible(user_id), favorited).where(
-            Question.id.in_(question_ids)
+        return set()
+    return set(
+        db.scalars(
+            select(QuestionFavorite.question_id).where(
+                QuestionFavorite.user_id == user_id,
+                QuestionFavorite.question_id.in_(question_ids),
+            )
         )
-    ):
-        states[id_] = True if is_favorite else False if eligible else None
-    return states
+    )

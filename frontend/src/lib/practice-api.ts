@@ -45,8 +45,8 @@ export type ActiveQuestion = {
   units?: QuestionUnitLabel[]; feedback?: QuestionFeedback | null;
   /** The bank question behind this snapshot; favorites refer to it. */
   source_question_id?: string;
-  /** Read live: favorited, can be favorited (false), or neither because it is no longer practice-eligible (null). */
-  favorite?: boolean | null;
+  /** Whether you favorited the source question; read from your favorites only, so bank changes never alter it. */
+  favorite?: boolean;
   /** Paper sessions only. */
   points?: number | null; label?: string | null;
 };

@@ -106,8 +106,8 @@ def test_favorite_state_and_active_question_carry_the_source():
             "answer": None,
         }
     )
-    # Unknown until the server reads the live favorite; never part of the snapshot.
-    assert question.favorite is None
+    # Not a favorite until the student adds one; never part of the snapshot.
+    assert question.favorite is False
     with pytest.raises(ValidationError):
         ActiveQuestion.model_validate(question.model_dump() | {"source_question_id": None})
 

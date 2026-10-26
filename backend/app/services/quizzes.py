@@ -42,7 +42,7 @@ from app.schemas.quiz import (
 from app.services.courses import get_member_course
 from app.services.exam_papers import load_paper
 from app.services.exam_scopes import resolve_focus
-from app.services.favorites import favorite_states
+from app.services.favorites import favorited
 from app.services.grading import grade
 from app.services.paper_scoring import SCORING_VERSION, ItemResult, item_points, score
 from app.services.progress import apply_reviews
@@ -161,7 +161,7 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
     units = unit_labels(db, course_id, sources)
     quiz = db.get(Quiz, attempt.quiz_id)
     assert quiz is not None and quiz.course_id == course_id
-    favorites = favorite_states(db, quiz.user_id, sources)
+    favorites = favorited(db, quiz.user_id, sources)
     penalty = Decimal(str(quiz.scoring["wrong_answer_penalty"])) if quiz.scoring else None
     active: list[ActiveQuestion] = []
     results: list[ResultQuestion] = []
@@ -179,7 +179,7 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
             options=[PublicOption(position=o.position, text=o.text) for o in content.options],
             answer=answer_adapter.validate_python(answer.payload) if answer else None,
             units=units.get(row.source_question_id, []),
-            favorite=favorites.get(row.source_question_id),
+            favorite=row.source_question_id in favorites,
             points=None if row.points is None else float(row.points),
             label=row.label,
         )
