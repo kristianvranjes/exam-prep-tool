@@ -1,18 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type ExamScopeCoverage, type ExamScopeReadiness, type ReviewProgressSummary } from "../lib/api";
+import { api, type CourseUnit, type ExamScope, type ExamScopeCoverage, type ExamScopeReadiness, type ReviewProgressSummary } from "../lib/api";
 import { countdownLabel, formatScopeDates, localIsoDate, nextExam, type NextExam } from "../lib/exam-dates";
-import { practiceApi, type Attempt } from "../lib/practice-api";
+import { practiceApi, type Attempt, type PracticeFocus } from "../lib/practice-api";
 import type { MaterialsSummary } from "./course-materials";
 import { ExamReadiness } from "./exam-readiness";
+import { kindLabels } from "./exam-scopes";
 import { ResumeSession } from "./resume-session";
 import type { ResumableAttempt } from "./use-resumable-sessions";
-import { Alert, Button, Surface } from "./ui";
+import { Alert, Button, Select, Surface } from "./ui";
 
 type ProgressState = { loading: boolean; summary: ReviewProgressSummary | null; error: boolean };
 type Availability = "loading" | "available" | "empty" | "unknown";
 type Countdown = { exam: NextExam; coverage: ExamScopeCoverage | null; readiness: ExamScopeReadiness | null };
+type QuickTargets = { scopes: ExamScope[]; units: CourseUnit[] };
+
+/** The quick quiz picker's value: "" for the whole course, `scope:<id>` or `unit:<id>`. */
+function quickFocus(value: string): PracticeFocus | undefined {
+  const [kind, id] = value.split(":");
+  if (kind === "scope") return { exam_scope_id: id };
+  if (kind === "unit") return { unit_ids: [id] };
+  return undefined;
+}
 
 export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt, checkingSession, activeSession, materials, onResume,
   onRecommendedPractice, onStandardPractice, onScopePractice, onUnitPractice, onStartAttempt, onProgress, onMaterials, onQuestions }: {
@@ -30,6 +40,10 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
   const [due, setDue] = useState(0);
   const [reviewing, setReviewing] = useState(false);
   const [reviewError, setReviewError] = useState("");
+  const [targets, setTargets] = useState<QuickTargets>({ scopes: [], units: [] });
+  const [quickTarget, setQuickTarget] = useState("");
+  const [quickStarting, setQuickStarting] = useState(false);
+  const [quickError, setQuickError] = useState("");
 
   useEffect(() => {
     if (!active) return;
@@ -42,6 +56,9 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
       setCountdown(null);
       setDue(0);
       setReviewError("");
+      setTargets({ scopes: [], units: [] });
+      setQuickTarget("");
+      setQuickError("");
       void api.reviewProgressSummary(courseId).then(summary => {
         if (current) setProgress({ loading: false, summary, error: false });
       }).catch(() => {
@@ -56,14 +73,20 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
       }).catch(() => { if (current) setAvailability("unknown"); });
       // Optional context: without dated cycles, or on failure, the overview simply omits it.
       void api.examScopes(courseId).then(scopes => {
+        if (!current) return;
+        setTargets(value => ({ ...value, scopes: scopes ?? [] }));
         const exam = nextExam(scopes, localIsoDate());
-        if (!current || !exam) return;
+        if (!exam) return;
         setCountdown({ exam, coverage: null, readiness: null });
         // Each part appears when it arrives; a failed one is left out.
         void api.examScopeReadiness(exam.scope.id).then(readiness => {
           if (current) setCountdown(value => value && { ...value, readiness });
         }).catch(() => undefined);
         return api.examScopeCoverage(exam.scope.id).then(coverage => { if (current) setCountdown(value => value && { ...value, coverage }); });
+      }).catch(() => undefined);
+      // Units only refine the quick quiz; without them it covers the whole course.
+      void Promise.resolve().then(() => api.units(courseId)).then(units => {
+        if (current) setTargets(value => ({ ...value, units: units ?? [] }));
       }).catch(() => undefined);
     });
     return () => { current = false; };
@@ -78,6 +101,14 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
     catch (cause) { setReviewError(cause instanceof Error ? cause.message : "Could not start the review. Try again."); }
     finally { setReviewing(false); }
   }
+  async function quickQuiz() {
+    if (!onStartAttempt || quickStarting) return;
+    setQuickStarting(true); setQuickError("");
+    try { onStartAttempt(await practiceApi.quickQuiz(courseId, quickFocus(quickTarget))); }
+    catch (cause) { setQuickError(cause instanceof Error ? cause.message : "Could not start the quick quiz. Try again."); }
+    finally { setQuickStarting(false); }
+  }
+  const showQuick = !activeSession && Boolean(onStartAttempt);
   const summary = progress.summary;
   const recentMaterials = [...materials.materials].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 2);
 
@@ -126,6 +157,19 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
             <Button variant="ghost" onClick={onStandardPractice}>Practice course questions</Button>
           </>}
         </div>
+        {showQuick && <div className="mt-6 border-t border-line pt-6">
+          <h4 className="text-xl font-semibold">Quick quiz</h4>
+          <p className="mt-2 max-w-prose text-muted">Five questions, each checked as you answer, picked like recommended practice. Fewer when fewer are available.</p>
+          {(targets.scopes.length > 0 || targets.units.length > 0) && <label className="mt-4 block max-w-sm text-sm font-medium">Questions from
+            <Select className="mt-1" value={quickTarget} disabled={quickStarting} onChange={event => { setQuickTarget(event.target.value); setQuickError(""); }}>
+              <option value="">Whole course</option>
+              {targets.scopes.length > 0 && <optgroup label="Exam cycles">{targets.scopes.map(scope => <option key={scope.id} value={`scope:${scope.id}`}>{scope.name} {scope.academic_year} · {kindLabels[scope.kind]}</option>)}</optgroup>}
+              {targets.units.length > 0 && <optgroup label="Units">{targets.units.map(unit => <option key={unit.id} value={`unit:${unit.id}`}>{unit.title}</option>)}</optgroup>}
+            </Select>
+          </label>}
+          {quickError && <Alert className="mt-3 max-w-prose">{quickError}</Alert>}
+          <Button variant="secondary" className="mt-4 w-full sm:w-auto" disabled={quickStarting} onClick={() => void quickQuiz()}>{quickStarting ? "Starting quick quiz…" : "Start quick quiz"}</Button>
+        </div>}
       </Surface>}
     </section>
 

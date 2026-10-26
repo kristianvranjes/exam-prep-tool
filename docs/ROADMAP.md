@@ -35,6 +35,8 @@ does not complete their implementation or hosted verification. Record completion
   server-side practice availability, per-unit progress, and bulk unit assignment (R2).
 - Mistakes and due-only review sessions with one-click due review (R5 selection), and
   generated mock exams spread across an exam scope's units (R3).
+- Private, course-scoped favorites with a star in practice and results, FAVORITES focus
+  sessions with unit/scope filters, and a one-click five-question quick quiz (R5).
 - Formulas (KaTeX) and code blocks in question text, with an authoring preview (R4).
 - Deterministic item analysis for course managers (part of R14): difficulty, upper/lower
   27 % discrimination, option distribution and review flags, shown after 30 students.
@@ -125,7 +127,9 @@ each item as its own pull request, in this order:
 ### Phase B — between midterms and finals (2 December 2026 – 31 January 2027)
 
 1. **R5** favorites and mistakes, plus due-only daily review, focus sessions combined
-   with unit and scope filters, and a short five-question quick quiz.
+   with unit and scope filters, and a short five-question quick quiz. *Implemented*
+   (see [favorites and the quick quiz](PRACTICE.md#favorites-and-the-quick-quiz-r5)),
+   except the paginated mistakes view, a favorites screen and material filters.
 2. **FSRS scheduling** (`fsrs-v1`) replacing `leitner-v1` per record on its next review,
    with the rating derived from correctness, confidence, and later response time.
    Leitner records keep working until then; no bulk rewrite.
@@ -486,8 +490,14 @@ separate coherent changes.
 **Status:** mistake selection (`MISTAKES`), due-only review (`DUE`) with one-click
 **Review due questions** on the overview and in Progress, their unit/scope/type
 combinations, and their availability counts are implemented without a migration (see
-[practice rules](PRACTICE.md#mistakes-due-review-and-mock-exams-r5-r3)). Favorites, the paginated
-mistakes view, material filters, and the five-question quick quiz remain open.
+[practice rules](PRACTICE.md#mistakes-due-review-and-mock-exams-r5-r3)). Favorites (migration
+0023) are implemented with idempotent add/remove, a paginated favorites API, a star on
+the active question and in submitted results, and `FAVORITES` selection with the same
+filters, exclusions and 409 (see
+[favorites and the quick quiz](PRACTICE.md#favorites-and-the-quick-quiz-r5)). The
+five-question quick quiz starts from the course overview, optionally for one unit or
+exam cycle. A favorites screen in the UI, the paginated mistakes view, and material
+filters remain open.
 
 ### R6 — Evaluate the pilot and prepare the next release
 

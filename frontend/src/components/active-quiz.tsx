@@ -6,6 +6,7 @@ import { practiceApi, type Attempt, type Confidence, type PracticeAnswer } from 
 import { Alert, Button } from "./ui";
 import { QuizAnswerEditor } from "./quiz-answer-editor";
 import { ExamTimer } from "./exam-timer";
+import { FavoriteToggle, useFavorites } from "./favorite-toggle";
 import { CheckedFeedback, ConfidencePicker } from "./quiz-feedback";
 import { QuestionUnits } from "./question-units";
 import { ExperiencePicker, QuizNavigator, type QuizExperience } from "./quiz-navigation";
@@ -28,6 +29,8 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
   const [review, setReview] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [confidence, setConfidence] = useState<Confidence | null>(null);
+  // Favorites are saved on their own, so they never wait for or block an answer save.
+  const favorites = useFavorites(attempt.course_id);
   const pending = useRef(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -250,7 +253,8 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
           </div>
         </div>
       </form>
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-wrap items-start gap-2">
+        <FavoriteToggle favorites={favorites} question={question} />
         <Button variant="ghost" disabled={busy} aria-pressed={flags.has(question.id)} onClick={() => setFlags(current => { const next = new Set(current); if (next.has(question.id)) next.delete(question.id); else next.add(question.id); return next; })}>{flags.has(question.id) ? "Remove revisit mark" : "Mark to revisit"}</Button>
         <Button variant="ghost" disabled={busy} onClick={openReview}>Review and finish</Button>
         <Button variant="ghost" aria-keyshortcuts="?" aria-haspopup="dialog" className="ml-auto hidden text-muted pointer-fine:inline-flex" onClick={() => setShortcutsOpen(true)}>Press <kbd>?</kbd> for shortcuts</Button>

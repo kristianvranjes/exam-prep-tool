@@ -198,6 +198,11 @@ Reference answer and comparison guidance. Even exact text equality is not graded
 PENDING is never counted as incorrect. These answers do not affect Progress or scheduling.
 There is no student self-score, AI grading or generated explanation.
 
+Each result has a **Favorite question N** star toggle (`aria-pressed`) when the
+question can be favorited or already is; the active question has the same
+**Favorite** toggle next to **Mark to revisit**. See
+[favorites](PRACTICE.md#favorites-and-the-quick-quiz-r5).
+
 **Practice again** refreshes history and returns to the existing setup with the
 mounted course's count, types, selection mode and presentation preferences intact.
 It never starts an attempt automatically. Failure retains Results and permits retry.

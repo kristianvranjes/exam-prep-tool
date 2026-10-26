@@ -1,8 +1,9 @@
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
+from app.schemas.favorite import FavoriteState
 from app.schemas.question import OwnerQuestion
-from app.schemas.quiz import AnswerPayload, CheckAnswer, StartQuiz
+from app.schemas.quiz import ActiveQuestion, AnswerPayload, CheckAnswer, StartQuiz
 from app.services.grading import grade
 from app.services.quiz_selection import spread
 
@@ -79,12 +80,36 @@ def test_selection_mode_defaults_to_standard():
     assert StartQuiz(selection_mode="ADAPTIVE").selection_mode == "ADAPTIVE"
 
 
-@pytest.mark.parametrize("mode", ["MISTAKES", "DUE"])
+@pytest.mark.parametrize("mode", ["MISTAKES", "DUE", "FAVORITES"])
 def test_review_modes_combine_with_any_focus(mode):
     assert StartQuiz(selection_mode=mode).selection_mode == mode
     unit = "00000000-0000-0000-0000-000000000001"
     assert StartQuiz.model_validate({"selection_mode": mode, "unit_ids": [unit]}).unit_ids
     assert StartQuiz.model_validate({"selection_mode": mode, "exam_scope_id": unit}).exam_scope_id
+
+
+def test_favorite_state_and_active_question_carry_the_source():
+    source = "00000000-0000-0000-0000-000000000002"
+    state = FavoriteState.model_validate(
+        {"question_id": source, "favorite": False, "favorited_at": None}
+    )
+    assert state.favorite is False and state.favorited_at is None
+    question = ActiveQuestion.model_validate(
+        {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "source_question_id": source,
+            "position": 0,
+            "type": "TRUE_FALSE",
+            "stem": "Is it true?",
+            "difficulty": None,
+            "options": [],
+            "answer": None,
+        }
+    )
+    # Unknown until the server reads the live favorite; never part of the snapshot.
+    assert question.favorite is None
+    with pytest.raises(ValidationError):
+        ActiveQuestion.model_validate(question.model_dump() | {"source_question_id": None})
 
 
 def test_mock_exam_needs_an_exam_scope():

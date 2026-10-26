@@ -1,7 +1,7 @@
 import { request, type QuestionType } from "./api";
 
-/** MISTAKES and DUE use your review progress; MOCK needs an exam scope and spreads it across its units. */
-export type SelectionMode = "STANDARD" | "ADAPTIVE" | "MISTAKES" | "DUE" | "MOCK";
+/** MISTAKES and DUE use your review progress, FAVORITES your favorites; MOCK needs an exam scope and spreads it across its units. */
+export type SelectionMode = "STANDARD" | "ADAPTIVE" | "MISTAKES" | "DUE" | "FAVORITES" | "MOCK";
 /** IMMEDIATE sessions let the student check each saved answer before submitting. */
 export type FeedbackMode = "END" | "IMMEDIATE";
 export type Confidence = "SURE" | "UNSURE" | "GUESS";
@@ -43,6 +43,10 @@ export type ActiveQuestion = {
   id: string; position: number; type: QuestionType; stem: string; difficulty: number | null;
   options: { position: number; text: string }[]; answer: PracticeAnswer | null;
   units?: QuestionUnitLabel[]; feedback?: QuestionFeedback | null;
+  /** The bank question behind this snapshot; favorites refer to it. */
+  source_question_id?: string;
+  /** Read live: favorited, can be favorited (false), or neither because it is no longer practice-eligible (null). */
+  favorite?: boolean | null;
   /** Paper sessions only. */
   points?: number | null; label?: string | null;
 };
@@ -64,13 +68,17 @@ export type PracticeAvailability = {
   course_total: number; total: number;
   by_type: { type: QuestionType; count: number }[];
   by_unit: { unit_id: string; count: number }[];
-  /** What Mistakes and Due for review would select with the same types and focus, whatever the mode. */
-  mistakes_total: number; due_total: number;
+  /** What Mistakes, Due for review and Favorites would select with the same types and focus, whatever the mode. */
+  mistakes_total: number; due_total: number; favorites_total?: number;
 };
+/** A private favorite after an idempotent add or remove; `favorited_at` is the first add. */
+export type FavoriteState = { question_id: string; favorite: boolean; favorited_at: string | null };
 const path = (course: string) => `/courses/${course}/attempts`;
 const allTypes: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
 /** The most questions a generated session may hold. */
 const MAX_SESSION_QUESTIONS = 20;
+/** A quick quiz is this many questions, or fewer when fewer are available. */
+export const QUICK_QUIZ_QUESTIONS = 5;
 function availabilityQuery(question_types: QuestionType[], selection_mode: SelectionMode, focus?: PracticeFocus) {
   const params = new URLSearchParams({ selection_mode });
   for (const type of question_types) params.append("question_types", type);
@@ -92,6 +100,14 @@ export const practiceApi = {
     if (!due_total) throw new Error("Nothing is due for review right now.");
     return practiceApi.start(course, Math.min(due_total, MAX_SESSION_QUESTIONS), allTypes, "DUE", undefined, "IMMEDIATE");
   },
+  /** Quick quiz: a guided recommended session of five questions, optionally limited to units or an exam scope. */
+  quickQuiz: async (course: string, focus?: PracticeFocus): Promise<Attempt> => {
+    const { total } = await practiceApi.availability(course, allTypes, "ADAPTIVE", focus);
+    if (!total) throw new Error("No questions are available for a quick quiz here yet.");
+    return practiceApi.start(course, Math.min(total, QUICK_QUIZ_QUESTIONS), allTypes, "ADAPTIVE", focus, "IMMEDIATE");
+  },
+  favorite: (course: string, question: string) => request<FavoriteState>(`/courses/${course}/favorites/${question}`, { method: "POST" }),
+  unfavorite: (course: string, question: string) => request<FavoriteState>(`/courses/${course}/favorites/${question}`, { method: "DELETE" }),
   startPaper: (paperId: string, feedback_mode: FeedbackMode = "END", timed = true) => request<Attempt>(`/exam-papers/${paperId}/attempts`, { method: "POST", body: JSON.stringify({ feedback_mode, timed }) }),
   abandon: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/abandon`, { method: "POST" }),
   submit: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/submit`, { method: "POST" }),
