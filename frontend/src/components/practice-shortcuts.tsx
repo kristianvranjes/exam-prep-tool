@@ -5,7 +5,7 @@ import type { ActiveQuestion, PracticeAnswer } from "../lib/practice-api";
 import { Button } from "./ui";
 
 /** What a key asks the active quiz to do. A `choice` key is matched to the question's options by `shortcutAnswer`. */
-export type ShortcutAction = { kind: "help" } | { kind: "primary" } | { kind: "next" } | { kind: "previous" } | { kind: "choice"; key: string };
+export type ShortcutAction = { kind: "help" } | { kind: "primary" } | { kind: "next" } | { kind: "previous" } | { kind: "favorite" } | { kind: "choice"; key: string };
 
 /** The rows of the help dialog. A new shortcut adds a row here and a case in `shortcutAction`. */
 export const PRACTICE_SHORTCUTS: { keys: string[][]; label: string }[] = [
@@ -14,6 +14,7 @@ export const PRACTICE_SHORTCUTS: { keys: string[][]; label: string }[] = [
   { keys: [["Enter"]], label: "Save, check, or go to the next question" },
   { keys: [["N"], ["J"]], label: "Next question" },
   { keys: [["P"], ["K"]], label: "Previous question" },
+  { keys: [["S"]], label: "Favorite or unfavorite the question" },
   { keys: [["?"]], label: "Show these shortcuts" },
 ];
 
@@ -25,6 +26,8 @@ export function shortcutAction(key: string): ShortcutAction | null {
   const lower = key.toLowerCase();
   if (lower === "n" || lower === "j") return { kind: "next" };
   if (lower === "p" || lower === "k") return { kind: "previous" };
+  // S for star: F already answers false and picks the sixth option.
+  if (lower === "s") return { kind: "favorite" };
   if (/^[1-9a-ift]$/.test(lower)) return { kind: "choice", key: lower };
   return null;
 }

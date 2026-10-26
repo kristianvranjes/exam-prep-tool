@@ -172,6 +172,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
     if (action.kind === "primary") { if (target !== document.body && !form.current?.contains(target)) return false; primary(); return true; }
     if (action.kind === "next") { if (!canMoveAhead) return false; navigate(index + 1); return true; }
     if (action.kind === "previous") { if (index === 0) return false; navigate(index - 1); return true; }
+    if (action.kind === "favorite") { if (favorites.value(question) === null) return false; void favorites.toggle(question); return true; }
     // A checked answer is final, and a closed session cannot save one.
     const choice = feedback || sessionClosed ? null : shortcutAnswer(question, action.key);
     if (!choice) return false;
@@ -254,7 +255,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
         </div>
       </form>
       <div className="mt-4 flex flex-wrap items-start gap-2">
-        <FavoriteToggle favorites={favorites} question={question} />
+        <FavoriteToggle favorites={favorites} question={question} keyshortcuts="S" />
         <Button variant="ghost" disabled={busy} aria-pressed={flags.has(question.id)} onClick={() => setFlags(current => { const next = new Set(current); if (next.has(question.id)) next.delete(question.id); else next.add(question.id); return next; })}>{flags.has(question.id) ? "Remove revisit mark" : "Mark to revisit"}</Button>
         <Button variant="ghost" disabled={busy} onClick={openReview}>Review and finish</Button>
         <Button variant="ghost" aria-keyshortcuts="?" aria-haspopup="dialog" className="ml-auto hidden text-muted pointer-fine:inline-flex" onClick={() => setShortcutsOpen(true)}>Press <kbd>?</kbd> for shortcuts</Button>

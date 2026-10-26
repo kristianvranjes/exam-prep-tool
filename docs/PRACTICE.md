@@ -123,6 +123,7 @@ existing control's action, so grading, saving and locking stay where they were.
 | `T` / `F`, or `1` / `2` | Answer true or false |
 | `Enter` | The primary button: save and next, *Check answer* in guided practice, or *Next question* after the check |
 | `N` / `J`, `P` / `K` | Next and previous question |
+| `S` | Favorite or unfavorite the question (see [favorites](#favorites-and-the-quick-quiz-r5)); `F` already answers false |
 | `?` | Open the shortcut list (a modal dialog; Escape or Close returns focus) |
 
 - Keys never fire while focus is in a text field, textarea or editable region (short
@@ -135,7 +136,8 @@ existing control's action, so grading, saving and locking stay where they were.
   and in paper sessions (*Skip for now*); in guided practice only once the answer is
   checked; otherwise once an answer is entered, which it saves first like *Save and next*.
 - Arrow keys are left to the radio group, where they change the chosen option.
-- Options, Previous, the primary button and the hint carry `aria-keyshortcuts`. The
+- Options, Previous, the primary button, the **Favorite** star and the hint carry
+  `aria-keyshortcuts`. The
   “Press ? for shortcuts” hint shows only with a fine pointer, not on touch screens.
 - A new shortcut adds a case to `shortcutAction` and a row to `PRACTICE_SHORTCUTS`.
 
@@ -512,7 +514,7 @@ live favorite flag, as it reads current unit labels.
   practice-eligible, so no star is shown).
 
 The star is a **Favorite** toggle button with `aria-pressed`. It sits under the active
-question next to **Mark to revisit**, and in each submitted result as **Favorite
+question next to **Mark to revisit** (shortcut `S`), and in each submitted result as **Favorite
 question N**. It saves on its own, never waits for or blocks an answer save, and keeps
 the choice while the student moves between questions or result filters. A refused
 change is announced next to the star.

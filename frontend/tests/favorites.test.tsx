@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ActiveQuiz } from "../src/components/active-quiz";
+import { shortcutAction } from "../src/components/practice-shortcuts";
 import { QuizResults } from "../src/components/quiz-results";
 import type { ActiveQuestion, Attempt, ResultQuestion } from "../src/lib/practice-api";
 
@@ -54,6 +55,22 @@ it("stars the active question and keeps the choice while moving between question
   await waitFor(() => expect(star()).toHaveAttribute("aria-pressed", "false"));
   expect(mock.unfavorite).toHaveBeenCalledExactlyOnceWith("course", "source-a");
   expect(mock.save).not.toHaveBeenCalled();
+});
+
+it("toggles the star with S, which no answer key uses", async () => {
+  expect(shortcutAction("S")).toEqual({ kind: "favorite" });
+  expect(shortcutAction("f")).toEqual({ kind: "choice", key: "f" });
+  render(<ActiveQuiz attempt={structuredClone(active)} experience="EXAM" setExperience={vi.fn()} update={vi.fn()} back={vi.fn(async () => {})} />);
+  expect(star()).toHaveAttribute("aria-keyshortcuts", "S");
+  fireEvent.keyDown(document.body, { key: "s" });
+  await waitFor(() => expect(star()).toHaveAttribute("aria-pressed", "true"));
+  expect(mock.favorite).toHaveBeenCalledExactlyOnceWith("course", "source-a");
+  fireEvent.keyDown(document.body, { key: "S" });
+  await waitFor(() => expect(star()).toHaveAttribute("aria-pressed", "false"));
+  expect(mock.unfavorite).toHaveBeenCalledExactlyOnceWith("course", "source-a");
+  // Held modifiers leave the key to the browser.
+  fireEvent.keyDown(document.body, { key: "s", ctrlKey: true });
+  expect(mock.favorite).toHaveBeenCalledTimes(1);
 });
 
 it("explains a refused favorite and leaves the star unpressed", async () => {

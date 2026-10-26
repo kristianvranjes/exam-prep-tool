@@ -44,15 +44,15 @@ export function useFavorites(courseId: string) {
  * The star for one question's private favorite. The name stays the same and `aria-pressed`
  * carries the state; nothing renders when the question can no longer be favorited.
  */
-export function FavoriteToggle({ favorites, question, label }: {
-  favorites: Favorites; question: Favoritable; label?: string;
+export function FavoriteToggle({ favorites, question, label, keyshortcuts }: {
+  favorites: Favorites; question: Favoritable; label?: string; keyshortcuts?: string;
 }) {
   const id = question.source_question_id;
   const favorite = favorites.value(question);
   if (!id || favorite === null) return null;
   const error = favorites.error(id);
   return <div className="flex flex-col items-start gap-1">
-    <Button variant="ghost" aria-pressed={favorite} aria-label={label} className="px-3" onClick={() => void favorites.toggle(question)}>
+    <Button variant="ghost" aria-pressed={favorite} aria-label={label} aria-keyshortcuts={keyshortcuts} className="px-3" onClick={() => void favorites.toggle(question)}>
       <Star aria-hidden="true" className="size-4 shrink-0" fill={favorite ? "currentColor" : "none"} />Favorite
     </Button>
     {error && <p role="alert" className="max-w-prose text-sm text-danger">{error}</p>}
