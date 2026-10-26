@@ -49,8 +49,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
     setQuestionFocus(current => ({ id, request: (current?.request ?? 0) + 1 }));
     setMoreDestination("questions");
   }
-  function openPractice(mode: PracticeSetupRequest["mode"], scopeId?: string) {
-    setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode, scopeId }));
+  function openPractice(mode: PracticeSetupRequest["mode"], focus: Pick<PracticeSetupRequest, "scopeId" | "unitIds"> = {}) {
+    setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode, ...focus }));
     navigate("practice", true);
   }
   const navigation = <nav aria-label="Course navigation" className="flex overflow-x-auto [scrollbar-width:none] shadow-[inset_0_-1px_0_var(--line)] sm:gap-x-1">
@@ -69,7 +69,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         knownAttemptId={knownAttemptId} knownAttempt={knownAttempt} checkingSession={checkingSession} activeSession={activeSession} materials={materials} onResume={onResume}
         onRecommendedPractice={() => openPractice("ADAPTIVE")}
         onStandardPractice={() => openPractice("STANDARD")}
-        onScopePractice={scopeId => openPractice("ADAPTIVE", scopeId)} onStartAttempt={onOpenAttempt}
+        onScopePractice={scopeId => openPractice("ADAPTIVE", { scopeId })} onUnitPractice={unitId => openPractice("ADAPTIVE", { unitIds: [unitId] })} onStartAttempt={onOpenAttempt}
         onProgress={() => navigate("progress")} onMaterials={() => navigate("materials")}
         onQuestions={() => { setMoreDestination("questions"); navigate("more"); }} />
     </section>

@@ -81,6 +81,7 @@ export const api = {
   updateExamScope: (id: string, body: Partial<ExamScopeBody>) => request<ExamScope>(`/exam-scopes/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteExamScope: (id: string) => request<void>(`/exam-scopes/${id}`, { method: "DELETE" }),
   examScopeCoverage: (id: string) => request<ExamScopeCoverage>(`/exam-scopes/${id}/coverage`),
+  examScopeReadiness: (id: string) => request<ExamScopeReadiness>(`/exam-scopes/${id}/readiness`),
   examPapers: (courseId: string) => request<ExamPaperList>(`/courses/${courseId}/exam-papers`),
   examPaper: (id: string) => request<ExamPaperDetail>(`/exam-papers/${id}`),
   createExamPaper: (courseId: string, body: ExamPaperBody) => request<ExamPaperDetail>(`/courses/${courseId}/exam-papers`, { method: "POST", body: JSON.stringify(body) }),
@@ -134,6 +135,20 @@ export type ExamScopeBody = { academic_year: string; kind: ExamScopeKind; name: 
 export type ExamScope = ExamScopeBody & { id: string; course_id: string; starts_on: string | null; ends_on: string | null; approved_question_count: number; created_at: string; updated_at: string };
 /** The caller's own progress through a cycle's approved questions. */
 export type ExamScopeCoverage = { scope_id: string; question_count: number; reviewed_count: number };
+/** Shares from 0 to 1 of questions you would answer correctly today (`readiness-v1`). */
+export type ReadinessRange = { low: number; high: number };
+/** Counts cover approved, automatically graded questions; ratios are null without a sample. */
+export type UnitReadiness = {
+  unit_id: string; title: string; position: number; is_archived: boolean;
+  question_count: number; answered_count: number; retained_count: number; answer_count: number; correct_answer_count: number;
+  coverage: number | null; accuracy: number | null; retention: number | null; readiness: ReadinessRange | null;
+};
+export type ExamScopeReadiness = {
+  scope_id: string; rule: "readiness-v1"; as_of: string;
+  question_count: number; answered_count: number; retained_count: number; answer_count: number; correct_answer_count: number;
+  /** Answered questions needed before `readiness` is given. */
+  min_answered: number; readiness: ReadinessRange | null; units: UnitReadiness[]; weakest_unit_ids: string[];
+};
 
 /** A past exam as it was set. Penalty is the fraction of an item's points lost for a wrong objective answer. */
 export type ExamPaperBody = {

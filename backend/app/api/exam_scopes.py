@@ -13,7 +13,9 @@ from app.schemas.exam_scope import (
     ExamScopeResponse,
     ExamScopeUpdate,
 )
+from app.schemas.readiness import ExamScopeReadiness
 from app.services import exam_scopes as service
+from app.services import readiness
 
 router = APIRouter(tags=["exam scopes"])
 
@@ -57,6 +59,13 @@ def coverage(
     scope_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> ExamScopeCoverage:
     return service.coverage(db, user, scope_id)
+
+
+@router.get("/exam-scopes/{scope_id}/readiness", response_model=ExamScopeReadiness)
+def get_readiness(
+    scope_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> ExamScopeReadiness:
+    return readiness.scope_readiness(db, user, scope_id)
 
 
 @router.patch("/exam-scopes/{scope_id}", response_model=ExamScopeResponse)

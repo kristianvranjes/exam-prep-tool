@@ -927,6 +927,18 @@ it("opens setup focused on the exam cycle requested from the overview", async ()
   expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE", { exam_scope_id: "mi" }, "IMMEDIATE");
 });
 
+it("opens setup focused on the unit requested from the readiness card", async () => {
+  withUnits();
+  render(<PracticeQuiz courseId="course" setupRequest={{ id: 1, mode: "ADAPTIVE", unitIds: ["u2"] }} />);
+  expect(await screen.findByRole("radio", { name: "Selected units" })).toBeChecked();
+  expect(await screen.findByRole("checkbox", { name: "Unit 2" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Unit 1" })).not.toBeChecked();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  await screen.findByText("Choose a number");
+  expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE", { unit_ids: ["u2"] }, "IMMEDIATE");
+});
+
 it("takes a past paper with points, skips and clears answers, and hands it in with blanks", async () => {
   current.feedback_mode = "END";
   current.paper = { exam_paper_id: "p1", title: "MI 2025/26", total_points: 6, wrong_answer_penalty: 0.25, pass_threshold: 4, duration_minutes: 90 };
