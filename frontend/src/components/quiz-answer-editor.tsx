@@ -1,5 +1,6 @@
 import type { ActiveQuestion, PracticeAnswer, QuestionFeedback } from "../lib/practice-api";
 import { cn } from "../lib/utils";
+import { optionShortcuts } from "./practice-shortcuts";
 import { RichText } from "./rich-text";
 
 /** Marks the key and a wrong choice once an answer is checked; text, not only color. */
@@ -10,24 +11,26 @@ function choiceMark(correct: boolean, chosen: boolean, feedback?: QuestionFeedba
   return { tone: "text-muted", note: null };
 }
 
-export function QuizAnswerEditor({ question, answer, change, disabled, feedback }: {
+export function QuizAnswerEditor({ question, answer, change, disabled, feedback, shortcuts = false }: {
   question: ActiveQuestion; answer: PracticeAnswer | null; change: (answer: PracticeAnswer) => void;
   disabled: boolean; feedback?: QuestionFeedback | null;
+  /** Announces the answer keys of the active quiz on each option. */
+  shortcuts?: boolean;
 }) {
-  const choice = (key: string, label: string, chosen: boolean, correct: boolean, select: () => void) => {
+  const choice = (index: number, key: string, label: string, chosen: boolean, correct: boolean, select: () => void) => {
     const mark = choiceMark(correct, chosen, feedback);
     return <label key={key} className={cn("rounded-control border border-line-strong/50 bg-surface p-3 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent [&>input:focus-visible]:outline-none", mark.tone)}>
-      <input type="radio" name={question.id} checked={chosen} onChange={select} /> <RichText text={label} className="min-w-0" />
+      <input type="radio" name={question.id} checked={chosen} onChange={select} aria-keyshortcuts={shortcuts ? optionShortcuts(question, index) : undefined} /> <RichText text={label} className="min-w-0" />
       {mark.note && <span className="ml-auto pl-3 text-sm font-medium">{mark.note}</span>}
     </label>;
   };
   return <fieldset disabled={disabled || Boolean(feedback)} className="flex min-w-0 flex-col gap-3">
       <legend className="mb-5 w-full max-w-prose break-words font-display text-xl font-medium leading-relaxed sm:text-2xl"><RichText text={question.stem} /></legend>
-      {question.type === "MULTIPLE_CHOICE" && question.options.map(option => choice(String(option.position), option.text,
+      {question.type === "MULTIPLE_CHOICE" && question.options.map((option, index) => choice(index, String(option.position), option.text,
         answer?.type === "MULTIPLE_CHOICE" && answer.option_position === option.position,
         Boolean(feedback?.options.find(key => key.position === option.position)?.is_correct),
         () => change({ type: "MULTIPLE_CHOICE", option_position: option.position })))}
-      {question.type === "TRUE_FALSE" && [true, false].map(value => choice(String(value), value ? "True" : "False",
+      {question.type === "TRUE_FALSE" && [true, false].map((value, index) => choice(index, String(value), value ? "True" : "False",
         answer?.type === "TRUE_FALSE" && answer.value === value, feedback?.correct_boolean === value,
         () => change({ type: "TRUE_FALSE", value })))}
       {question.type === "SHORT_ANSWER" && <label>Your short answer<textarea name="short-answer" className="mt-2 w-full rounded-control border border-line-strong bg-surface p-3" rows={5} maxLength={2000} required value={answer?.type === "SHORT_ANSWER" ? answer.text : ""} onChange={event => change({ type: "SHORT_ANSWER", text: event.target.value })} /></label>}

@@ -38,6 +38,8 @@ does not complete their implementation or hosted verification. Record completion
 - Formulas (KaTeX) and code blocks in question text, with an authoring preview (R4).
 - Deterministic item analysis for course managers (part of R14): difficulty, upper/lower
   27 % discrimination, option distribution and review flags, shown after 30 students.
+- Keyboard shortcuts in the active practice session, and continue cards on Home and the
+  course overview with each unfinished session's mode, progress and time left.
 - Exam readiness (`readiness-v1`) on the course overview: per unit coverage, accuracy and
   a Leitner-based retention proxy with sample counts, a Wilson-based readiness range for
   the next exam cycle, and its three weakest units with a practice shortcut.
@@ -138,6 +140,10 @@ each item as its own pull request, in this order:
    time per question (item 6).
 5. **R4** numeric and multiple-select questions, KaTeX, code highlighting.
 6. Practice keyboard shortcuts, “continue where you left off”, and time per question.
+   *Implemented* except time per question (see
+   [shortcuts and continuing](PRACTICE.md#keyboard-shortcuts-and-continuing-a-session)).
+   Time per question is deferred to the FSRS work (item 2): storing it needs a
+   migration, and FSRS is its first consumer, followed by item analysis median time.
 7. **R6** pilot evaluation right after the midterms, before the finals.
 
 ### Phase C — exam terms and summer semester (from February 2027)

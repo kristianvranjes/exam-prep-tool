@@ -14,6 +14,7 @@ import { PracticeQuiz, type PracticeSetupRequest } from "./practice-quiz";
 import { ProgressPanel } from "./progress-panel";
 import { QuestionBank, type QuestionFocus } from "./question-bank";
 import { Button } from "./ui";
+import type { ResumableAttempt } from "./use-resumable-sessions";
 
 export type { CourseDestination } from "../lib/workspace-route";
 const destinations: { id: CourseDestination; label: string }[] = [
@@ -22,12 +23,12 @@ const destinations: { id: CourseDestination; label: string }[] = [
 ];
 
 export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = false, visible, destination, navigate, goHome, checkingSession,
-  adaptiveReviewRequest, onOpenAdaptiveReview, knownAttemptId, onResume, onResumableAttemptChange, activeSession, routeAttemptId, routeResults, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onUpdated, onDeleted, onOpenAttempt }: {
+  adaptiveReviewRequest, onOpenAdaptiveReview, knownAttemptId, knownAttempt, onResume, onResumableAttemptChange, activeSession, routeAttemptId, routeResults, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onUpdated, onDeleted, onOpenAttempt }: {
   course: Course; currentUserId: string; isOwner: boolean; visible: boolean; destination: CourseDestination;
   /** A moderator of the course's faculty; with owners, they manage papers and see item analysis. */
   isModerator?: boolean;
   navigate: (destination: CourseDestination, setup?: boolean) => void; goHome: () => void; checkingSession?: boolean;
-  adaptiveReviewRequest: number; onOpenAdaptiveReview: () => void; knownAttemptId: string | null;
+  adaptiveReviewRequest: number; onOpenAdaptiveReview: () => void; knownAttemptId: string | null; knownAttempt?: ResumableAttempt;
   onResume: () => void; onResumableAttemptChange: (id: string | null) => void;
   activeSession: boolean; routeAttemptId?: string | null; routeResults: boolean;
   onAttemptRoute: (attempt: Attempt | null, replace?: boolean) => void; onAttemptChange: (attempt: Attempt | null) => void;
@@ -65,7 +66,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
       <h2 id="overview-heading" className="text-xl font-semibold">Overview</h2>
       {course.description && <p className="mt-3 max-w-prose text-muted">{course.description}</p>}
       <CourseOverview courseId={course.id} active={visible && destination === "overview"}
-        knownAttemptId={knownAttemptId} checkingSession={checkingSession} activeSession={activeSession} materials={materials} onResume={onResume}
+        knownAttemptId={knownAttemptId} knownAttempt={knownAttempt} checkingSession={checkingSession} activeSession={activeSession} materials={materials} onResume={onResume}
         onRecommendedPractice={() => openPractice("ADAPTIVE")}
         onStandardPractice={() => openPractice("STANDARD")}
         onScopePractice={scopeId => openPractice("ADAPTIVE", { scopeId })} onUnitPractice={unitId => openPractice("ADAPTIVE", { unitIds: [unitId] })} onStartAttempt={onOpenAttempt}

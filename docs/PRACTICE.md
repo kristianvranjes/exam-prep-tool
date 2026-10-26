@@ -112,6 +112,46 @@ session records no review progress, like any abandonment; its history keeps the
 feedback that was already shown. Confidence is stored and shown in results but does
 not change `leitner-v1` scheduling; it becomes a scheduling input with FSRS.
 
+## Keyboard shortcuts and continuing a session
+
+The active session takes keyboard shortcuts (`practice-shortcuts.tsx`). Each one reuses an
+existing control's action, so grading, saving and locking stay where they were.
+
+| Keys | Action |
+| --- | --- |
+| `1`–`9` or `A`–`I` | Choose that multiple-choice option (in display order) |
+| `T` / `F`, or `1` / `2` | Answer true or false |
+| `Enter` | The primary button: save and next, *Check answer* in guided practice, or *Next question* after the check |
+| `N` / `J`, `P` / `K` | Next and previous question |
+| `?` | Open the shortcut list (a modal dialog; Escape or Close returns focus) |
+
+- Keys never fire while focus is in a text field, textarea or editable region (short
+  answers), with Ctrl, Alt or Meta held, or with Shift held (except `?`). They also do
+  nothing while a request runs, in Review, confirmations and the time-up notice, and
+  while the session is hidden behind another course destination or Home.
+- Answer keys do nothing once an answer is checked or the session is closed, and move
+  focus to the chosen option. On a focused button or link, Enter keeps its own meaning.
+- Next follows the visible controls: always with the question navigator (Exam layout)
+  and in paper sessions (*Skip for now*); in guided practice only once the answer is
+  checked; otherwise once an answer is entered, which it saves first like *Save and next*.
+- Arrow keys are left to the radio group, where they change the chosen option.
+- Options, Previous, the primary button and the hint carry `aria-keyshortcuts`. The
+  “Press ? for shortcuts” hint shows only with a fine pointer, not on touch screens.
+- A new shortcut adds a case to `shortcutAction` and a row to `PRACTICE_SHORTCUTS`.
+
+**Continue studying.** Home lists every course with an unfinished session; the course
+overview shows its own. Each entry shows the mode (guided, exam, or the past paper's
+title), the focus label, saved answers out of the total, and for a timed paper the time
+left on the server clock (ochre from five minutes). *Resume session* opens it. After the
+deadline the entry says the time is up and offers *Hand in and see results* instead,
+because the server accepts only submission by then; opening the session hands in the
+saved answers. Discovery reads at most five history pages per course, then reads the
+found session once for its progress, since history rows carry no answers. While a
+session is open, its own updates keep the entry current. No endpoint changed.
+
+Targeted tests: `npm test -- tests/practice-shortcuts.test.tsx tests/resume-session.test.tsx`
+from frontend.
+
 ## Abandoning unfinished attempts
 
 **Abandon attempt** requires explicit confirmation. It closes the active session,

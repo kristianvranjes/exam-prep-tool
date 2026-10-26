@@ -12,7 +12,7 @@ import { ApplicationFrame, Brand } from "./application-frame";
 import { AuthScreen, type AuthMode } from "./auth-screen";
 import { Alert, Button, LoadingState } from "./ui";
 import { UnsavedChangesProvider } from "./unsaved-changes";
-import { useResumableSessions } from "./use-resumable-sessions";
+import { resumableAttempt, useResumableSessions } from "./use-resumable-sessions";
 
 export function AppShell() {
   const [user, setUser] = useState<User | null>(null);
@@ -54,13 +54,18 @@ export function AppShell() {
   const selectedId = selected?.id;
   const { sessions, update: updateResumableSession } = useResumableSessions(courses.map(course => course.id), user?.id);
   const knownAttemptId = selectedId ? sessions[selectedId]?.id ?? null : null;
-  const resumableCourse = (selected && sessions[selected.id]?.id ? selected : courses.find(course => sessions[course.id]?.id)) ?? null;
+  // The selected course's session leads; the others follow in course order.
+  const resumable = courses.filter(course => sessions[course.id]?.id)
+    .sort((a, b) => Number(b.id === selectedId) - Number(a.id === selectedId))
+    .map(course => ({ course, attempt: sessions[course.id].attempt }));
   const onResumableAttemptChange = useCallback((id: string | null) => {
     if (selectedId) updateResumableSession(selectedId, id);
   }, [selectedId, updateResumableSession]);
   const onAttemptChange = useCallback((attempt: Attempt | null) => {
     setMountedAttempt(current => current?.id === attempt?.id && current?.status === attempt?.status ? current : attempt);
-  }, []);
+    // Keep the continue cards' progress current while the session is open.
+    if (attempt?.status === "ACTIVE") updateResumableSession(attempt.course_id, attempt.id, resumableAttempt(attempt));
+  }, [updateResumableSession]);
   const onAttemptRoute = useCallback((attempt: Attempt | null, replace = false) => {
     const current = parseWorkspaceRoute(window.location.pathname);
     if (current?.view !== "course" || current.destination !== "practice") return;
@@ -209,7 +214,7 @@ export function AppShell() {
     <div hidden={view !== "home"}>
       <StudentHome courses={courses} loading={loadingCourses} onOpen={selectCourse}
         onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])}
-        catalogRevision={catalogRevision} resumableCourse={resumableCourse} onResume={() => resumeSession(resumableCourse)}
+        catalogRevision={catalogRevision} resumable={resumable} onResume={resumeSession}
         checkingSessions={Object.values(sessions).some(session => session.status === "loading")} />
     </div>
     {view === "course" && (loadingCourses || !courses.some(course => course.id === routeCourseId) || selectedId !== routeCourseId) && <section>
@@ -226,7 +231,7 @@ export function AppShell() {
         <CourseWorkspace course={selected} currentUserId={user.id} isOwner={isOwner} isModerator={faculties.some(faculty => faculty.id === selected.faculty_id)} visible={view === "course" && selectedId === routeCourseId}
           destination={destination} navigate={navigateCourse} goHome={() => navigate("/")}
           adaptiveReviewRequest={adaptiveReviewRequest} onOpenAdaptiveReview={openAdaptiveReview}
-          knownAttemptId={knownAttemptId} checkingSession={sessions[selected.id]?.status === "loading"} onResume={() => resumeSession()} onResumableAttemptChange={onResumableAttemptChange} activeSession={activePractice}
+          knownAttemptId={knownAttemptId} knownAttempt={selectedId ? sessions[selectedId]?.attempt : undefined} checkingSession={sessions[selected.id]?.status === "loading"} onResume={() => resumeSession()} onResumableAttemptChange={onResumableAttemptChange} activeSession={activePractice}
           routeAttemptId={route?.view === "course" && selectedId === routeCourseId && destination === "practice" ? route.attemptId : undefined}
           routeResults={route?.view === "course" && route.results}
           onAttemptRoute={onAttemptRoute} onAttemptChange={onAttemptChange} onAnswerDirtyChange={setAnswerEdited}
