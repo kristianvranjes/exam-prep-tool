@@ -76,7 +76,7 @@ it("offers materials and a secondary contribution path when the course has no pr
 
 it("asks for course-wide availability across every practice type, ignoring the current setup", async () => {
   render(<CourseOverview {...props()} />);
-  await waitFor(() => expect(mock.availability).toHaveBeenCalledExactlyOnceWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]));
+  await waitFor(() => expect(mock.availability).toHaveBeenCalledExactlyOnceWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"]));
   expect(screen.getByRole("button", { name: "Start recommended practice" })).toBeVisible();
   expect(screen.queryByText("No practice questions are available for this course yet.")).not.toBeInTheDocument();
 });

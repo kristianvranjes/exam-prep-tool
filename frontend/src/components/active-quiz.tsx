@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { penaltyText, pointsLabel } from "../lib/points";
+import { numberProblem } from "../lib/question-types";
 import { practiceApi, type Attempt, type Confidence, type PracticeAnswer } from "../lib/practice-api";
 import { Alert, Button } from "./ui";
 import { QuizAnswerEditor } from "./quiz-answer-editor";
@@ -49,7 +50,8 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
   const feedback = question.feedback ?? null;
   const checkedCount = attempt.questions.filter(item => item.feedback).length;
   const dirty = JSON.stringify(answer) !== JSON.stringify(question.answer);
-  const valid = answer !== null && (answer.type !== "SHORT_ANSWER" || answer.text.trim().length > 0);
+  const valid = answer !== null && (answer.type !== "SHORT_ANSWER" || answer.text.trim().length > 0)
+    && (answer.type !== "NUMERIC" || numberProblem(answer.value) === null);
   const answered = attempt.questions.filter(item => item.answer !== null).length;
   const unanswered = attempt.questions.length - answered;
   // A past paper can be handed in with blanks, which score 0 instead of a penalty.
@@ -136,7 +138,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
     if (busy) return;
     if (immediate && !feedback) check(); else forward();
   }
-  function changeAnswer(value: PracticeAnswer) { setAnswer(value); setSaveFailed(false); setError(""); }
+  function changeAnswer(value: PracticeAnswer | null) { setAnswer(value); setSaveFailed(false); setError(""); }
   function reviewUnanswered() {
     const next = attempt.questions.findIndex(item => item.answer === null);
     if (next < 0) return;
@@ -174,10 +176,10 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
     if (action.kind === "previous") { if (index === 0) return false; navigate(index - 1); return true; }
     if (action.kind === "favorite") { if (!question.source_question_id) return false; void favorites.toggle(question); return true; }
     // A checked answer is final, and a closed session cannot save one.
-    const choice = feedback || sessionClosed ? null : shortcutAnswer(question, action.key);
+    const choice = feedback || sessionClosed ? null : shortcutAnswer(question, action.key, answer);
     if (!choice) return false;
     changeAnswer(choice.answer);
-    Array.from(form.current?.querySelectorAll<HTMLInputElement>("input[type=radio]") ?? []).filter(input => input.name === question.id)[choice.index]?.focus();
+    Array.from(form.current?.querySelectorAll<HTMLInputElement>("input[type=radio], input[type=checkbox]") ?? []).filter(input => input.name === question.id)[choice.index]?.focus();
     return true;
   });
 
@@ -245,7 +247,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
         {immediate && !feedback && <ConfidencePicker name={question.id} value={confidence} onChange={setConfidence} disabled={busy} />}
         <div aria-live="polite">{feedback && <CheckedFeedback question={question} feedback={feedback} headingRef={feedbackHeading} />}</div>
         <div className="flex flex-col gap-3">
-          {!valid && <p id="answer-help" className="text-sm text-muted">{paper ? "Answer, or skip and leave this question blank." : question.type === "SHORT_ANSWER" ? "Enter your answer to continue." : "Choose an answer to continue."}</p>}
+          {!valid && <p id="answer-help" className="text-sm text-muted">{paper ? "Answer, or skip and leave this question blank." : question.type === "SHORT_ANSWER" || question.type === "NUMERIC" ? "Enter your answer to continue." : "Choose an answer to continue."}</p>}
           <div className="flex flex-wrap justify-between gap-3">
             <Button variant="secondary" disabled={busy || index === 0} aria-keyshortcuts="P K" onClick={() => navigate(index - 1)}>Previous</Button>
             {paper && !feedback && (question.answer !== null || answer !== null) && <Button variant="ghost" disabled={busy} onClick={leaveBlank}>Leave blank</Button>}

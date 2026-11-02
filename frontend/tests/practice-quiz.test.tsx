@@ -54,7 +54,7 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
   fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value: "3" } });
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 3, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "STANDARD", undefined, "IMMEDIATE");
+  expect(mock.start).toHaveBeenCalledWith("course", 3, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"], "STANDARD", undefined, "IMMEDIATE");
   expect(screen.queryByText(/Correct answer:|Reference answer:|Self-review required/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("One"));
   fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
@@ -116,7 +116,7 @@ it("keeps failed saves unsaved and allows reloading an already submitted attempt
 it("supports type filters and refuses an empty selection", async () => {
   render(<PracticeQuiz courseId="course" />);
   await open();
-  for (const label of ["Multiple choice", "True / false", "Short answer"]) fireEvent.click(screen.getByLabelText(label));
+  for (const label of ["Multiple choice", "True / false", "Short answer", "Numeric", "Multiple select"]) fireEvent.click(screen.getByLabelText(label));
   expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
   expect(screen.getByText("Choose at least one question type in More options.")).toBeVisible();
   expect(mock.start).not.toHaveBeenCalled();
@@ -266,7 +266,7 @@ it("launches adaptive review with the existing count and type controls", async (
   mock.start.mockRejectedValue(new Error("Only 1 eligible approved questions available"));
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Only 1 eligible");
-  expect(mock.start).toHaveBeenCalledWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE", undefined, "IMMEDIATE");
+  expect(mock.start).toHaveBeenCalledWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 async function start(experience: "Guided practice" | "Exam practice" = "Guided practice") {
@@ -293,7 +293,7 @@ it("keeps Study/Exam separate from the selection strategy and saves before navig
   fireEvent.click(screen.getByLabelText("Recommended practice"));
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 5, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE", undefined, "END");
+  expect(mock.start).toHaveBeenCalledWith("course", 5, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"], "ADAPTIVE", undefined, "END");
   fireEvent.click(screen.getByText("Session options"));
   fireEvent.click(screen.getByLabelText("Guided practice"));
   expect(screen.queryByRole("navigation", { name: "Question navigator" })).not.toBeInTheDocument();
@@ -532,7 +532,7 @@ it.each([5, 10, 20])("uses the %i question preset with the unchanged ADAPTIVE tr
   expect(screen.getByRole("radio", { name: `${count} questions` })).toBeChecked();
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", count, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE", undefined, "IMMEDIATE");
+  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", count, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 it.each(["0", "21", "1.5", ""])("explains invalid Custom length %s and does not start", async value => {
@@ -575,7 +575,7 @@ it("waits for eligibility, then replaces setup with an intentional empty state a
   expect(start).toBeDisabled();
   expect(screen.queryByText("No practice questions are available for this course yet.")).not.toBeInTheDocument();
   expect(screen.getByText("Checking practice questions…")).toBeVisible();
-  await act(async () => resolve(reply({}, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], 0)));
+  await act(async () => resolve(reply({}, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"], 0)));
   expect(await screen.findByText("No practice questions are available for this course yet.")).toBeVisible();
   expect(screen.queryByRole("button", { name: "Start practice" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "View materials" })); expect(materials).toHaveBeenCalledOnce();
@@ -613,25 +613,28 @@ it("prevents a predictably oversized request and allows a valid Custom count", a
   expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 1, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE", undefined, "IMMEDIATE");
+  expect(mock.start).toHaveBeenCalledWith("course", 1, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 it("asks the server again for the chosen mode and types and counts banks beyond one page", async () => {
   serve({ MULTIPLE_CHOICE: 40, TRUE_FALSE: 25 }, 65);
   render(<PracticeQuiz courseId="course" />);
   await open();
-  expect(mock.availability).toHaveBeenLastCalledWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE", undefined);
+  expect(mock.availability).toHaveBeenLastCalledWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"], "ADAPTIVE", undefined);
   fireEvent.click(screen.getByLabelText("Course questions"));
-  await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "STANDARD", undefined));
+  await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"], "STANDARD", undefined));
   fireEvent.click(screen.getByLabelText("Multiple choice"));
-  await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", ["TRUE_FALSE", "SHORT_ANSWER"], "STANDARD", undefined));
+  await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", ["TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"], "STANDARD", undefined));
   fireEvent.click(screen.getByRole("radio", { name: "20 questions" }));
   await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
   fireEvent.click(screen.getByLabelText("True / false"));
   expect(await screen.findByText(/No questions match your selected types/)).toBeVisible();
   expect(screen.queryByText("No practice questions are available for this course yet.")).not.toBeInTheDocument();
-  const calls = mock.availability.mock.calls.length;
   fireEvent.click(screen.getByLabelText("Short answer"));
+  fireEvent.click(screen.getByLabelText("Numeric"));
+  await screen.findByText(/No questions match your selected types/);
+  const calls = mock.availability.mock.calls.length;
+  fireEvent.click(screen.getByLabelText("Multiple select"));
   expect(await screen.findByText("Choose at least one question type in More options.")).toBeVisible();
   expect(mock.availability).toHaveBeenCalledTimes(calls);
   expect(mock.start).not.toHaveBeenCalled();
@@ -786,7 +789,7 @@ it('returns directly to marked questions from Guided review without changing exp
 
 const focusUnits = ["Unit 1", "Unit 2", "Unit 3"].map((title, position) => ({ id: `u${position + 1}`, course_id: "course", position, title, description: null, is_archived: false, approved_question_count: 10, created_at: "2026-10-01", updated_at: "2026-10-01" }));
 const midterm = { id: "mi", course_id: "course", academic_year: "2025/26", kind: "MIDTERM" as const, name: "MI", unit_ids: ["u1", "u2"], starts_on: null, ends_on: null, approved_question_count: 20, created_at: "2026-10-01", updated_at: "2026-10-01" };
-const allTypes = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
+const allTypes = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"];
 
 function withUnits() {
   mock.units.mockResolvedValue(focusUnits);
@@ -1002,4 +1005,50 @@ it("shows the exam timer and hands in saved answers when the server deadline pas
   await waitFor(() => expect(mock.submit).toHaveBeenCalledWith("course", "attempt"), { timeout: 4000 });
   expect(await screen.findByRole("heading", { name: "Practice complete" })).toBeVisible();
   expect(mock.submit).toHaveBeenCalledTimes(1);
+});
+
+it("answers numeric and multiple-select questions and shows their keys in results", async () => {
+  current.questions = [
+    { id: "num", position: 0, type: "NUMERIC", stem: "Gravity?", difficulty: null, options: [], answer: null, unit: "m/s²" },
+    { id: "multi", position: 1, type: "MULTIPLE_SELECT", stem: "Which are prime?", difficulty: null, options: [{ position: 0, text: "2" }, { position: 1, text: "3" }, { position: 2, text: "4" }], answer: null },
+  ];
+  current.feedback_mode = "END";
+  mock.history.mockResolvedValue([current]);
+  mock.submit.mockImplementation(async () => {
+    current = { ...current, status: "SUBMITTED", submitted_at: "2026-10-21T10:10:00Z", questions: [
+      { ...current.questions[0], options: [], grading_status: "CORRECT", explanation: null, reference_answer: null, correct_boolean: null, correct_value: "9.81", absolute_tolerance: "0.05", relative_tolerance: null },
+      { ...current.questions[1], options: [{ position: 0, text: "2", is_correct: true }, { position: 1, text: "3", is_correct: true }, { position: 2, text: "4", is_correct: false }], grading_status: "INCORRECT", explanation: null, reference_answer: null, correct_boolean: null },
+    ] } as Attempt;
+    return structuredClone(current);
+  });
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Resume session" }));
+  const field = await screen.findByLabelText(/^Your answer/);
+  expect(screen.getByText("m/s²")).toBeVisible();
+  fireEvent.change(field, { target: { value: "9.81 m/s" } });
+  expect(screen.getByText(/without units or spaces/)).toBeVisible();
+  expect(field).toHaveAttribute("aria-invalid", "true");
+  expect(screen.getByRole("button", { name: "Save and next" })).toBeDisabled();
+  fireEvent.change(field, { target: { value: "9,81" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
+  await screen.findByText("Which are prime?");
+  expect(mock.save).toHaveBeenLastCalledWith("course", "attempt", "num", { type: "NUMERIC", value: "9,81" });
+  expect(screen.getByText(/Only the exact set counts as correct/)).toBeVisible();
+  fireEvent.click(screen.getByLabelText("3"));
+  fireEvent.click(screen.getByLabelText("2"));
+  fireEvent.click(screen.getByLabelText("3"));
+  expect(screen.getByLabelText("3")).not.toBeChecked();
+  fireEvent.click(screen.getByLabelText("2"));
+  expect(screen.getByRole("button", { name: "Save and review" })).toBeDisabled();
+  fireEvent.click(screen.getByLabelText("3"));
+  fireEvent.click(screen.getByLabelText("2"));
+  fireEvent.click(screen.getByRole("button", { name: "Save and review" }));
+  await waitFor(() => expect(mock.save).toHaveBeenLastCalledWith("course", "attempt", "multi", { type: "MULTIPLE_SELECT", option_positions: [0, 1] }));
+  fireEvent.click(await screen.findByRole("button", { name: "Finish practice" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirm final submission" }));
+  await screen.findByRole("heading", { name: "Practice complete" });
+  fireEvent.click(screen.getByRole("button", { name: "All answers" }));
+  expect(screen.getByText("9.81 m/s² (± 0.05)")).toBeInTheDocument();
+  // The saved selection and the key read the same here.
+  expect(screen.getAllByText("2; 3", { selector: "dd" })).toHaveLength(2);
 });

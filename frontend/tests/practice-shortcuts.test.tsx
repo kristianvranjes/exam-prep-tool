@@ -54,6 +54,26 @@ it("maps keys to actions and only to options the question has", () => {
   expect(shortcutAnswer(sa, "1")).toBeNull();
 });
 
+it("toggles multiple-select options and ignores numeric questions", async () => {
+  const multi: ActiveQuestion = { ...mcq, id: "multi", type: "MULTIPLE_SELECT", stem: "Which are odd?" };
+  const numeric: ActiveQuestion = { ...sa, id: "num", type: "NUMERIC", stem: "Gravity?", unit: "m/s²" };
+  expect(shortcutAnswer(multi, "3", { type: "MULTIPLE_SELECT", option_positions: [0] })).toEqual({ answer: { type: "MULTIPLE_SELECT", option_positions: [0, 2] }, index: 2 });
+  // Removing the last chosen option leaves the question unanswered.
+  expect(shortcutAnswer(multi, "a", { type: "MULTIPLE_SELECT", option_positions: [0] })).toEqual({ answer: null, index: 0 });
+  expect(shortcutAnswer(numeric, "1")).toBeNull();
+  current = attempt([multi]);
+  render(<Quiz initial={current} experience="EXAM" />);
+  await question(1);
+  press("1"); press("c");
+  expect(screen.getByRole("checkbox", { name: "One" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Three" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Three" })).toHaveFocus();
+  press("1");
+  expect(screen.getByRole("checkbox", { name: "One" })).not.toBeChecked();
+  press("Enter", {}, document.body);
+  await waitFor(() => expect(mock.save).toHaveBeenLastCalledWith("course", "attempt", "multi", { type: "MULTIPLE_SELECT", option_positions: [2] }));
+});
+
 it("chooses multiple-choice options by number or letter and saves with Enter", async () => {
   current = attempt([mcq, tf]);
   render(<Quiz initial={current} experience="EXAM" />);
@@ -173,7 +193,7 @@ it("opens the shortcut list with ? and closes it with Escape, returning focus", 
   const dialog = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
   expect(dialog).toHaveAttribute("open");
   expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
-  expect(screen.getByText("Choose an answer option")).toBeVisible();
+  expect(screen.getByText("Choose an answer option, or toggle one on multiple-select")).toBeVisible();
   // Answer keys wait while the list is open.
   press("1");
   expect(screen.getByRole("radio", { name: "One", hidden: true })).not.toBeChecked();

@@ -1,5 +1,6 @@
 "use client";
 import { useUnsavedChanges } from "./unsaved-changes";
+import { keyText } from "../lib/question-types";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type Course, type Faculty, type ModeratorReport, type OwnerQuestion } from "../lib/api";
@@ -48,6 +49,7 @@ function QuestionReviewCard({
       {question.type === "MULTIPLE_CHOICE" && <p className="text-sm text-muted">Correct answer: <RichText text={question.options.find(option => option.is_correct)?.text ?? "Unknown"} /></p>}
       {question.type === "TRUE_FALSE" && <p className="text-sm text-muted">Answer: {question.correct_boolean === null ? "Unknown" : question.correct_boolean ? "True" : "False"}</p>}
       {question.type === "SHORT_ANSWER" && <p className="text-sm text-muted">Reference answer: <RichText text={question.reference_answer || "No reference answer"} /></p>}
+      {(question.type === "NUMERIC" || question.type === "MULTIPLE_SELECT") && <p className="text-sm text-muted">Correct answer: <RichText text={keyText(question) ?? "Unknown"} /></p>}
     </div>
     {question.explanation && <p className="text-sm text-muted">Explanation: <RichText text={question.explanation} /></p>}
     {(question.concept_ids.length > 0 || question.source_chunks.length > 0) && <details className="rounded-lg border border-line p-3">
@@ -323,6 +325,8 @@ function ReportsQueue({ facultyId, courseId, courses }: { facultyId: string; cou
         {question.type === "MULTIPLE_CHOICE" && <ul className="list-inside list-disc space-y-1">{question.options.map(option => <li key={option.position} className="break-words"><RichText text={option.text} />{option.is_correct ? " (correct)" : ""}</li>)}</ul>}
         {question.type === "TRUE_FALSE" && <p>Answer: {question.correct_boolean ? "True" : "False"}</p>}
         {question.type === "SHORT_ANSWER" && <p>Reference answer: <RichText text={question.reference_answer ?? ""} /></p>}
+        {question.type === "MULTIPLE_SELECT" && <ul className="list-inside list-disc space-y-1">{question.options.map(option => <li key={option.position} className="break-words"><RichText text={option.text} />{option.is_correct ? " (correct)" : ""}</li>)}</ul>}
+        {question.type === "NUMERIC" && <p>Correct answer: <RichText text={keyText(question) ?? ""} /></p>}
         {question.explanation && <p>Explanation: <RichText text={question.explanation} /></p>}
         <p>Reason: {report.reason}</p>
         {report.details && <p className="break-words">Details: {report.details}</p>}

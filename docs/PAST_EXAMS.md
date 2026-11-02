@@ -82,7 +82,9 @@ frozen points, grades and rule whenever the result is read:
 
 - a correct answer earns the item's points;
 - a wrong objective answer loses `wrong_answer_penalty × points`, rounded half up to
-  hundredths; the total may be negative, as on a real paper;
+  hundredths; the total may be negative, as on a real paper. Numeric answers outside
+  the tolerance and multiple-select answers that are not exactly the correct set count
+  as wrong; there is no partial credit;
 - a blank earns 0;
 - a short answer awaiting self-review earns nothing yet and is reported as
   `pending_points`, never guessed into the total;

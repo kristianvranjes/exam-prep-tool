@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { answerText } from "../lib/question-types";
 import type { Attempt } from "../lib/practice-api";
 import { QuestionUnits } from "./question-units";
 import { RichText } from "./rich-text";
@@ -15,7 +16,7 @@ export function AbandonedQuiz({ attempt }: { attempt: Extract<Attempt, { status:
     </div>
     {attempt.questions.map((question, index) => {
       const answer = question.answer;
-      const savedAnswer = answer?.type === "SHORT_ANSWER" ? answer.text : answer?.type === "TRUE_FALSE" ? String(answer.value) : question.options.find(option => answer?.type === "MULTIPLE_CHOICE" && option.position === answer.option_position)?.text;
+      const savedAnswer = answerText(answer, question.options, question.unit);
       return <article key={question.id} aria-label={`Question ${index + 1} saved answer`}><Surface className="flex flex-col gap-3">
         <h3 className="text-lg font-semibold">{index + 1}. <RichText text={question.stem} /></h3>
         <QuestionUnits units={question.units} />

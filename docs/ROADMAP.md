@@ -25,9 +25,11 @@ does not complete their implementation or hosted verification. Record completion
 - Authentication, faculty/course discovery, enrollment, and course management.
 - PDF ingestion, stored sections/chunks, optional concept extraction and semantic retrieval.
 - Manual question authoring, JSON draft import, question versions, and human approval.
-- Multiple-choice, true/false, and short-answer practice.
+- Multiple-choice, true/false, and short-answer practice, plus numeric answers with
+  tolerances and multiple-select questions (R4).
 - Saved attempts, resume, abandonment, and frozen submitted results.
-- Deterministic grading for multiple-choice and true/false.
+- Deterministic grading for multiple-choice and true/false, numeric answers by tolerance
+  (`numeric-tolerance-v1`) and multiple-select by exact set (`exact-set-v1`).
 - Question-level review scheduling, adaptive selection, and course progress summaries.
 - Faculty moderation, question reports, and reviewed edit suggestions.
 - Unit, PostgreSQL integration, and multi-user browser acceptance coverage.
@@ -142,7 +144,11 @@ each item as its own pull request, in this order:
    *Implemented* for course owners and faculty moderators (see
    [item analysis](COMMUNITY.md#item-analysis-r14)), except median time, which needs
    time per question (item 6).
-5. **R4** numeric and multiple-select questions, KaTeX, code highlighting.
+5. **R4** numeric and multiple-select questions, KaTeX, code highlighting. *Implemented*
+   for numeric and multiple-select questions (see
+   [numeric and multiple-select grading](PRACTICE.md#numeric-and-multiple-select-grading-r4)),
+   with `quiz-import-v2`; KaTeX and code blocks shipped earlier. Question images,
+   longer stems and rubrics remain open.
 6. Practice keyboard shortcuts, “continue where you left off”, and time per question.
    *Implemented* except time per question (see
    [shortcuts and continuing](PRACTICE.md#keyboard-shortcuts-and-continuing-a-session)).
@@ -394,6 +400,11 @@ deterministically.
 2. **Multiple-select answers**
    - Add a `MULTIPLE_SELECT` type graded by exact-set correctness. Partial credit is only
      available through an explicit paper scoring rule (R3), never by default.
+
+   *Packages 1 and 2 are implemented* (migration 0024): authoring, moderation, edit
+   suggestions, versions, snapshots, practice and paper sessions, checked feedback,
+   results and scheduling, and the `quiz-import-v2` format (v1 still imports). Paper
+   sessions apply their usual penalty to any wrong set; no partial-credit rule exists yet.
 
 3. **Formulas and diagrams**
    - Render LaTeX in stems, options, explanations, and reference answers with KaTeX;

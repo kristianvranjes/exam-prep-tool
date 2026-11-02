@@ -3,6 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api, type CourseUnit, type ExamPaper, type ExamPaperBody, type ExamPaperDetail, type ExamPaperItemInput, type ExamScope, type ExamScopeKind, type Question } from "../lib/api";
 import { formatExamDate } from "../lib/exam-dates";
+import { typeLabels } from "../lib/question-types";
 import { formatPoints, penaltyLabels, penaltyText, pointsLabel } from "../lib/points";
 import { practiceApi, type Attempt } from "../lib/practice-api";
 import { currentAcademicYear, kindLabels } from "./exam-scopes";
@@ -12,7 +13,6 @@ import { DraftForm } from "./unsaved-changes";
 
 const YEAR = /^\d{4}\/\d{2}$/;
 const PAGE = 50;
-const typeLabels = { MULTIPLE_CHOICE: "Multiple choice", TRUE_FALSE: "True / false", SHORT_ANSWER: "Short answer" } as const;
 
 function paperFacts(paper: ExamPaper) {
   return [

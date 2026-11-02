@@ -26,6 +26,7 @@ from app.schemas.quiz import (
     FeedbackMode,
     Grade,
     MCQAnswer,
+    MultipleSelectAnswer,
     PaperScore,
     PaperSession,
     PracticeAvailability,
@@ -146,6 +147,9 @@ def feedback(content: OwnerQuestion, answer: Answer | None) -> QuestionFeedback:
         explanation=content.explanation,
         correct_boolean=content.correct_boolean,
         reference_answer=content.reference_answer,
+        correct_value=content.correct_value,
+        absolute_tolerance=content.absolute_tolerance,
+        relative_tolerance=content.relative_tolerance,
         grading_status=cast(Grade, answer.grading_status) if answer else "PENDING",
         confidence=cast(Confidence | None, answer.confidence) if answer else None,
     )
@@ -182,6 +186,7 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
             favorite=row.source_question_id in favorites,
             points=None if row.points is None else float(row.points),
             label=row.label,
+            unit=content.unit,
         )
         if attempt.status == "SUBMITTED":
             result = ResultQuestion(
@@ -463,9 +468,16 @@ def save_answer(
     require_writable(attempt)
     question = attempt_question(db, attempt, question_id)
     content = OwnerQuestion.model_validate(question.snapshot)
-    if data.type != content.type or (
-        isinstance(data, MCQAnswer)
-        and data.option_position not in {o.position for o in content.options}
+    if (
+        data.type != content.type
+        or (
+            isinstance(data, MCQAnswer)
+            and data.option_position not in {o.position for o in content.options}
+        )
+        or (
+            isinstance(data, MultipleSelectAnswer)
+            and not set(data.option_positions) <= {o.position for o in content.options}
+        )
     ):
         raise HTTPException(422, "Answer must match the question type and available options")
     try:

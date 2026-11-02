@@ -26,7 +26,7 @@ requests return 401. Payload ownership, status, timestamp and score fields are f
 
 | Method / path | Contract |
 | --- | --- |
-| `POST /courses/{course_id}/attempts` | `{ "count": 5, "question_types": ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"] }`; 201 ACTIVE attempt. Omitted types means all three. Optional `unit_ids` or `exam_scope_id` (not both) limit selection to questions in those units; see [practice by unit](COURSE_UNITS.md#practice-by-unit-or-exam-cycle). Optional `selection_mode`: `STANDARD` (default), `ADAPTIVE`, `MISTAKES`, `DUE`, `FAVORITES` or `MOCK`; see [adaptive selection](#adaptive-quiz-selection-phase-9b), [mistakes, due review and mock exams](#mistakes-due-review-and-mock-exams-r5-r3) and [favorites](#favorites-and-the-quick-quiz-r5). |
+| `POST /courses/{course_id}/attempts` | `{ "count": 5, "question_types": ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"] }`; 201 ACTIVE attempt. Omitted types means all five. Optional `unit_ids` or `exam_scope_id` (not both) limit selection to questions in those units; see [practice by unit](COURSE_UNITS.md#practice-by-unit-or-exam-cycle). Optional `selection_mode`: `STANDARD` (default), `ADAPTIVE`, `MISTAKES`, `DUE`, `FAVORITES` or `MOCK`; see [adaptive selection](#adaptive-quiz-selection-phase-9b), [mistakes, due review and mock exams](#mistakes-due-review-and-mock-exams-r5-r3) and [favorites](#favorites-and-the-quick-quiz-r5). |
 | `GET /courses/{course_id}/practice-availability` | Advisory counts of what a start with the same mode, types and focus could select now, using the same selection filters; see [practice availability](COURSE_UNITS.md#practice-availability). |
 | `GET /courses/{course_id}/attempts?limit=20&offset=0` | Own attempt summaries, newest first; limit 1–50, offset 0–10000. |
 | `GET /courses/{course_id}/attempts/{id}` | Saved ACTIVE attempt, frozen SUBMITTED result, or read-only ABANDONED history. |
@@ -41,12 +41,19 @@ Answer payloads (strict types; unknown fields rejected):
 {"type":"MULTIPLE_CHOICE","option_position":0}
 {"type":"TRUE_FALSE","value":false}
 {"type":"SHORT_ANSWER","text":"My response"}
+{"type":"NUMERIC","value":"9,81"}
+{"type":"MULTIPLE_SELECT","option_positions":[0,2]}
 ```
 
 Positions refer to the snapshotted options, not mutable bank option identifiers.
 The type must match the snapshot; invalid positions/shapes return 422. Short answers
 preserve original text, including whitespace, and are bounded to 1–2000 characters.
-Blank-only text, NUL and unpaired Unicode surrogates are rejected. There is one saved answer per question;
+Blank-only text, NUL and unpaired Unicode surrogates are rejected. Numeric answers are
+kept as typed (at most 40 characters) and must parse as a number: a decimal comma or
+point and scientific notation are accepted; units, spaces, thousands separators and
+inputs with both a comma and a point are rejected with a message instead of guessed.
+Multiple-select answers list one or more distinct snapshot positions (sorted on save);
+an empty selection is not an answer. There is one saved answer per question;
 changing it replaces the previous payload. Unsaved input is not persisted.
 
 ## Lifecycle, integrity and grading
@@ -54,7 +61,9 @@ changing it replaces the previous payload. Unsaved input is not persisted.
 `ACTIVE -> SUBMITTED` and `ACTIVE -> ABANDONED` are the final transitions. Submission
 requires a saved answer for every question (otherwise 409, with no state or grade
 changes). Submission
-marks MCQ/TRUE_FALSE answers CORRECT or INCORRECT using exact option/boolean comparison.
+marks MCQ/TRUE_FALSE answers CORRECT or INCORRECT using exact option/boolean comparison,
+NUMERIC answers by tolerance and MULTIPLE_SELECT answers by exact set (see
+[numeric and multiple-select grading](#numeric-and-multiple-select-grading-r4)).
 SHORT_ANSWER always remains PENDING, even when its text exactly matches the
 snapshotted reference after normalization. Submitted results show the original
 student answer and frozen Reference answer for self-review. No aggregate score
@@ -172,6 +181,26 @@ starts/submissions, so an adaptive start after committed abandonment can reuse t
 eligible source questions. Abandoned sources remain seen, rather than becoming
 unseen; other active attempts still exclude their sources. STANDARD selection and
 ADAPTIVE ranking are unchanged. There is no automatic expiry, reopening or deletion.
+
+## Numeric and multiple-select grading (R4)
+
+Both types are graded deterministically at submission, or on *Check* in guided
+practice, and record their own `grading_version`, so earlier provenance is unchanged:
+
+- **`numeric-tolerance-v1`:** the typed value is parsed as above and compared with the
+  frozen key. It is correct when `|answer − key| ≤ max(absolute_tolerance,
+  relative_tolerance × |key|)`, inclusive at the boundary. Without tolerances only the
+  exact value matches (`9,81` equals `9.810`). The optional unit is shown next to the
+  field; answers never carry a unit and nothing is converted.
+- **`exact-set-v1`:** correct only when the chosen options are exactly the frozen set of
+  correct options. There is no partial credit; a past paper's wrong-answer penalty
+  applies to any other set, as for a wrong multiple-choice answer.
+
+Results and checked feedback show the numeric key with its tolerance (for example
+`9.81 m/s² (± 0.05)`) or every correct option. Scheduling, mistakes, due review,
+readiness and favorites treat both types like other graded questions. Item analysis
+reports their difficulty and discrimination; its option distribution covers
+single-answer questions only.
 
 ## Phase 8 grading and provenance
 

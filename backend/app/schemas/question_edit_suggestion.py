@@ -4,7 +4,18 @@ from uuid import UUID
 
 from pydantic import Field, model_validator
 
-from app.schemas.question import Difficulty, OwnerQuestion, QuestionContent, Stem, StrictModel, Text
+from app.schemas.question import (
+    Difficulty,
+    Number,
+    OwnerQuestion,
+    QuestionContent,
+    RelativeTolerance,
+    Stem,
+    StrictModel,
+    Text,
+    Tolerance,
+    Unit,
+)
 from app.schemas.question_report import Details
 
 SuggestionStatus = Literal["OPEN", "RESOLVED"]
@@ -23,14 +34,28 @@ class SuggestionChanges(StrictModel):
     difficulty: Difficulty | None = None
     options: list[OptionTextChange] | None = Field(default=None, min_length=1, max_length=6)
     correct_option_position: Position | None = None
+    # MULTIPLE_SELECT: the complete set of correct positions.
+    correct_option_positions: list[Position] | None = Field(
+        default=None, min_length=1, max_length=6
+    )
     correct_answer: bool | None = None
     reference_answer: Text | None = None
+    # NUMERIC; null clears an optional tolerance or unit.
+    correct_value: Number | None = None
+    absolute_tolerance: Tolerance | None = None
+    relative_tolerance: RelativeTolerance | None = None
+    unit: Unit | None = None
 
     @model_validator(mode="after")
     def sparse_changes(self) -> Self:
         if not self.model_fields_set:
             raise ValueError("Provide at least one proposed change")
-        for name in self.model_fields_set - {"difficulty", "explanation"}:
+        nullable = {"difficulty", "explanation", "absolute_tolerance", "relative_tolerance", "unit"}
+        if self.correct_option_positions and len(set(self.correct_option_positions)) != len(
+            self.correct_option_positions
+        ):
+            raise ValueError("Correct option positions must be unique")
+        for name in self.model_fields_set - nullable:
             if getattr(self, name) is None:
                 raise ValueError("Proposed content cannot be null")
         if self.options and len({option.position for option in self.options}) != len(self.options):

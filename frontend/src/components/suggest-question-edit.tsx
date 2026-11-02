@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, type PublicQuestion, type SuggestionChanges } from "../lib/api";
+import { numberProblem } from "../lib/question-types";
 import { Alert, Button, Input, Select } from "./ui";
 import { DraftForm } from "./unsaved-changes";
 
@@ -38,6 +39,24 @@ export function SuggestQuestionEdit({ question }: { question: SuggestableQuestio
       if (options.length) changes.options = options;
       const correct = String(data.get("correctOption") ?? "");
       if (correct !== "") changes.correct_option_position = Number(correct);
+    } else if (question.type === "MULTIPLE_SELECT") {
+      const options = question.options.flatMap(option => {
+        const text = String(data.get(`option-${option.position}`) ?? "").trim();
+        return text ? [{ position: option.position, text }] : [];
+      });
+      if (options.length) changes.options = options;
+      if (data.get("changeKey") === "on") {
+        const positions = data.getAll("correctOptions").map(Number);
+        if (!positions.length) { setError("Choose at least one correct option, or untick the answer change."); return; }
+        changes.correct_option_positions = positions;
+      }
+    } else if (question.type === "NUMERIC") {
+      const value = String(data.get("correctValue") ?? "").trim();
+      if (value) {
+        const problem = numberProblem(value);
+        if (problem) { setError(`Proposed correct value: ${problem}.`); return; }
+        changes.correct_value = value;
+      }
     } else if (question.type === "TRUE_FALSE") {
       const answer = String(data.get("answer") ?? "");
       if (answer !== "") changes.correct_answer = answer === "true";
@@ -87,6 +106,18 @@ export function SuggestQuestionEdit({ question }: { question: SuggestableQuestio
             </Select>
           </label>
         </>}
+        {question.type === "MULTIPLE_SELECT" && <>
+          {question.options.map(option => <label key={option.position} className="block text-sm font-medium">Proposed option {option.position + 1} text
+            <Input name={`option-${option.position}`} maxLength={400} placeholder={option.text} className="mt-1" />
+          </label>)}
+          <fieldset className="space-y-1">
+            <legend className="text-sm font-medium"><label><input type="checkbox" name="changeKey" /> Propose a different set of correct options</label></legend>
+            {question.options.map(option => <label key={option.position} className="block text-sm"><input type="checkbox" name="correctOptions" value={option.position} /> Option {option.position + 1}: {option.text}</label>)}
+          </fieldset>
+        </>}
+        {question.type === "NUMERIC" && <label className="block text-sm font-medium">Proposed correct value
+          <Input name="correctValue" inputMode="decimal" maxLength={40} className="mt-1 sm:w-48" />
+        </label>}
         {question.type === "TRUE_FALSE" && <label className="block text-sm font-medium">Proposed correct answer
           <Select name="answer" defaultValue="" className="mt-1"><option value="">No answer change</option><option value="true">True</option><option value="false">False</option></Select>
         </label>}

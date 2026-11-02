@@ -54,7 +54,7 @@ export function QuizImport({ courseId, disabled, onImported, units = [] }: {
         try { await navigator.clipboard.writeText(quizImportPrompt); setCopyError(""); setNotice("Prompt copied."); }
         catch { setCopyError("Could not copy. Select and copy the prompt text above."); }
       }}>Copy prompt</Button>
-      <a className="inline-flex min-h-11 items-center text-sm font-medium text-accent underline underline-offset-4 hover:text-accent-hover" href="/quiz-import-v1.example.json" download>Download example JSON</a></div>
+      <a className="inline-flex min-h-11 items-center text-sm font-medium text-accent underline underline-offset-4 hover:text-accent-hover" href="/quiz-import-v2.example.json" download>Download example JSON</a></div>
       {copyError && <Alert className="mt-3">{copyError}</Alert>}
     </details>
     <form onSubmit={submit} className="space-y-3">

@@ -29,7 +29,7 @@ def test_supported_types(indices):
 @pytest.mark.parametrize(
     "change",
     [
-        {"version": "quiz-import-v2"},
+        {"version": "quiz-import-v3"},
         {"questions": []},
         {"status": "APPROVED"},
         {"questions": [{"type": "ESSAY", "stem": "No"}]},

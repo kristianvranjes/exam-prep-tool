@@ -3,13 +3,14 @@
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { api, Concept, type CourseUnit, OwnerQuestion, Question, QuestionAction, QuestionCreate, QuestionEdit, QuestionStatus, QuestionType, QuestionVersion, type ReportReason } from "../lib/api";
 
+import { CLASSIC_TYPES, keyText, numberProblem, QUESTION_TYPES } from "../lib/question-types";
 import { QuizImport } from "./quiz-import";
 import { FormattingHelp, RichText, RichTextPreview } from "./rich-text";
 import { SuggestQuestionEdit } from "./suggest-question-edit";
 import { DraftForm } from "./unsaved-changes";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
 
-const types: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
+const types: QuestionType[] = QUESTION_TYPES;
 const statuses: QuestionStatus[] = ["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED", "ARCHIVED"];
 const label = (value: string) => value === "PENDING_REVIEW" ? "Awaiting faculty review" : value.toLowerCase().replaceAll("_", " ");
 const textareaClass = "min-h-28 w-full rounded-control border border-line-strong bg-surface px-3 py-2 text-foreground";
@@ -248,7 +249,7 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
           <fieldset>
             <legend className="font-medium">Question types</legend>
             <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
-              {types.map((t) => <label key={t} className="text-sm"><input type="checkbox" name="questionType" value={t} defaultChecked />{label(t)}</label>)}
+              {CLASSIC_TYPES.map((t) => <label key={t} className="text-sm"><input type="checkbox" name="questionType" value={t} defaultChecked />{label(t)}</label>)}
             </div>
           </fieldset>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -457,6 +458,7 @@ function OwnerReview({ question: q, creator, moderator, owner, concepts, units, 
   return <div className="min-w-0 space-y-5 text-sm">
     <div className="space-y-2 break-words [overflow-wrap:anywhere]">
       {q.type === "TRUE_FALSE" && <p>Correct answer: {String(q.correct_boolean)}</p>}
+      {(q.type === "NUMERIC" || q.type === "MULTIPLE_SELECT") && <p>Correct answer: <RichText text={keyText(q) ?? ""} /></p>}
       {q.reference_answer && <p>Reference answer: <RichText text={q.reference_answer} /></p>}
       {q.explanation && <p>Explanation: <RichText text={q.explanation} /></p>}
       {q.rejection_reason && <p className="rounded-lg border border-danger/30 bg-danger-surface p-3 text-danger">Rejection reason: {q.rejection_reason}</p>}
@@ -497,6 +499,7 @@ function OwnerReview({ question: q, creator, moderator, owner, concepts, units, 
             {v.snapshot.explanation && <p>Explanation: <RichText text={v.snapshot.explanation} /></p>}
             {v.snapshot.options.map((o) => <p key={o.position}><RichText text={o.text} />{o.is_correct ? " (correct)" : ""}</p>)}
             {v.snapshot.type === "TRUE_FALSE" && <p>Answer: {String(v.snapshot.correct_boolean)}</p>}
+            {v.snapshot.type === "NUMERIC" && <p>Answer: <RichText text={keyText(v.snapshot) ?? ""} /></p>}
             {v.snapshot.reference_answer && <p>Reference answer: <RichText text={v.snapshot.reference_answer} /></p>}
             <p>Concepts: {v.snapshot.concept_ids.join(", ")}</p>
             <p>Source: {v.snapshot.source}</p>
@@ -511,7 +514,8 @@ function OwnerReview({ question: q, creator, moderator, owner, concepts, units, 
 function toEdit(body: QuestionCreate): QuestionEdit {
   const patch: QuestionEdit = { stem: body.stem, explanation: body.explanation, difficulty: body.difficulty, concept_ids: body.concept_ids };
   if (body.unit_ids) patch.unit_ids = body.unit_ids;
-  if (body.type === "MULTIPLE_CHOICE") patch.options = body.options;
+  if (body.type === "MULTIPLE_CHOICE" || body.type === "MULTIPLE_SELECT") patch.options = body.options;
+  if (body.type === "NUMERIC") Object.assign(patch, { correct_value: body.correct_value, absolute_tolerance: body.absolute_tolerance, relative_tolerance: body.relative_tolerance, unit: body.unit });
   if (body.type === "TRUE_FALSE") patch.correct_answer = body.correct_answer;
   if (body.type === "SHORT_ANSWER") patch.reference_answer = body.reference_answer;
   return patch;
@@ -524,6 +528,8 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
   const [selectedConceptIds, setSelectedConceptIds] = useState<string[]>(q?.concept_ids ?? []);
   const [stem, setStem] = useState(q?.stem ?? "");
   const formattingHelp = useId();
+  const [formError, setFormError] = useState("");
+  const multiple = questionType === "MULTIPLE_SELECT";
   const approved = concepts.filter((concept) => concept.status === "APPROVED");
   const approvedIds = new Set(approved.map((concept) => concept.id));
   // Keep edit associations that are not currently offered, including when concepts fail to load.
@@ -548,7 +554,22 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
       ...(units.length ? { unit_ids: selectedUnitIds } : {}),
     };
     let body: QuestionCreate;
-    if (questionType === "MULTIPLE_CHOICE") body = { ...common, type: questionType, options };
+    const text = (name: string) => String(data.get(name) ?? "").trim();
+    if (questionType === "NUMERIC") {
+      const fields: [string, string][] = [["Correct value", text("correctValue")], ["Absolute tolerance", text("absoluteTolerance")], ["Relative tolerance", text("relativeTolerance")]];
+      const problem = fields.find(([name, value]) => (name === "Correct value" || value) && numberProblem(value));
+      if (problem) { setFormError(`${problem[0]}: ${numberProblem(problem[1])}.`); return; }
+      const percent = text("relativeTolerance");
+      // Authors type a percentage; the API stores the share of the key (1 % = 0.01).
+      const relative = percent ? String(Number((Number(percent.replace(",", ".")) / 100).toPrecision(12))) : null;
+      setFormError("");
+      body = { ...common, type: questionType, correct_value: text("correctValue"), absolute_tolerance: text("absoluteTolerance") || null, relative_tolerance: relative, unit: text("unit") || null };
+      void save(body);
+      return;
+    }
+    if (questionType === "MULTIPLE_SELECT" && !options.some((option) => option.is_correct)) { setFormError("Mark at least one correct option."); return; }
+    setFormError("");
+    if (questionType === "MULTIPLE_CHOICE" || questionType === "MULTIPLE_SELECT") body = { ...common, type: questionType, options };
     else if (questionType === "TRUE_FALSE") body = { ...common, type: questionType, correct_answer: data.get("answer") === "true" };
     else body = { ...common, type: questionType, reference_answer: String(data.get("reference")) };
     void save(body);
@@ -558,7 +579,12 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
     <fieldset disabled={busy} className="space-y-4">
       <legend className="px-1 font-semibold">{q ? "Edit draft content" : "New private draft"}</legend>
       {!q && <label className="block font-medium">Question type
-        <Select className="mt-1" value={questionType} onChange={(e) => setQuestionType(e.target.value as QuestionType)}>
+        <Select className="mt-1" value={questionType} onChange={(e) => {
+          const next = e.target.value as QuestionType;
+          // A single-answer question keeps only its first correct option.
+          if (next === "MULTIPLE_CHOICE") { const first = Math.max(0, options.findIndex((option) => option.is_correct)); setOptions(options.map((option, position) => ({ ...option, is_correct: position === first }))); }
+          setQuestionType(next);
+        }}>
           {types.map((value) => <option key={value} value={value}>{label(value)}</option>)}
         </Select>
       </label>}
@@ -574,10 +600,11 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
         <Input className="mt-1 sm:w-24" name="difficulty" type="number" min={1} max={5} defaultValue={q?.difficulty || ""} />
       </label>
 
-      {questionType === "MULTIPLE_CHOICE" && <fieldset className="space-y-2">
-        <legend className="font-medium">Options (select one correct answer)</legend>
+      {(questionType === "MULTIPLE_CHOICE" || multiple) && <fieldset className="space-y-2">
+        <legend className="font-medium">{multiple ? "Options (mark every correct answer)" : "Options (select one correct answer)"}</legend>
         {options.map((option, index) => <div key={index} className="flex min-w-0 flex-wrap items-center gap-2">
-          <input aria-label={"Correct option " + (index + 1)} type="radio" name="correctOption" checked={option.is_correct} onChange={() => setOptions(options.map((item, position) => ({ ...item, is_correct: position === index })))} required />
+          <input aria-label={"Correct option " + (index + 1)} type={multiple ? "checkbox" : "radio"} name="correctOption" checked={option.is_correct}
+            onChange={() => setOptions(options.map((item, position) => multiple ? (position === index ? { ...item, is_correct: !item.is_correct } : item) : { ...item, is_correct: position === index }))} required={!multiple} />
           <Input aria-label={"Option " + (index + 1)} className="min-w-32 flex-1" value={option.text} required maxLength={400} onChange={(e) => setOptions(options.map((item, position) => position === index ? { ...item, text: e.target.value } : item))} />
           <Button type="button" variant="secondary" aria-label={"Remove option " + (index + 1)} disabled={options.length <= 2} onClick={() => removeOption(index)}>Remove</Button>
         </div>)}
@@ -589,6 +616,16 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
           <option value="true">True</option><option value="false">False</option>
         </Select>
       </label>}
+      {questionType === "NUMERIC" && <fieldset className="space-y-3">
+        <legend className="font-medium">Numeric answer</legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">Correct value<Input className="mt-1" name="correctValue" inputMode="decimal" required maxLength={40} defaultValue={q?.correct_value ?? ""} placeholder="9,81" /></label>
+          <label className="block">Unit (optional)<Input className="mt-1" name="unit" maxLength={20} defaultValue={q?.unit ?? ""} placeholder="m/s²" /></label>
+          <label className="block">Absolute tolerance (optional)<Input className="mt-1" name="absoluteTolerance" inputMode="decimal" maxLength={40} defaultValue={q?.absolute_tolerance ?? ""} placeholder="0,05" /></label>
+          <label className="block">Relative tolerance in % (optional)<Input className="mt-1" name="relativeTolerance" inputMode="decimal" maxLength={40} defaultValue={q?.relative_tolerance ? String(Number((Number(q.relative_tolerance) * 100).toPrecision(12))) : ""} placeholder="1" /></label>
+        </div>
+        <p className="text-sm text-muted">Answers within the larger of the two tolerances count as correct, boundaries included. Without tolerances only the exact value counts. Students type the number without the unit.</p>
+      </fieldset>}
       {questionType === "SHORT_ANSWER" && <label className="block font-medium">Reference answer
         <textarea className={textareaClass + " mt-1"} name="reference" defaultValue={q?.reference_answer || ""} required maxLength={2000} />
       </label>}
@@ -601,6 +638,7 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
         <legend className="font-medium">Course units (optional, up to {MAX_QUESTION_UNITS})</legend>
         <UnitChoices units={units} linked={q?.unit_ids ?? []} chosen={selectedUnitIds} setChosen={setSelectedUnitIds} />
       </fieldset>}
+      {formError && <Alert>{formError}</Alert>}
       <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={busy}>{busy ? "Saving…" : q ? "Save question" : "Save draft"}</Button>
         {cancel && <Button type="button" variant="secondary" disabled={busy} onClick={cancel}>Cancel create</Button>}

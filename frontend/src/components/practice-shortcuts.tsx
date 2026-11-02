@@ -9,7 +9,7 @@ export type ShortcutAction = { kind: "help" } | { kind: "primary" } | { kind: "n
 
 /** The rows of the help dialog. A new shortcut adds a row here and a case in `shortcutAction`. */
 export const PRACTICE_SHORTCUTS: { keys: string[][]; label: string }[] = [
-  { keys: [["1", "9"], ["A", "I"]], label: "Choose an answer option" },
+  { keys: [["1", "9"], ["A", "I"]], label: "Choose an answer option, or toggle one on multiple-select" },
   { keys: [["T"], ["F"], ["1"], ["2"]], label: "Answer true or false" },
   { keys: [["Enter"]], label: "Save, check, or go to the next question" },
   { keys: [["N"], ["J"]], label: "Next question" },
@@ -32,16 +32,30 @@ export function shortcutAction(key: string): ShortcutAction | null {
   return null;
 }
 
-/** The answer a choice key gives this question, and which option it is, or null if the key does not fit. */
-export function shortcutAnswer(question: ActiveQuestion, key: string): { answer: PracticeAnswer; index: number } | null {
+/** Adds or removes one option of a multiple-select answer; an empty selection is no answer. */
+export function toggleOption(selected: number[], position: number): PracticeAnswer | null {
+  const next = selected.includes(position) ? selected.filter(item => item !== position) : [...selected, position];
+  return next.length ? { type: "MULTIPLE_SELECT", option_positions: [...next].sort((a, b) => a - b) } : null;
+}
+
+/**
+ * The answer a choice key gives this question, and which option it is, or null if the key does not fit.
+ * On multiple-select questions the key toggles that option in `current`.
+ */
+export function shortcutAnswer(question: ActiveQuestion, key: string, current: PracticeAnswer | null = null): { answer: PracticeAnswer | null; index: number } | null {
   if (question.type === "TRUE_FALSE") {
     const value = key === "t" || key === "1" ? true : key === "f" || key === "2" ? false : null;
     return value === null ? null : { answer: { type: "TRUE_FALSE", value }, index: value ? 0 : 1 };
   }
-  if (question.type !== "MULTIPLE_CHOICE" || key.length !== 1) return null;
+  if ((question.type !== "MULTIPLE_CHOICE" && question.type !== "MULTIPLE_SELECT") || key.length !== 1) return null;
   const index = /[1-9]/.test(key) ? Number(key) - 1 : LETTERS.indexOf(key);
   const option = index >= 0 ? question.options[index] : undefined;
-  return option ? { answer: { type: "MULTIPLE_CHOICE", option_position: option.position }, index } : null;
+  if (!option) return null;
+  if (question.type === "MULTIPLE_SELECT") {
+    const selected = current?.type === "MULTIPLE_SELECT" ? current.option_positions : [];
+    return { answer: toggleOption(selected, option.position), index };
+  }
+  return { answer: { type: "MULTIPLE_CHOICE", option_position: option.position }, index };
 }
 
 /** The `aria-keyshortcuts` value for an answer option. */
