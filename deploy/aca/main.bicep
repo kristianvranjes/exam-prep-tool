@@ -29,8 +29,11 @@ param databaseUrl string
 @description('Session signing secret of at least 32 random characters.')
 param sessionSecret string
 
-@description('owner/name of the GitHub repository whose main branch may deploy.')
-param githubRepository string = 'kristianvranjes/exam-prep-tool'
+// The repository uses GitHub's immutable OIDC subjects, which carry the owner and
+// repository IDs: `gh api repos/OWNER/REPO/actions/oidc/customization/sub` prints it
+// as sub_claim_prefix (or `repo:OWNER/REPO` when use_immutable_subject is false).
+@description('Subject prefix of the GitHub repository whose main branch may deploy.')
+param githubSubjectPrefix string = 'repo:kristianvranjes@150933585/exam-prep-tool@1368863694'
 
 @description('standard (0.5 vCPU, 1 GiB) leaves room for PDF imports; small (0.25 vCPU, 0.5 GiB) costs about half.')
 @allowed([
@@ -277,7 +280,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
 // --- Deploys from GitHub Actions -------------------------------------------------
 
 // GitHub signs in as this identity through OIDC, so no Azure password is stored in
-// GitHub. Only workflow runs on the main branch of githubRepository are accepted.
+// GitHub. Only workflow runs on the main branch of that repository are accepted.
 resource deployIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: 'examprep-github-deploy'
   location: location
@@ -288,7 +291,7 @@ resource githubMain 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedI
   name: 'github-main'
   properties: {
     issuer: 'https://token.actions.githubusercontent.com'
-    subject: 'repo:${githubRepository}:ref:refs/heads/main'
+    subject: '${githubSubjectPrefix}:ref:refs/heads/main'
     audiences: [
       'api://AzureADTokenExchange'
     ]
