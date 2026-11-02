@@ -18,7 +18,7 @@ import type { ResumableAttempt } from "./use-resumable-sessions";
 
 export type { CourseDestination } from "../lib/workspace-route";
 const destinations: { id: CourseDestination; label: string }[] = [
-  { id: "overview", label: "Overview" }, { id: "practice", label: "Practice" },
+  { id: "overview", label: "Overview" }, { id: "practice", label: "Practice" }, { id: "papers", label: "Past exams" },
   { id: "progress", label: "Progress" }, { id: "materials", label: "Materials" }, { id: "more", label: "More" },
 ];
 
@@ -37,7 +37,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
   onAnswerDirtyChange: (dirty: boolean) => void;
   onUpdated: (course: Course) => void; onDeleted: (course: Course) => void;
 }) {
-  const [moreDestination, setMoreDestination] = useState<"questions" | "units" | "papers" | "analysis" | "settings" | null>(null);
+  const [moreDestination, setMoreDestination] = useState<"questions" | "units" | "analysis" | "settings" | null>(null);
   const [questionFocus, setQuestionFocus] = useState<QuestionFocus | null>(null);
   const manager = isOwner || isModerator;
   // Mount units on first use, then keep them mounted like other destinations.
@@ -70,7 +70,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         onRecommendedPractice={() => openPractice("ADAPTIVE")}
         onStandardPractice={() => openPractice("STANDARD")}
         onScopePractice={scopeId => openPractice("ADAPTIVE", { scopeId })} onUnitPractice={unitId => openPractice("ADAPTIVE", { unitIds: [unitId] })} onStartAttempt={onOpenAttempt}
-        onProgress={() => navigate("progress")} onMaterials={() => navigate("materials")}
+        onPapers={() => navigate("papers")} onProgress={() => navigate("progress")} onMaterials={() => navigate("materials")}
         onQuestions={() => { setMoreDestination("questions"); navigate("more"); }} />
     </section>
     <div id="course-practice" hidden={destination !== "practice"}>
@@ -86,6 +86,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
       <Button variant="ghost" className="mb-4" onClick={goHome}>Back to Home</Button>
       {navigation}
     </details>}
+    {/* Past papers are the main way to rehearse an exam, so they get their own destination. */}
+    {destination === "papers" && <div id="course-papers"><ExamPapers courseId={course.id} onStartAttempt={onOpenAttempt} /></div>}
     <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} onStartAttempt={onOpenAttempt} /></div>
     <div id="course-materials" hidden={destination !== "materials"}><CourseMaterials courseId={course.id} currentUserId={currentUserId} onSummaryChange={setMaterials} /></div>
     <section id="course-more" hidden={destination !== "more"} aria-label="More course tools" className="mt-6">
@@ -93,13 +95,11 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
       <div className="mt-4 flex flex-wrap gap-3">
         <Button variant="secondary" aria-pressed={moreDestination === "questions"} onClick={() => setMoreDestination("questions")}>Question bank</Button>
         <Button variant="secondary" aria-pressed={moreDestination === "units"} onClick={() => { setUnitsOpened(true); setMoreDestination("units"); }}>Course units</Button>
-        <Button variant="secondary" aria-pressed={moreDestination === "papers"} onClick={() => setMoreDestination("papers")}>Past exams</Button>
         {manager && <Button variant="secondary" aria-pressed={moreDestination === "analysis"} onClick={() => setMoreDestination("analysis")}>Item analysis</Button>}
         {isOwner && <Button variant="secondary" aria-pressed={moreDestination === "settings"} onClick={() => setMoreDestination("settings")}>Course settings</Button>}
       </div>
       <div hidden={moreDestination !== "questions"}><QuestionBank courseId={course.id} focus={questionFocus} onOpenMaterials={() => navigate("materials")} /></div>
       {unitsOpened && <div hidden={moreDestination !== "units"}><CourseUnits courseId={course.id} isOwner={isOwner} /></div>}
-      {moreDestination === "papers" && <ExamPapers courseId={course.id} onStartAttempt={onOpenAttempt} />}
       {manager && moreDestination === "analysis" && <ItemAnalysisView courseId={course.id} onOpenQuestion={openQuestion} />}
       {isOwner && <div hidden={moreDestination !== "settings"}><CourseSettings course={course} onUpdated={onUpdated} onDeleted={onDeleted} /></div>}
     </section>

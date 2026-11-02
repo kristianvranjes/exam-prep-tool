@@ -1,4 +1,4 @@
-export type CourseDestination = "overview" | "practice" | "progress" | "materials" | "more";
+export type CourseDestination = "overview" | "practice" | "papers" | "progress" | "materials" | "more";
 export type WorkspaceRoute =
   | { view: "home" | "management" }
   | { view: "course"; courseId: string; destination: CourseDestination; attemptId: string | null; results: boolean };
@@ -12,7 +12,7 @@ export function parseWorkspaceRoute(pathname: string): WorkspaceRoute | null {
   const path = pathname.replace(/\/$/, "") || "/";
   if (path === "/") return { view: "home" };
   if (path === "/faculty") return { view: "management" };
-  const match = /^\/courses\/([^/]+)(?:\/(practice|progress|materials|more)|\/attempts\/([^/]+)(\/results)?)?$/.exec(path);
+  const match = /^\/courses\/([^/]+)(?:\/(practice|papers|progress|materials|more)|\/attempts\/([^/]+)(\/results)?)?$/.exec(path);
   if (!match) return null;
   try {
     const courseId = decodeURIComponent(match[1]);
