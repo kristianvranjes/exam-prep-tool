@@ -47,7 +47,13 @@ def test_availability_matches_session_start(clients):
 
     whole = available(member, course)
     assert whole["course_total"] == 4 and whole["total"] == 4
-    assert by_type(whole) == {"MULTIPLE_CHOICE": 0, "TRUE_FALSE": 4, "SHORT_ANSWER": 0}
+    assert by_type(whole) == {
+        "MULTIPLE_CHOICE": 0,
+        "TRUE_FALSE": 4,
+        "SHORT_ANSWER": 0,
+        "NUMERIC": 0,
+        "MULTIPLE_SELECT": 0,
+    }
     assert whole["by_unit"] == []
     assert available(owner, course)["total"] == 1
     typed = available(member, course, question_types=["MULTIPLE_CHOICE"])

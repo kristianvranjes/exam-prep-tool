@@ -8,6 +8,7 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from community_helpers import provision
 from fastapi.testclient import TestClient
+from migration_helpers import legacy_question_columns
 from sqlalchemy import delete, select, text
 from sqlalchemy.exc import DataError, IntegrityError
 from test_materials import clients as clients
@@ -219,7 +220,6 @@ def historical_rows():
         "materials",
         "material_sections",
         "material_chunks",
-        "questions",
         "question_options",
         "question_versions",
         "question_review_progress",
@@ -228,6 +228,9 @@ def historical_rows():
         result = {
             name: conn.execute(text(f"SELECT * FROM {name} ORDER BY id")).all() for name in tables
         }
+        result["questions"] = conn.execute(
+            text(f"SELECT {legacy_question_columns(conn)} FROM questions ORDER BY id")
+        ).all()
         # Compare columns shared by old revisions; 0017's practice focus is tested separately.
         result["quizzes"] = conn.execute(
             text("SELECT id, course_id, user_id, created_at FROM quizzes ORDER BY id")
