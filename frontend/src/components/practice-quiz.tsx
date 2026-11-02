@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
+import { QUESTION_TYPES } from "../lib/question-types";
 import type { QuestionType } from "../lib/api";
 import { practiceApi, type Attempt, type AttemptSummary, type SelectionMode } from "../lib/practice-api";
 import { ActiveQuiz } from "./active-quiz";
@@ -10,7 +11,7 @@ import type { QuizExperience } from "./quiz-navigation";
 import { QuizResults } from "./quiz-results";
 import { Alert, Button, LoadingState, Surface } from "./ui";
 
-const types: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
+const types: QuestionType[] = QUESTION_TYPES;
 
 /** A request to open setup, optionally focused on one exam cycle. */
 export type PracticeSetupRequest = { id: number; mode: SelectionMode; scopeId?: string; unitIds?: string[] };

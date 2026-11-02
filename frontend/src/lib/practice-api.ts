@@ -10,7 +10,10 @@ export type Grade = "PENDING" | "CORRECT" | "INCORRECT";
 export type PracticeAnswer =
   | { type: "MULTIPLE_CHOICE"; option_position: number }
   | { type: "TRUE_FALSE"; value: boolean }
-  | { type: "SHORT_ANSWER"; text: string };
+  | { type: "SHORT_ANSWER"; text: string }
+  /** Kept as typed, e.g. "9,81"; the server parses it. */
+  | { type: "NUMERIC"; value: string }
+  | { type: "MULTIPLE_SELECT"; option_positions: number[] };
 export type AttemptSummary = {
   id: string; course_id: string; status: "ACTIVE" | "SUBMITTED" | "ABANDONED";
   started_at: string; submitted_at: string | null;
@@ -38,6 +41,8 @@ export type ResultOption = { position: number; text: string; is_correct: boolean
 export type QuestionFeedback = {
   options: ResultOption[]; explanation: string | null; correct_boolean: boolean | null;
   reference_answer: string | null; grading_status: Grade; confidence?: Confidence | null;
+  /** NUMERIC keys as exact decimal strings. */
+  correct_value?: string | null; absolute_tolerance?: string | null; relative_tolerance?: string | null;
 };
 export type ActiveQuestion = {
   id: string; position: number; type: QuestionType; stem: string; difficulty: number | null;
@@ -49,12 +54,15 @@ export type ActiveQuestion = {
   favorite?: boolean;
   /** Paper sessions only. */
   points?: number | null; label?: string | null;
+  /** NUMERIC only: the unit the answer is expected in. */
+  unit?: string | null;
 };
 export type ResultQuestion = Omit<ActiveQuestion, "options"> & {
   options: ResultOption[];
   explanation: string | null; correct_boolean: boolean | null; reference_answer: string | null;
   /** UNANSWERED marks a question left blank in a paper session. */
   grading_status: Grade | "UNANSWERED"; confidence?: Confidence | null;
+  correct_value?: string | null; absolute_tolerance?: string | null; relative_tolerance?: string | null;
   /** Paper sessions only; null while a short answer awaits self-review. */
   earned_points?: number | null;
 };
@@ -74,7 +82,7 @@ export type PracticeAvailability = {
 /** A private favorite after an idempotent add or remove; `favorited_at` is the first add. */
 export type FavoriteState = { question_id: string; favorite: boolean; favorited_at: string | null };
 const path = (course: string) => `/courses/${course}/attempts`;
-const allTypes: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
+const allTypes: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"];
 /** The most questions a generated session may hold. */
 const MAX_SESSION_QUESTIONS = 20;
 /** A quick quiz is this many questions, or fewer when fewer are available. */

@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
@@ -7,10 +8,11 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.course_unit import MAX_COURSE_UNITS, UnitId
 from app.schemas.question import OwnerOption, PublicOption, QuestionType, StrictModel, unique_ids
+from app.services.numbers import MAX_ANSWER_LENGTH, parse_number
 
 
 def default_types() -> list[QuestionType]:
-    return ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]
+    return ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"]
 
 
 # MISTAKES and DUE narrow selection to the student's review progress, FAVORITES to their
@@ -27,7 +29,7 @@ class PracticeFilters(StrictModel):
     question_types: list[QuestionType] = Field(
         default_factory=default_types,
         min_length=1,
-        max_length=3,
+        max_length=5,
     )
     # Optional focus: selected units, or an exam scope that expands to its units.
     unit_ids: list[UnitId] = Field(default_factory=list, max_length=MAX_COURSE_UNITS)
@@ -102,7 +104,34 @@ class TextAnswer(StrictModel):
         return value
 
 
-AnswerPayload = Annotated[MCQAnswer | BooleanAnswer | TextAnswer, Field(discriminator="type")]
+class NumericAnswer(StrictModel):
+    type: Literal["NUMERIC"]
+    # Kept as typed ("9,81"); parsed the same way when saved and when graded.
+    value: str = Field(min_length=1, max_length=MAX_ANSWER_LENGTH)
+
+    @field_validator("value")
+    @classmethod
+    def parseable(cls, value: str) -> str:
+        parse_number(value)
+        return value
+
+
+class MultipleSelectAnswer(StrictModel):
+    type: Literal["MULTIPLE_SELECT"]
+    option_positions: list[Annotated[int, Field(ge=0, le=5)]] = Field(min_length=1, max_length=6)
+
+    @field_validator("option_positions")
+    @classmethod
+    def unique_positions(cls, value: list[int]) -> list[int]:
+        if len(set(value)) != len(value):
+            raise ValueError("Choose each option at most once")
+        return sorted(value)
+
+
+AnswerPayload = Annotated[
+    MCQAnswer | BooleanAnswer | TextAnswer | NumericAnswer | MultipleSelectAnswer,
+    Field(discriminator="type"),
+]
 Grade = Literal["PENDING", "CORRECT", "INCORRECT"]
 # Results also mark questions left blank in a paper session.
 ResultGrade = Literal["PENDING", "CORRECT", "INCORRECT", "UNANSWERED"]
@@ -173,6 +202,10 @@ class QuestionFeedback(BaseModel):
     reference_answer: str | None
     grading_status: Grade
     confidence: Confidence | None = None
+    # NUMERIC keys; null for other types.
+    correct_value: Decimal | None = None
+    absolute_tolerance: Decimal | None = None
+    relative_tolerance: Decimal | None = None
 
 
 class ActiveQuestion(BaseModel):
@@ -195,6 +228,8 @@ class ActiveQuestion(BaseModel):
     # Paper sessions only: the item's frozen points and original label.
     points: float | None = None
     label: str | None = None
+    # NUMERIC only: the unit the answer is expected in.
+    unit: str | None = None
 
 
 class ResultQuestion(ActiveQuestion):
@@ -204,6 +239,9 @@ class ResultQuestion(ActiveQuestion):
     reference_answer: str | None
     grading_status: ResultGrade
     confidence: Confidence | None = None
+    correct_value: Decimal | None = None
+    absolute_tolerance: Decimal | None = None
+    relative_tolerance: Decimal | None = None
     # Paper sessions only; None while a short answer awaits self-review.
     earned_points: float | None = None
 

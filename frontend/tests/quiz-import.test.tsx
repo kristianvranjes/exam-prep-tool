@@ -75,7 +75,7 @@ it("provides a copyable prompt and downloadable example", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
   await screen.findByText("Prompt copied.");
   expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Use only the study material"));
-  expect(screen.getByRole("link", { name: "Download example JSON" })).toHaveAttribute("href", "/quiz-import-v1.example.json");
+  expect(screen.getByRole("link", { name: "Download example JSON" })).toHaveAttribute("href", "/quiz-import-v2.example.json");
   expect(screen.getByRole("link", { name: "Download example JSON" })).toHaveAttribute("download");
 });
 it("explains how to copy the prompt when clipboard access fails", async () => {

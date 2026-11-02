@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { QUESTION_TYPES } from "../lib/question-types";
 import { api, type CourseUnit, type ExamScope, type ExamScopeCoverage, type ExamScopeReadiness, type ReviewProgressSummary } from "../lib/api";
 import { countdownLabel, formatScopeDates, localIsoDate, nextExam, type NextExam } from "../lib/exam-dates";
 import { practiceApi, type Attempt, type PracticeFocus } from "../lib/practice-api";
@@ -65,7 +66,7 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
         if (current) setProgress({ loading: false, summary: null, error: true });
       });
       // Counts every practice-eligible course question with the same rules as session start.
-      void practiceApi.availability(courseId, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]).then(counts => {
+      void practiceApi.availability(courseId, QUESTION_TYPES).then(counts => {
         if (!current) return;
         setAvailability(counts.course_total > 0 ? "available" : "empty");
         // Due questions not already waiting in an unfinished session.

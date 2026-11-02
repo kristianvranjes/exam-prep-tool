@@ -125,7 +125,7 @@ it("reopens abandoned history with exact saved short answers and no grading cont
   fireEvent.click(await screen.findByText("Practice history"));
   fireEvent.click(await screen.findByRole("button", { name: /View abandoned practice/ }));
   const view = await screen.findByRole("region", { name: "Abandoned attempt" });
-  expect(within(view).getByText("Your saved answer: false")).toBeInTheDocument();
+  expect(within(view).getByText("Your saved answer: False")).toBeInTheDocument();
   const answer = within(screen.getByRole("article", { name: "Question 3 saved answer" })).getByText(/^Your saved answer:/);
   expect(answer.textContent).toBe("Your saved answer:   My answer\n stays here  ");
   expect(answer).toHaveClass("whitespace-pre-wrap");

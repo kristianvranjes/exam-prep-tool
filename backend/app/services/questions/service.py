@@ -29,6 +29,8 @@ from app.schemas.question import (
     MCQ,
     BulkQuestionTransition,
     BulkQuestionTransitionResult,
+    MultipleSelect,
+    Numeric,
     OwnerOption,
     OwnerQuestion,
     PublicOption,
@@ -131,6 +133,7 @@ def representation(db: Session, question: Question, owner: bool) -> QuestionResp
         difficulty=question.difficulty,
         options=[PublicOption(position=o.position, text=o.text) for o in options(db, question)],
         unit_ids=question_unit_ids(db, question.id),
+        unit=question.unit,
     )
 
 
@@ -226,12 +229,17 @@ def current_content(db: Session, question: Question) -> dict[str, object]:
         "explanation": question.explanation,
         "difficulty": question.difficulty,
     }
-    if question.type == "MULTIPLE_CHOICE":
+    if question.type in ("MULTIPLE_CHOICE", "MULTIPLE_SELECT"):
         result["options"] = [
             {"text": o.text, "is_correct": o.is_correct} for o in options(db, question)
         ]
     elif question.type == "TRUE_FALSE":
         result["correct_answer"] = question.correct_boolean
+    elif question.type == "NUMERIC":
+        result["correct_value"] = question.correct_value
+        result["absolute_tolerance"] = question.absolute_tolerance
+        result["relative_tolerance"] = question.relative_tolerance
+        result["unit"] = question.unit
     else:
         result["reference_answer"] = question.reference_answer
     return result
@@ -246,9 +254,14 @@ def save_content(db: Session, question: Question, content: QuestionContent) -> N
     question.reference_answer = (
         content.reference_answer if isinstance(content, ShortAnswer) else None
     )
+    numeric = content if isinstance(content, Numeric) else None
+    question.correct_value = numeric.correct_value if numeric else None
+    question.absolute_tolerance = numeric.absolute_tolerance if numeric else None
+    question.relative_tolerance = numeric.relative_tolerance if numeric else None
+    question.unit = numeric.unit if numeric else None
     db.flush([question])
     db.execute(delete(QuestionOption).where(QuestionOption.question_id == question.id))
-    if isinstance(content, MCQ):
+    if isinstance(content, MCQ | MultipleSelect):
         for index, option in enumerate(content.options):
             db.add(
                 QuestionOption(

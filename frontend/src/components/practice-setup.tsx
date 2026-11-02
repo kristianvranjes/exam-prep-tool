@@ -1,17 +1,14 @@
 "use client";
 
 import { useEffect, useId, useState, type ReactNode } from "react";
+import { QUESTION_TYPES, typeLabels } from "../lib/question-types";
 import { api, type CourseUnit, type ExamScope, type QuestionType } from "../lib/api";
 import { practiceApi, type PracticeAvailability, type PracticeFocus, type SelectionMode } from "../lib/practice-api";
 import { kindLabels } from "./exam-scopes";
 import { ExperiencePicker, type QuizExperience } from "./quiz-navigation";
 import { Alert, Button, Input, Select } from "./ui";
 
-const types: { type: QuestionType; label: string }[] = [
-  { type: "MULTIPLE_CHOICE", label: "Multiple choice" },
-  { type: "TRUE_FALSE", label: "True / false" },
-  { type: "SHORT_ANSWER", label: "Short answer" },
-];
+const types: { type: QuestionType; label: string }[] = QUESTION_TYPES.map(type => ({ type, label: typeLabels[type] }));
 export type SessionLength = "5" | "10" | "20" | "custom";
 /** What a session covers: the whole course, one exam cycle, or chosen units. */
 export type FocusChoice = { kind: "COURSE" } | { kind: "SCOPE"; scopeId: string } | { kind: "UNITS"; unitIds: string[] };

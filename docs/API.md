@@ -432,8 +432,11 @@ the options' group shares are `null` while fewer than five students fit in each 
 
 Allowed sparse fields: `stem` (nonblank, max 400), `explanation` (max 2000, nullable),
 `difficulty` (strict integer 1–5, nullable), MCQ `options: [{position, text}]` for
-existing positions only and `correct_option_position`, TRUE_FALSE `correct_answer`
-(strict boolean), SHORT_ANSWER `reference_answer` (nonblank, max 2000). MCQ positions
+existing positions only and `correct_option_position`, MULTIPLE_SELECT the same
+`options` and `correct_option_positions` (the complete, unique set of correct
+positions), TRUE_FALSE `correct_answer` (strict boolean), SHORT_ANSWER
+`reference_answer` (nonblank, max 2000), NUMERIC `correct_value`, `absolute_tolerance`,
+`relative_tolerance` and `unit` (the last three nullable to clear them). Option positions
 are zero-based, unique and bounded by the existing option count. Omitted fields are
 merged internally with current content and validated using the existing full content
 schema. Type, option count/order, concepts, provenance, source, creator, status and
@@ -449,8 +452,15 @@ check exposes current correctness. Unexpected persistence failures return safe 5
 with complete rollback. Existing archive atomically closes OPEN reports and suggestions
 as QUESTION_ARCHIVED with the same actor/time and one ARCHIVED version.
 
-Supported types: MULTIPLE_CHOICE (2–6 options, one correct), TRUE_FALSE (strict
-boolean `correct_answer` in write payloads), SHORT_ANSWER (nonblank reference).
+Supported types: MULTIPLE_CHOICE (2–6 options, one correct), MULTIPLE_SELECT (2–6
+options, at least one correct, graded as an exact set), TRUE_FALSE (strict boolean
+`correct_answer` in write payloads), SHORT_ANSWER (nonblank reference), NUMERIC
+(`correct_value` plus optional `absolute_tolerance` ≥ 0, `relative_tolerance` 0–1 and a
+display `unit` of up to 20 characters; numbers may be sent as JSON numbers or strings
+such as `"9,81"`, and responses return them as decimal strings). Public question and
+active-attempt representations include `unit` but never the numeric key or tolerances,
+which appear only in owner/moderator responses, checked feedback and submitted results.
+AI generation still produces only the first three types.
 Stems/option texts max 400 characters; explanation/reference max 2000; optional
 difficulty integer 1–5. MCQ option text must be unique after normalization. Manual
 creation rejects unknown or server-owned fields and accepts zero concepts. Editing

@@ -185,7 +185,7 @@ export type Concept = { id: string; course_id: string; name: string; normalized_
 export type ConceptDetail = Concept & { source_chunks: { id: string; material_id: string; ordinal: number; content: string }[] };
 export type AIJob = { id: string; status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'; model: string; error_message: string | null; error_code: string | null };
 
-export type QuestionType = "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
+export type QuestionType = "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER" | "NUMERIC" | "MULTIPLE_SELECT";
 export type QuestionStatus = "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED";
 export type QuestionAction = "submit" | "approve" | "reject" | "archive";
 export type ReportReason = "INCORRECT_ANSWER" | "MULTIPLE_CORRECT" | "UNCLEAR" | "TYPO" | "OUTDATED" | "DUPLICATE" | "OTHER";
@@ -193,11 +193,13 @@ export type ReportStatus = "OPEN" | "RESOLVED";
 export type ReportReceipt = { id: string; question_id: string; reason: ReportReason; details: string | null; status: ReportStatus; created_at: string };
 export type ModeratorReport = ReportReceipt & { resolution: "DISMISSED" | "QUESTION_ARCHIVED" | null; resolved_by_user_id: string | null; resolved_at: string | null; question: OwnerQuestion };
 type QuestionBase = { id: string; course_id: string; type: QuestionType; stem: string; difficulty: number | null };
-export type PublicQuestion = QuestionBase & { visibility: "MEMBER"; status: "APPROVED"; options: { position: number; text: string }[]; unit_ids?: string[] };
+export type PublicQuestion = QuestionBase & { visibility: "MEMBER"; status: "APPROVED"; options: { position: number; text: string }[]; unit_ids?: string[]; unit?: string | null };
 export type OwnerQuestion = QuestionBase & {
   visibility: "OWNER"; status: QuestionStatus; source: "AI" | "USER"; ai_job_id: string | null;
   created_by_user_id: string; created_at: string; updated_at: string;
   explanation: string | null; correct_boolean: boolean | null; reference_answer: string | null;
+  /** NUMERIC keys come back as exact decimal strings. */
+  correct_value?: string | null; absolute_tolerance?: string | null; relative_tolerance?: string | null; unit?: string | null;
   reviewed_by_user_id: string | null; reviewed_at: string | null; rejection_reason: string | null;
   options: { position: number; text: string; is_correct: boolean }[];
   concept_ids: string[]; unit_ids?: string[]; source_chunks: { chunk_id: string; material_id: string; ordinal: number }[];
@@ -209,12 +211,16 @@ export type QuestionContent = Omit<QuestionCreateBase, "concept_ids"> & (
   | { type: "MULTIPLE_CHOICE"; options: { text: string; is_correct: boolean }[] }
   | { type: "TRUE_FALSE"; correct_answer: boolean }
   | { type: "SHORT_ANSWER"; reference_answer: string }
+  | { type: "MULTIPLE_SELECT"; options: { text: string; is_correct: boolean }[] }
+  | { type: "NUMERIC"; correct_value: string; absolute_tolerance: string | null; relative_tolerance: string | null; unit: string | null }
 );
 export type QuestionCreate = QuestionContent & { concept_ids: string[]; unit_ids?: string[] };
 export type SuggestionChanges = {
   stem?: string; explanation?: string | null; difficulty?: number | null;
   options?: { position: number; text: string }[]; correct_option_position?: number;
+  correct_option_positions?: number[];
   correct_answer?: boolean; reference_answer?: string;
+  correct_value?: string; absolute_tolerance?: string | null; relative_tolerance?: string | null; unit?: string | null;
 };
 export type SuggestionCreate = { changes: SuggestionChanges; note: string | null };
 export type SuggestionReceipt = { id: string; question_id: string; base_version_number: number; status: "OPEN" | "RESOLVED"; created_at: string };
@@ -225,7 +231,11 @@ export type ModeratorSuggestion = SuggestionReceipt & {
   applied_version_number: number | null; base_snapshot: OwnerQuestion;
   proposed_content: QuestionContent; question: OwnerQuestion;
 };
-export type QuestionEdit = { stem: string; explanation: string | null; difficulty: number | null; concept_ids: string[]; unit_ids?: string[]; options?: { text: string; is_correct: boolean }[]; correct_answer?: boolean; reference_answer?: string };
+export type QuestionEdit = {
+  stem: string; explanation: string | null; difficulty: number | null; concept_ids: string[]; unit_ids?: string[];
+  options?: { text: string; is_correct: boolean }[]; correct_answer?: boolean; reference_answer?: string;
+  correct_value?: string; absolute_tolerance?: string | null; relative_tolerance?: string | null; unit?: string | null;
+};
 export type QuestionVersion = { version_number: number; reason: string; snapshot: OwnerQuestion; changed_by_user_id: string; created_at: string };
 
 export type ReviewProgress = {

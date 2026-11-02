@@ -8,6 +8,7 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from community_helpers import provision
 from fastapi.testclient import TestClient
+from migration_helpers import legacy_question_columns
 from sqlalchemy import delete, text
 from sqlalchemy.exc import IntegrityError
 from test_materials import clients as clients
@@ -253,9 +254,10 @@ def test_bulk_lifecycle_actions_are_atomic_and_follow_single_rules(community):
 
 def history():
     with engine.connect() as conn:
-        return [
+        questions = text(f"SELECT {legacy_question_columns(conn)} FROM questions ORDER BY id")
+        return [conn.execute(questions).all()] + [
             conn.execute(text(f"SELECT * FROM {table} ORDER BY id")).all()
-            for table in ("questions", "question_versions", "question_options")
+            for table in ("question_versions", "question_options")
         ]
 
 

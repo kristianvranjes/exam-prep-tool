@@ -1,6 +1,6 @@
 # External AI quiz import (Phase 6.6)
 
-PDF/study material → external AI using our prompt → `quiz-import-v1` JSON →
+PDF/study material → external AI using our prompt → `quiz-import-v2` JSON →
 application import → DRAFT → human review → APPROVED.
 
 This is a temporary staging bypass. The internal provider-based AI architecture,
@@ -28,24 +28,32 @@ To restore internal generation, explicitly select and configure an existing prov
 
 The copyable prompt is maintained in
 [`quiz-import-prompt.ts`](../frontend/src/lib/quiz-import-prompt.ts).
-Download the [example JSON](../frontend/public/quiz-import-v1.example.json) in the UI
-or use this repository file. It contains all three supported types.
+Download the [example JSON](../frontend/public/quiz-import-v2.example.json) in the UI
+or use this repository file. It contains all five supported types. The earlier
+[v1 example](../frontend/public/quiz-import-v1.example.json) still imports unchanged.
 
-## Version 1 format
+## Format versions 1 and 2
 
-Top level: `{"version":"quiz-import-v1","questions":[...]}`. Unknown fields and
-versions are rejected, including status, creator IDs, course IDs and approval claims.
-The existing strict question-content schemas validate each item:
+Top level: `{"version":"quiz-import-v2","questions":[...]}`. Version 2 adds
+`NUMERIC` and `MULTIPLE_SELECT` (R4); `quiz-import-v1` documents stay valid exactly as
+before, and a v1 document containing a new type is rejected with a hint to use v2.
+Unknown fields and versions are rejected, including status, creator IDs, course IDs and
+approval claims. The existing strict question-content schemas validate each item:
 
 | Field | Rule |
 | --- | --- |
-| `type` | `MULTIPLE_CHOICE`, `SHORT_ANSWER` or `TRUE_FALSE` |
+| `type` | `MULTIPLE_CHOICE`, `SHORT_ANSWER` or `TRUE_FALSE`; v2 also `NUMERIC` and `MULTIPLE_SELECT` |
 | `stem` | Required nonblank text, up to 400 characters |
 | `explanation` | Optional null or nonblank text, up to 2000 characters |
 | `difficulty` | Optional null or integer 1–5, never a boolean/string |
 | MCQ `options` | 2–6 objects with `text` (1–400 characters) and boolean `is_correct`; distinct normalized text and exactly one correct answer |
 | Short answer `reference_answer` | Required nonblank text, up to 2000 characters |
 | True/false `correct_answer` | Required JSON boolean |
+| Multiple-select `options` | As for MCQ, but one or more options are correct; students must choose exactly that set |
+| Numeric `correct_value` | Required number, written as a string (`"9.81"`, `"9,81"`, `"1.5e-3"`) or a JSON number |
+| Numeric `absolute_tolerance` | Optional number ≥ 0 in the answer's unit |
+| Numeric `relative_tolerance` | Optional share of the key's magnitude, 0–1 (`"0.01"` allows 1 %) |
+| Numeric `unit` | Optional display unit, 1–20 characters; never converted |
 
 Text fields may use the [formula and code syntax](QUESTIONS.md#formulas-and-code)
 (`$…$`, `$$…$$`, backticks and code fences). It is plain text to the importer; in JSON,
@@ -53,7 +61,7 @@ write each backslash twice (`"$\\frac{1}{2}$"`) and line breaks as `\n`. The pro
 asks the external AI for exactly this.
 
 Only the answer fields for the selected type are allowed. There is no free-form
-source/reference field in v1: existing source references identify verified database
+source/reference field in either version: existing source references identify verified database
 chunks, which an external AI cannot supply. Human-readable page references may appear
 in explanation, but are not verified provenance. Imports use the existing `USER`
 source (user-supplied content, even if externally AI-assisted), no AI job, and empty

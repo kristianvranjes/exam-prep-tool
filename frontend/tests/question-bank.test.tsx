@@ -910,3 +910,53 @@ it("renders one report and one suggestion panel for an approved question", async
   expect(errors.mock.calls.flat().join(" ")).not.toContain("two children with the same key");
   errors.mockRestore();
 });
+
+it("creates a numeric question with tolerances, a percentage and a unit, and refuses an ambiguous value", async () => {
+  const form = await openCreate();
+  fireEvent.change(within(form).getByLabelText("Question type"), { target: { value: "NUMERIC" } });
+  fireEvent.change(within(form).getByLabelText("Question text"), { target: { value: "g at sea level?" } });
+  fireEvent.change(within(form).getByLabelText("Correct value"), { target: { value: "1.234,5" } });
+  fireEvent.click(within(form).getByRole("button", { name: "Save draft" }));
+  expect(await within(form).findByRole("alert")).toHaveTextContent("Correct value: Use either a decimal comma or a decimal point");
+  expect(mock.createQuestion).not.toHaveBeenCalled();
+  fireEvent.change(within(form).getByLabelText("Correct value"), { target: { value: "9,81" } });
+  fireEvent.change(within(form).getByLabelText("Absolute tolerance (optional)"), { target: { value: "0,05" } });
+  fireEvent.change(within(form).getByLabelText("Relative tolerance in % (optional)"), { target: { value: "1,1" } });
+  fireEvent.change(within(form).getByLabelText("Unit (optional)"), { target: { value: "m/s²" } });
+  fireEvent.click(within(form).getByRole("button", { name: "Save draft" }));
+  await waitFor(() => expect(mock.createQuestion).toHaveBeenCalledWith("course", {
+    type: "NUMERIC", stem: "g at sea level?", explanation: null, difficulty: null, concept_ids: [],
+    correct_value: "9,81", absolute_tolerance: "0,05", relative_tolerance: "0.011", unit: "m/s²",
+  }));
+});
+
+it("creates a multiple-select question with several correct options and keeps one when switching back", async () => {
+  const form = await openCreate();
+  fireEvent.change(within(form).getByLabelText("Question type"), { target: { value: "MULTIPLE_SELECT" } });
+  expect(within(form).getByText("Options (mark every correct answer)")).toBeInTheDocument();
+  fireEvent.change(within(form).getByLabelText("Question text"), { target: { value: "Which are prime?" } });
+  fireEvent.change(within(form).getByLabelText("Option 1"), { target: { value: "2" } });
+  fireEvent.change(within(form).getByLabelText("Option 2"), { target: { value: "3" } });
+  fireEvent.click(within(form).getByLabelText("Correct option 2"));
+  expect(within(form).getByLabelText("Correct option 1")).toBeChecked();
+  expect(within(form).getByLabelText("Correct option 2")).toBeChecked();
+  fireEvent.change(within(form).getByLabelText("Question type"), { target: { value: "MULTIPLE_CHOICE" } });
+  expect(within(form).getByLabelText("Correct option 1")).toBeChecked();
+  expect(within(form).getByLabelText("Correct option 2")).not.toBeChecked();
+  fireEvent.change(within(form).getByLabelText("Question type"), { target: { value: "MULTIPLE_SELECT" } });
+  fireEvent.click(within(form).getByLabelText("Correct option 2"));
+  fireEvent.click(within(form).getByRole("button", { name: "Save draft" }));
+  await waitFor(() => expect(mock.createQuestion).toHaveBeenCalledWith("course", {
+    type: "MULTIPLE_SELECT", stem: "Which are prime?", explanation: null, difficulty: null, concept_ids: [],
+    options: [{ text: "2", is_correct: true }, { text: "3", is_correct: true }],
+  }));
+});
+
+it("offers AI generation only for the types it supports", async () => {
+  await open();
+  const generation = screen.queryAllByText("Question types", { selector: "legend" });
+  for (const legend of generation) {
+    const group = legend.closest("fieldset")!;
+    expect(within(group).queryByLabelText(/numeric/i)).not.toBeInTheDocument();
+  }
+});

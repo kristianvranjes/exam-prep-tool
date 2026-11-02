@@ -328,3 +328,17 @@ on `(user_id, question_id)`. Course scope comes from the question. No existing t
 changes and there is no backfill, so attempts, answers, snapshots and review progress
 are untouched. `alembic downgrade 0022` drops the table and every favorite; upgrading
 again starts empty. Back up first if favorites matter.
+
+## Numeric and multiple-select questions migration 0024
+
+Revision 0024 follows 0023 and extends `questions` for R4: nullable `correct_value`,
+`absolute_tolerance` and `relative_tolerance` (NUMERIC, exact decimals) and `unit`
+(VARCHAR(20)). `ck_question_type` adds `NUMERIC` and `MULTIPLE_SELECT`;
+`ck_question_answer` requires a `correct_value` exactly for NUMERIC and keeps the other
+key columns empty, with MULTIPLE_SELECT stored like MULTIPLE_CHOICE (its options in
+`question_options`, one or more correct); the new `ck_question_numeric` keeps the
+tolerances and unit NULL for other types, tolerances non-negative, the relative one at
+most 1, and the unit nonblank. Existing rows already satisfy the new checks, so nothing is
+backfilled, and snapshots, answers and attempts are unchanged. `alembic downgrade 0023`
+refuses while any NUMERIC or MULTIPLE_SELECT question exists (delete them first), then
+restores the earlier constraints and drops the four columns.

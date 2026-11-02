@@ -1,10 +1,26 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    TypeAdapter,
+    model_validator,
+)
 
-QuestionType = Literal["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]
+from app.services.numbers import parse_number
+
+QuestionType = Literal[
+    "MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"
+]
+# AI generation and quiz-import-v1 keep the original three types.
+ClassicType = Literal["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]
+CLASSIC_TYPES = frozenset({"MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"})
 QuestionStatus = Literal["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED", "ARCHIVED"]
 Stem = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=400)]
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
@@ -18,6 +34,24 @@ MAX_IMPORT_QUESTIONS = 500
 
 def normalize(text: str) -> str:
     return " ".join(text.split()).casefold()
+
+
+def to_decimal(value: object) -> object:
+    # Authors may write 9.81, "9.81" or "9,81"; floats go through str to avoid binary noise.
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return parse_number(str(value))
+    if isinstance(value, str):
+        return parse_number(value)
+    return value
+
+
+Number = Annotated[Decimal, BeforeValidator(to_decimal), Field(strict=False, allow_inf_nan=False)]
+Tolerance = Annotated[Number, Field(ge=0)]
+# A share of the key's magnitude: 0.01 allows a 1 % error.
+RelativeTolerance = Annotated[Number, Field(ge=0, le=1)]
+Unit = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
 
 
 class StrictModel(BaseModel):
@@ -48,6 +82,30 @@ class MCQ(Content):
         return self
 
 
+class MultipleSelect(Content):
+    """Graded as one exact set of options; partial credit is never implied."""
+
+    type: Literal["MULTIPLE_SELECT"]
+    options: list[Option] = Field(min_length=2, max_length=6)
+
+    @model_validator(mode="after")
+    def valid_options(self) -> Self:
+        if not any(option.is_correct for option in self.options):
+            raise ValueError("At least one correct option is required")
+        if len({normalize(option.text) for option in self.options}) != len(self.options):
+            raise ValueError("Duplicate option text")
+        return self
+
+
+class Numeric(Content):
+    type: Literal["NUMERIC"]
+    correct_value: Number
+    absolute_tolerance: Tolerance | None = None
+    relative_tolerance: RelativeTolerance | None = None
+    # Shown next to the answer field; answers carry no unit and are never converted.
+    unit: Unit | None = None
+
+
 class TrueFalse(Content):
     type: Literal["TRUE_FALSE"]
     correct_answer: bool
@@ -58,7 +116,9 @@ class ShortAnswer(Content):
     reference_answer: Text
 
 
-QuestionContent = Annotated[MCQ | TrueFalse | ShortAnswer, Field(discriminator="type")]
+QuestionContent = Annotated[
+    MCQ | TrueFalse | ShortAnswer | Numeric | MultipleSelect, Field(discriminator="type")
+]
 content_adapter: TypeAdapter[QuestionContent] = TypeAdapter(QuestionContent)
 
 
@@ -103,8 +163,17 @@ class CreateShortAnswer(ShortAnswer, ManualConcepts, ManualUnits):
     pass
 
 
+class CreateNumeric(Numeric, ManualConcepts, ManualUnits):
+    pass
+
+
+class CreateMultipleSelect(MultipleSelect, ManualConcepts, ManualUnits):
+    pass
+
+
 QuestionCreate = Annotated[
-    CreateMCQ | CreateTrueFalse | CreateShortAnswer, Field(discriminator="type")
+    CreateMCQ | CreateTrueFalse | CreateShortAnswer | CreateNumeric | CreateMultipleSelect,
+    Field(discriminator="type"),
 ]
 
 
@@ -136,7 +205,7 @@ class GeneratedQuestions(StrictModel):
 class GenerationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     concept_ids: list[UUID] = Field(min_length=1, max_length=5)
-    question_types: list[QuestionType] = Field(min_length=1, max_length=3)
+    question_types: list[ClassicType] = Field(min_length=1, max_length=3)
     count: int = Field(default=5, ge=1, le=10, strict=True)
     retrieval_top_k: int = Field(default=5, ge=1, le=10, strict=True)
 
@@ -157,6 +226,11 @@ class QuestionPatch(BaseModel):
     options: list[Option] | None = None
     correct_answer: bool | None = Field(default=None, strict=True)
     reference_answer: Text | None = None
+    # NUMERIC fields; null clears an optional tolerance or unit.
+    correct_value: Number | None = None
+    absolute_tolerance: Tolerance | None = None
+    relative_tolerance: RelativeTolerance | None = None
+    unit: Unit | None = None
     concept_ids: list[UUID] | None = Field(default=None, max_length=5)
     unit_ids: list[UUID] | None = Field(default=None, max_length=MAX_QUESTION_UNITS)
 
@@ -208,6 +282,8 @@ class PublicQuestion(BaseModel):
     difficulty: int | None
     options: list[PublicOption]
     unit_ids: list[UUID] = []
+    # Public for NUMERIC: students see the unit their answer is in.
+    unit: str | None = None
 
 
 class SourceReference(BaseModel):
@@ -231,6 +307,11 @@ class OwnerQuestion(BaseModel):
     difficulty: int | None
     correct_boolean: bool | None
     reference_answer: str | None
+    # Defaults keep snapshots from before NUMERIC readable.
+    correct_value: Decimal | None = None
+    absolute_tolerance: Decimal | None = None
+    relative_tolerance: Decimal | None = None
+    unit: str | None = None
     reviewed_by_user_id: UUID | None
     reviewed_at: datetime | None
     rejection_reason: str | None
@@ -255,11 +336,16 @@ class VersionResponse(BaseModel):
 
 
 class QuizImport(StrictModel):
-    version: Literal["quiz-import-v1"]
+    # v2 adds NUMERIC and MULTIPLE_SELECT; v1 documents stay valid as they were.
+    version: Literal["quiz-import-v1", "quiz-import-v2"]
     questions: list[QuestionContent] = Field(min_length=1, max_length=MAX_IMPORT_QUESTIONS)
 
     @model_validator(mode="after")
     def unique_stems(self) -> Self:
+        if self.version == "quiz-import-v1" and any(
+            q.type not in CLASSIC_TYPES for q in self.questions
+        ):
+            raise ValueError("Use quiz-import-v2 for numeric and multiple-select questions")
         stems = [normalize(q.stem) for q in self.questions]
         if len(set(stems)) != len(stems):
             raise ValueError("Duplicate question stems in import")

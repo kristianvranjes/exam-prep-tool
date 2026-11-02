@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { formatPoints, penaltyText, pointsLabel } from "../lib/points";
+import { answerText, keyText } from "../lib/question-types";
 import type { Attempt, Confidence, PaperScore, PaperSession, ResultQuestion } from "../lib/practice-api";
 import { FavoriteToggle, useFavorites } from "./favorite-toggle";
 import { QuestionUnits } from "./question-units";
@@ -41,13 +42,8 @@ function PaperScoreSummary({ score, paper }: { score: PaperScore; paper: PaperSe
 }
 
 export function ResultAnswers({ question }: { question: ResultQuestion }) {
-  const answer = question.answer;
-  const studentAnswer = answer?.type === "SHORT_ANSWER" ? answer.text
-    : answer?.type === "TRUE_FALSE" ? (answer.value ? "True" : "False")
-    : question.options.find(option => answer?.type === "MULTIPLE_CHOICE" && option.position === answer.option_position)?.text;
-  const correctAnswer = question.type === "SHORT_ANSWER" ? question.reference_answer
-    : question.type === "TRUE_FALSE" ? (question.correct_boolean === null ? null : question.correct_boolean ? "True" : "False")
-    : question.options.find(option => option.is_correct)?.text;
+  const studentAnswer = answerText(question.answer, question.options, question.unit);
+  const correctAnswer = keyText(question);
   return <div className="space-y-4">
     <dl className="space-y-4">
       <div><dt className="text-sm font-medium text-muted">Your answer</dt><dd className="mt-1 whitespace-pre-wrap"><RichText text={studentAnswer ?? (question.grading_status === "UNANSWERED" ? "Left blank" : "No answer saved")} /></dd></div>

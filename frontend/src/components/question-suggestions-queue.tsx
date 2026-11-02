@@ -10,6 +10,8 @@ function baseContent(question: OwnerQuestion): QuestionContent {
   const common = { stem: question.stem, explanation: question.explanation, difficulty: question.difficulty };
   if (question.type === "MULTIPLE_CHOICE") return { ...common, type: question.type, options: question.options };
   if (question.type === "TRUE_FALSE") return { ...common, type: question.type, correct_answer: question.correct_boolean === true };
+  if (question.type === "MULTIPLE_SELECT") return { ...common, type: question.type, options: question.options };
+  if (question.type === "NUMERIC") return { ...common, type: question.type, correct_value: question.correct_value ?? "", absolute_tolerance: question.absolute_tolerance ?? null, relative_tolerance: question.relative_tolerance ?? null, unit: question.unit ?? null };
   return { ...common, type: question.type, reference_answer: question.reference_answer ?? "" };
 }
 
@@ -18,6 +20,14 @@ function contentFields(content: QuestionContent): [string, string][] {
   if (content.type === "MULTIPLE_CHOICE") {
     content.options.forEach((option, position) => fields.push([`Option ${position + 1}`, option.text]));
     fields.push(["Correct option", String(content.options.findIndex(option => option.is_correct) + 1)]);
+  } else if (content.type === "MULTIPLE_SELECT") {
+    content.options.forEach((option, position) => fields.push([`Option ${position + 1}`, option.text]));
+    fields.push(["Correct options", content.options.flatMap((option, position) => option.is_correct ? [String(position + 1)] : []).join(", ")]);
+  } else if (content.type === "NUMERIC") {
+    fields.push(["Correct value", String(content.correct_value)]);
+    fields.push(["Absolute tolerance", content.absolute_tolerance == null ? "None" : String(content.absolute_tolerance)]);
+    fields.push(["Relative tolerance", content.relative_tolerance == null ? "None" : String(content.relative_tolerance)]);
+    fields.push(["Unit", content.unit ?? "None"]);
   } else if (content.type === "TRUE_FALSE") fields.push(["Correct answer", content.correct_answer ? "True" : "False"]);
   else fields.push(["Reference answer", content.reference_answer]);
   return fields;
