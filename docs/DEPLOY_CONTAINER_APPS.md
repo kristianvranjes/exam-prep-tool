@@ -239,5 +239,5 @@ PDFs off Azure after uploads that matter.
 | Revision not ready, console log shows a settings error | A value fails the hosted checks; fix it with `secret set` or `--set-env-vars` |
 | Startup probe failures | Migrations or the database are slow or unreachable; read the console log |
 | Login works but the session is lost | `FRONTEND_URL` must equal the Vercel origin exactly; the cookies are already `Secure` and `SameSite=None` |
-| `azure/login` fails with *No matching federated identity record* | The workflow ran from a branch other than `main`, or `githubRepository` in the template differs from the repository |
+| `azure/login` fails with *No matching federated identity record* | The workflow ran from a branch other than `main`, or the subject differs: the log prints the presented `subject claim`, and `githubSubjectPrefix` in the template must equal it up to `:ref:`. Fix an existing deployment with `az identity federated-credential update -g examprep --identity-name examprep-github-deploy -n github-main --issuer https://token.actions.githubusercontent.com --audiences api://AzureADTokenExchange --subject "<subject claim from the log>"` |
 | Rollout fails with `AuthorizationFailed` | Role assignments can take a few minutes to apply after step 5; also check the variables in step 9 |
