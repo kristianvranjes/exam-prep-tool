@@ -15,7 +15,8 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://examprep:examprep@localhost:5432/examprep", repr=False
     )
     session_secret: str = Field(default="development-only-change-me", repr=False)
-    session_max_age_seconds: int = 3600
+    # Sessions slide: an authenticated request past half this age gets a fresh cookie.
+    session_max_age_seconds: int = 14400
     session_cookie_name: str = "examprep_session"
     session_cookie_secure: bool = False
     session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
