@@ -24,11 +24,12 @@ export function focusRequest(focus: FocusChoice): PracticeFocus | undefined {
 /** Choices kept under More options; they open it when one is already selected. */
 const moreModes: SelectionMode[] = ["STANDARD", "DUE", "FAVORITES"];
 
-function ModeChoice({ label, descriptionId, checked, onSelect, children }: {
-  label: string; descriptionId: string; checked: boolean; onSelect: () => void; children: ReactNode;
+/** Each fieldset is its own radio group, so Tab reaches it even while a mode from the other one is checked. */
+function ModeChoice({ label, descriptionId, checked, onSelect, children, group = "selection-mode" }: {
+  label: string; descriptionId: string; checked: boolean; onSelect: () => void; children: ReactNode; group?: string;
 }) {
   return <label className="flex min-h-11 cursor-pointer items-start gap-3">
-    <input className="mt-1" type="radio" name="selection-mode" aria-label={label} aria-describedby={descriptionId} checked={checked} onChange={onSelect} />
+    <input className="mt-1" type="radio" name={group} aria-label={label} aria-describedby={descriptionId} checked={checked} onChange={onSelect} />
     <span><span className="font-semibold">{label}</span><span id={descriptionId} className="mt-1 block text-sm text-muted">{children}</span></span>
   </label>;
 }
@@ -214,11 +215,11 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
       <div className="mt-3 flex flex-col gap-5">
         <fieldset disabled={busy} className="space-y-3">
           <legend className="mb-2 font-semibold">Other ways to practice</legend>
-          <ModeChoice label="Course questions" descriptionId={`${id}-standard`} checked={mode === "STANDARD"} onSelect={() => setMode("STANDARD")}>Uses shared approved questions and your own drafts or questions awaiting review.</ModeChoice>
-          {offered(due, mode === "DUE") && <ModeChoice label="Due for review" descriptionId={`${id}-due`} checked={mode === "DUE"} onSelect={() => setMode("DUE")}>
+          <ModeChoice group="selection-mode-more" label="Course questions" descriptionId={`${id}-standard`} checked={mode === "STANDARD"} onSelect={() => setMode("STANDARD")}>Uses shared approved questions and your own drafts or questions awaiting review.</ModeChoice>
+          {offered(due, mode === "DUE") && <ModeChoice group="selection-mode-more" label="Due for review" descriptionId={`${id}-due`} checked={mode === "DUE"} onSelect={() => setMode("DUE")}>
             Only questions whose review is due now, earliest first.{reviewNote(due, n => `${n} due with these options.`, "Nothing is due with these options.")}
           </ModeChoice>}
-          {offered(favorites, mode === "FAVORITES") && <ModeChoice label="Favorites" descriptionId={`${id}-favorites`} checked={mode === "FAVORITES"} onSelect={() => setMode("FAVORITES")}>
+          {offered(favorites, mode === "FAVORITES") && <ModeChoice group="selection-mode-more" label="Favorites" descriptionId={`${id}-favorites`} checked={mode === "FAVORITES"} onSelect={() => setMode("FAVORITES")}>
             Questions you starred, in the order you saved them.{reviewNote(favorites, n => `${n} saved with these options.`, "None with these options yet. Star a question while you practice or in its results.")}
           </ModeChoice>}
         </fieldset>

@@ -53,6 +53,10 @@ it("asks what to practice first, then how, with the other ways under More option
   // Nothing is due and nothing is starred, so only Course questions is listed.
   expect(within(other).getAllByRole("radio").map(radio => radio.getAttribute("aria-label"))).toEqual(["Course questions"]);
   for (const radio of screen.getAllByRole("radio")) expect(radio.closest("label")).toBeInTheDocument();
+  // Separate radio groups keep both fieldsets reachable with Tab while the other one holds the checked mode.
+  const groupName = (group: HTMLElement) => new Set(within(group).getAllByRole("radio").map(radio => radio.getAttribute("name")));
+  expect(groupName(how)).toEqual(new Set(["selection-mode"]));
+  expect(groupName(other)).toEqual(new Set(["selection-mode-more"]));
 });
 
 it("offers mistakes with their count and hides due review when nothing is due", async () => {
