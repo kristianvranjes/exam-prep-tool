@@ -28,7 +28,8 @@ involved.
   during the window. Course owners who also practice are counted; filter
   `course_memberships.role` if you need to leave them out.
 - **Returning participant**: a participant who submitted sessions on at least two
-  different calendar days in the window.
+  different calendar days in the window. Both the start and the submission must fall
+  before `until`, so a session finished after the window does not add a day.
 - **Kind of practice**, from how the session was started:
 
   | Kind | Recognised by | Before 0026 |
@@ -43,6 +44,15 @@ involved.
   session. The one-click due review and a due session from the setup both record `DUE`;
   the quick quiz records `QUICK` (its selection is `ADAPTIVE`). See
   [recorded selection mode](PRACTICE.md#recorded-selection-mode-migration-0026).
+
+  Units, exam scope and past paper describe the focus, not the mode, so they overlap
+  with the recorded modes. A mock exam or a `MISTAKES`, `DUE`, `FAVORITES` or `QUICK`
+  session started with units or an exam scope also counts as a units or exam scope
+  session. Query 3 therefore reports the R6 target two ways: `unit, scope or past
+  paper` counts every focused session whatever its mode, and `unit, scope or past
+  paper (focused practice only)` counts only units or exam scope sessions with
+  `selection_mode` `STANDARD` or `ADAPTIVE`, plus past papers. Sessions started before
+  0026 have no mode and only reach the second row as past papers.
 
 ## 0. Recording check
 
@@ -118,7 +128,7 @@ WITH params AS (
          NULL::uuid[] AS course_ids
 ),
 sessions AS (
-  SELECT q.user_id, a.status, a.submitted_at
+  SELECT q.user_id, a.status, a.submitted_at, p.until
   FROM params p
   JOIN quiz_attempts a ON a.started_at >= p.since AND a.started_at < p.until
   JOIN quizzes q ON q.id = a.quiz_id
@@ -127,7 +137,8 @@ sessions AS (
 per_user AS (
   SELECT user_id,
          count(*) FILTER (WHERE status = 'SUBMITTED') AS submitted,
-         count(DISTINCT (submitted_at AT TIME ZONE 'Europe/Zagreb')::date) AS submit_days
+         count(DISTINCT (submitted_at AT TIME ZONE 'Europe/Zagreb')::date)
+           FILTER (WHERE submitted_at < until) AS submit_days
   FROM sessions
   GROUP BY user_id
 )
@@ -144,8 +155,10 @@ FROM per_user;
 
 Target: at least half of the returning participants use unit, scope or past-paper
 practice. One row per kind of practice; a participant counts once per kind they
-started at least one session of in the window, so the rows overlap. The
-`unit, scope or past paper` row is the target.
+started at least one session of in the window, so the rows overlap. The first two rows
+are the target, read with or without mock exams and the `MISTAKES`, `DUE`, `FAVORITES`
+and `QUICK` sessions that were started with units or a scope (see
+[Definitions](#definitions)).
 
 ```sql
 WITH params AS (
@@ -154,11 +167,14 @@ WITH params AS (
          NULL::uuid[] AS course_ids
 ),
 sessions AS (
-  SELECT q.user_id, a.status, a.submitted_at, q.selection_mode,
+  SELECT q.user_id, a.status, a.submitted_at, p.until, q.selection_mode,
          q.scoring IS NOT NULL AS paper,
          q.scoring IS NULL AND q.exam_scope_id IS NOT NULL AS scope,
          q.scoring IS NULL AND q.exam_scope_id IS NULL
-           AND jsonb_array_length(q.focus_unit_ids) > 0 AS units
+           AND jsonb_array_length(q.focus_unit_ids) > 0 AS units,
+         q.scoring IS NULL AND q.selection_mode IN ('STANDARD', 'ADAPTIVE')
+           AND (q.exam_scope_id IS NOT NULL OR jsonb_array_length(q.focus_unit_ids) > 0)
+           AS focused_practice
   FROM params p
   JOIN quiz_attempts a ON a.started_at >= p.since AND a.started_at < p.until
   JOIN quizzes q ON q.id = a.quiz_id
@@ -167,7 +183,7 @@ sessions AS (
 returners AS (
   SELECT user_id
   FROM sessions
-  WHERE status = 'SUBMITTED'
+  WHERE status = 'SUBMITTED' AND submitted_at < until
   GROUP BY user_id
   HAVING count(DISTINCT (submitted_at AT TIME ZONE 'Europe/Zagreb')::date) >= 2
 ),
@@ -176,6 +192,7 @@ used AS (
          bool_or(s.units) AS units,
          bool_or(s.scope) AS scope,
          bool_or(s.paper) AS paper,
+         bool_or(s.focused_practice) AS focused_practice,
          bool_or(s.selection_mode = 'MISTAKES') AS mistakes,
          bool_or(s.selection_mode = 'DUE') AS due,
          bool_or(s.selection_mode = 'FAVORITES') AS favorites,
@@ -194,15 +211,17 @@ SELECT k.kind,
 FROM used u
 CROSS JOIN LATERAL (VALUES
   (1, 'unit, scope or past paper', coalesce(u.units OR u.scope OR u.paper, false)),
-  (2, 'units', coalesce(u.units, false)),
-  (3, 'exam scope', coalesce(u.scope, false)),
-  (4, 'past paper', coalesce(u.paper, false)),
-  (5, 'mistakes', coalesce(u.mistakes, false)),
-  (6, 'due review', coalesce(u.due, false)),
-  (7, 'favorites', coalesce(u.favorites, false)),
-  (8, 'mock exam', coalesce(u.mock, false)),
-  (9, 'quick quiz', coalesce(u.quick, false)),
-  (10, 'started before 0026 (mode unknown)', coalesce(u.unrecorded, false))
+  (2, 'unit, scope or past paper (focused practice only)',
+      coalesce(u.focused_practice OR u.paper, false)),
+  (3, 'units', coalesce(u.units, false)),
+  (4, 'exam scope', coalesce(u.scope, false)),
+  (5, 'past paper', coalesce(u.paper, false)),
+  (6, 'mistakes', coalesce(u.mistakes, false)),
+  (7, 'due review', coalesce(u.due, false)),
+  (8, 'favorites', coalesce(u.favorites, false)),
+  (9, 'mock exam', coalesce(u.mock, false)),
+  (10, 'quick quiz', coalesce(u.quick, false)),
+  (11, 'started before 0026 (mode unknown)', coalesce(u.unrecorded, false))
 ) AS k(position, kind, used)
 GROUP BY k.position, k.kind
 ORDER BY k.position;
