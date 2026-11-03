@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import { ExamReadiness } from "../src/components/exam-readiness";
+import { ReadinessFigure, ReadinessUnits } from "../src/components/exam-readiness";
 import type { ExamScopeReadiness, UnitReadiness } from "../src/lib/api";
 
 const unit = (unit_id: string, title: string, fields: Partial<UnitReadiness> = {}): UnitReadiness => ({
@@ -16,31 +16,37 @@ const readiness = (fields: Partial<ExamScopeReadiness> = {}): ExamScopeReadiness
   units: [logic, sets, relations], weakest_unit_ids: ["u3", "u2", "u1"], ...fields,
 });
 
-it("states the range in words, explains its evidence and lists the weakest units with practice actions", () => {
+it("sets the range as one figure in Literata tabular figures, says it in words and carries coverage as its subtitle", () => {
+  render(<ReadinessFigure readiness={readiness()} subtitle="You have practiced 12 of 30 approved questions" />);
+  expect(screen.getByText("Estimated readiness: 55 to 70 percent")).toBeInTheDocument();
+  const figure = screen.getByText("55–70%");
+  expect(figure).toHaveAttribute("aria-hidden", "true");
+  expect(figure.parentElement).toHaveClass("font-display", "tabular-nums");
+  expect(screen.getByText("You have practiced 12 of 30 approved questions")).toBeVisible();
+  expect(screen.queryByText(/The range is wide/)).not.toBeInTheDocument();
+});
+
+it("lists the weakest units with counts and practice shortcuts, keeping evidence one click away", () => {
   const onPracticeUnit = vi.fn();
-  render(<ExamReadiness readiness={readiness()} onPracticeUnit={onPracticeUnit} />);
-  const card = screen.getByRole("region", { name: "Readiness" });
-  expect(within(card).getByText("Estimated readiness: 55 to 70 percent")).toBeInTheDocument();
-  expect(within(card).getByText("55–70%")).toHaveAttribute("aria-hidden", "true");
-  expect(within(card).getByText(/from 17 graded answers to 12 of 30 questions/)).toBeVisible();
-  expect(within(card).queryByText(/The range is wide/)).not.toBeInTheDocument();
-  const weakest = within(card).getByRole("list", { name: "Weakest units" });
+  render(<ReadinessUnits readiness={readiness()} onPracticeUnit={onPracticeUnit} />);
+  const weakest = screen.getByRole("list", { name: "Weakest units" });
   const items = within(weakest).getAllByRole("listitem");
   expect(items.map(item => item.querySelector("p")?.textContent)).toEqual(["Relacije", "Skupovi", "Logika"]);
   expect(within(items[0]).getByText("Not practiced yet · 0 of 10 questions answered")).toBeVisible();
-  expect(within(items[1]).getByText("4 of 10 questions answered · 1 retained · 40% correct (2 of 5 answers)")).toBeVisible();
+  // Counts, not percentages: the readiness figure is the overview's only percentage.
+  expect(within(items[1]).getByText("4 of 10 questions answered · 1 retained · 2 of 5 answers correct")).toBeVisible();
   const practice = within(items[1]).getByRole("button", { name: "Practice this unit: Skupovi" });
   expect(practice).toHaveClass("min-h-11");
   fireEvent.click(practice);
   expect(onPracticeUnit).toHaveBeenCalledExactlyOnceWith("u2");
-  // Evidence for every unit, and the rule, stay one click away.
-  fireEvent.click(within(card).getByText("Readiness by unit"));
-  expect(within(within(card).getByRole("list", { name: "Readiness by unit" })).getAllByRole("listitem")).toHaveLength(3);
-  expect(within(card).getByText(/How it works \(readiness-v1\)/)).toBeVisible();
+  fireEvent.click(screen.getByText("Readiness by unit"));
+  expect(within(screen.getByRole("list", { name: "Readiness by unit" })).getAllByRole("listitem")).toHaveLength(3);
+  expect(screen.getByText(/How it works \(readiness-v1\).*from 17 graded answers to 12 of 30 questions/)).toBeVisible();
 });
 
 it("says plainly when there are not enough answers yet, without a range", () => {
-  render(<ExamReadiness readiness={readiness({ answered_count: 3, readiness: null })} onPracticeUnit={vi.fn()} />);
+  const early = readiness({ answered_count: 3, readiness: null });
+  render(<><ReadinessFigure readiness={early} /><ReadinessUnits readiness={early} onPracticeUnit={vi.fn()} /></>);
   expect(screen.getByText("Not enough answers yet")).toBeVisible();
   expect(screen.getByText(/Answer 7 more questions from this cycle to see a readiness range\. You have answered 3 of 30/)).toBeVisible();
   expect(screen.queryByText(/Estimated readiness/)).not.toBeInTheDocument();
@@ -48,19 +54,20 @@ it("says plainly when there are not enough answers yet, without a range", () => 
 });
 
 it("flags a wide range and shows a single number once the range has closed", () => {
-  const view = render(<ExamReadiness readiness={readiness({ readiness: { low: 0.2, high: 0.9 } })} />);
+  const view = render(<><ReadinessFigure readiness={readiness({ readiness: { low: 0.2, high: 0.9 } })} /><ReadinessUnits readiness={readiness()} /></>);
   expect(screen.getByText("Estimated readiness: 20 to 90 percent")).toBeInTheDocument();
   expect(screen.getByText("The range is wide because some units have few or no answers yet.")).toBeVisible();
   // Without a handler, for example during an open session, there are no practice actions.
   expect(screen.queryByRole("button", { name: /Practice this/ })).not.toBeInTheDocument();
   view.unmount();
-  render(<ExamReadiness readiness={readiness({ readiness: { low: 0.75, high: 0.75 } })} />);
+  render(<ReadinessFigure readiness={readiness({ readiness: { low: 0.75, high: 0.75 } })} />);
   expect(screen.getByText("Estimated readiness: 75 percent")).toBeInTheDocument();
   expect(screen.getByText("75%")).toBeInTheDocument();
 });
 
 it("explains a cycle without automatically graded questions instead of showing zeros", () => {
-  render(<ExamReadiness readiness={readiness({ question_count: 0, answered_count: 0, min_answered: 0, readiness: null, units: [unit("u1", "Logika", { question_count: 0, coverage: null, readiness: null })], weakest_unit_ids: [] })} />);
+  const empty = readiness({ question_count: 0, answered_count: 0, min_answered: 0, readiness: null, units: [unit("u1", "Logika", { question_count: 0, coverage: null, readiness: null })], weakest_unit_ids: [] });
+  render(<><ReadinessFigure readiness={empty} /><ReadinessUnits readiness={empty} /></>);
   expect(screen.getByText(/No automatically graded questions are linked to this cycle's units yet/)).toBeVisible();
   expect(screen.queryByText("Not enough answers yet")).not.toBeInTheDocument();
   expect(screen.queryByText("Readiness by unit")).not.toBeInTheDocument();

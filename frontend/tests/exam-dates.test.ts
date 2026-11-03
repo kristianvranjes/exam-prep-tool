@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { ExamScope } from "../src/lib/api";
-import { countdownLabel, daysBetween, formatScopeDates, localIsoDate, nextExam } from "../src/lib/exam-dates";
+import { countdownHeading, daysBetween, formatScopeDates, localIsoDate, nextExam } from "../src/lib/exam-dates";
 
 function scope(id: string, starts_on: string | null, ends_on: string | null = null): ExamScope {
   return { id, course_id: "course", academic_year: "2026/27", kind: "MIDTERM", name: id, unit_ids: ["u1"], starts_on, ends_on,
@@ -24,10 +24,10 @@ it("picks the dated cycle in progress or coming next and ignores undated or past
 
 it("labels the countdown and the date range", () => {
   const mi = scope("mi", "2026-11-23", "2026-12-01");
-  expect(countdownLabel(nextExam([mi], "2026-10-20")!)).toBe("In 34 days");
-  expect(countdownLabel(nextExam([mi], "2026-11-22")!)).toBe("Tomorrow");
-  expect(countdownLabel(nextExam([mi], "2026-11-24")!)).toBe("In progress until Tue 1 Dec");
-  expect(countdownLabel(nextExam([scope("blic", "2026-10-20")], "2026-10-20")!)).toBe("Today");
+  expect(countdownHeading(nextExam([mi], "2026-10-20")!)).toBe("mi in 34 days");
+  expect(countdownHeading(nextExam([mi], "2026-11-22")!)).toBe("mi tomorrow");
+  expect(countdownHeading(nextExam([mi], "2026-11-24")!)).toBe("mi · in progress until Tue 1 Dec");
+  expect(countdownHeading(nextExam([scope("blic", "2026-10-20")], "2026-10-20")!)).toBe("blic today");
   expect(formatScopeDates(mi)).toBe("Mon 23 Nov – Tue 1 Dec");
   expect(formatScopeDates(scope("blic", "2026-10-20"))).toBe("Tue 20 Oct");
   expect(formatScopeDates(scope("undated", null))).toBeNull();

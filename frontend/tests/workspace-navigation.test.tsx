@@ -264,9 +264,11 @@ it("opens existing Progress and Course Overview directly from submitted results 
   expect(mock.start).not.toHaveBeenCalled(); expect(mock.submit).not.toHaveBeenCalled();
 });
 
-it("opens Recommended and Standard setup from Overview without starting an attempt or resetting settings", async () => {
+it("opens Recommended setup from Overview without starting an attempt or resetting settings", async () => {
   render(<AppShell />); await enterCourse();
   expect(screen.queryByRole("button", { name: "Resume session" })).not.toBeInTheDocument();
+  // Course questions is a setup choice, not another way to start from Overview.
+  expect(screen.queryByRole("button", { name: "Practice course questions" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Start recommended practice" }));
   await waitFor(() => expect(screen.getByRole("radio", { name: "Recommended practice" })).toBeChecked());
   expect(within(screen.getByRole("navigation", { name: "Course navigation" })).getByRole("button", { name: "Practice" })).toHaveAttribute("aria-current", "page");
@@ -274,9 +276,9 @@ it("opens Recommended and Standard setup from Overview without starting an attem
   fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
   fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value: "2" } });
   fireEvent.click(screen.getByRole("checkbox", { name: "Short answer" }));
-  navigate("Overview");
-  fireEvent.click(screen.getByRole("button", { name: "Practice course questions" }));
-  await waitFor(() => expect(screen.getByRole("radio", { name: "Course questions" })).toBeChecked());
+  fireEvent.click(screen.getByRole("radio", { name: "Course questions" }));
+  navigate("Overview"); navigate("Practice");
+  expect(screen.getByRole("radio", { name: "Course questions" })).toBeChecked();
   expect(screen.getByLabelText("Custom question count")).toHaveValue(2);
   expect(screen.getByRole("checkbox", { name: "Short answer" })).not.toBeChecked();
   navigate("Overview"); fireEvent.click(screen.getByRole("button", { name: "Start recommended practice" }));
@@ -287,12 +289,13 @@ it("opens Recommended and Standard setup from Overview without starting an attem
   expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "NUMERIC", "MULTIPLE_SELECT"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
-it("offers an honestly labelled return to the mounted session from Overview", async () => {
+it("offers Resume as the only way back to the mounted session from Overview", async () => {
   render(<AppShell />); fireEvent.change(await startPractice(), { target: { value: "Keep this answer" } });
   navigate("Overview");
   expect(screen.getByRole("button", { name: "Resume session" })).toHaveClass("bg-accent");
   expect(screen.queryByRole("button", { name: "Start recommended practice" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Return to session" }));
+  expect(screen.queryByRole("button", { name: "Return to session" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Resume session" }));
   expect(await screen.findByLabelText("Your short answer")).toHaveValue("Keep this answer");
   navigate("Overview"); fireEvent.click(screen.getByRole("button", { name: "Resume session" }));
   expect(await screen.findByLabelText("Your short answer")).toHaveValue("Keep this answer");
