@@ -353,3 +353,19 @@ or `INCORRECT`, `ck_answer_self_review_time` sets both columns together, and
 existing rows stay NULL and nothing is backfilled. `alembic downgrade 0024` refuses while
 any self-assessment exists (clear them first), then drops the constraints and columns.
 See [self-assessment](PRACTICE.md#short-answer-self-assessment-r4).
+
+## Selection mode migration 0026
+
+Revision 0026 follows 0025 and adds nullable `quizzes.selection_mode` (VARCHAR(10)):
+how the session was started, recorded for aggregate pilot metrics.
+`ck_quiz_selection_mode` allows `STANDARD`, `ADAPTIVE`, `MISTAKES`, `DUE`, `FAVORITES`,
+`MOCK`, `QUICK` (the quick quiz, ADAPTIVE selection) and `PAPER` (a past-paper session);
+`ck_quiz_selection_mode_paper` records `PAPER` exactly when the quiz has a frozen
+paper `scoring` rule, so the value survives the paper's deletion while `exam_paper_id`
+is cleared. Additive only: existing quizzes stay NULL, meaning unknown, and nothing is
+backfilled. Nothing reads it back; see
+[recorded selection mode](PRACTICE.md#recorded-selection-mode-migration-0026) and
+[pilot metrics](PILOT_METRICS.md). `alembic downgrade 0025` drops the constraints and the
+column; sessions, answers and grades are unchanged, and upgrading again leaves every
+earlier session NULL. Run the pilot metrics before a downgrade if the recorded modes
+matter.

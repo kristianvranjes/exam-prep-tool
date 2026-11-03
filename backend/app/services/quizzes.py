@@ -331,6 +331,7 @@ def start(db: Session, user: User, course_id: UUID, data: StartQuiz) -> AttemptR
             focus_unit_ids=[str(id_) for id_ in unit_ids],
             focus_label=label,
             feedback_mode=data.feedback_mode,
+            selection_mode="QUICK" if data.quick_quiz else data.selection_mode,
         )
         db.add(quiz)
         db.flush()
@@ -406,6 +407,7 @@ def start_paper(db: Session, user: User, paper_id: UUID, data: StartPaper) -> At
             focus_label=paper.title,
             feedback_mode=data.feedback_mode,
             exam_paper_id=paper.id,
+            selection_mode="PAPER",
             scoring={
                 "version": SCORING_VERSION,
                 "title": paper.title,

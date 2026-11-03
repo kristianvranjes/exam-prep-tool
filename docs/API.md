@@ -348,7 +348,11 @@ practice-eligible favorites (oldest favorite first), and `MOCK` spreads `count` 
 across the units of the required `exam_scope_id` (422 without one). All four exclude
 questions in the caller's active attempts and return 409 when fewer than `count`
 qualify. See [mistakes, due review and mock exams](PRACTICE.md#mistakes-due-review-and-mock-exams-r5-r3)
-and [favorites](PRACTICE.md#favorites-and-the-quick-quiz-r5).
+and [favorites](PRACTICE.md#favorites-and-the-quick-quiz-r5). Optional `quick_quiz: true`
+(only with `ADAPTIVE`, otherwise 422) marks a quick quiz; it changes no selection and
+only records the session as `QUICK` for
+[pilot metrics](PRACTICE.md#recorded-selection-mode-migration-0026). The recorded mode
+is not returned.
 
 ### Favorites (R5)
 

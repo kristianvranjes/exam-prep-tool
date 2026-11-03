@@ -108,7 +108,8 @@ function availabilityQuery(question_types: QuestionType[], selection_mode: Selec
 export const practiceApi = {
   availability: (course: string, question_types: QuestionType[], selection_mode: SelectionMode = "STANDARD", focus?: PracticeFocus) => request<PracticeAvailability>(`/courses/${course}/practice-availability?${availabilityQuery(question_types, selection_mode, focus)}`),
   history: (course: string, offset = 0) => request<AttemptSummary[]>(`${path(course)}?limit=20&offset=${offset}`),
-  start: (course: string, count: number, question_types: QuestionType[], selection_mode: SelectionMode = "STANDARD", focus?: PracticeFocus, feedback_mode?: FeedbackMode) => request<Attempt>(path(course), { method: "POST", body: JSON.stringify({ count, question_types, selection_mode, ...focus, ...(feedback_mode && { feedback_mode }) }) }),
+  /** `quick_quiz` only records the session as a quick quiz for aggregate pilot metrics; selection is unchanged. */
+  start: (course: string, count: number, question_types: QuestionType[], selection_mode: SelectionMode = "STANDARD", focus?: PracticeFocus, feedback_mode?: FeedbackMode, quick_quiz = false) => request<Attempt>(path(course), { method: "POST", body: JSON.stringify({ count, question_types, selection_mode, ...focus, ...(feedback_mode && { feedback_mode }), ...(quick_quiz && { quick_quiz }) }) }),
   read: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}`),
   save: (course: string, id: string, question: string, answer: PracticeAnswer) => request<Attempt>(`${path(course)}/${id}/answers/${question}`, { method: "PATCH", body: JSON.stringify(answer) }),
   check: (course: string, id: string, question: string, confidence: Confidence | null) => request<Attempt>(`${path(course)}/${id}/answers/${question}/check`, { method: "POST", body: JSON.stringify(confidence ? { confidence } : {}) }),
@@ -125,7 +126,7 @@ export const practiceApi = {
   quickQuiz: async (course: string, focus?: PracticeFocus): Promise<Attempt> => {
     const { total } = await practiceApi.availability(course, allTypes, "ADAPTIVE", focus);
     if (!total) throw new Error("No questions are available for a quick quiz here yet.");
-    return practiceApi.start(course, Math.min(total, QUICK_QUIZ_QUESTIONS), allTypes, "ADAPTIVE", focus, "IMMEDIATE");
+    return practiceApi.start(course, Math.min(total, QUICK_QUIZ_QUESTIONS), allTypes, "ADAPTIVE", focus, "IMMEDIATE", true);
   },
   favorite: (course: string, question: string) => request<FavoriteState>(`/courses/${course}/favorites/${question}`, { method: "POST" }),
   unfavorite: (course: string, question: string) => request<FavoriteState>(`/courses/${course}/favorites/${question}`, { method: "DELETE" }),

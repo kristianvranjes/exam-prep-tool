@@ -51,6 +51,14 @@ class StartQuiz(PracticeFilters):
     count: int = Field(default=5, ge=1, le=20)
     # Not a selection filter: availability is the same in both modes.
     feedback_mode: FeedbackMode = "END"
+    # Marks the quick quiz, an ADAPTIVE preset; only the recorded mode (QUICK) differs.
+    quick_quiz: bool = False
+
+    @model_validator(mode="after")
+    def quick_quiz_is_adaptive(self) -> Self:
+        if self.quick_quiz and self.selection_mode != "ADAPTIVE":
+            raise ValueError("A quick quiz uses ADAPTIVE selection")
+        return self
 
 
 class TypeAvailability(BaseModel):
