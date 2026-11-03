@@ -197,7 +197,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
               value: 'examprep_session'
             }
             {
-              // 4 h of inactivity; active sessions renew themselves (see docs/API.md).
+              // 4 h lifetime; requests after 2 h renew it, so idle gaps up to 2 h are always safe (see docs/API.md).
               name: 'SESSION_MAX_AGE_SECONDS'
               value: '14400'
             }

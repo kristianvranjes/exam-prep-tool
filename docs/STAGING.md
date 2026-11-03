@@ -98,7 +98,7 @@ Set these **backend-only** variables in the service dashboard:
 | SESSION_COOKIE_SECURE | `true` |
 | SESSION_COOKIE_SAMESITE | `none` for unrelated platform domains; `lax` for same-site HTTPS custom domains |
 | SESSION_COOKIE_NAME | `examprep_session` (default); do not share a name/domain with unrelated applications |
-| SESSION_MAX_AGE_SECONDS | `14400` (default, 4 h without requests; active sessions renew) |
+| SESSION_MAX_AGE_SECONDS | `14400` (default, 4 h lifetime; renewed after 2 h, so idle gaps up to 2 h are safe) |
 | MATERIAL_STORAGE_DIR | `/data/materials` on the mounted volume |
 | AI_PROVIDER | `disabled` for external import; `openai_compatible` to enable internal generation |
 | OPENAI_COMPATIBLE_URL | Only for internal generation: explicit trusted public HTTPS origin + `/v1` |
