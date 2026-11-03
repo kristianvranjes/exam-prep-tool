@@ -47,6 +47,21 @@ jobs:
           alembic upgrade head
           pytest tests/test_materials.py tests/test_storage_cleanup.py tests/test_storage_cleanup_migration.py
       - run: alembic downgrade base && alembic upgrade head
+  studio:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/studio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[dev]"
+      - run: ruff format --check .
+      - run: ruff check .
+      - run: mypy studio
+      - run: pytest
   frontend:
     runs-on: ubuntu-latest
     defaults:
