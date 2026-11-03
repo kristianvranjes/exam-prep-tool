@@ -438,8 +438,10 @@ ranking and source eligibility remain unchanged.
 eligibility, the question-type and unit/scope filters, snapshots, grading, scheduling
 and transaction boundaries, and, like ADAPTIVE, skip sources already in the student's
 ACTIVE attempts. When fewer questions qualify than requested, start returns the usual
-409 and never creates a shorter session. The mode is not stored with the quiz, and no
-migration is involved.
+409 and never creates a shorter session. Since migration 0026 the quiz records the
+mode it was started with, for aggregate pilot metrics only (see
+[recorded selection mode](#recorded-selection-mode-migration-0026)); selection never
+reads it.
 
 | Mode | Selects | Order |
 | --- | --- | --- |
@@ -608,8 +610,36 @@ It is a client preset over existing options, not a new engine: it reads ADAPTIVE
 availability for that focus and starts `min(total, 5)` questions, so a unit with three
 eligible questions gives a three-question quiz. With none it shows the reason and
 starts nothing. The session opens like a due review, and the overview hides the quick
-quiz while a session is open.
+quiz while a session is open. Its start request adds `quick_quiz: true`, which changes
+nothing about selection and only records the session as `QUICK`
+([recorded selection mode](#recorded-selection-mode-migration-0026)).
 
 Targeted tests: `RUN_DB_TESTS=1 python -m pytest tests/test_favorites_database.py`
 from backend; `npm test -- tests/favorites.test.tsx tests/practice-modes.test.tsx tests/course-overview.test.tsx tests/practice-api.test.ts`
 from frontend.
+
+## Recorded selection mode (migration 0026)
+
+The R6 pilot evaluation needs to know which kinds of practice students used, so every
+session records how it was started in `quizzes.selection_mode`:
+
+| Start path | Recorded |
+| --- | --- |
+| Practice setup, `POST /courses/{id}/attempts` | the requested `selection_mode`: `STANDARD`, `ADAPTIVE`, `MISTAKES`, `DUE`, `FAVORITES` or `MOCK` |
+| One-click **Review due questions** | `DUE`, like a due session from the setup |
+| Quick quiz (`selection_mode: "ADAPTIVE"`, `quick_quiz: true`) | `QUICK` |
+| Past paper, `POST /exam-papers/{id}/attempts` | `PAPER` |
+
+Units, exam scope and past paper stay recognisable from `focus_unit_ids`,
+`exam_scope_id` and `scoring`, as before; feedback mode stays in `feedback_mode`.
+`quick_quiz` is accepted only with `ADAPTIVE` (otherwise 422), so `QUICK` always means
+ADAPTIVE selection. Sessions started before 0026 keep NULL: their mode is unknown and
+nothing is backfilled or guessed. The value is analytics only: it is not part of the
+attempt payload, the UI does not show it, and selection, grading, scheduling and
+history never read it. Aggregate queries for the pilot are in
+[pilot metrics](PILOT_METRICS.md); the schema is in
+[migration 0026](DATABASE.md#selection-mode-migration-0026).
+
+Targeted tests: `python -m pytest tests/test_practice.py` and
+`RUN_DB_TESTS=1 python -m pytest tests/test_selection_mode_database.py` from backend;
+`npm test -- tests/practice-api.test.ts` from frontend.

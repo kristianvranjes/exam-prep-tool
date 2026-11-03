@@ -154,7 +154,9 @@ each item as its own pull request, in this order:
    [shortcuts and continuing](PRACTICE.md#keyboard-shortcuts-and-continuing-a-session)).
    Time per question is deferred to the FSRS work (item 2): storing it needs a
    migration, and FSRS is its first consumer, followed by item analysis median time.
-7. **R6** pilot evaluation right after the midterms, before the finals.
+7. **R6** pilot evaluation right after the midterms, before the finals. Sessions record
+   how they were started since migration 0026; the aggregate queries for the pilot
+   targets are in [pilot metrics](PILOT_METRICS.md).
 
 ### Phase C — exam terms and summer semester (from February 2027)
 

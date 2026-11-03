@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 from alembic.config import Config
 from fastapi.testclient import TestClient
+from migration_helpers import legacy_rows
 from sqlalchemy import delete, text
 from sqlalchemy.exc import IntegrityError
 from test_materials import clients as clients
@@ -26,7 +27,7 @@ pytestmark = pytest.mark.skipif(os.getenv("RUN_DB_TESTS") != "1", reason="Requir
 def retained_rows():
     with engine.connect() as conn:
         return {
-            table: conn.execute(text(f"SELECT * FROM {table} ORDER BY id")).all()
+            table: legacy_rows(conn, table)
             for table in ("quizzes", "quiz_questions", "answers", "question_review_progress")
         }
 
@@ -349,6 +350,6 @@ def test_0015_downgrade_refuses_to_erase_abandoned_history(bank):
     with pytest.raises(RuntimeError, match="abandoned attempts exist"):
         command.downgrade(Config("alembic.ini"), "0014")
     with engine.connect() as conn:
-        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0025"
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0026"
     assert member.get(path).json() == abandoned
     assert retained_rows() == before

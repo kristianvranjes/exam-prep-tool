@@ -7,6 +7,7 @@ from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from community_helpers import create_course, review_question
+from migration_helpers import legacy_rows
 from sqlalchemy import text, update
 from test_exam_scopes_database import draft, scope, unit
 from test_materials import clients as clients
@@ -58,7 +59,7 @@ def history():
     """Everything an attempt is made of, which favorites must never touch."""
     with engine.connect() as conn:
         return {
-            table: conn.execute(text(f"SELECT * FROM {table} ORDER BY id")).all()
+            table: legacy_rows(conn, table)
             for table in (
                 "quizzes",
                 "quiz_questions",
@@ -270,7 +271,7 @@ def test_0023_roundtrip_drops_only_favorites(clients):
             assert history() == before
             command.upgrade(config, "head")
             with engine.connect() as conn:
-                assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0025"
+                assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0026"
             assert history() == before
             # No backfill: the favorite is gone, the session is not.
             assert favorites(member, course) == []

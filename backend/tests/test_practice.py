@@ -1,9 +1,18 @@
+from typing import get_args
+
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
+from app.models.quiz import RECORDED_SELECTION_MODES
 from app.schemas.favorite import FavoriteState
 from app.schemas.question import OwnerQuestion
-from app.schemas.quiz import ActiveQuestion, AnswerPayload, CheckAnswer, StartQuiz
+from app.schemas.quiz import (
+    ActiveQuestion,
+    AnswerPayload,
+    CheckAnswer,
+    SelectionMode,
+    StartQuiz,
+)
 from app.services.grading import grade
 from app.services.quiz_selection import spread
 
@@ -78,6 +87,23 @@ def test_deterministic_grading(payload, expected):
 def test_selection_mode_defaults_to_standard():
     assert StartQuiz().selection_mode == "STANDARD"
     assert StartQuiz(selection_mode="ADAPTIVE").selection_mode == "ADAPTIVE"
+
+
+def test_quick_quiz_is_an_adaptive_preset():
+    assert StartQuiz().quick_quiz is False
+    assert StartQuiz(selection_mode="ADAPTIVE", quick_quiz=True).quick_quiz is True
+    for mode in ("STANDARD", "MISTAKES", "DUE", "FAVORITES"):
+        with pytest.raises(ValidationError, match="ADAPTIVE"):
+            StartQuiz.model_validate({"selection_mode": mode, "quick_quiz": True})
+    with pytest.raises(ValidationError):
+        StartQuiz.model_validate({"selection_mode": "ADAPTIVE", "quick_quiz": "yes"})
+
+
+def test_recorded_modes_cover_every_start_path():
+    # The ck_quiz_selection_mode values: each request mode, the quick quiz and papers.
+    assert set(RECORDED_SELECTION_MODES) == {*get_args(SelectionMode), "QUICK", "PAPER"}
+    assert len(RECORDED_SELECTION_MODES) == len(set(RECORDED_SELECTION_MODES))
+    assert all(len(mode) <= 10 for mode in RECORDED_SELECTION_MODES)
 
 
 @pytest.mark.parametrize("mode", ["MISTAKES", "DUE", "FAVORITES"])

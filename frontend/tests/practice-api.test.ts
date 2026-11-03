@@ -58,13 +58,13 @@ it("starts a guided five-question quick quiz, fewer when fewer are available", a
   await expect(practiceApi.quickQuiz("course")).resolves.toEqual({ id: "quick" });
   expect(mock).toHaveBeenNthCalledWith(1, counted);
   expect(mock).toHaveBeenLastCalledWith("/courses/course/attempts", {
-    method: "POST", body: JSON.stringify({ count: 5, question_types: types, selection_mode: "ADAPTIVE", feedback_mode: "IMMEDIATE" }),
+    method: "POST", body: JSON.stringify({ count: 5, question_types: types, selection_mode: "ADAPTIVE", feedback_mode: "IMMEDIATE", quick_quiz: true }),
   });
   mock.mockResolvedValueOnce({ total: 3 }).mockResolvedValueOnce({ id: "unit" });
   await practiceApi.quickQuiz("course", { unit_ids: ["u1"] });
   expect(mock).toHaveBeenNthCalledWith(3, `${counted}&unit_ids=u1`);
   expect(mock).toHaveBeenLastCalledWith("/courses/course/attempts", {
-    method: "POST", body: JSON.stringify({ count: 3, question_types: types, selection_mode: "ADAPTIVE", unit_ids: ["u1"], feedback_mode: "IMMEDIATE" }),
+    method: "POST", body: JSON.stringify({ count: 3, question_types: types, selection_mode: "ADAPTIVE", unit_ids: ["u1"], feedback_mode: "IMMEDIATE", quick_quiz: true }),
   });
   mock.mockResolvedValueOnce({ total: 0 });
   await expect(practiceApi.quickQuiz("course", { exam_scope_id: "mi" })).rejects.toThrow("No questions are available for a quick quiz here yet.");

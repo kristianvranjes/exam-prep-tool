@@ -17,11 +17,35 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
+# How a session was started, recorded for aggregate pilot metrics (docs/PILOT_METRICS.md):
+# the requested selection mode, QUICK for the quick quiz (ADAPTIVE selection) and PAPER
+# for a past-paper session. NULL on sessions started before migration 0026.
+RECORDED_SELECTION_MODES = (
+    "STANDARD",
+    "ADAPTIVE",
+    "MISTAKES",
+    "DUE",
+    "FAVORITES",
+    "MOCK",
+    "QUICK",
+    "PAPER",
+)
+
 
 class Quiz(Base):
     __tablename__ = "quizzes"
     __table_args__ = (
         CheckConstraint("feedback_mode IN ('END','IMMEDIATE')", name="ck_quiz_feedback_mode"),
+        CheckConstraint(
+            "selection_mode IS NULL OR selection_mode IN ("
+            + ",".join(f"'{mode}'" for mode in RECORDED_SELECTION_MODES)
+            + ")",
+            name="ck_quiz_selection_mode",
+        ),
+        CheckConstraint(
+            "selection_mode IS NULL OR (selection_mode = 'PAPER') = (scoring IS NOT NULL)",
+            name="ck_quiz_selection_mode_paper",
+        ),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     course_id: Mapped[UUID] = mapped_column(
@@ -44,6 +68,8 @@ class Quiz(Base):
         ForeignKey("exam_papers.id", ondelete="SET NULL"), index=True
     )
     scoring: Mapped[dict[str, object] | None] = mapped_column(JSONB)
+    # One of RECORDED_SELECTION_MODES; analytics only, never read back by the product.
+    selection_mode: Mapped[str | None] = mapped_column(String(10))
 
 
 class QuizQuestion(Base):
