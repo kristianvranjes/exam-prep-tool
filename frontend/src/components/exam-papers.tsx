@@ -60,13 +60,13 @@ export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onS
     </div>
     {!list && !loadError && <LoadingState>Loading past exams…</LoadingState>}
     {loadError && <div className="space-y-3"><Alert>{loadError}</Alert><Button variant="secondary" onClick={() => { setLoadError(""); setRevision((value) => value + 1); }}>Retry past exams</Button></div>}
-    {notice && <p role="status" className="rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{notice}</p>}
+    {notice && <Alert tone="info">{notice}</Alert>}
     {startError && <Alert>{startError}</Alert>}
     {list && list.papers.length === 0 && <EmptyState title="No past exams yet.">{list.canManage ? "Add the first past exam below." : "Course staff have not published past exams yet."}</EmptyState>}
     {list && years.map((year) => <div key={year} className="space-y-2">
       <h4 className="font-semibold">Academic year {year}</h4>
       <ul aria-label={`Past exams ${year}`} className="space-y-2">
-        {list.papers.filter((paper) => paper.academic_year === year).map((paper) => <li key={paper.id} className="min-w-0 rounded-lg border border-line bg-surface p-4">
+        {list.papers.filter((paper) => paper.academic_year === year).map((paper) => <li key={paper.id} className="min-w-0 rounded-control border border-line bg-surface p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="break-words font-medium [overflow-wrap:anywhere]">{paper.title}</p>
@@ -137,14 +137,14 @@ function PaperForm({ courseId, paper, onSave, onCancel }: {
   return <DraftForm aria-label={paper ? `Edit details of ${paper.title}` : "Add past exam"} className="space-y-4" onSubmit={(event) => void submit(event)}>
     <fieldset disabled={busy} className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-3">
-        <label className="block text-sm font-medium sm:col-span-2">Title<Input className="mt-1" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={100} placeholder="Međuispit 2025/26" required /></label>
-        <label className="block text-sm font-medium">Academic year<Input className="mt-1" value={year} onChange={(event) => setYear(event.target.value)} placeholder="2025/26" required /></label>
+        <label className="block text-sm font-medium sm:col-span-2">Title<Input className="mt-1" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={100} placeholder="e.g. Međuispit 2025/26" required /></label>
+        <label className="block text-sm font-medium">Academic year<Input className="mt-1" value={year} onChange={(event) => setYear(event.target.value)} placeholder="e.g. 2025/26" required /></label>
         <label className="block text-sm font-medium">Exam type
           <Select className="mt-1" value={kind} onChange={(event) => setKind(event.target.value as ExamScopeKind)}>
             {(Object.keys(kindLabels) as ExamScopeKind[]).map((value) => <option key={value} value={value}>{kindLabels[value]}</option>)}
           </Select>
         </label>
-        <label className="block text-sm font-medium">Term <span className="font-normal text-muted">(optional)</span><Input className="mt-1" value={term} onChange={(event) => setTerm(event.target.value)} maxLength={100} placeholder="Zimski rok" /></label>
+        <label className="block text-sm font-medium">Term <span className="font-normal text-muted">(optional)</span><Input className="mt-1" value={term} onChange={(event) => setTerm(event.target.value)} maxLength={100} placeholder="e.g. Zimski rok" /></label>
         <label className="block text-sm font-medium">Exam date <span className="font-normal text-muted">(optional)</span><Input type="date" className="mt-1" value={date} onChange={(event) => setDate(event.target.value)} /></label>
         <label className="block text-sm font-medium">Time limit in minutes <span className="font-normal text-muted">(optional)</span><Input type="number" min={1} max={600} className="mt-1" value={duration} onChange={(event) => setDuration(event.target.value)} /></label>
         <label className="block text-sm font-medium">Wrong answers
@@ -236,12 +236,12 @@ function PaperEditor({ paperId, courseId, onChanged, onDeleted }: {
       {!draft && <p className="text-sm text-muted">Unpublish this paper to change its questions.</p>}
       {items.length === 0 && <p className="text-sm text-muted">No questions yet. Add approved questions below in the order they appeared on the exam.</p>}
       <ol className="space-y-2">
-        {items.map((item, index) => <li key={item.question_id} className="rounded-lg border border-line p-3">
+        {items.map((item, index) => <li key={item.question_id} className="rounded-control border border-line p-3">
           <p className="break-words text-sm [overflow-wrap:anywhere]"><span className="font-medium">{index + 1}.</span> <RichText text={item.stem} /></p>
           <p className="mt-1 text-xs text-muted">{typeLabels[item.type]}</p>
           <div className="mt-2 flex flex-wrap items-end gap-3">
             <label className="block text-sm font-medium">Points<Input type="number" min={0.01} step={0.01} className="mt-1 w-28" disabled={!draft || busy} value={Number.isFinite(item.points) ? item.points : ""} onChange={(event) => change(index, { points: event.target.value === "" ? Number.NaN : Number(event.target.value) })} /></label>
-            <label className="block text-sm font-medium">Label <span className="font-normal text-muted">(optional)</span><Input className="mt-1 w-40" maxLength={40} disabled={!draft || busy} value={item.label ?? ""} placeholder="Zadatak 3a" onChange={(event) => change(index, { label: event.target.value.trim() ? event.target.value : null })} /></label>
+            <label className="block text-sm font-medium">Label <span className="font-normal text-muted">(optional)</span><Input className="mt-1 w-40" maxLength={40} disabled={!draft || busy} value={item.label ?? ""} placeholder="e.g. Zadatak 3a" onChange={(event) => change(index, { label: event.target.value.trim() ? event.target.value : null })} /></label>
             {draft && <div className="flex flex-wrap gap-1">
               <Button variant="ghost" disabled={busy || index === 0} aria-label={`Move question ${index + 1} up`} onClick={() => move(index, -1)}>Up</Button>
               <Button variant="ghost" disabled={busy || index === items.length - 1} aria-label={`Move question ${index + 1} down`} onClick={() => move(index, 1)}>Down</Button>
@@ -261,16 +261,20 @@ function PaperEditor({ paperId, courseId, onChanged, onDeleted }: {
       </>}
     </section>
 
-    <div className="flex flex-wrap gap-2 border-t border-line pt-4">
+    {/* Publishing moves the paper forward; deleting sits apart on the other edge, in red, behind a confirmation. */}
+    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-t border-line pt-4">
       {draft
         ? <Button disabled={busy || dirty || paper.items.length === 0} aria-describedby={dirty ? "publish-help" : undefined} onClick={() => void run(() => api.publishExamPaper(paper.id), `Published ${paper.title}. Students can now see it.`)}>Publish</Button>
         : <Button variant="secondary" disabled={busy} onClick={() => void run(() => api.unpublishExamPaper(paper.id), `Unpublished ${paper.title}. Students no longer see it.`)}>Unpublish</Button>}
-      {draft && (confirmDelete
-        ? <>
-          <Button variant="secondary" className="border-danger/40 text-danger" disabled={busy} onClick={() => void run(async () => { await api.deleteExamPaper(paper.id); onDeleted(paper.title); }, "")}>Confirm delete</Button>
-          <Button variant="ghost" disabled={busy} onClick={() => setConfirmDelete(false)}>Keep paper</Button>
-        </>
-        : <Button variant="ghost" disabled={busy} onClick={() => setConfirmDelete(true)}>Delete</Button>)}
+      {draft && <div role="group" aria-label="Delete this past exam" className="flex flex-wrap items-center gap-2">
+        {confirmDelete
+          ? <>
+            <span className="text-sm text-danger">Delete {paper.title} for good?</span>
+            <Button variant="danger" disabled={busy} onClick={() => void run(async () => { await api.deleteExamPaper(paper.id); onDeleted(paper.title); }, "")}>Confirm delete</Button>
+            <Button variant="ghost" disabled={busy} onClick={() => setConfirmDelete(false)}>Keep paper</Button>
+          </>
+          : <Button variant="secondary" className="border-danger/50 text-danger hover:border-danger hover:bg-danger-surface" disabled={busy} onClick={() => setConfirmDelete(true)}>Delete</Button>}
+      </div>}
     </div>
     {dirty && draft && <p id="publish-help" className="text-sm text-muted">Save or discard question changes before publishing.</p>}
   </div>;
@@ -302,7 +306,7 @@ function QuestionPicker({ courseId, chosen, disabled, onAdd }: {
 
   const term = search.trim().toLowerCase();
   const visible = rows.filter((question) => !chosen.includes(question.id) && (!term || question.stem.toLowerCase().includes(term)));
-  return <section aria-label="Add questions" className="space-y-3 rounded-lg border border-dashed border-line p-3">
+  return <section aria-label="Add questions" className="space-y-3 rounded-control border border-dashed border-line p-3">
     <h6 className="font-semibold">Add approved questions</h6>
     <div className="flex flex-wrap gap-3">
       {units.length > 0 && <label className="block text-sm font-medium">Unit

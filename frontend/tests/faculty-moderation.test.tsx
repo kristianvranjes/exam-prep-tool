@@ -295,24 +295,24 @@ describe("FacultyModeration", () => {
 
     const mcq = await screen.findByRole("article", { name: "What is 2 + 2?" });
     expect(within(mcq).getByText("Course: Algorithms")).toBeInTheDocument();
-    expect(within(mcq).getByText("MULTIPLE_CHOICE")).toBeInTheDocument();
-    expect(within(mcq).getByText("USER")).toBeInTheDocument();
+    expect(within(mcq).getByText("Multiple choice")).toBeInTheDocument();
+    expect(within(mcq).getByText("Written or imported")).toBeInTheDocument();
+    expect(within(mcq).getByText("Awaiting faculty review")).toBeInTheDocument();
+    expect(within(mcq).queryByText(/MULTIPLE_CHOICE|USER/)).not.toBeInTheDocument();
     expect(within(mcq).getByText("Difficulty: 2")).toBeInTheDocument();
     expect(within(mcq).getByText("Correct answer: 4")).toBeInTheDocument();
     expect(within(mcq).getByText("Explanation: Because four is correct.")).toBeInTheDocument();
-    expect(within(mcq).getByText("Concepts: concept-a, concept-b")).toBeInTheDocument();
-    expect(within(mcq).getByText("Sources: material-7 / chunk-7 (chunk 3)")).toBeInTheDocument();
-    expect(within(mcq).getByText("Sources: material-7 / chunk-7 (chunk 3)")).not.toBeVisible();
-    fireEvent.click(within(mcq).getByText("Source details"));
-    expect(within(mcq).getByText("Sources: material-7 / chunk-7 (chunk 3)")).toBeVisible();
+    // Only IDs reach the queue, so the card says how much grounds the question instead of printing them.
+    expect(within(mcq).getByText("Linked to 2 concepts and 1 material passage.")).toBeVisible();
+    expect(within(mcq).queryByText(/concept-a|material-7|chunk-7/)).not.toBeInTheDocument();
     const self = screen.getByRole("article", { name: "The answer is true" });
     expect(within(self).getByText("Answer: True")).toBeInTheDocument();
     expect(within(self).getByText("Another faculty moderator must review this question.")).toBeInTheDocument();
     expect(within(self).queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
     expect(within(self).queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
     const short = screen.getByRole("article", { name: "Describe the result" });
-    expect(within(short).getByText("SHORT_ANSWER")).toBeInTheDocument();
-    expect(within(short).getByText("AI")).toBeInTheDocument();
+    expect(within(short).getByText("Short answer")).toBeInTheDocument();
+    expect(within(short).getByText("AI-generated")).toBeInTheDocument();
     expect(within(short).getByText("Reference answer: Four")).toBeInTheDocument();
   });
 
@@ -363,7 +363,7 @@ describe("FacultyModeration", () => {
     apiMock.transitionQuestion.mockRejectedValueOnce(new Error("Rejected")).mockResolvedValueOnce(makeQuestion({ id: "q-fail-reject" }));
 
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties} />);
-    const input = await screen.findByPlaceholderText("Reason for rejection");
+    const input = await screen.findByLabelText("Rejection reason");
     expect(input).toHaveAttribute("maxlength", "1000");
     expect(input).toBeRequired();
     fireEvent.change(input, { target: { value: "   " } });
@@ -391,7 +391,7 @@ describe("FacultyModeration", () => {
     const pending = deferred<OwnerQuestion>();
     apiMock.transitionQuestion.mockReturnValue(pending.promise);
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties} />);
-    const input = await screen.findAllByPlaceholderText("Reason for rejection");
+    const input = await screen.findAllByLabelText("Rejection reason");
     fireEvent.change(input[0], { target: { value: "Wrong answer" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Reject" })[0]);
     fireEvent.submit(screen.getByRole("button", { name: "Rejecting…" }).closest("form")!);

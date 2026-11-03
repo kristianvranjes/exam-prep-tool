@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api, Course, Faculty, User, type CourseMembership } from "../lib/api";
 import { CourseWorkspace } from "./course-workspace";
-import { attemptPath, coursePath, parseWorkspaceRoute, type CourseDestination } from "../lib/workspace-route";
+import { attemptPath, coursePath, documentTitle, parseWorkspaceRoute, type CourseDestination } from "../lib/workspace-route";
 import type { AttemptSummary, Attempt } from "../lib/practice-api";
 import { useWorkspaceNavigation } from "./use-workspace-navigation";
 import { StudentHome } from "./student-home";
@@ -200,17 +200,20 @@ export function AppShell() {
     if (selected?.id !== course.id) activateCourse(course);
   }
 
-  if (checkingSession) return <main className="mx-auto max-w-6xl px-6 py-8"><Brand /><LoadingState>Loading your study space…</LoadingState></main>;
-  if (!user) return <AuthScreen mode={mode} busy={busy} error={error} submit={submitAuth} changeMode={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }} />;
+  // Every route renders through this client shell, so it names the tab with React's <title>, which React hoists
+  // into <head>. Root metadata leaves the title out so there is only one title element (see DESIGN.md).
+  const tabTitle = <title>{checkingSession || !user ? "ExamPrep" : documentTitle(route, view === "course" && selectedId === routeCourseId ? selected?.name : null)}</title>;
+  if (checkingSession) return <>{tabTitle}<main className="mx-auto max-w-6xl px-6 py-8"><Brand /><LoadingState>Loading your study space…</LoadingState></main></>;
+  if (!user) return <>{tabTitle}<AuthScreen mode={mode} busy={busy} error={error} submit={submitAuth} changeMode={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }} /></>;
 
   const isOwner = !!selected && selectedRole?.courseId === selected.id && selectedRole.role === "OWNER";
-  return <ApplicationFrame user={user} courseName={view === "course" && selectedId === routeCourseId ? selected?.name : undefined} logout={() => void logout()} busy={loggingOut}
+  return <>{tabTitle}<ApplicationFrame user={user} courseName={view === "course" && selectedId === routeCourseId ? selected?.name : undefined} logout={() => void logout()} busy={loggingOut}
     focusedPractice={view === "course" && destination === "practice" && activePractice}
     onHome={() => navigate("/")} homeActive={view === "home"} managementActive={view === "management"}
     onManagement={faculties.length > 0 ? () => { setManagementVisited(true); navigate("/faculty"); } : undefined}>
     {error && <Alert className="mb-5">{error}</Alert>}
     {view === "unavailable" && <section><h1 id="unavailable-heading" tabIndex={-1} className="text-2xl font-semibold">Page unavailable</h1><Button className="mt-4" onClick={() => navigate("/")}>Back to Home</Button></section>}
-    {deletedNotice && <p role="status" className="mb-5 rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{deletedNotice}</p>}
+    {deletedNotice && <Alert tone="info" className="mb-5">{deletedNotice}</Alert>}
     <div hidden={view !== "home"}>
       <StudentHome courses={courses} loading={loadingCourses} onOpen={selectCourse}
         onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])}
@@ -244,5 +247,5 @@ export function AppShell() {
       {view === "management" && (checkingFaculties ? <LoadingState>Checking faculty access…</LoadingState> : faculties.length === 0 && <><Alert>Faculty tools are available to faculty moderators.</Alert><Button className="mt-4" onClick={() => navigate("/")}>Back to Home</Button></>)}
       {managementVisited && faculties.length > 0 && <UnsavedChangesProvider onDirtyChange={setManagementEdited}><FacultyWorkspace faculties={faculties} currentUserId={user.id} busy={busy} createCourse={createCourse} goHome={() => navigate("/")} /></UnsavedChangesProvider>}
     </div>
-  </ApplicationFrame>;
+  </ApplicationFrame></>;
 }

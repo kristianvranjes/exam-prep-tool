@@ -8,6 +8,21 @@ export const coursePath = (id: string, destination: CourseDestination = "overvie
 export const attemptPath = (courseId: string, id: string, submitted = false) =>
   `${coursePath(courseId)}/attempts/${encodeURIComponent(id)}${submitted ? "/results" : ""}`;
 
+const destinationTitles: Record<CourseDestination, string | null> = {
+  overview: null, practice: "Practice", papers: "Past exams", progress: "Progress", materials: "Materials", more: "More",
+};
+
+/**
+ * The browser tab title for a workspace route, most specific part first: "Practice · Formal languages · ExamPrep".
+ * The course name is left out until it is known, so a tab never shows a raw course ID.
+ */
+export function documentTitle(route: WorkspaceRoute | null, courseName?: string | null) {
+  if (!route) return "Page unavailable · ExamPrep";
+  if (route.view !== "course") return `${route.view === "home" ? "Home" : "Faculty"} · ExamPrep`;
+  const page = route.results ? "Results" : route.attemptId ? "Practice session" : destinationTitles[route.destination];
+  return [page, courseName || (page ? null : "Course"), "ExamPrep"].filter(Boolean).join(" · ");
+}
+
 export function parseWorkspaceRoute(pathname: string): WorkspaceRoute | null {
   const path = pathname.replace(/\/$/, "") || "/";
   if (path === "/") return { view: "home" };

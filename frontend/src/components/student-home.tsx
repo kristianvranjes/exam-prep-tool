@@ -38,7 +38,7 @@ export function StudentHome({ courses, loading, onOpen, onJoined, catalogRevisio
         {loading ? <LoadingState>Loading courses…</LoadingState> : courses.length === 0 ?
           <EmptyState title="No courses yet">Use Join a course to find your faculty and start studying.</EmptyState> :
           <ul className="grid gap-3 sm:grid-cols-2">{courses.map(course => <li key={course.id}>
-            <button type="button" aria-label={`Open course: ${course.name}`} className="h-full w-full rounded-xl border border-line bg-surface p-5 text-left hover:border-accent" onClick={() => onOpen(course)}>
+            <button type="button" aria-label={`Open course: ${course.name}`} className="h-full w-full rounded-card border border-line bg-surface p-5 text-left hover:border-accent" onClick={() => onOpen(course)}>
               <span className="block text-lg font-semibold">{course.name}</span>
               {course.code && <Badge className="mt-2">{course.code}</Badge>}
               {course.description && <span className="mt-3 block text-sm text-muted">{course.description}</span>}

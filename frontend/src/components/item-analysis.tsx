@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { CircleCheck } from "lucide-react";
 import { api, type ItemAnalysis, type ItemAnalysisFlag, type ItemAnalysisList, type OptionAnalysis } from "../lib/api";
+import { typeLabels } from "../lib/question-types";
+import { RichText } from "./rich-text";
 import { Alert, Badge, Button, EmptyState, LoadingState } from "./ui";
 
 const PAGE = 20;
 const percent = (share: number) => `${Math.round(share * 100)}%`;
 const signed = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(2)}`;
 const students = (count: number) => `${count} ${count === 1 ? "student" : "students"}`;
-const typeLabel = (item: ItemAnalysis) => item.type.toLowerCase().replaceAll("_", " ");
 // A likely wrong key needs a decision; the other flags suggest an improvement.
 const FLAGS: Record<ItemAnalysisFlag, { label: string; tone: "danger" | "pending" }> = {
   NEGATIVE_DISCRIMINATION: { label: "Check the key", tone: "danger" },
@@ -66,7 +67,7 @@ export function ItemAnalysisView({ courseId, onOpenQuestion }: { courseId: strin
     </div>
     {loading && <LoadingState>Loading item analysis…</LoadingState>}
     {!loading && error && <div className="mt-4 space-y-3"><Alert>{error}</Alert><Button variant="secondary" onClick={() => { setLoading(true); setError(""); setRevision(value => value + 1); }}>Try again</Button></div>}
-    {!loading && !error && data && data.total === 0 && <div className="mt-4"><EmptyState title="No graded answers yet.">Statistics appear once students answer approved multiple-choice or true/false questions. Each question needs {data.min_sample_size} students.</EmptyState></div>}
+    {!loading && !error && data && data.total === 0 && <div className="mt-4"><EmptyState title="No graded answers yet.">Statistics appear once students answer approved, automatically graded questions. Each question needs {data.min_sample_size} students.</EmptyState></div>}
     {!loading && !error && data && data.total > 0 && <>
       <p className="mt-4 text-sm">{data.total} {data.total === 1 ? "question" : "questions"} answered · {data.analysed} with at least {data.min_sample_size} students · <span className="font-semibold">{data.flagged} to check</span></p>
       <ol aria-label="Questions, those to check first" className="mt-4 border-t border-line">
@@ -86,8 +87,8 @@ function ItemRow({ item, minimum, onOpenQuestion }: { item: ItemAnalysis; minimu
   const notes = explanations(item);
   return <li aria-labelledby={heading} className="min-w-0 border-b border-line py-5">
     <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-      <h4 id={heading} className="min-w-0 max-w-prose break-words font-display text-lg font-medium [overflow-wrap:anywhere]">{item.stem}</h4>
-      <span className="flex flex-wrap gap-2"><Badge>{typeLabel(item)}</Badge>{item.flags.map(flag => <Badge key={flag} tone={FLAGS[flag].tone}>{FLAGS[flag].label}</Badge>)}</span>
+      <h4 id={heading} className="min-w-0 max-w-prose break-words font-display text-lg font-medium [overflow-wrap:anywhere]"><RichText text={item.stem} /></h4>
+      <span className="flex flex-wrap gap-2"><Badge>{typeLabels[item.type]}</Badge>{item.flags.map(flag => <Badge key={flag} tone={FLAGS[flag].tone}>{FLAGS[flag].label}</Badge>)}</span>
     </div>
     {!item.enough_data && <p className="mt-2 text-sm text-muted">Not enough answers yet: {item.sample_size} of {minimum} students.</p>}
     {item.enough_data && <>
@@ -117,7 +118,7 @@ function OptionTable({ item }: { item: ItemAnalysis }) {
       <tbody>
         {item.options.map(option => <tr key={option.position} className="border-t border-line align-top">
           <th scope="row" className="min-w-0 py-2 pr-3 font-normal">
-            <span className="break-words [overflow-wrap:anywhere]">{letter(item, option) && <span className="mr-1 font-semibold">{letter(item, option)}</span>}{option.text}</span>
+            <span className="break-words [overflow-wrap:anywhere]">{letter(item, option) && <span className="mr-1 font-semibold">{letter(item, option)}</span>}<RichText text={option.text} /></span>
             {option.is_key && <span className="ml-2 inline-flex items-center gap-1 font-medium text-success"><CircleCheck aria-hidden="true" className="size-4" />Key</span>}
             {option.flag && <Badge tone={FLAGS[option.flag].tone} className="ml-2 whitespace-nowrap">{FLAGS[option.flag].label}</Badge>}
           </th>

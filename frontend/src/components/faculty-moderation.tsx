@@ -4,11 +4,21 @@ import { keyText } from "../lib/question-types";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type Course, type Faculty, type ModeratorReport, type OwnerQuestion } from "../lib/api";
-import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
+import { Alert, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
+import { QuestionBadges } from "./question-badges";
 import { QuestionSuggestionsQueue } from "./question-suggestions-queue";
 import { RichText } from "./rich-text";
 
 type QuestionReasonMap = Record<string, string>;
+
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+function groundingSummary(question: OwnerQuestion) {
+  const parts = [
+    question.concept_ids.length ? plural(question.concept_ids.length, "concept", "concepts") : null,
+    question.source_chunks.length ? plural(question.source_chunks.length, "material passage", "material passages") : null,
+  ].filter(Boolean);
+  return `Linked to ${parts.join(" and ")}.`;
+}
 
 function QuestionReviewCard({
   question,
@@ -39,8 +49,7 @@ function QuestionReviewCard({
         <h3 className="mt-1 break-words text-lg font-semibold"><RichText text={question.stem} /></h3>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Badge>{question.type}</Badge>
-        <Badge>{question.source}</Badge>
+        <QuestionBadges type={question.type} status={question.status} source={question.source} />
       </div>
     </div>
     <div className="grid gap-3 sm:grid-cols-2">
@@ -52,18 +61,15 @@ function QuestionReviewCard({
       {(question.type === "NUMERIC" || question.type === "MULTIPLE_SELECT") && <p className="text-sm text-muted">Correct answer: <RichText text={keyText(question) ?? "Unknown"} /></p>}
     </div>
     {question.explanation && <p className="text-sm text-muted">Explanation: <RichText text={question.explanation} /></p>}
-    {(question.concept_ids.length > 0 || question.source_chunks.length > 0) && <details className="rounded-lg border border-line p-3">
-      <summary className="text-sm font-medium">Source details</summary>
-      {question.concept_ids.length > 0 && <p className="mt-2 text-sm text-muted">Concepts: {question.concept_ids.join(", ")}</p>}
-      {question.source_chunks.length > 0 && <p className="mt-2 break-words text-sm text-muted">Sources: {question.source_chunks.map(chunk => `${chunk.material_id} / ${chunk.chunk_id} (chunk ${chunk.ordinal + 1})`).join(", ")}</p>}
-    </details>}
+    {/* Only concept and chunk IDs reach the queue, so say how much grounds the question instead of printing IDs. */}
+    {(question.concept_ids.length > 0 || question.source_chunks.length > 0) && <p className="text-sm text-muted">{groundingSummary(question)}</p>}
     {selfReview ? <Alert>Another faculty moderator must review this question.</Alert> : <>
       <div className="flex flex-wrap gap-2">
         <Button type="button" onClick={onApprove} disabled={busy}>{busyAction === "approve" ? "Approving…" : "Approve"}</Button>
       </div>
       <form onSubmit={event => { event.preventDefault(); onReject(); }} className="space-y-2">
         <label className="block text-sm font-medium">Rejection reason
-          <Input value={reason} required maxLength={1000} onChange={event => onReasonChange(event.target.value)} placeholder="Reason for rejection" className="mt-2" />
+          <Input value={reason} required maxLength={1000} onChange={event => onReasonChange(event.target.value)} placeholder="e.g. Option B is also correct" className="mt-2" />
         </label>
         <Button type="submit" variant="secondary" disabled={busy || !reason.trim()}>{busyAction === "reject" ? "Rejecting…" : "Reject"}</Button>
       </form>
@@ -205,9 +211,9 @@ export function FacultyModeration({ currentUserId, moderatedFaculties }: { curre
     </div>
 
     <div className="mt-5 flex flex-wrap gap-2" role="group" aria-label="Moderation mode">
-      <Button type="button" variant={mode === "review" ? "primary" : "secondary"} aria-pressed={mode === "review"} onClick={() => { setMode("review"); setLoadingQueue(true); setQueueError(""); setQueueRevision(value => value + 1); }}>Question review</Button>
-      <Button type="button" variant={mode === "reports" ? "primary" : "secondary"} aria-pressed={mode === "reports"} onClick={() => setMode("reports")}>Reports</Button>
-      <Button type="button" variant={mode === "suggestions" ? "primary" : "secondary"} aria-pressed={mode === "suggestions"} onClick={() => setMode("suggestions")}>Suggestions</Button>
+      <Button type="button" variant="secondary" aria-pressed={mode === "review"} onClick={() => { setMode("review"); setLoadingQueue(true); setQueueError(""); setQueueRevision(value => value + 1); }}>Question review</Button>
+      <Button type="button" variant="secondary" aria-pressed={mode === "reports"} onClick={() => setMode("reports")}>Reports</Button>
+      <Button type="button" variant="secondary" aria-pressed={mode === "suggestions"} onClick={() => setMode("suggestions")}>Suggestions</Button>
     </div>
 
     <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -228,7 +234,7 @@ export function FacultyModeration({ currentUserId, moderatedFaculties }: { curre
     {mode === "review" && <>
     {queueError && <Alert className="mt-4">{queueError}</Alert>}
     {actionError && <Alert className="mt-4">{actionError}</Alert>}
-    {successNotice && <p role="status" className="mt-4 rounded-lg border border-line bg-subtle p-3 text-sm text-foreground">{successNotice}</p>}
+    {successNotice && <Alert tone="success" className="mt-4">{successNotice}</Alert>}
     {loadingCourses ? <LoadingState>Loading faculty courses…</LoadingState> : null}
     {loadingQueue ? <LoadingState>Loading moderation queue…</LoadingState> : null}
     {!loadingQueue && !queueError && !queue.length && <EmptyState title="No questions awaiting faculty review">There are no submitted questions awaiting review on this page.</EmptyState>}
@@ -320,7 +326,7 @@ function ReportsQueue({ facultyId, courseId, courses }: { facultyId: string; cou
       return <Surface key={report.id} role="article" aria-label={`Report: ${question.stem}`} className="space-y-3">
         <p className="text-sm text-muted">{courses.find(course => course.id === question.course_id)?.name ?? question.course_id}</p>
         <h3 className="break-words text-lg font-semibold"><RichText text={question.stem} /></h3>
-        <div className="flex gap-2"><Badge>{question.type}</Badge><Badge>{question.source}</Badge></div>
+        <div className="flex flex-wrap gap-2"><QuestionBadges type={question.type} status={question.status} source={question.source} /></div>
         {question.type === "MULTIPLE_CHOICE" && <p>Correct answer: <RichText text={question.options.find(option => option.is_correct)?.text ?? ""} /></p>}
         {question.type === "MULTIPLE_CHOICE" && <ul className="list-inside list-disc space-y-1">{question.options.map(option => <li key={option.position} className="break-words"><RichText text={option.text} />{option.is_correct ? " (correct)" : ""}</li>)}</ul>}
         {question.type === "TRUE_FALSE" && <p>Answer: {question.correct_boolean ? "True" : "False"}</p>}

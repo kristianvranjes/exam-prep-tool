@@ -200,7 +200,7 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
     {hasUnfinishedSession && mode !== "STANDARD" && <p className="text-sm text-muted">{mode === "ADAPTIVE" ? "Recommended practice" : "This choice"} excludes questions in unfinished sessions, so fewer questions may be available. You can resume above or choose Course questions under More options.</p>}
     <fieldset disabled={busy}>
       <legend className="mb-2 font-semibold">Session length</legend>
-      <div className="flex flex-wrap gap-2">{(["5", "10", "20", "custom"] as const).map(value => <label key={value} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm">
+      <div className="flex flex-wrap gap-2">{(["5", "10", "20", "custom"] as const).map(value => <label key={value} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-control border border-line px-3 py-2 text-sm">
         <input type="radio" name="session-length" aria-label={value === "custom" ? "Custom" : `${value} questions`} checked={length === value} onChange={() => { setLength(value); if (value !== "custom") setCount(Number(value)); }} />
         {value === "custom" ? "Custom" : value}
       </label>)}</div>

@@ -22,7 +22,7 @@ export function ApplicationFrame({ user, courseName, logout, busy, onHome, homeA
     <header className="border-b border-line bg-surface">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
         {focusedPractice ? <Brand /> : <button type="button" onClick={() => { setMenuOpen(false); onHome(); }} aria-label="ExamPrep home"><Brand /></button>}
-        <div className="flex items-center gap-3"><ThemeSelect />{!focusedPractice && <button ref={menuButton} type="button" aria-label={menuOpen ? "Close navigation" : "Open navigation"} aria-expanded={menuOpen} aria-controls="app-navigation" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-line md:hidden" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}</button>}</div>
+        <div className="flex items-center gap-3"><ThemeSelect />{!focusedPractice && <button ref={menuButton} type="button" aria-label={menuOpen ? "Close navigation" : "Open navigation"} aria-expanded={menuOpen} aria-controls="app-navigation" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-control border border-line md:hidden" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}</button>}</div>
       </div>
     </header>
     <div className={cn("mx-auto grid max-w-7xl", !focusedPractice && "md:grid-cols-[14rem_minmax(0,1fr)]")}>

@@ -7,6 +7,8 @@
   --surface: #fcf9f1;
   --subtle: #ebe3d5;
   --muted: #63594e;
+  /* Lighter than muted so examples never read as entered values; still 4.5:1 on surface and background. */
+  --placeholder: #756a5e;
   --line: #dcd2c2;
   --line-strong: #877969;
   --accent: #225a93;
@@ -34,6 +36,7 @@
   --surface: #24201a;
   --subtle: #312c25;
   --muted: #bab1a3;
+  --placeholder: #958c80;
   --line: #423c34;
   --line-strong: #887f72;
   --accent: #89bdef;
@@ -57,6 +60,7 @@
   --color-surface: var(--surface);
   --color-subtle: var(--subtle);
   --color-muted: var(--muted);
+  --color-placeholder: var(--placeholder);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
   --color-accent: var(--accent);
@@ -130,7 +134,7 @@
   input, textarea { caret-color: var(--accent); }
   input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width: 1.125rem; height: 1.125rem; flex-shrink: 0; }
   label:has(input[type="checkbox"], input[type="radio"]) { display: inline-flex; align-items: center; gap: .625rem; min-height: 2.75rem; cursor: pointer; }
-  ::placeholder { color: var(--muted); opacity: 1; }
+  ::placeholder { color: var(--placeholder); opacity: 1; }
   ::selection { background: var(--highlight); color: var(--foreground); }
   pre { max-width: 100%; overflow-x: auto; }
   .tabular-nums, dd { font-variant-numeric: tabular-nums; }

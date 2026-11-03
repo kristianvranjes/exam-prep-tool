@@ -3,7 +3,8 @@
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { api, Concept, type CourseUnit, OwnerQuestion, Question, QuestionAction, QuestionCreate, QuestionEdit, QuestionStatus, QuestionType, QuestionVersion, type ReportReason } from "../lib/api";
 
-import { CLASSIC_TYPES, keyText, numberProblem, QUESTION_TYPES } from "../lib/question-types";
+import { CLASSIC_TYPES, keyText, numberProblem, QUESTION_TYPES, sourceLabels, statusLabels, typeLabels } from "../lib/question-types";
+import { QuestionBadges } from "./question-badges";
 import { QuizImport } from "./quiz-import";
 import { FormattingHelp, RichText, RichTextPreview } from "./rich-text";
 import { SuggestQuestionEdit } from "./suggest-question-edit";
@@ -12,7 +13,10 @@ import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface 
 
 const types: QuestionType[] = QUESTION_TYPES;
 const statuses: QuestionStatus[] = ["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED", "ARCHIVED"];
-const label = (value: string) => value === "PENDING_REVIEW" ? "Awaiting faculty review" : value.toLowerCase().replaceAll("_", " ");
+/** Version reasons such as CREATED or EDITED, in words. */
+const reasonLabel = (value: string) => value.charAt(0) + value.slice(1).toLowerCase().replaceAll("_", " ");
+/** A disclosure that is itself one sheet; its content is ruled, never another box. */
+const SHEET_DISCLOSURE = "min-w-0 rounded-card border border-line bg-surface px-card py-3 sm:px-card-lg";
 const textareaClass = "min-h-28 w-full rounded-control border border-line-strong bg-surface px-3 py-2 text-foreground";
 const MAX_QUESTION_UNITS = 5;
 const UNPUBLISHED: QuestionStatus[] = ["DRAFT", "PENDING_REVIEW", "REJECTED"];
@@ -222,16 +226,16 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
       {!creating && <Button type="button" variant="secondary" disabled={busy} onClick={() => { setCreating(true); setCreateError(""); setCreateNotice(""); }}>Create question</Button>}
       {creating && <QuestionForm concepts={concepts} units={units} busy={createBusy} save={createQuestion} cancel={() => setCreating(false)} />}
       {createError && <Alert>{createError}</Alert>}
-      {createNotice && <p role="status" className="rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{createNotice}</p>}
+      {createNotice && <Alert tone="info">{createNotice}</Alert>}
     </Surface>}
 
     <QuizImport courseId={courseId} disabled={busy} units={units.filter((u) => !u.is_archived)} onImported={(imported) => {
       setStatus("DRAFT"); setType(""); setUnit(""); setOffset(0); setSelected(imported[0] ?? null); refresh();
     }} />
 
-    {owner && <details className="rounded-lg border border-line p-3">
+    {owner && <details className={SHEET_DISCLOSURE}>
       <summary className="text-sm font-medium">Advanced: AI question generation</summary>
-      <Surface className="mt-3 space-y-4 border-dashed">
+      <div className="mt-3 space-y-4 border-t border-line pt-4">
       <div>
         <h4 className="text-lg font-semibold">Generate draft questions (experimental internal AI)</h4>
         <p className="mt-1 text-sm text-muted">Optional generation from approved concepts. Review every draft before sharing it.</p>
@@ -249,7 +253,7 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
           <fieldset>
             <legend className="font-medium">Question types</legend>
             <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
-              {CLASSIC_TYPES.map((t) => <label key={t} className="text-sm"><input type="checkbox" name="questionType" value={t} defaultChecked />{label(t)}</label>)}
+              {CLASSIC_TYPES.map((t) => <label key={t} className="text-sm"><input type="checkbox" name="questionType" value={t} defaultChecked />{typeLabels[t]}</label>)}
             </div>
           </fieldset>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -259,8 +263,8 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
           <Button type="submit" variant="secondary" disabled={busy}>{busy ? "Working…" : "Generate drafts"}</Button>
         </fieldset>
       </form>
-      {notice && <p role="status" className="rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{notice}</p>}
-      </Surface>
+      {notice && <Alert tone="info">{notice}</Alert>}
+      </div>
     </details>}
 
     {error && <Alert>{error}</Alert>}
@@ -273,12 +277,12 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
       <div className={units.length ? "grid gap-3 sm:grid-cols-3" : "grid gap-3 sm:grid-cols-2"}>
         <label className="block text-sm font-medium">Status
           <Select className="mt-1" value={status} disabled={busy} onChange={(e) => { setStatus(e.target.value as QuestionStatus | ""); setOffset(0); setPicked([]); setListError(""); setLoading(true); }}>
-            <option value="">All statuses</option>{statuses.map((s) => <option key={s} value={s}>{label(s)}</option>)}
+            <option value="">All statuses</option>{statuses.map((s) => <option key={s} value={s}>{statusLabels[s]}</option>)}
           </Select>
         </label>
         <label className="block text-sm font-medium">Type
           <Select className="mt-1" value={type} disabled={busy} onChange={(e) => { setType(e.target.value as QuestionType | ""); setOffset(0); setPicked([]); setListError(""); setLoading(true); }}>
-            <option value="">All types</option>{types.map((t) => <option key={t} value={t}>{label(t)}</option>)}
+            <option value="">All types</option>{types.map((t) => <option key={t} value={t}>{typeLabels[t]}</option>)}
           </Select>
         </label>
         {units.length > 0 && <label className="block text-sm font-medium">Unit
@@ -291,7 +295,7 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
       {listError && <div className="space-y-3"><Alert>{listError}</Alert><Button type="button" variant="secondary" onClick={refresh}>Retry questions</Button></div>}
       {loading && <LoadingState>Loading questions…</LoadingState>}
       {!loading && !listError && rows.length === 0 && <EmptyState title="No questions match this view.">Try another status, type or unit, or create a draft above.</EmptyState>}
-      {joined && !listError && rows.length > 0 && <div role="group" aria-label="Organize selected questions" className="space-y-3 rounded-lg border border-line bg-subtle p-3">
+      {joined && !listError && rows.length > 0 && <div role="group" aria-label="Organize selected questions" className="space-y-3 border-y border-line py-4">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
             <input type="checkbox" disabled={busy || loading || !selectable.length} checked={selectable.length > 0 && pickedIds.length === selectable.length}
@@ -325,14 +329,14 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
         {canOrganize && bulkTarget?.is_archived && <p className="text-sm text-muted">Archived units take no new questions, but you can remove them.</p>}
         {bulkNotice && <p role="status" className="text-sm text-foreground">{bulkNotice}</p>}
       </div>}
-      {!loading && !listError && rows.length > 0 && <ul className="space-y-2" aria-label="Questions list">
-        {rows.map((q) => <li key={q.id} className="flex min-w-0 rounded-lg border border-line bg-surface">
+      {!loading && !listError && rows.length > 0 && <ul className="divide-y divide-line border-y border-line" aria-label="Questions list">
+        {rows.map((q) => <li key={q.id} className="flex min-w-0">
           {joined && <label className="flex min-w-11 shrink-0 items-center justify-center border-r border-line px-3">
             <input type="checkbox" aria-label={"Select question: " + q.stem} disabled={busy || q.status === "ARCHIVED"} checked={pickedIds.includes(q.id)}
               onChange={(e) => setPicked((ids) => e.target.checked ? [...ids, q.id] : ids.filter((id) => id !== q.id))} />
           </label>}
           <Button type="button" variant="ghost" disabled={busy} aria-pressed={selected?.id === q.id} className="h-auto w-full min-w-0 flex-1 flex-col items-start gap-2 whitespace-normal p-3 text-left text-foreground" onClick={() => { setSelected(q); setError(""); }}>
-            <span className="flex flex-wrap gap-2"><Badge>{label(q.type)}</Badge><Badge>{label(q.status)}</Badge>{unitNames(q.unit_ids, units).map((name, index) => <Badge key={index}>{name}</Badge>)}</span>
+            <span className="flex flex-wrap gap-2"><QuestionBadges type={q.type} status={q.status} />{unitNames(q.unit_ids, units).map((name, index) => <Badge key={index}>{name}</Badge>)}</span>
             <span className="max-w-full break-words font-medium [overflow-wrap:anywhere]"><RichText text={q.stem} /></span>
           </Button>
         </li>)}
@@ -344,12 +348,12 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
       </div>
     </Surface>
 
-    {selected && <article aria-label="Selected question" className="min-w-0 space-y-4 rounded-xl border border-line bg-surface p-5 sm:p-6">
+    {selected && <article aria-label="Selected question" className="min-w-0 space-y-4 rounded-card border border-line bg-surface p-card sm:p-card-lg">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h4 ref={selectedHeading} tabIndex={-1} className="min-w-0 break-words text-lg font-semibold [overflow-wrap:anywhere]"><RichText text={selected.stem} /></h4>
         <Button type="button" variant="secondary" disabled={busy} onClick={() => setSelected(null)}>Close question</Button>
       </div>
-      <div className="flex flex-wrap items-center gap-2"><Badge>{label(selected.type)}</Badge><Badge>{label(selected.status)}</Badge>{selected.difficulty && <span className="text-sm text-muted">Difficulty {selected.difficulty}/5</span>}</div>
+      <div className="flex flex-wrap items-center gap-2"><QuestionBadges type={selected.type} status={selected.status} />{selected.difficulty && <span className="text-sm text-muted">Difficulty {selected.difficulty}/5</span>}</div>
       {units.length > 0 && <p className="break-words text-sm [overflow-wrap:anywhere]"><span className="font-medium">Units:</span> {unitNames(selected.unit_ids, units).join(", ") || "None"}</p>}
       <ul className="list-inside list-disc space-y-1 text-sm">{selected.options.map((option) => <li key={option.position} className="break-words [overflow-wrap:anywhere]"><RichText text={option.text} />{selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (correct)" : ""}</li>)}</ul>
       {selected.visibility === "OWNER" && <OwnerReview key={selected.id + ":" + selected.updated_at} question={selected} creator={selected.created_by_user_id === userId} moderator={moderator} owner={owner} concepts={concepts} units={units} busy={busy} mutate={mutate} />}
@@ -461,15 +465,15 @@ function OwnerReview({ question: q, creator, moderator, owner, concepts, units, 
       {(q.type === "NUMERIC" || q.type === "MULTIPLE_SELECT") && <p>Correct answer: <RichText text={keyText(q) ?? ""} /></p>}
       {q.reference_answer && <p>Reference answer: <RichText text={q.reference_answer} /></p>}
       {q.explanation && <p>Explanation: <RichText text={q.explanation} /></p>}
-      {q.rejection_reason && <p className="rounded-lg border border-danger/30 bg-danger-surface p-3 text-danger">Rejection reason: {q.rejection_reason}</p>}
+      {q.rejection_reason && <p className="rounded-control border border-danger/30 bg-danger-surface p-3 text-danger">Rejection reason: {q.rejection_reason}</p>}
       {q.reviewed_at && <p className="text-muted">Reviewed {new Date(q.reviewed_at).toLocaleString()}</p>}
     </div>
 
-    <details className="min-w-0 rounded-lg bg-subtle p-4">
+    <details className="min-w-0 border-t border-line pt-2">
       <summary className="font-semibold">Source details</summary>
       <p className="mt-2 break-words [overflow-wrap:anywhere]">Concepts: {q.concept_ids.map((id) => concepts.find((c) => c.id === id)?.name || id).join(", ")}</p>
       <ul className="mt-2 space-y-1">{q.source_chunks.map((s) => <li key={s.chunk_id} className="break-words [overflow-wrap:anywhere]">Material {s.material_id} · chunk {s.ordinal + 1} ({s.chunk_id})</li>)}</ul>
-      <p className="mt-2 break-words [overflow-wrap:anywhere]">Source: {q.source}{q.ai_job_id && " · Generation job " + q.ai_job_id}</p>
+      <p className="mt-2 break-words [overflow-wrap:anywhere]">Source: {sourceLabels[q.source]}{q.ai_job_id && " · Generation job " + q.ai_job_id}</p>
     </details>
 
     <div className="flex flex-wrap gap-2">
@@ -482,7 +486,7 @@ function OwnerReview({ question: q, creator, moderator, owner, concepts, units, 
     </div>
 
     {moderator && !creator && q.status === "PENDING_REVIEW" && <DraftForm onSubmit={(e) => { e.preventDefault(); const reason = String(new FormData(e.currentTarget).get("reason")); void transition("reject", reason); }} className="flex flex-col gap-2 sm:flex-row">
-      <Input aria-label="Rejection reason" className="min-w-0 flex-1" name="reason" required maxLength={1000} placeholder="Reason for rejection" disabled={busy} />
+      <Input aria-label="Rejection reason" className="min-w-0 flex-1" name="reason" required maxLength={1000} placeholder="e.g. Option B is also correct" disabled={busy} />
       <Button type="submit" variant="secondary" disabled={busy}>Reject question</Button>
     </DraftForm>}
     {editing && <QuestionForm question={q} concepts={concepts} units={units} busy={busy} save={(body) => mutate(() => api.editQuestion(q.id, toEdit(body)))} />}
@@ -491,18 +495,18 @@ function OwnerReview({ question: q, creator, moderator, owner, concepts, units, 
       <h5 className="font-semibold">Version history</h5>
       {versionBusy && <p role="status" className="text-muted">Loading question history…</p>}
       {versionError && <Alert>{versionError}</Alert>}
-      {versions.length > 0 && <ol className="space-y-2">{versions.map((v) => <li key={v.version_number} className="min-w-0 rounded-lg border border-line">
+      {versions.length > 0 && <ol className="divide-y divide-line border-y border-line">{versions.map((v) => <li key={v.version_number} className="min-w-0">
         <details className="group">
-          <summary className="min-w-0 break-words px-4 py-2 font-medium [overflow-wrap:anywhere]">Version {v.version_number} · {label(v.reason)} · {new Date(v.created_at).toLocaleString()}</summary>
-          <div className="min-w-0 space-y-2 border-t border-line p-4 break-words [overflow-wrap:anywhere]">
+          <summary className="min-w-0 break-words py-2 font-medium [overflow-wrap:anywhere]">Version {v.version_number} · {reasonLabel(v.reason)} · {new Date(v.created_at).toLocaleString()}</summary>
+          <div className="min-w-0 space-y-2 pb-4 pl-4 break-words [overflow-wrap:anywhere]">
             <p className="font-medium"><RichText text={v.snapshot.stem} /></p>
             {v.snapshot.explanation && <p>Explanation: <RichText text={v.snapshot.explanation} /></p>}
             {v.snapshot.options.map((o) => <p key={o.position}><RichText text={o.text} />{o.is_correct ? " (correct)" : ""}</p>)}
             {v.snapshot.type === "TRUE_FALSE" && <p>Answer: {String(v.snapshot.correct_boolean)}</p>}
             {v.snapshot.type === "NUMERIC" && <p>Answer: <RichText text={keyText(v.snapshot) ?? ""} /></p>}
             {v.snapshot.reference_answer && <p>Reference answer: <RichText text={v.snapshot.reference_answer} /></p>}
-            <p>Concepts: {v.snapshot.concept_ids.join(", ")}</p>
-            <p>Source: {v.snapshot.source}</p>
+            {v.snapshot.concept_ids.length > 0 && <p>Concepts: {v.snapshot.concept_ids.map((id) => concepts.find((c) => c.id === id)?.name || id).join(", ")}</p>}
+            <p>Source: {sourceLabels[v.snapshot.source]}</p>
             <p>Sources: {v.snapshot.source_chunks.map((s) => s.chunk_id).join(", ")}</p>
           </div>
         </details>
@@ -575,7 +579,7 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
     void save(body);
   }
 
-  return <DraftForm onSubmit={submit} aria-label={q ? "Edit question form" : "Create question form"} className="min-w-0 rounded-lg border border-line bg-subtle p-4">
+  return <DraftForm onSubmit={submit} aria-label={q ? "Edit question form" : "Create question form"} className="min-w-0 border-t border-line pt-4">
     <fieldset disabled={busy} className="space-y-4">
       <legend className="px-1 font-semibold">{q ? "Edit draft content" : "New private draft"}</legend>
       {!q && <label className="block font-medium">Question type
@@ -585,7 +589,7 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
           if (next === "MULTIPLE_CHOICE") { const first = Math.max(0, options.findIndex((option) => option.is_correct)); setOptions(options.map((option, position) => ({ ...option, is_correct: position === first }))); }
           setQuestionType(next);
         }}>
-          {types.map((value) => <option key={value} value={value}>{label(value)}</option>)}
+          {types.map((value) => <option key={value} value={value}>{typeLabels[value]}</option>)}
         </Select>
       </label>}
       <label className="block font-medium">Question text
@@ -619,10 +623,10 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
       {questionType === "NUMERIC" && <fieldset className="space-y-3">
         <legend className="font-medium">Numeric answer</legend>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block">Correct value<Input className="mt-1" name="correctValue" inputMode="decimal" required maxLength={40} defaultValue={q?.correct_value ?? ""} placeholder="9,81" /></label>
-          <label className="block">Unit (optional)<Input className="mt-1" name="unit" maxLength={20} defaultValue={q?.unit ?? ""} placeholder="m/s²" /></label>
-          <label className="block">Absolute tolerance (optional)<Input className="mt-1" name="absoluteTolerance" inputMode="decimal" maxLength={40} defaultValue={q?.absolute_tolerance ?? ""} placeholder="0,05" /></label>
-          <label className="block">Relative tolerance in % (optional)<Input className="mt-1" name="relativeTolerance" inputMode="decimal" maxLength={40} defaultValue={q?.relative_tolerance ? String(Number((Number(q.relative_tolerance) * 100).toPrecision(12))) : ""} placeholder="1" /></label>
+          <label className="block">Correct value<Input className="mt-1" name="correctValue" inputMode="decimal" required maxLength={40} defaultValue={q?.correct_value ?? ""} placeholder="e.g. 9,81" /></label>
+          <label className="block">Unit (optional)<Input className="mt-1" name="unit" maxLength={20} defaultValue={q?.unit ?? ""} placeholder="e.g. m/s²" /></label>
+          <label className="block">Absolute tolerance (optional)<Input className="mt-1" name="absoluteTolerance" inputMode="decimal" maxLength={40} defaultValue={q?.absolute_tolerance ?? ""} placeholder="e.g. 0,05" /></label>
+          <label className="block">Relative tolerance in % (optional)<Input className="mt-1" name="relativeTolerance" inputMode="decimal" maxLength={40} defaultValue={q?.relative_tolerance ? String(Number((Number(q.relative_tolerance) * 100).toPrecision(12))) : ""} placeholder="e.g. 1" /></label>
         </div>
         <p className="text-sm text-muted">Answers within the larger of the two tolerances count as correct, boundaries included. Without tolerances only the exact value counts. Students type the number without the unit.</p>
       </fieldset>}

@@ -104,6 +104,7 @@ terracotta because those would collide with "correct" and "incorrect".
 | `--subtle` | `#ebe3d5` | `#312c25` | Hover fills, neutral badges, skeletons |
 | `--foreground` | `#201b16` | `#eee7d9` | Ink: body text and headings |
 | `--muted` | `#63594e` | `#bab1a3` | Secondary text, unselected tabs |
+| `--placeholder` | `#756a5e` | `#958c80` | Placeholder text in inputs; lighter than `muted` so an example never reads as an entered value |
 | `--line` | `#dcd2c2` | `#423c34` | Hairline rules, sheet edges |
 | `--line-strong` | `#877969` | `#887f72` | Borders that identify a control (inputs, textareas) |
 | `--accent` | `#225a93` | `#89bdef` | Ink blue: primary action, links, current tab, selection, focus |
@@ -138,6 +139,8 @@ boundaries and focus indicators need 3:1.
 | `muted` on `background` | 5.94 | 8.47 |
 | `muted` on `surface` | 6.50 | 7.64 |
 | `muted` on `subtle` | 5.37 | 6.53 |
+| `placeholder` on `surface` (input fill) | 5.02 | 4.89 |
+| `placeholder` on `background` | 4.58 | 5.42 |
 | `accent` on `background` (links, focus ring) | 6.17 | 9.05 |
 | `accent` on `surface` (links, focus ring) | 6.76 | 8.17 |
 | `accent` on `subtle` (focus ring on hover fill) | 5.58 | 6.98 |
@@ -229,16 +232,32 @@ Elevation is a 1 px hairline, never a shadow. Tabs are square with a 2 px underl
 
 - **Button**:
   - `primary`: one per view, the next step.
-  - `secondary`: bordered. With `aria-pressed` it becomes a segmented filter with an
-    accent fill.
+  - `secondary`: bordered. With `aria-pressed` it becomes a segmented filter: accent fill,
+    accent text and a 2 px edge (border plus inset ring in the text colour), so the pressed
+    one differs in weight as well as hue. This is the only filter and mode-switch recipe
+    (result filters, moderation modes, More destinations); use it without underline,
+    `text-muted` or primary-fill overrides. A semantic pressed state (the self-review "I had
+    it" / "I missed it") may swap the tone; the ring follows the text colour.
   - `ghost`: accent text, for link-like actions.
   - `danger`: filled red, the final destructive step.
   - `tab`: course destinations, underlined on `aria-current="page"`.
 - **Input / Select**: `line-strong` border (3:1 or better), sheet fill, 44 px tall.
+  Placeholders use `--placeholder`. They show an example, prefixed with "e.g." ("e.g.
+  Zadatak 3a"), never a repeat of the label.
 - **Surface**: a sheet with a `line` hairline, `rounded-card`, `p-card sm:p-card-lg`.
 - **Badge**: `tone` = `neutral` (default) | `info` | `success` | `danger` | `pending`.
+  - Review status (`question-badges.tsx`, `statusTones` in `lib/question-types.ts`): draft
+    and archived are neutral, awaiting faculty review is pending, approved is success,
+    rejected is danger. A past exam's Published is success and Draft neutral.
+  - Question type and origin always go through `typeLabels` / `sourceLabels` ("True /
+    false", "AI-generated"); raw enum values (`TRUE_FALSE`, `USER`) and IDs never reach the
+    screen. Where only concept or chunk IDs are available, say how many there are instead.
 - **Alert**: `tone` = `danger` (default, `role="alert"`) | `success` | `pending` | `info`
-  (`role="status"`).
+  (`role="status"`). Confirmations such as "Course updated." use `tone="info"` (or
+  `success` for a moderation decision), not a hand-made tinted paragraph.
+- **Destructive actions** sit apart from the forward action, on the other edge of the
+  row, in the danger tone: a bordered red "Delete" first, then a filled `danger`
+  "Confirm delete" next to "Keep …" (past-exam editor).
 - **LoadingState / EmptyState**: muted text, `subtle` skeleton bars, dashed
   `line-strong` border.
 
@@ -300,6 +319,15 @@ primary action.
   - A choice with nothing to select is left out, not shown faded, unless it is already
     selected and has to explain itself.
 
+### Question bank
+
+The bank keeps one level of sheets. Create, Import, AI generation, Browse and the selected
+question are sibling sheets; inside them, the question list, the bulk-organise group,
+source details, the edit form and version history are ruled rows (`divide-y`,
+`border-t border-line`), never boxes inside the sheet. A disclosure that is a sheet
+(`Import question drafts`, `Advanced: AI question generation`) carries the sheet edge
+itself and rules its content.
+
 ## Interaction and accessibility
 
 - **Focus**: `:focus-visible` draws a 2 px accent outline, offset 2 px. On tabs the
@@ -313,6 +341,12 @@ primary action.
   `prefers-reduced-motion: reduce` all transitions and animations are off.
 - **Browser surfaces are themed**: caret and checkbox accent, highlighter `::selection`,
   scrollbar colour, link underline offset, and `color-scheme` per theme.
+- **Tab titles**: most specific first, then the course, then the product: "Practice ·
+  Formal languages · ExamPrep", "Past exams · …", "Results · …". Every route renders
+  through the client `AppShell`, so it renders React's `<title>` (Next.js recommends it
+  where `metadata` cannot run) from `documentTitle()` in `lib/workspace-route.ts`; the root
+  `metadata` keeps only the description so there is one title element. A course ID is
+  never shown while the name is loading.
 - **Language**: the interface is English (`<html lang="en">`), while course content is
   usually Croatian. Both interface languages are wanted. A Croatian interface, and
   `lang="hr"` on Croatian content, is a separate change.
@@ -332,3 +366,13 @@ These need markup changes and are left for the practice/results redesign (R13 fo
 
 - Results open with three bare counts. Lead with "n of N correct", the weakest unit and a
   "practise these mistakes" action.
+
+Left from the component-consistency pass (Impeccable critique P2):
+
+- `progress-panel.tsx` still has one `rounded-lg` disclosure; it changes with the
+  Progress redesign that adds Mistakes and Favorites.
+- Concept review (`concept-review.tsx`) shows concept status as a lowercase neutral badge
+  ("draft", "approved"); it should share the status tones above.
+- The question bank's owner-only "Source details" and version history still list
+  material and chunk IDs; they need material names from the API.
+- A moderation card shows the course ID when the faculty course list fails to load.

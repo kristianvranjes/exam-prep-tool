@@ -14,3 +14,10 @@ export const penaltyLabels: Record<string, string> = { "0": "No negative points"
 export function penaltyText(fraction: number) {
   return penaltyLabels[String(fraction)] ?? `−${fraction} of the item's points`;
 }
+
+/** "Item 3 · 2 points", with the paper's own label only when it says more than the number ("Item 3 · Zadatak 3a · 2 points"). */
+export function paperItemMeta(number: number, label: string | null | undefined, points: number) {
+  const own = label?.trim();
+  const redundant = !own || own === String(number) || own.toLowerCase() === `item ${number}`;
+  return [`Item ${number}`, redundant ? null : own, pointsLabel(points)].filter(Boolean).join(" · ");
+}

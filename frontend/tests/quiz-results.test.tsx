@@ -109,7 +109,10 @@ it("keeps filter focus on the chosen button and exposes selection beyond color",
   filter.focus(); fireEvent.click(filter);
   expect(filter).toHaveFocus();
   expect(filter).toHaveAttribute("aria-pressed", "true");
-  expect(filter).toHaveClass("underline");
+  // The shared segmented-filter recipe: a 2 px edge as well as the accent fill, with no per-screen overrides.
+  expect(filter).toHaveClass("aria-pressed:ring-1", "aria-pressed:bg-accent-surface");
+  expect(filter).not.toHaveClass("underline");
+  expect(screen.getByRole("button", { name: "All answers" })).not.toHaveClass("text-muted");
   expect(screen.getByRole("heading", { name: "Self-review" })).not.toHaveFocus();
 });
 

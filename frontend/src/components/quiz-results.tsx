@@ -154,7 +154,6 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
     {hasResults && <section aria-label="Answer review" className="space-y-5">
       <div role="group" aria-label="Result filters" className="flex flex-wrap gap-2">
         {(["INCORRECT", "PENDING", "ALL"] as const).map(filter => <Button key={filter} variant="secondary" aria-pressed={view === filter}
-          className={view === filter ? "underline underline-offset-4" : "text-muted"}
           disabled={filter !== "ALL" && counts[filter] === 0} onClick={() => setView(filter)}>{viewLabels[filter]}</Button>)}
       </div>
       <div><h3 ref={reviewHeading} tabIndex={-1} className="text-lg font-semibold">{viewLabels[view]}</h3><p role="status" className="mt-1 text-sm text-muted">{visibleQuestions.length} {visibleQuestions.length === 1 ? "answer" : "answers"}</p></div>

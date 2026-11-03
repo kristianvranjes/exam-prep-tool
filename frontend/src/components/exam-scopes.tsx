@@ -97,7 +97,7 @@ export function ExamScopes({ courseId, isOwner, units }: { courseId: string; isO
     {loading && <LoadingState>Loading exam cycles…</LoadingState>}
     {loadError && <div className="space-y-3"><Alert>{loadError}</Alert><Button variant="secondary" onClick={() => { setLoading(true); setLoadError(""); setRevision((value) => value + 1); }}>Retry exam cycles</Button></div>}
     {error && <Alert>{error}</Alert>}
-    {notice && <p role="status" className="rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{notice}</p>}
+    {notice && <Alert tone="info">{notice}</Alert>}
 
     {!loading && !loadError && scopes.length === 0 && <EmptyState title="No exam cycles yet.">{isOwner
       ? (activeUnits.length ? "Add the first exam cycle below." : "Add course units first, then define which units each exam covers.")
@@ -130,7 +130,7 @@ function ScopeRow({ scope, units, isOwner, busy, editing, confirming, onEdit, on
 }) {
   const label = `${scope.name} ${scope.academic_year}`;
   const unitTitle = (id: string) => units.find((unit) => unit.id === id)?.title ?? "Archived unit";
-  return <li className="min-w-0 rounded-lg border border-line bg-surface p-4">
+  return <li className="min-w-0 rounded-control border border-line bg-surface p-4">
     {editing
       ? <ScopeForm scope={scope} units={units} busy={busy} onCancel={() => onEdit(null)} onSave={(body) => onSave(scope, body)} />
       : <>
@@ -171,7 +171,7 @@ function CopyYear({ years, busy, onCopy }: { years: string[]; busy: boolean; onC
           {years.map((year) => <option key={year} value={year}>{year}</option>)}
         </Select>
       </label>
-      <label className="block text-sm font-medium">To academic year<Input className="mt-1 w-32" value={to} onChange={(event) => setTo(event.target.value)} placeholder="2026/27" /></label>
+      <label className="block text-sm font-medium">To academic year<Input className="mt-1 w-32" value={to} onChange={(event) => setTo(event.target.value)} placeholder="e.g. 2026/27" /></label>
       <Button type="submit" variant="secondary">Copy cycles</Button>
     </fieldset>
     {error && <Alert>{error}</Alert>}
@@ -207,7 +207,7 @@ function ScopeForm({ scope, units, busy, onSave, onCancel }: {
   return <DraftForm aria-label={scope ? `Edit exam cycle ${scope.name}` : "Add exam cycle"} className="space-y-4" onSubmit={submit}>
     <fieldset disabled={busy} className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-3">
-        <label className="block text-sm font-medium">Academic year<Input className="mt-1" value={year} onChange={(event) => setYear(event.target.value)} placeholder="2025/26" required /></label>
+        <label className="block text-sm font-medium">Academic year<Input className="mt-1" value={year} onChange={(event) => setYear(event.target.value)} placeholder="e.g. 2025/26" required /></label>
         <label className="block text-sm font-medium">Exam type
           <Select className="mt-1" value={kind} onChange={(event) => {
             const next = event.target.value as ExamScopeKind;

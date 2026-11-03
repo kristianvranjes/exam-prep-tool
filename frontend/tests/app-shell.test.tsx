@@ -155,6 +155,7 @@ it("replaces Home with the selected course overview and switches one destination
   await screen.findByRole("region", { name: "Your courses" });
   await openCourse();
   expect(screen.getByRole("heading", { name: "Algorithms" })).toHaveFocus();
+  expect(document.title).toBe("Algorithms · ExamPrep");
   expect(screen.queryByRole("region", { name: "Your courses" })).not.toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Home" })).not.toBeInTheDocument();
   const nav = screen.getByRole("navigation", { name: "Course navigation" });
@@ -166,6 +167,7 @@ it("replaces Home with the selected course overview and switches one destination
   navigate("Progress");
   expect(screen.getByRole("region", { name: "Progress" })).toHaveTextContent("course-1");
   expect(screen.queryByRole("region", { name: "Practice quiz" })).not.toBeInTheDocument();
+  expect(document.title).toBe("Progress · Algorithms · ExamPrep");
   navigate("Materials");
   expect(screen.getByRole("region", { name: "Course materials" })).toHaveTextContent("course-1");
   navigate("More");

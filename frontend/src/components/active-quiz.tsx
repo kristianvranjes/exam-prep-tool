@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Flag } from "lucide-react";
-import { penaltyText, pointsLabel } from "../lib/points";
+import { paperItemMeta, penaltyText, pointsLabel } from "../lib/points";
 import { numberProblem } from "../lib/question-types";
 import { practiceApi, type Attempt, type Confidence, type PracticeAnswer, type SelfReview } from "../lib/practice-api";
 import { Alert, Button } from "./ui";
@@ -269,7 +269,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
             </Button>
           </div>
         </div>
-        {paper && question.points != null && <p className="-mt-4 text-sm text-muted">{[question.label, pointsLabel(question.points)].filter(Boolean).join(" · ")}</p>}
+        {paper && question.points != null && <p className="-mt-4 text-sm text-muted">{paperItemMeta(index + 1, question.label, question.points)}</p>}
         <QuestionUnits units={question.units} />
         <QuizAnswerEditor question={question} answer={answer} change={changeAnswer} disabled={busy} feedback={feedback} shortcuts />
         {immediate && !feedback && <ConfidencePicker name={question.id} value={confidence} onChange={setConfidence} disabled={busy} />}
