@@ -1,8 +1,9 @@
 # Content Studio: lessons, quizzes and exams from course PDFs
 
-**Status:** proposal, not implemented. Written 3 November 2026; decisions below are the
-project owner's from the same day. Nothing here changes the application before the
-16 November feature freeze.
+**Status:** S0 implemented in [`tools/studio/`](../tools/studio/README.md) (ingest, the
+`course.yaml` proposal, provider check); S1 onwards are proposals. Written 3 November
+2026; decisions below are the project owner's from the same day. Nothing here changes
+the application before the 16 November feature freeze.
 
 ## 1. Problem
 
@@ -142,7 +143,16 @@ Planned after the winter midterms; this needs a migration and new UI.
 
 ## 8. Build order for the tool
 
-1. **S0** skeleton, ingest and `course.yaml` proposal.
+1. **S0** skeleton, ingest and `course.yaml` proposal. *Done.* First runs on 3 November:
+   SRS (14 decks, 743 pages) ingests in about 3 seconds into 14 proposed units, with the
+   repeated deck header removed from every page. PPJ's single 1061-page PDF has no
+   outline and 783 OCR-damaged pages (`■` for č/ć/đ), so its twelve units need page
+   ranges by hand and quote grounding there will be weaker. The SRS scripts
+   (`ultskripte/`) are scans without text and cannot be sources without OCR. The
+   OpenRouter account enforces zero data retention, which rules out models without ZDR
+   endpoints; the defaults are `deepseek/deepseek-v4-flash` (generator) and
+   `qwen/qwen3.8-27b` (verifier). The verifier reasons before answering (536 output
+   tokens for a two-word ping), which S2 must budget for.
 2. **S1** question generation with blueprints and stage 4 checks.
 3. **S2** verifier and flags.
 4. **S3** local review page.
