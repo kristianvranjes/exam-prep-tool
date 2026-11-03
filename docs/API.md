@@ -13,7 +13,17 @@ are at `/docs`; the schema is at `/openapi.json`.
 CORS permits the configured FRONTEND_URL origin and credentials for browser requests.
 Authentication uses an HttpOnly `session` cookie (the name is configurable with
 `SESSION_COOKIE_NAME`). The browser sends it automatically; clients must not put it
-in localStorage. Sessions expire after `SESSION_MAX_AGE_SECONDS`.
+in localStorage. A session token is valid for `SESSION_MAX_AGE_SECONDS` (default 14400,
+4 hours) after it was issued, and sessions slide: when an authenticated request carries
+a valid token older than half that age, its response sets a fresh cookie with the same
+attributes. A student working through a long timed paper therefore stays signed in,
+so a gap of up to half the lifetime without requests is always safe; a longer gap may end
+the session.
+Responses that fail, and endpoints that return an empty `204` body themselves, do not
+renew; the next ordinary request does. Logout never renews, and an expired token
+returns `401` without a cookie. The frontend shows a 401 on any request other than
+login/registration as "Your session has expired. Sign in again; your saved answers are
+kept." (answers already saved stay on the server).
 
 ## Authentication
 

@@ -217,6 +217,7 @@ with `read -rs VALUE` and use `"$VALUE"`.
 | Revisions and their state | `az containerapp revision list -n examprep-api -g examprep -o table` |
 | Restart | `az containerapp revision restart -n examprep-api -g examprep --revision <name>` |
 | Change a plain setting | `az containerapp update -n examprep-api -g examprep --set-env-vars FRONTEND_URL=https://...` |
+| Session lifetime | The template sets `SESSION_MAX_AGE_SECONDS=14400` (4 h lifetime, renewed by any request after 2 h, so idle gaps of up to 2 h are always safe). Apply it to an app created with the older `3600` with `az containerapp update -n examprep-api -g examprep --set-env-vars SESSION_MAX_AGE_SECONDS=14400` |
 | Change a secret | `az containerapp secret set -n examprep-api -g examprep --secrets session-secret="$VALUE"`, then restart the revision |
 | Replace the package token | `az containerapp registry set -n examprep-api -g examprep --server ghcr.io --username kristianvranjes --password "$VALUE"` |
 | Roll back to an earlier commit | `az containerapp update -n examprep-api -g examprep --image ghcr.io/kristianvranjes/exam-prep-tool/backend:<sha>` |
@@ -225,6 +226,10 @@ with `read -rs VALUE` and use `"$VALUE"`.
 
 Running the template again (step 5) is safe; it asks for the secrets again and keeps
 the PDFs. It resets the image to the `main` tag, which is the latest build of `main`.
+
+The GitHub deploy (step 9) only swaps the image. Settings changed in
+`deploy/aca/main.bicep` reach the running app only when you run the template again or
+set them with `--set-env-vars` as above.
 
 **Backups.** Neon keeps its own restore history (check how long on your plan); copy the
 PDFs off Azure after uploads that matter.

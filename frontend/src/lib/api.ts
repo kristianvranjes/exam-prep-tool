@@ -5,13 +5,55 @@ export type Course = { id: string; faculty_id: string; is_active: boolean; name:
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
+export const SESSION_EXPIRED_MESSAGE = "Your session has expired. Sign in again; your saved answers are kept.";
+/** Login and registration answer 401/422 about the credentials, not about a session. */
+const SIGN_IN_PATHS = ["/auth/login", "/auth/register"];
+
+/** A failed API call; `message` is ready to show, `status` lets callers branch on it. */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+/** Retry-After is either delta-seconds or an HTTP date. */
+function retryAfterSeconds(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  const date = Date.parse(trimmed);
+  return Number.isNaN(date) ? null : Math.max(0, Math.ceil((date - Date.now()) / 1000));
+}
+
+/** FastAPI 422 bodies carry `[{loc, msg, type}]`; show the messages, not the structure. */
+function validationMessage(detail: unknown): string | null {
+  if (!Array.isArray(detail)) return null;
+  const messages = detail
+    .map(item => (item && typeof item === "object" && typeof item.msg === "string" ? item.msg.replace(/^Value error, /, "").trim() : ""))
+    .filter(Boolean);
+  return messages.length ? [...new Set(messages)].join(" ") : null;
+}
+
+export function errorMessage(path: string, status: number, payload: { detail?: unknown }, retryAfter?: string | null): string {
+  const detail = typeof payload.detail === "string" ? payload.detail : null;
+  if (status === 401 && !SIGN_IN_PATHS.includes(path.split("?")[0])) return SESSION_EXPIRED_MESSAGE;
+  if (status === 429) {
+    const seconds = retryAfterSeconds(retryAfter);
+    if (seconds !== null) return `Too many attempts. Try again in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`;
+    return detail ?? "Too many attempts. Try again shortly.";
+  }
+  if (status === 422) return validationMessage(payload.detail) ?? detail ?? "Some fields are not valid. Check them and try again.";
+  return detail ?? "Request failed";
+}
+
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
   const response = await fetch(`${API_URL}${path}`, { ...options, credentials: "include", headers });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(typeof payload.detail === "string" ? payload.detail : "Request failed");
+    throw new ApiError(errorMessage(path, response.status, payload ?? {}, response.headers?.get("Retry-After")), response.status);
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }

@@ -197,8 +197,9 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
               value: 'examprep_session'
             }
             {
+              // 4 h lifetime; requests after 2 h renew it, so idle gaps up to 2 h are always safe (see docs/API.md).
               name: 'SESSION_MAX_AGE_SECONDS'
-              value: '3600'
+              value: '14400'
             }
             {
               // The image is built without the optional ML stack; question import works without AI.
