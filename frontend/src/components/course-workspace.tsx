@@ -87,7 +87,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
     </details>}
     {/* Past papers are the main way to rehearse an exam, so they get their own destination. */}
     {destination === "papers" && <div id="course-papers"><ExamPapers courseId={course.id} onStartAttempt={onOpenAttempt} /></div>}
-    <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} onStartAttempt={onOpenAttempt} /></div>
+    <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} onStartAttempt={onOpenAttempt}
+      onPracticeMistakes={() => openPractice("MISTAKES")} onPracticeFavorites={() => openPractice("FAVORITES")} /></div>
     <div id="course-materials" hidden={destination !== "materials"}><CourseMaterials courseId={course.id} currentUserId={currentUserId} onSummaryChange={setMaterials} /></div>
     <section id="course-more" hidden={destination !== "more"} aria-label="More course tools" className="mt-6">
       <h2 className="text-xl font-semibold">More</h2>

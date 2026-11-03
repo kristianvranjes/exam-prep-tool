@@ -39,6 +39,7 @@ does not complete their implementation or hosted verification. Record completion
   generated mock exams spread across an exam scope's units (R3).
 - Private, course-scoped favorites with a star in practice and results, FAVORITES focus
   sessions with unit/scope filters, and a one-click five-question quick quiz (R5).
+- Paginated Mistakes and Favorites lists in Progress, each opening its practice mode (R5).
 - Formulas (KaTeX) and code blocks in question text, with an authoring preview (R4).
 - Deterministic item analysis for course managers (part of R14): difficulty, upper/lower
   27 % discrimination, option distribution and review flags, shown after 30 students.
@@ -131,7 +132,8 @@ each item as its own pull request, in this order:
 1. **R5** favorites and mistakes, plus due-only daily review, focus sessions combined
    with unit and scope filters, and a short five-question quick quiz. *Implemented*
    (see [favorites and the quick quiz](PRACTICE.md#favorites-and-the-quick-quiz-r5)),
-   except the paginated mistakes view, a favorites screen and material filters.
+   including the paginated mistakes view and the favorites screen in Progress; only
+   material filters remain.
 2. **FSRS scheduling** (`fsrs-v1`) replacing `leitner-v1` per record on its next review,
    with the rating derived from correctness, confidence, and later response time.
    Leitner records keep working until then; no bulk rewrite.
@@ -487,6 +489,8 @@ for later, within any unit, scope, or material filter.
   remain compatible.
 - Extend the R2 practice availability summary with these modes.
 - Add a paginated course mistakes view backed by existing review progress.
+  *Implemented* as `GET /courses/{course_id}/mistakes` and the Progress Mistakes and
+  Favorites sections; material filters remain open.
 
 **Completion criteria**
 

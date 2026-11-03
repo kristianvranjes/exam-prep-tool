@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ReviewProgress, type ReviewProgressSummary, type UnitProgress } from "../lib/api";
 import { practiceApi, type Attempt } from "../lib/practice-api";
+import { FavoritesList, MistakesList } from "./review-lists";
 import { Alert, Badge, Button, EmptyState, LoadingState, Surface } from "./ui";
 
 type Dashboard = { summary: ReviewProgressSummary; units: UnitProgress[]; rows: ReviewProgress[]; offset: number };
@@ -21,13 +22,15 @@ type ProgressProps = {
   courseId: string; active?: boolean; onOpenAdaptiveReview?: () => void;
   /** Opens a session started here, such as the one-click due review. */
   onStartAttempt?: (attempt: Attempt) => void;
+  /** Open practice setup with Mistakes or Favorites selected. */
+  onPracticeMistakes?: () => void; onPracticeFavorites?: () => void;
 };
 
 export function ProgressPanel(props: ProgressProps) {
   return <CourseProgressPanel key={props.courseId} {...props} />;
 }
 
-function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, onStartAttempt }: ProgressProps) {
+function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, onStartAttempt, onPracticeMistakes, onPracticeFavorites }: ProgressProps) {
   const [open, setOpen] = useState(false);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [busy, setBusy] = useState<Action | null>(null);
@@ -35,6 +38,8 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, on
   const [failed, setFailed] = useState<FailedAction | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [reviewError, setReviewError] = useState("");
+  // Bumped by every full load, so the review lists refresh with the rest of Progress.
+  const [listVersion, setListVersion] = useState(0);
   const pending = useRef(false);
   const requestId = useRef(0);
   const activated = useRef(false);
@@ -51,6 +56,7 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, on
     setBusy(action);
     setError("");
     setFailed(null);
+    if (action !== "page") setListVersion(version => version + 1);
     const request: Promise<{ summary?: ReviewProgressSummary; units?: UnitProgress[]; rows: ReviewProgress[] }> = action === "page"
       ? api.reviewProgress(courseId, nextOffset).then(rows => ({ rows }))
       : Promise.all([api.reviewProgressSummary(courseId), api.unitProgress(courseId), api.reviewProgress(courseId, nextOffset)])
@@ -136,6 +142,8 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, on
             </div>}
           </section>
         </Surface>
+        {hasHistory && <MistakesList courseId={courseId} version={listVersion} onPractice={onPracticeMistakes} />}
+        <FavoritesList courseId={courseId} version={listVersion} onPractice={onPracticeFavorites} />
         {hasHistory && <section aria-label="Your practice" className="space-y-4">
           <h3 className="text-lg font-semibold">Your practice</h3>
           <p className="max-w-prose text-sm text-muted">Your practice history includes previously reviewed questions, even when they are no longer available.</p>
