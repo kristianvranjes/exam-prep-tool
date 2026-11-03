@@ -1,7 +1,8 @@
 import type { Ref } from "react";
 import { CircleCheck, CircleDashed, CircleX } from "lucide-react";
 import type { ActiveQuestion, Confidence, QuestionFeedback } from "../lib/practice-api";
-import { ResultAnswers } from "./quiz-results";
+import { answerText, keyText } from "../lib/question-types";
+import { RichText } from "./rich-text";
 import { cn } from "../lib/utils";
 
 export const confidenceLabels: Record<Confidence, string> = { SURE: "Sure", UNSURE: "Unsure", GUESS: "Guessed" };
@@ -20,23 +21,32 @@ export function ConfidencePicker({ name, value, onChange, disabled }: {
 }
 
 const verdicts = {
-  CORRECT: { title: "Correct", tone: "border-success/40 bg-success-surface text-success", Icon: CircleCheck },
-  INCORRECT: { title: "Incorrect", tone: "border-danger/40 bg-danger-surface text-danger", Icon: CircleX },
-  PENDING: { title: "Compare with the reference answer", tone: "border-pending/40 bg-pending-surface text-pending", Icon: CircleDashed },
+  CORRECT: { title: "Correct", tone: "border-success/40 bg-success-surface", text: "text-success", Icon: CircleCheck },
+  INCORRECT: { title: "Incorrect", tone: "border-danger/40 bg-danger-surface", text: "text-danger", Icon: CircleX },
+  PENDING: { title: "Compare with the reference answer", tone: "border-pending/40 bg-pending-surface", text: "text-pending", Icon: CircleDashed },
 } as const;
 
-/** The key and explanation revealed after checking one answer in guided practice. */
+/**
+ * The verdict and explanation revealed after checking one answer in guided practice.
+ * Option slips already mark the chosen and correct options, so only typed answers
+ * (numeric and short answer) spell out the key here.
+ */
 export function CheckedFeedback({ question, feedback, headingRef }: {
   question: ActiveQuestion; feedback: QuestionFeedback; headingRef?: Ref<HTMLHeadingElement>;
 }) {
   const verdict = verdicts[feedback.grading_status];
-  return <section aria-label="Answer feedback" className="space-y-4">
-    <div className={cn("rounded-control border px-4 py-3", verdict.tone)}>
-      <h3 ref={headingRef} tabIndex={-1} className="flex items-center gap-2 font-semibold">
-        <verdict.Icon aria-hidden="true" className="size-5 shrink-0" />{verdict.title}
-      </h3>
-      {feedback.confidence && <p className="mt-1 pl-7 text-sm">You marked this answer as {confidenceLabels[feedback.confidence].toLowerCase()}.</p>}
-    </div>
-    <div className="max-w-prose"><ResultAnswers question={{ ...question, ...feedback }} /></div>
+  const typed = question.type === "NUMERIC" || question.type === "SHORT_ANSWER";
+  const yours = typed ? answerText(question.answer, feedback.options, question.unit) : undefined;
+  const key = typed ? keyText({ ...question, ...feedback }) : null;
+  return <section aria-label="Answer feedback" className={cn("max-w-prose rounded-control border px-4 py-3", verdict.tone)}>
+    <h3 ref={headingRef} tabIndex={-1} className={cn("flex items-center gap-2 font-semibold", verdict.text)}>
+      <verdict.Icon aria-hidden="true" className="size-5 shrink-0" />{verdict.title}
+    </h3>
+    {feedback.confidence && <p className={cn("mt-1 text-sm sm:pl-7", verdict.text)}>You marked this answer as {confidenceLabels[feedback.confidence].toLowerCase()}.</p>}
+    {typed && <dl className="mt-3 space-y-2 sm:pl-7">
+      <div><dt className="text-sm font-medium text-muted">Your answer</dt><dd className="mt-0.5 whitespace-pre-wrap"><RichText text={yours ?? "No answer saved"} /></dd></div>
+      {key != null && <div><dt className="text-sm font-medium text-muted">{question.type === "SHORT_ANSWER" ? "Reference answer" : "Correct answer"}</dt><dd className="mt-0.5 whitespace-pre-wrap"><RichText text={key} /></dd></div>}
+    </dl>}
+    {feedback.explanation && <div className={cn("whitespace-pre-wrap sm:pl-7", typed ? "mt-3" : "mt-2")}><RichText text={feedback.explanation} /></div>}
   </section>;
 }

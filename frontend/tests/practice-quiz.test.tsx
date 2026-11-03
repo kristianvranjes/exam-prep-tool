@@ -106,7 +106,7 @@ it("keeps failed saves unsaved and allows reloading an already submitted attempt
   expect(screen.getByText("Save failed")).toBeInTheDocument();
   await mock.submit();
   expect(screen.getByRole("button", { name: "Reload saved answers" })).not.toBeVisible();
-  fireEvent.click(screen.getByText("Recovery options"));
+  fireEvent.click(screen.getByText("Session", { selector: "summary" }));
   expect(mock.read).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Reload saved answers" }));
   fireEvent.click(screen.getByRole("button", { name: "Discard changes and continue" }));
@@ -135,7 +135,7 @@ it("reloads the saved selection even when the current draft differs", async () =
   fireEvent.click(screen.getByRole("button", { name: "Previous" }));
   await screen.findByText("Saved");
   fireEvent.click(screen.getByLabelText("Two"));
-  fireEvent.click(screen.getByText("Recovery options"));
+  fireEvent.click(screen.getByText("Session", { selector: "summary" }));
   fireEvent.click(screen.getByRole("button", { name: "Reload saved answers" }));
   expect(screen.getByRole("region", { name: "Unsaved answer" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Discard changes and continue" }));
@@ -275,7 +275,7 @@ async function start(experience: "Guided practice" | "Exam practice" = "Guided p
   fireEvent.click(screen.getByLabelText(experience));
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
-  fireEvent.click(screen.getByText("Session options"));
+  fireEvent.click(screen.getByText("Session", { selector: "summary" }));
   if (experience === "Exam practice") fireEvent.click(screen.getByText("Question navigator", { selector: "summary" }));
 }
 function allAnswered() {
@@ -294,7 +294,7 @@ it("keeps Study/Exam separate from the selection strategy and saves before navig
   fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
   await screen.findByText("Choose a number");
   expect(mock.start).toHaveBeenCalledWith("course", 5, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"], "ADAPTIVE", undefined, "END");
-  fireEvent.click(screen.getByText("Session options"));
+  fireEvent.click(screen.getByText("Session", { selector: "summary" }));
   fireEvent.click(screen.getByLabelText("Guided practice"));
   expect(screen.queryByRole("navigation", { name: "Question navigator" })).not.toBeInTheDocument();
   expect(screen.queryByText("The sky is green")).not.toBeInTheDocument();
@@ -333,7 +333,7 @@ it("supports direct jumps, answered states, local flags and revisit actions in E
   const nav = screen.getByRole("navigation", { name: "Question navigator" });
   expect(within(nav).getAllByRole("button", { name: /Question [123]/ })).toHaveLength(3);
   expect(within(nav).getByRole("button", { name: /Question 1/ })).toHaveAttribute("aria-current", "step");
-  fireEvent.click(screen.getByRole("button", { name: "Mark to revisit" }));
+  fireEvent.click(screen.getByRole("button", { name: "Revisit" }));
   expect(within(nav).getByRole("button", { name: /Question 1.*Unanswered.*Marked/ })).toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("One"));
   fireEvent.click(within(nav).getByRole("button", { name: /Question 3/ }));
@@ -341,11 +341,11 @@ it("supports direct jumps, answered states, local flags and revisit actions in E
   expect(within(nav).getByRole("button", { name: /Question 1.*Saved.*Marked/ })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Next marked" }));
   await screen.findByText("Choose a number");
-  expect(screen.getByRole("button", { name: "Remove revisit mark" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "Revisit" })).toHaveAttribute("aria-pressed", "true");
   fireEvent.click(screen.getByLabelText("Guided practice"));
   fireEvent.click(screen.getByLabelText("Exam practice"));
-  expect(screen.getByRole("button", { name: "Remove revisit mark" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Remove revisit mark" }));
+  expect(screen.getByRole("button", { name: "Revisit" })).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(screen.getByRole("button", { name: "Revisit" }));
   expect(screen.getByRole("button", { name: "Next marked" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Next unanswered" }));
   await screen.findByText("The sky is green");
@@ -357,7 +357,6 @@ it("requires an explicit decision before leaving or reloading an edited answer",
   const event = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(event);
   expect(event.defaultPrevented).toBe(true);
-  fireEvent.click(screen.getByText("Recovery options"));
   fireEvent.click(screen.getByRole("button", { name: "Reload saved answers" }));
   expect(screen.getByText("Keep your unsaved answer?")).toHaveFocus();
   fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
@@ -370,7 +369,7 @@ it("requires an explicit decision before leaving or reloading an edited answer",
 
 it("shows incomplete readiness and reviews unanswered without calling submit", async () => {
   await start();
-  fireEvent.click(screen.getByRole("button", { name: "Mark to revisit" }));
+  fireEvent.click(screen.getByRole("button", { name: "Revisit" }));
   fireEvent.click(screen.getByRole("button", { name: "Review and finish" }));
   const review = await screen.findByRole("region", { name: "Review practice" });
   expect(within(review).getByText("Review practice")).toHaveFocus();
@@ -386,7 +385,7 @@ it("shows incomplete readiness and reviews unanswered without calling submit", a
 it("preserves answers on submit failure, retries, and derives result counts from frozen data", async () => {
   allAnswered();
   await start("Exam practice");
-  fireEvent.click(screen.getByRole("button", { name: "Mark to revisit" }));
+  fireEvent.click(screen.getByRole("button", { name: "Revisit" }));
   fireEvent.click(screen.getByRole("button", { name: "Review and finish" }));
   await screen.findByRole("region", { name: "Review practice" });
   fireEvent.click(screen.getByRole("button", { name: "Finish practice" }));
@@ -666,7 +665,7 @@ it("waits for unfinished-session discovery before showing an empty setup", async
 it("focuses the answering loop and keeps settings and recovery secondary", async () => {
   await start();
   await waitFor(() => expect(screen.getByText("Question 1 of 3")).toHaveFocus());
-  fireEvent.click(screen.getByText("Session options"));
+  fireEvent.click(screen.getByText("Session", { selector: "summary" }));
   expect(screen.getByRole("radio", { name: "Guided practice" })).not.toBeVisible();
   expect(screen.getByRole("button", { name: "Reload saved answers" })).not.toBeVisible();
   expect(screen.queryByRole("button", { name: "Save answer" })).not.toBeInTheDocument();
@@ -759,7 +758,6 @@ it("requires an explicit decision before leaving an invalid edited short answer"
 it("keeps local edits visible when recovery cannot load the saved session", async () => {
   await start(); fireEvent.click(screen.getByLabelText("Two"));
   mock.read.mockRejectedValueOnce(new Error("Connection unavailable"));
-  fireEvent.click(screen.getByText("Recovery options"));
   fireEvent.click(screen.getByRole("button", { name: "Reload saved answers" }));
   fireEvent.click(screen.getByRole("button", { name: "Discard changes and continue" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Connection unavailable");
@@ -775,7 +773,7 @@ it('returns directly to marked questions from Guided review without changing exp
   await open();
   fireEvent.click(screen.getByRole('button', { name: 'Start practice' }));
   fireEvent.click(await screen.findByLabelText('One'));
-  fireEvent.click(screen.getByRole('button', { name: 'Mark to revisit' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Revisit' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save and next' }));
   fireEvent.click(await screen.findByLabelText('False'));
   fireEvent.click(screen.getByRole('button', { name: 'Save and next' }));
@@ -884,6 +882,11 @@ it("checks a guided answer with confidence, reveals only its key, and moves on w
   expect(screen.getByText("Two is the answer")).toBeVisible();
   expect(screen.getByText("You marked this answer as guessed.")).toBeVisible();
   expect(screen.getByText("Correct answer", { selector: "span" })).toBeVisible();
+  // The slips mark the choice and the key, so the feedback leads with the explanation instead.
+  const feedback = screen.getByRole("region", { name: "Answer feedback" });
+  expect(within(feedback).getByText("Two is the answer")).toBeVisible();
+  expect(within(feedback).queryByText(/Your answer|Correct answer|Explanation/)).not.toBeInTheDocument();
+  expect(screen.getByText("1 of 3 checked")).toBeVisible();
   expect(screen.getByLabelText(/One/)).toBeDisabled();
   expect(screen.queryByText("How sure are you?", { exact: false })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Next question" }));
@@ -891,6 +894,44 @@ it("checks a guided answer with confidence, reveals only its key, and moves on w
   expect(mock.save).toHaveBeenCalledTimes(1);
   expect(screen.getByRole("button", { name: "Check answer" })).toBeDisabled();
   expect(screen.queryByRole("heading", { name: /Correct|Incorrect/ })).not.toBeInTheDocument();
+});
+
+it("marks a missed multiple-select option on the slips and spells out only a typed key", async () => {
+  current.feedback_mode = "IMMEDIATE";
+  current.questions = [
+    { id: "multi", position: 0, type: "MULTIPLE_SELECT", stem: "Which are prime?", difficulty: null, options: [{ position: 0, text: "2" }, { position: 1, text: "3" }, { position: 2, text: "4" }], answer: null },
+    { id: "num", position: 1, type: "NUMERIC", stem: "Gravity?", difficulty: null, options: [], answer: null, unit: "m/s²" },
+  ];
+  mock.history.mockResolvedValue([current]);
+  mock.check.mockImplementation(async (_course, _id, question: string) => {
+    current = { ...current, questions: current.questions.map(q => q.id !== question ? q : { ...q, feedback: question === "multi"
+      ? { options: q.options.map(o => ({ ...o, is_correct: o.position < 2 })), explanation: "4 is even.", correct_boolean: null, reference_answer: null, grading_status: "INCORRECT" }
+      : { options: [], explanation: "Standard gravity.", correct_boolean: null, reference_answer: null, grading_status: "CORRECT", correct_value: "9.81", absolute_tolerance: "0.05", relative_tolerance: null } }) } as Attempt;
+    return structuredClone(current);
+  });
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Resume session" }));
+  await screen.findByText("Which are prime?");
+  expect(screen.getByText("0 of 2 checked · a checked answer is final")).toBeVisible();
+  fireEvent.click(screen.getByLabelText("2"));
+  fireEvent.click(screen.getByRole("button", { name: "Check answer" }));
+  let feedback = await screen.findByRole("region", { name: "Answer feedback" });
+  expect(within(feedback).getByRole("heading", { name: "Incorrect" })).toBeVisible();
+  expect(within(feedback).getByText("4 is even.")).toBeVisible();
+  expect(within(feedback).queryByText(/Your answer|Correct answer/)).not.toBeInTheDocument();
+  expect(screen.getByText("Your answer · Correct")).toBeVisible();
+  expect(screen.getByText("Missed · Correct answer")).toBeVisible();
+  expect(screen.getByRole("checkbox", { name: /^3/ })).not.toBeChecked();
+  expect(screen.getByText("1 of 2 checked")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+  fireEvent.change(await screen.findByLabelText(/^Your answer/), { target: { value: "9,81" } });
+  fireEvent.click(screen.getByRole("button", { name: "Check answer" }));
+  feedback = await screen.findByRole("region", { name: "Answer feedback" });
+  expect(within(feedback).getByRole("heading", { name: "Correct" })).toBeVisible();
+  // A typed answer has no slip to mark, so the key is spelled out before the explanation.
+  expect(within(feedback).getByText("Your answer", { selector: "dt" }).nextElementSibling).toHaveTextContent("9,81 m/s²");
+  expect(within(feedback).getByText("Correct answer", { selector: "dt" }).nextElementSibling).toHaveTextContent("9.81 m/s² (± 0.05)");
+  expect(within(feedback).getByText("Standard gravity.")).toBeVisible();
 });
 
 it("keeps exam sessions free of checks and resumes a guided session in its own mode", async () => {
@@ -915,7 +956,7 @@ it("resumes a guided session with checking enabled", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Resume session" }));
   await screen.findByText("Choose a number");
   expect(screen.getByRole("button", { name: "Check answer" })).toBeInTheDocument();
-  fireEvent.click(screen.getByText("Session options"));
+  fireEvent.click(screen.getByText("Session", { selector: "summary" }));
   expect(screen.getByLabelText("Guided practice")).toBeChecked();
 });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Flag } from "lucide-react";
 import { penaltyText, pointsLabel } from "../lib/points";
 import { numberProblem } from "../lib/question-types";
 import { practiceApi, type Attempt, type Confidence, type PracticeAnswer } from "../lib/practice-api";
@@ -63,6 +64,13 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
   const finalQuestion = index === attempt.questions.length - 1;
   const saveState = saving ? "Saving…" : saveFailed ? "Save failed" : dirty ? "Unsaved changes" : question.answer ? "Saved" : "No answer saved";
   const sessionClosed = /already submitted|not active|frozen/i.test(error);
+  const flagged = flags.has(question.id);
+  // One short line of progress; the full rules live in the Session disclosure.
+  const progress = [
+    immediate ? `${checkedCount} of ${attempt.questions.length} checked` : `${answered} of ${attempt.questions.length} answered`,
+    flags.size > 0 ? `${flags.size} marked to revisit` : null,
+    immediate && checkedCount === 0 ? "a checked answer is final" : null,
+  ].filter(Boolean).join(" · ");
   // Moving ahead without answering follows the visible controls: the navigator, Skip for now, or the primary button.
   const canMoveAhead = !finalQuestion && (experience === "EXAM" || Boolean(paper) || (valid && (!immediate || Boolean(feedback))));
   useUnsavedChanges(dirty, onDirtyChange);
@@ -139,6 +147,9 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
     if (immediate && !feedback) check(); else forward();
   }
   function changeAnswer(value: PracticeAnswer | null) { setAnswer(value); setSaveFailed(false); setError(""); }
+  function toggleFlag() {
+    setFlags(current => { const next = new Set(current); if (next.has(question.id)) next.delete(question.id); else next.add(question.id); return next; });
+  }
   function reviewUnanswered() {
     const next = attempt.questions.findIndex(item => item.answer === null);
     if (next < 0) return;
@@ -191,7 +202,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
     </header>}
     {attempt.deadline_at && paper && <ExamTimer deadline={attempt.deadline_at} serverTime={attempt.server_time} durationMinutes={paper.duration_minutes}
       answeredPoints={answeredPoints} totalPoints={paper.total_points} onExpire={handInAtDeadline} />}
-    {timeUp && <section aria-label="Time is up" className="rounded-xl border border-line bg-surface p-5">
+    {timeUp && <section aria-label="Time is up" className="rounded-card border border-line bg-surface p-5">
       <h2 className="text-lg font-semibold">Time is up</h2>
       <p className="mt-2">Your saved answers are being handed in. Unsaved changes were not included.</p>
       {!busy && <Button className="mt-4" onClick={handInAtDeadline}>Hand in now</Button>}
@@ -201,8 +212,8 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
       <Button variant="secondary" disabled={busy} onClick={saveAndLeave}>Save and leave</Button>
     </div>
     {error && <Alert>{error}</Alert>}
-    {sessionClosed && <p className="text-sm text-muted">This session can no longer be edited. Use Recovery options to view the saved session, or return to Practice history. Your local answer remains here until you choose to leave or reload.</p>}
-    {confirmation && <section aria-label={confirmation === "submit" ? "Confirm submission" : confirmation === "abandon" ? "Confirm abandonment" : "Unsaved answer"} className="rounded-xl border border-line bg-surface p-5">
+    {sessionClosed && <p className="text-sm text-muted">This session can no longer be edited. Open Session below to reload the saved session, or return to Practice history. Your local answer remains here until you choose to leave or reload.</p>}
+    {confirmation && <section aria-label={confirmation === "submit" ? "Confirm submission" : confirmation === "abandon" ? "Confirm abandonment" : "Unsaved answer"} className="rounded-card border border-line bg-surface p-5">
       <h2 ref={confirmationHeading} tabIndex={-1} className="text-lg font-semibold">{confirmation === "submit" ? "Finish practice?" : confirmation === "abandon" ? "Abandon this attempt?" : "Keep your unsaved answer?"}</h2>
       {confirmation === "submit" ? <>
         <p className="mt-3">{answered} of {attempt.questions.length} answered and saved · {flags.size} marked to revisit</p>
@@ -242,9 +253,17 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
     </section>}
     <div hidden={confirmation !== null || review || timeUp}>
       <form ref={form} className="flex min-w-0 flex-col gap-6" onSubmit={event => { event.preventDefault(); primary(); }}>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 ref={questionHeading} tabIndex={-1} className="text-base font-semibold">Question {index + 1} of {attempt.questions.length}</h2>
-          <p role="status" className="text-sm text-muted">{saveState}</p>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2 ref={questionHeading} tabIndex={-1} className="text-base font-semibold">Question {index + 1} of {attempt.questions.length}</h2>
+            <p role="status" className="text-sm text-muted">{saveState}</p>
+          </div>
+          <div className="flex flex-wrap items-start gap-1">
+            <FavoriteToggle favorites={favorites} question={question} keyshortcuts="S" />
+            <Button variant="ghost" className="px-3" disabled={busy} aria-pressed={flagged} onClick={toggleFlag}>
+              <Flag aria-hidden="true" className="size-4 shrink-0" fill={flagged ? "currentColor" : "none"} />Revisit
+            </Button>
+          </div>
         </div>
         {paper && question.points != null && <p className="-mt-4 text-sm text-muted">{[question.label, pointsLabel(question.points)].filter(Boolean).join(" · ")}</p>}
         <QuestionUnits units={question.units} />
@@ -261,31 +280,26 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
           </div>
         </div>
       </form>
-      <div className="mt-4 flex flex-wrap items-start gap-2">
-        <FavoriteToggle favorites={favorites} question={question} keyshortcuts="S" />
-        <Button variant="ghost" disabled={busy} aria-pressed={flags.has(question.id)} onClick={() => setFlags(current => { const next = new Set(current); if (next.has(question.id)) next.delete(question.id); else next.add(question.id); return next; })}>{flags.has(question.id) ? "Remove revisit mark" : "Mark to revisit"}</Button>
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1">
         <Button variant="ghost" disabled={busy} onClick={openReview}>Review and finish</Button>
+        <p className="text-sm text-muted">{progress}</p>
         <Button variant="ghost" aria-keyshortcuts="?" aria-haspopup="dialog" className="ml-auto hidden text-muted pointer-fine:inline-flex" onClick={() => setShortcutsOpen(true)}>Press <kbd>?</kbd> for shortcuts</Button>
       </div>
-      <p className="mt-3 text-sm text-muted">{immediate ? `Check each answer to see the key and explanation; a checked answer can no longer change. ${checkedCount} of ${attempt.questions.length} checked. Review progress updates when you finish.` : "Edited answers are saved before moving to another question. Results appear after final submission."}</p>
-      {flags.size > 0 && <p className="text-sm text-muted">Revisit marks last while this session stays open.</p>}
     </div>
     {!confirmation && experience === "EXAM" && <details open={Boolean(paper)} className="border-t border-line pt-3">
       <summary className="min-h-11 cursor-pointer py-2 font-medium">Question navigator</summary>
       <div className="mt-3"><QuizNavigator questions={attempt.questions} index={index} flags={flags} busy={busy} jump={next => { setReview(false); navigate(next); }} /></div>
     </details>}
-    {!confirmation && <details className="border-t border-line pt-3">
-      <summary className="min-h-11 cursor-pointer py-2 font-medium">Session options</summary>
-      <div className="mt-3"><ExperiencePicker value={experience} onChange={setExperience} disabled={busy} /></div>
-      <Button variant="ghost" className="mt-4" disabled={busy} onClick={() => { setError(""); setConfirmation("abandon"); }}>Abandon attempt</Button>
-    </details>}
     <details className="border-t border-line pt-3">
-      <summary className="min-h-11 cursor-pointer py-2 font-medium">Recovery options</summary>
-      <p className="mt-2 text-sm text-muted">Reload saved answers. If you have unsaved changes, choose whether to save or discard them first.</p>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <summary className="min-h-11 cursor-pointer py-2 font-medium">Session</summary>
+      <p className="mt-2 max-w-prose text-sm text-muted">{immediate ? "Check each answer to see the key and explanation; a checked answer can no longer change. Review progress updates when you finish." : "Edited answers are saved before moving to another question. Results appear after final submission."} Revisit marks last while this session stays open.</p>
+      {!confirmation && <div className="mt-4"><ExperiencePicker value={experience} onChange={setExperience} disabled={busy} /></div>}
+      <div className="mt-4 flex flex-wrap gap-2">
         <Button variant="ghost" disabled={busy} onClick={() => requestLeave("reload")}>Reload saved answers</Button>
         {sessionClosed && <Button variant="ghost" disabled={busy} onClick={() => requestLeave("back")}>Return to Practice history</Button>}
+        {!confirmation && <Button variant="ghost" disabled={busy} onClick={() => { setError(""); setConfirmation("abandon"); }}>Abandon attempt</Button>}
       </div>
+      <p className="mt-2 max-w-prose text-sm text-muted">Reloading asks whether to save or discard unsaved changes first.</p>
     </details>
     <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
   </div>;

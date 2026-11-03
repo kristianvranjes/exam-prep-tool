@@ -255,7 +255,24 @@ Answer options (`quiz-answer-editor.tsx`) are full-width paper slips.
 - While answering, the chosen slip turns `accent-surface` with an accent border, and
   keyboard focus rings the whole slip.
 - After checking, the key is green with "Correct answer", a wrong choice is red with
-  "Your answer", and other slips drop to muted text.
+  "Your answer", and other slips drop to muted text. In a multiple-select question a
+  correct option left unticked reads "Missed · Correct answer".
+- The slip note sits at the right edge from `sm`; on phones it drops onto its own line
+  under the option text.
+
+Checked feedback (`quiz-feedback.tsx`) is one tinted block in the verdict's tone: the
+verdict word and icon, then the explanation directly under it. The slips already mark the
+chosen and correct options, so choice questions never restate them. Numeric and short
+answers, whose key is not on screen, list "Your answer" and the correct or reference
+answer before the explanation.
+
+The guided question keeps its controls quiet:
+
+- "Favorite" and "Revisit" are compact pressed toggles in the "Question n of N" row.
+- The footer holds the answer buttons, then "Review and finish", one muted progress line
+  ("3 of 10 checked") and the shortcuts hint.
+- Everything else (mode switch, how the session works, reload, abandon) sits in one
+  "Session" disclosure.
 
 ## Interaction and accessibility
 
@@ -292,5 +309,3 @@ These need markup changes and are left for the practice/results redesign (R13 fo
 - The overview is still a stack of sheets. Move it toward ruled sections.
 - Results open with three bare counts. Lead with "n of N correct", the weakest unit and a
   "practise these mistakes" action.
-- Checked feedback repeats the chosen and correct answers already marked on the options.
-  Make the explanation the focus.
