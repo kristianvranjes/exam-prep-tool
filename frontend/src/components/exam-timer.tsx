@@ -55,7 +55,7 @@ export function ExamTimer({ deadline, serverTime, durationMinutes, answeredPoint
   const elapsedShare = durationMinutes ? Math.min(1, Math.max(0, 1 - remaining / (durationMinutes * 60))) : null;
   const pointsShare = totalPoints ? answeredPoints / totalPoints : 0;
   const behind = elapsedShare !== null && elapsedShare - pointsShare > 0.15;
-  return <section aria-label="Exam time" className={cn("flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 rounded-lg border px-4 py-3", urgent ? "border-danger/40 bg-danger-surface" : "border-line bg-surface")}>
+  return <section aria-label="Exam time" className={cn("sticky top-0 z-10 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 rounded-control border px-4 py-3", urgent ? "border-danger/40 bg-danger-surface" : "border-line bg-surface")}>
     <p className="text-sm text-muted">Time left <span role="timer" aria-label={`Time left ${formatRemaining(remaining)}`} className={cn("ml-1 text-xl font-semibold tabular-nums text-foreground", urgent && "text-danger")}>{formatRemaining(remaining)}</span></p>
     {elapsedShare !== null && <p className="text-sm text-muted">{formatPoints(answeredPoints)} of {formatPoints(totalPoints)} points answered · {Math.round(elapsedShare * 100)}% of the time used{remaining > 0 && <> · <span className={behind ? "font-medium text-foreground" : undefined}>{behind ? "Behind pace" : "On pace"}</span></>}</p>}
     <p aria-live="assertive" className="sr-only">{announcement}</p>

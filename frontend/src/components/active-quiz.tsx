@@ -184,6 +184,11 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
   });
 
   return <div ref={root} className="flex min-w-0 flex-col gap-6">
+    {paper && <header aria-label="Exam paper" className="border-b border-line pb-4">
+      <h2 className="text-2xl font-semibold">{paper.title}</h2>
+      <p className="mt-1 text-sm text-muted">{[`${attempt.questions.length} ${attempt.questions.length === 1 ? "question" : "questions"}`, pointsLabel(paper.total_points), paper.duration_minutes ? `${paper.duration_minutes} min` : null].filter(Boolean).join(" · ")}</p>
+      <p className="mt-1 text-sm">{paper.wrong_answer_penalty > 0 ? `Wrong answers lose ${penaltyText(paper.wrong_answer_penalty).slice(1)}; blank answers score 0.` : "Wrong and blank answers score 0."}</p>
+    </header>}
     {attempt.deadline_at && paper && <ExamTimer deadline={attempt.deadline_at} serverTime={attempt.server_time} durationMinutes={paper.duration_minutes}
       answeredPoints={answeredPoints} totalPoints={paper.total_points} onExpire={handInAtDeadline} />}
     {timeUp && <section aria-label="Time is up" className="rounded-xl border border-line bg-surface p-5">
@@ -252,7 +257,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
             <Button variant="secondary" disabled={busy || index === 0} aria-keyshortcuts="P K" onClick={() => navigate(index - 1)}>Previous</Button>
             {paper && !feedback && (question.answer !== null || answer !== null) && <Button variant="ghost" disabled={busy} onClick={leaveBlank}>Leave blank</Button>}
             {paper && !valid && !finalQuestion && <Button variant="secondary" disabled={busy} onClick={() => navigate(index + 1)}>Skip for now</Button>}
-            <Button type="submit" disabled={busy || !valid} aria-describedby={!valid ? "answer-help" : undefined} aria-keyshortcuts="Enter">{saving ? "Saving…" : immediate && !feedback ? (busy ? "Checking…" : "Check answer") : immediate ? (finalQuestion ? "Continue to review" : "Next question") : finalQuestion ? "Save and review" : "Save and next"}</Button>
+            <Button type="submit" className="ml-auto" disabled={busy || !valid} aria-describedby={!valid ? "answer-help" : undefined} aria-keyshortcuts="Enter">{saving ? "Saving…" : immediate && !feedback ? (busy ? "Checking…" : "Check answer") : immediate ? (finalQuestion ? "Continue to review" : "Next question") : finalQuestion ? "Save and review" : "Save and next"}</Button>
           </div>
         </div>
       </form>
@@ -262,11 +267,10 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
         <Button variant="ghost" disabled={busy} onClick={openReview}>Review and finish</Button>
         <Button variant="ghost" aria-keyshortcuts="?" aria-haspopup="dialog" className="ml-auto hidden text-muted pointer-fine:inline-flex" onClick={() => setShortcutsOpen(true)}>Press <kbd>?</kbd> for shortcuts</Button>
       </div>
-      {paper && <p className="mt-3 text-sm text-muted">{paper.wrong_answer_penalty > 0 ? `Wrong answers lose ${penaltyText(paper.wrong_answer_penalty).slice(1)}; blank answers score 0.` : "Wrong and blank answers score 0."}{paper.duration_minutes ? ` The original time limit was ${paper.duration_minutes} minutes.` : ""}</p>}
       <p className="mt-3 text-sm text-muted">{immediate ? `Check each answer to see the key and explanation; a checked answer can no longer change. ${checkedCount} of ${attempt.questions.length} checked. Review progress updates when you finish.` : "Edited answers are saved before moving to another question. Results appear after final submission."}</p>
       {flags.size > 0 && <p className="text-sm text-muted">Revisit marks last while this session stays open.</p>}
     </div>
-    {!confirmation && experience === "EXAM" && <details className="border-t border-line pt-3">
+    {!confirmation && experience === "EXAM" && <details open={Boolean(paper)} className="border-t border-line pt-3">
       <summary className="min-h-11 cursor-pointer py-2 font-medium">Question navigator</summary>
       <div className="mt-3"><QuizNavigator questions={attempt.questions} index={index} flags={flags} busy={busy} jump={next => { setReview(false); navigate(next); }} /></div>
     </details>}

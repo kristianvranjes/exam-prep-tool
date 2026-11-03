@@ -955,7 +955,11 @@ it("takes a past paper with points, skips and clears answers, and hands it in wi
   fireEvent.click(await screen.findByRole("button", { name: "Resume session" }));
   await screen.findByText("Choose a number");
   expect(screen.getByText("Zadatak 1 · 2 points")).toBeVisible();
-  expect(screen.getByText(/Wrong answers lose ¼ of the item's points; blank answers score 0. The original time limit was 90 minutes./)).toBeVisible();
+  // The paper header states the title, size, time limit and scoring rule above the questions.
+  const header = screen.getByRole("banner", { name: "Exam paper" });
+  expect(within(header).getByRole("heading", { level: 2 })).toBeVisible();
+  expect(within(header).getByText(/· 90 min$/)).toBeVisible();
+  expect(within(header).getByText("Wrong answers lose ¼ of the item's points; blank answers score 0.")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
   await screen.findByText("The sky is green");
   expect(mock.save).not.toHaveBeenCalled();

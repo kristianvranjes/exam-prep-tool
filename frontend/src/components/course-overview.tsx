@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { QUESTION_TYPES } from "../lib/question-types";
-import { api, type CourseUnit, type ExamScope, type ExamScopeCoverage, type ExamScopeReadiness, type ReviewProgressSummary } from "../lib/api";
+import { api, type CourseUnit, type ExamPaper, type ExamScope, type ExamScopeCoverage, type ExamScopeReadiness, type ReviewProgressSummary } from "../lib/api";
 import { countdownLabel, formatScopeDates, localIsoDate, nextExam, type NextExam } from "../lib/exam-dates";
 import { practiceApi, type Attempt, type PracticeFocus } from "../lib/practice-api";
 import type { MaterialsSummary } from "./course-materials";
@@ -25,8 +25,17 @@ function quickFocus(value: string): PracticeFocus | undefined {
   return undefined;
 }
 
+/** Names the past exams for the coming cycle when there are any, otherwise all published ones. */
+export function pastExamsLabel(papers: ExamPaper[], scopeId: string) {
+  const forScope = papers.filter(paper => paper.exam_scope_id === scopeId).length;
+  const count = forScope || papers.length;
+  return `${forScope ? "Take a past exam for this cycle" : "Take a past exam"} (${count})`;
+}
+
 export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt, checkingSession, activeSession, materials, onResume,
-  onRecommendedPractice, onStandardPractice, onScopePractice, onUnitPractice, onStartAttempt, onProgress, onMaterials, onQuestions }: {
+  onRecommendedPractice, onStandardPractice, onScopePractice, onUnitPractice, onStartAttempt, onPapers, onProgress, onMaterials, onQuestions }: {
+  /** Opens the course's past exams. */
+  onPapers?: () => void;
   courseId: string; active: boolean; knownAttemptId: string | null; knownAttempt?: ResumableAttempt;
   checkingSession?: boolean; activeSession?: boolean; materials: MaterialsSummary; onResume: () => void; onRecommendedPractice: () => void;
   onStandardPractice: () => void; onScopePractice?: (scopeId: string) => void; onProgress: () => void; onMaterials: () => void; onQuestions: () => void;
@@ -45,6 +54,7 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
   const [quickTarget, setQuickTarget] = useState("");
   const [quickStarting, setQuickStarting] = useState(false);
   const [quickError, setQuickError] = useState("");
+  const [papers, setPapers] = useState<ExamPaper[]>([]);
 
   useEffect(() => {
     if (!active) return;
@@ -60,6 +70,11 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
       setTargets({ scopes: [], units: [] });
       setQuickTarget("");
       setQuickError("");
+      setPapers([]);
+      // Published past exams are offered next to the countdown; without them the link is left out.
+      void Promise.resolve().then(() => api.examPapers(courseId)).then(rows => {
+        if (current) setPapers((rows?.papers ?? []).filter(paper => paper.status === "PUBLISHED"));
+      }).catch(() => undefined);
       void api.reviewProgressSummary(courseId).then(summary => {
         if (current) setProgress({ loading: false, summary, error: false });
       }).catch(() => {
@@ -127,7 +142,10 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
         <p className="mt-2"><span className="font-semibold">{countdownLabel(countdown.exam)}</span> · <time dateTime={countdown.exam.scope.starts_on ?? undefined}>{formatScopeDates(countdown.exam.scope)}</time></p>
         <p className="mt-2 text-sm text-muted">Covers {countdown.exam.scope.unit_ids.length} {countdown.exam.scope.unit_ids.length === 1 ? "unit" : "units"}
           {countdown.coverage && countdown.coverage.question_count > 0 && ` · You have practiced ${countdown.coverage.reviewed_count} of ${countdown.coverage.question_count} approved questions (${Math.round(countdown.coverage.reviewed_count / countdown.coverage.question_count * 100)}%)`}</p>
-        {onScopePractice && !activeSession && <Button className="mt-4 w-full sm:w-auto" variant="secondary" onClick={() => onScopePractice(countdown.exam.scope.id)}>Practice for {countdown.exam.scope.name}</Button>}
+        {!activeSession && (onScopePractice || (onPapers && papers.length > 0)) && <div className="mt-4 flex flex-wrap gap-3">
+          {onScopePractice && <Button className="w-full sm:w-auto" variant="secondary" onClick={() => onScopePractice(countdown.exam.scope.id)}>Practice for {countdown.exam.scope.name}</Button>}
+          {onPapers && papers.length > 0 && <Button className="w-full sm:w-auto" variant="secondary" onClick={onPapers}>{pastExamsLabel(papers, countdown.exam.scope.id)}</Button>}
+        </div>}
         {countdown.readiness && <ExamReadiness readiness={countdown.readiness} onPracticeUnit={activeSession ? undefined : onUnitPractice} />}
       </Surface>
     </section>}

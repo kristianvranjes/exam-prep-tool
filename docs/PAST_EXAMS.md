@@ -75,7 +75,10 @@ From the deadline on, saving, clearing or checking an answer returns 409 ("Time 
 up"); reading, submitting and abandoning still work, and only answers saved before the
 deadline are handed in. The interface shows the time left, warns at 10, 5 and 1 minutes
 (announced to screen readers), shows a pace indicator (answered points against the
-share of time used), and hands the paper in automatically at the deadline.
+share of time used), and hands the paper in automatically at the deadline. During the
+session, a paper header states its title, question count, points, time limit and scoring
+rule, the timer stays pinned to the top of the screen while scrolling, and the question
+navigator starts open.
 
 **Scoring** (`app/services/paper_scoring.py`, pure and versioned) is computed from the
 frozen points, grades and rule whenever the result is read:
@@ -97,7 +100,9 @@ question's `earned_points`, and `UNANSWERED` as the status of blank questions.
 
 ## Interface
 
-Under **More → Past exams**, members see published papers by academic year. Managers
+The course's **Past exams** tab (`/courses/{id}/papers`) lists published papers by
+academic year; the overview's next-exam countdown links to it with the number of
+published papers for that cycle (or for the course when none are linked to it). Managers
 also see drafts, add a paper with its details, open it to choose approved questions
 (filtered by unit and searched within the loaded page), set points and labels, reorder
 them, save, and publish or unpublish. Unsaved question changes block publishing.

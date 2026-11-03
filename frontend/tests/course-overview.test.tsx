@@ -1,10 +1,10 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { CourseOverview } from "../src/components/course-overview";
-import type { ExamScope, ExamScopeReadiness, Material, ReviewProgressSummary } from "../src/lib/api";
+import { CourseOverview, pastExamsLabel } from "../src/components/course-overview";
+import type { ExamPaper, ExamScope, ExamScopeReadiness, Material, ReviewProgressSummary } from "../src/lib/api";
 import type { Attempt, PracticeAvailability } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ reviewProgressSummary: vi.fn(), availability: vi.fn(), reviewDue: vi.fn(), quickQuiz: vi.fn(), examScopes: vi.fn(), examScopeCoverage: vi.fn(), examScopeReadiness: vi.fn(), units: vi.fn() }));
+const mock = vi.hoisted(() => ({ reviewProgressSummary: vi.fn(), availability: vi.fn(), reviewDue: vi.fn(), quickQuiz: vi.fn(), examScopes: vi.fn(), examScopeCoverage: vi.fn(), examScopeReadiness: vi.fn(), units: vi.fn(), examPapers: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 const summary: ReviewProgressSummary = { as_of: "2026-10-05", reviewed_questions: 3, due_now: 42, upcoming: 1,
@@ -137,6 +137,25 @@ it("counts down to the next dated exam cycle with personal coverage and a focuse
   expect(await within(exam).findByText(/practiced 10 of 40 approved questions \(25%\)/)).toBeVisible();
   expect(mock.examScopeCoverage).toHaveBeenCalledWith("mi");
   expect(within(exam).getByRole("button", { name: "Practice for Međuispit" })).not.toHaveClass("bg-accent");
+});
+
+const paper = (id: string, exam_scope_id: string | null, status: ExamPaper["status"] = "PUBLISHED") => ({ id, exam_scope_id, status }) as ExamPaper;
+
+it("names past exams for the coming cycle, falling back to every published paper", () => {
+  expect(pastExamsLabel([paper("a", "mi"), paper("b", "zi"), paper("c", "mi")], "mi")).toBe("Take a past exam for this cycle (2)");
+  expect(pastExamsLabel([paper("a", "zi")], "mi")).toBe("Take a past exam (1)");
+});
+
+it("offers published past exams next to the countdown and leaves drafts out", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 9, 20, 12));
+  mock.examScopes.mockResolvedValue([dated("mi", "2026-11-23")]);
+  mock.examScopeCoverage.mockRejectedValue(new Error("Offline"));
+  mock.examPapers.mockResolvedValue({ can_manage: false, papers: [paper("a", "mi"), paper("b", "mi", "DRAFT")] });
+  const onPapers = vi.fn();
+  render(<CourseOverview {...props()} onPapers={onPapers} />);
+  const exam = await screen.findByRole("region", { name: "Međuispit" });
+  fireEvent.click(await within(exam).findByRole("button", { name: "Take a past exam for this cycle (1)" }));
+  expect(onPapers).toHaveBeenCalled();
 });
 
 it("passes the cycle to practice and hides the countdown without dated upcoming cycles", async () => {
