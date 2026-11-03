@@ -36,7 +36,7 @@ async function start(mode = "Guided practice") {
   fireEvent.click(screen.getByRole("button", { name: "Previous" }));
   await screen.findByLabelText("One");
   expect(screen.getByRole("button", { name: "Abandon attempt" })).not.toBeVisible();
-  fireEvent.click(screen.getByText("Session options"));
+  fireEvent.click(screen.getByText("Session", { selector: "summary" }));
 }
 
 it.each(["Guided practice", "Exam practice"])("requires confirmation, warns about unsaved edits, and cancels without mutation in %s", async mode => {
@@ -135,7 +135,6 @@ it("reopens abandoned history with exact saved short answers and no grading cont
 
 it("handles a saved-attempt reload after abandonment in another tab", async () => {
   await start();
-  fireEvent.click(screen.getByText("Recovery options"));
   fireEvent.click(screen.getByRole("button", { name: "Reload saved answers" }));
   await waitFor(() => expect(screen.getByText("Attempt abandoned")).toBeInTheDocument());
   expect(screen.queryByRole("button", { name: "Abandon attempt" })).not.toBeInTheDocument();

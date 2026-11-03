@@ -4,10 +4,13 @@ import { cn } from "../lib/utils";
 import { optionShortcuts, toggleOption } from "./practice-shortcuts";
 import { RichText } from "./rich-text";
 
-/** Marks the key and a wrong choice once an answer is checked; text, not only color. */
-function choiceMark(correct: boolean, chosen: boolean, feedback?: QuestionFeedback | null) {
+/**
+ * Marks the key and a wrong choice once an answer is checked; text, not only color.
+ * In a multiple-select question a correct option left unticked is called out as missed.
+ */
+function choiceMark(correct: boolean, chosen: boolean, feedback: QuestionFeedback | null | undefined, multiple: boolean) {
   if (!feedback) return { tone: "hover:border-line-strong hover:bg-subtle has-[:checked]:border-accent has-[:checked]:bg-accent-surface", note: null };
-  if (correct) return { tone: "border-success bg-success-surface [&>span:last-child]:text-success", note: chosen ? "Your answer · Correct" : "Correct answer" };
+  if (correct) return { tone: "border-success bg-success-surface [&>span:last-child]:text-success", note: chosen ? "Your answer · Correct" : multiple ? "Missed · Correct answer" : "Correct answer" };
   if (chosen) return { tone: "border-danger bg-danger-surface [&>span:last-child]:text-danger", note: "Your answer" };
   return { tone: "text-muted", note: null };
 }
@@ -19,10 +22,11 @@ export function QuizAnswerEditor({ question, answer, change, disabled, feedback,
   shortcuts?: boolean;
 }) {
   const choice = (index: number, key: string, label: string, chosen: boolean, correct: boolean, select: () => void, kind: "radio" | "checkbox" = "radio") => {
-    const mark = choiceMark(correct, chosen, feedback);
-    return <label key={key} className={cn("rounded-control border border-line-strong/50 bg-surface p-3 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent [&>input:focus-visible]:outline-none", mark.tone)}>
-      <input type={kind} name={question.id} checked={chosen} onChange={select} aria-keyshortcuts={shortcuts ? optionShortcuts(question, index) : undefined} /> <RichText text={label} className="min-w-0" />
-      {mark.note && <span className="ml-auto pl-3 text-sm font-medium">{mark.note}</span>}
+    const mark = choiceMark(correct, chosen, feedback, kind === "checkbox");
+    // On narrow screens the note drops below the option text instead of squeezing it.
+    return <label key={key} className={cn("flex-wrap gap-y-1 rounded-control border border-line-strong/50 bg-surface p-3 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent [&>input:focus-visible]:outline-none", mark.tone)}>
+      <input type={kind} name={question.id} checked={chosen} onChange={select} aria-keyshortcuts={shortcuts ? optionShortcuts(question, index) : undefined} /> <RichText text={label} className="min-w-0 flex-1" />
+      {mark.note && <span className="basis-full pl-7 text-sm font-medium sm:basis-auto sm:pl-3">{mark.note}</span>}
     </label>;
   };
   const selected = answer?.type === "MULTIPLE_SELECT" ? answer.option_positions : [];
