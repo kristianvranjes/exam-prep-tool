@@ -39,7 +39,12 @@ export function useFavorites(courseId: string) {
       inFlight.current.delete(id);
     }
   }
-  return { value, toggle, error: (id: string): string | undefined => errors[id] };
+  /** Forget the changes made here, once a reload shows the saved favorites. */
+  function reset() {
+    setSaved({});
+    setErrors({});
+  }
+  return { value, toggle, reset, error: (id: string): string | undefined => errors[id] };
 }
 
 /**

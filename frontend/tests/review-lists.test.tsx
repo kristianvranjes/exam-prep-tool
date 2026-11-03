@@ -140,3 +140,57 @@ it("reloads both lists with Refresh progress", async () => {
   expect(await within(mistakes).findByText("Mistake 1?")).toBeVisible();
   expect(mock.favorites).toHaveBeenCalledTimes(2);
 });
+
+it("pages favorites past rows unstarred here without skipping the next favorite", async () => {
+  mock.favorites.mockResolvedValueOnce(page(index => favorite(index), 0, 20)).mockResolvedValueOnce([favorite(20)]);
+  mock.unfavorite.mockResolvedValue({ question_id: "f3", favorite: false, favorited_at: null });
+  render(<ProgressPanel courseId="course" />);
+  const favorites = await section("Favorites");
+  const rows = await within(favorites).findAllByRole("listitem");
+  const star = within(rows[3]).getByRole("button", { name: "Favorite: Favorite 3?" });
+  await act(async () => { fireEvent.click(star); });
+  expect(star).toHaveAttribute("aria-pressed", "false");
+  fireEvent.click(within(favorites).getByRole("button", { name: "Load more favorites" }));
+  // The server no longer counts f3, so the next page starts one row earlier.
+  await waitFor(() => expect(within(favorites).getAllByRole("listitem")).toHaveLength(21));
+  expect(mock.favorites).toHaveBeenNthCalledWith(2, "course", 19, 20);
+  expect(within(favorites).getByText("Favorite 20?")).toBeVisible();
+});
+
+it("drops stars changed here once Refresh progress reloads the favorites", async () => {
+  mock.favorites.mockResolvedValue([favorite(1)]);
+  mock.unfavorite.mockResolvedValue({ question_id: "f1", favorite: false, favorited_at: null });
+  render(<ProgressPanel courseId="course" />);
+  const favorites = await section("Favorites");
+  await act(async () => { fireEvent.click(await within(favorites).findByRole("button", { name: "Favorite: Favorite 1?" })); });
+  expect(within(favorites).getByRole("button", { name: "Favorite: Favorite 1?" })).toHaveAttribute("aria-pressed", "false");
+  // Starred again elsewhere: the reloaded list is the truth.
+  fireEvent.click(screen.getByRole("button", { name: "Refresh progress" }));
+  await waitFor(() => expect(mock.favorites).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(within(favorites).getByRole("button", { name: "Favorite: Favorite 1?" })).toHaveAttribute("aria-pressed", "true"));
+});
+
+it("says a failed refresh could not refresh the list and never calls it loading more", async () => {
+  let fail: (cause: Error) => void = () => {};
+  mock.favorites
+    .mockResolvedValueOnce(page(index => favorite(index), 0, 20))
+    .mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; }));
+  render(<ProgressPanel courseId="course" />);
+  const favorites = await section("Favorites");
+  expect(await within(favorites).findAllByRole("listitem")).toHaveLength(20);
+  fireEvent.click(screen.getByRole("button", { name: "Refresh progress" }));
+  await waitFor(() => expect(mock.favorites).toHaveBeenCalledTimes(2));
+  const more = within(favorites).getByRole("button", { name: "Load more favorites" });
+  expect(more).toBeDisabled();
+  await act(async () => { fail(new Error("offline")); });
+  expect(await within(favorites).findByRole("alert")).toHaveTextContent("Could not refresh your favorites.");
+  expect(within(favorites).getAllByRole("listitem")).toHaveLength(20);
+  expect(within(favorites).getByRole("button", { name: "Retry favorites" })).toBeEnabled();
+});
+
+it("explains that questions in an unfinished session are left out of Mistakes practice", async () => {
+  mock.mistakes.mockResolvedValue([mistake(1)]);
+  render(<ProgressPanel courseId="course" />);
+  const mistakes = await section("Mistakes");
+  expect(within(mistakes).getByText(/Questions in an unfinished session are left out of practice until you finish or abandon it\./)).toBeVisible();
+});

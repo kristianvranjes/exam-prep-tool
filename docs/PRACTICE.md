@@ -470,7 +470,8 @@ unit/scope focus from `services/quiz_selection.py`. Questions that are no longer
 practice-eligible stay listed, marked unavailable, after the available ones; it never
 returns keys or explanations. Progress shows it as the **Mistakes** section, with type,
 units, last miss and miss count per question, **Load more**, and **Practice these
-mistakes**, which opens practice setup with Mistakes selected.
+mistakes**, which opens practice setup with Mistakes selected. Questions in an unfinished
+session are left out of practice until you finish or abandon it.
 
 `GET /courses/{course_id}/practice-availability` accepts the same modes (MOCK only with
 `exam_scope_id`) and counts through the same `selection_filters`. Whatever the requested
