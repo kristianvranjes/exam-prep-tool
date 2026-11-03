@@ -6,8 +6,9 @@ const buttonVariants = cva(
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-control px-4 py-2 text-sm font-semibold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50",
   { variants: { variant: {
     primary: "bg-accent text-accent-foreground hover:bg-accent-hover",
-    // aria-pressed turns a row of secondary buttons into a segmented filter.
-    secondary: "border border-line-strong/60 bg-surface text-foreground hover:border-line-strong hover:bg-subtle aria-pressed:border-accent/50 aria-pressed:bg-accent-surface aria-pressed:text-accent",
+    // aria-pressed turns a row of secondary buttons into a segmented filter: the pressed one gets an accent fill
+    // and a 2 px edge in its text colour, so selection never rests on hue alone. Use it as is, without overrides.
+    secondary: "border border-line-strong/60 bg-surface text-foreground hover:border-line-strong hover:bg-subtle aria-pressed:border-current aria-pressed:bg-accent-surface aria-pressed:text-accent aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-current",
     ghost: "text-accent hover:bg-accent-surface aria-pressed:bg-accent-surface",
     danger: "bg-danger text-danger-foreground hover:bg-danger/90",
     // Course destinations: an underline marks the current page instead of a filled button.

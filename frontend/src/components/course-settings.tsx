@@ -84,7 +84,7 @@ export function CourseSettings({ course, onUpdated, onDeleted }: {
           <Button type="submit" disabled={busy !== null}>{busy === "save" ? "Saving…" : "Save course"}</Button>
         </fieldset>
         {saveError && <Alert>{saveError}</Alert>}
-        {notice && <p role="status" className="rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{notice}</p>}
+        {notice && <Alert tone="info">{notice}</Alert>}
       </DraftForm>
     </Surface>
     <Surface className="border-danger/40">

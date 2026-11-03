@@ -138,7 +138,7 @@ it("generates with selected approved concepts and bounded controls", async () =>
   expect(await screen.findByRole("alert")).toHaveTextContent("Select 1–5");
   fireEvent.click(screen.getByLabelText("Matrices"));
   fireEvent.change(screen.getByLabelText("Question count"), { target: { value: "2" } });
-  fireEvent.click(screen.getByLabelText("short answer"));
+  fireEvent.click(screen.getByLabelText("Short answer"));
   fireEvent.click(screen.getByRole("button", { name: "Generate drafts" }));
   expect(await screen.findByText(/Generation SUCCEEDED/)).toBeInTheDocument();
   expect(mock.generateQuestions).toHaveBeenCalledWith("course", { concept_ids: ["c1"], question_types: ["MULTIPLE_CHOICE", "TRUE_FALSE"], count: 2, retrieval_top_k: 3 });
@@ -151,6 +151,11 @@ it("lets a creator edit and submit without granting OWNER moderation", async () 
   expect(screen.getByText(/Material material1 · chunk 1/)).not.toBeVisible();
   fireEvent.click(screen.getByText("Source details"));
   expect(screen.getByText(/Material material1 · chunk 1/)).toBeVisible();
+  expect(screen.getByText("Source: AI-generated · Generation job job1")).toBeVisible();
+  // Review states are words in a semantic tone: a draft is neutral, never the raw enum.
+  const selectedCard = screen.getByRole("article", { name: "Selected question" });
+  expect(within(selectedCard).getByText("Draft")).toHaveClass("bg-subtle", "text-muted");
+  expect(selectedCard).not.toHaveTextContent("DRAFT");
   fireEvent.click(screen.getByRole("button", { name: "Edit question" }));
   fireEvent.change(screen.getByLabelText("Question text"), { target: { value: "Revised matrix question?" } });
   fireEvent.change(screen.getByLabelText("Option 2"), { target: { value: "Revised option" } });
@@ -160,10 +165,12 @@ it("lets a creator edit and submit without granting OWNER moderation", async () 
   fireEvent.click(await screen.findByRole("button", { name: "Submit for review" }));
   await waitFor(() => expect(screen.queryByRole("button", { name: "Submit for review" })).not.toBeInTheDocument());
   expect(screen.getByRole("article", { name: "Selected question" })).toHaveTextContent("Awaiting faculty review");
+  expect(within(screen.getByRole("article", { name: "Selected question" })).getByText("Awaiting faculty review")).toHaveClass("bg-pending-surface", "text-pending");
   expect(screen.queryByRole("button", { name: "Approve question" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Reject question" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "View versions" }));
-  expect(await screen.findByText(/Version 1/)).toBeInTheDocument();
+  expect(await screen.findByText(/^Version 1 · Created · /)).toBeInTheDocument();
+  expect(screen.queryByText(/CREATED/)).not.toBeInTheDocument();
   expect(mock.transitionQuestion.mock.calls.map(c => c[1])).toEqual(["submit"]);
 });
 
@@ -392,8 +399,11 @@ it("archives approved content as a moderator and retains version access", async 
   current.status = "APPROVED";
   await open();
   fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
-  fireEvent.click(await screen.findByRole("button", { name: "Archive question" }));
+  const archive = await screen.findByRole("button", { name: "Archive question" });
+  expect(within(screen.getByRole("article", { name: "Selected question" })).getByText("Approved")).toHaveClass("bg-success-surface", "text-success");
+  fireEvent.click(archive);
   await waitFor(() => expect(screen.queryByRole("button", { name: "Archive question" })).not.toBeInTheDocument());
+  expect(within(screen.getByRole("article", { name: "Selected question" })).getByText("Archived")).toHaveClass("bg-subtle", "text-muted");
   fireEvent.click(screen.getByRole("button", { name: "View versions" }));
   expect(await screen.findByText(/Version 1/)).toBeInTheDocument();
   expect(mock.transitionQuestion).toHaveBeenCalledWith("q1", "archive", undefined);
@@ -678,6 +688,28 @@ it.each(["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"] as const)("keeps publi
   fireEvent.submit(form);
   await waitFor(() => expect(mock.suggestQuestionEdit).toHaveBeenCalledWith("q1", { changes, note: null }));
   expect(await screen.findByText("Suggestion submitted for faculty review.")).toBeInTheDocument();
+});
+
+it("lets a numeric suggestion propose the value, tolerances and unit", async () => {
+  const publicQuestion: PublicQuestion = { id: "q1", course_id: "course", type: "NUMERIC", status: "APPROVED", visibility: "MEMBER", stem: draft.stem, difficulty: 2, options: [] };
+  mock.me.mockResolvedValue({ id: "student" });
+  mock.questions.mockResolvedValue([publicQuestion]);
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
+  const selected = screen.getByRole("article", { name: "Selected question" });
+  fireEvent.click(within(selected).getByRole("button", { name: "Suggest edit" }));
+  const form = within(selected).getByRole("form", { name: "Suggest question edit" });
+  fireEvent.change(within(form).getByLabelText("Proposed relative tolerance in %"), { target: { value: "150" } });
+  fireEvent.submit(form);
+  expect(await within(selected).findByRole("alert")).toHaveTextContent("Use a percentage from 0 to 100");
+  fireEvent.change(within(form).getByLabelText("Proposed correct value"), { target: { value: "9,81" } });
+  fireEvent.change(within(form).getByLabelText("Proposed absolute tolerance"), { target: { value: "0,05" } });
+  fireEvent.change(within(form).getByLabelText("Proposed relative tolerance in %"), { target: { value: "2,5" } });
+  fireEvent.change(within(form).getByLabelText("Proposed unit"), { target: { value: "m/s²" } });
+  fireEvent.submit(form);
+  await waitFor(() => expect(mock.suggestQuestionEdit).toHaveBeenCalledWith("q1", {
+    changes: { correct_value: "9,81", absolute_tolerance: "0,05", relative_tolerance: "0.025", unit: "m/s²" }, note: null,
+  }));
 });
 
 it("deduplicates pending suggestions and preserves input after a duplicate conflict for retry", async () => {

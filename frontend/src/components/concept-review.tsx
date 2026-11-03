@@ -188,12 +188,12 @@ export function ConceptReview({ courseId, materialId }: { courseId: string; mate
       </div>}
       {source && <div className="min-w-0 space-y-2">
         <p className="break-words font-medium [overflow-wrap:anywhere]">Sources for {source.name}</p>
-        {source.source_chunks.map((chunk) => <details key={chunk.id} className="min-w-0 rounded-lg border border-line">
+        {source.source_chunks.map((chunk) => <details key={chunk.id} className="min-w-0 rounded-control border border-line">
           <summary className="break-words px-3 py-2 text-sm font-medium [overflow-wrap:anywhere]">Source excerpt {chunk.ordinal + 1}</summary>
           <div className="min-w-0 space-y-2 border-t border-line p-3">
             <p className="break-words text-xs text-muted [overflow-wrap:anywhere]">Material ID: {chunk.material_id}</p>
             <p className="break-words text-xs text-muted [overflow-wrap:anywhere]">Chunk ID: {chunk.id}</p>
-            <pre role="region" aria-label={"Source text for chunk " + chunk.id} tabIndex={0} className="max-h-60 max-w-full overflow-auto whitespace-pre-wrap rounded-lg bg-subtle p-3 text-sm [overflow-wrap:anywhere]">{chunk.content}</pre>
+            <pre role="region" aria-label={"Source text for chunk " + chunk.id} tabIndex={0} className="max-h-60 max-w-full overflow-auto whitespace-pre-wrap rounded-control bg-subtle p-3 text-sm [overflow-wrap:anywhere]">{chunk.content}</pre>
           </div>
         </details>)}
       </div>}

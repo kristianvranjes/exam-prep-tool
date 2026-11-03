@@ -1,4 +1,6 @@
-import type { QuestionType } from "./api";
+import type { OwnerQuestion, QuestionStatus, QuestionType } from "./api";
+
+type QuestionSource = OwnerQuestion["source"];
 import type { PracticeAnswer } from "./practice-api";
 
 export const QUESTION_TYPES: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"];
@@ -11,6 +13,29 @@ export const typeLabels: Record<QuestionType, string> = {
   TRUE_FALSE: "True / false",
   NUMERIC: "Numeric",
   SHORT_ANSWER: "Short answer",
+};
+
+export const statusLabels: Record<QuestionStatus, string> = {
+  DRAFT: "Draft",
+  PENDING_REVIEW: "Awaiting faculty review",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+  ARCHIVED: "Archived",
+};
+
+/** Badge tones from DESIGN.md: draft and archived neutral, awaiting review pending, approved success, rejected danger. */
+export const statusTones: Record<QuestionStatus, "neutral" | "pending" | "success" | "danger"> = {
+  DRAFT: "neutral",
+  PENDING_REVIEW: "pending",
+  APPROVED: "success",
+  REJECTED: "danger",
+  ARCHIVED: "neutral",
+};
+
+/** Where an owner-visible question came from. Imports from an external AI prompt count as added by a person. */
+export const sourceLabels: Record<QuestionSource, string> = {
+  AI: "AI-generated",
+  USER: "Written or imported",
 };
 
 // Mirrors `app/services/numbers.py`: one decimal comma or point, optional exponent, nothing else.

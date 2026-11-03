@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
-import { answerText, keyText, numberProblem, numericKey } from "../src/lib/question-types";
+import { paperItemLabel, paperItemMeta } from "../src/lib/points";
+import { answerText, keyText, numberProblem, numericKey, sourceLabels, statusLabels, statusTones } from "../src/lib/question-types";
 
 it("checks numbers with the server's rules", () => {
   for (const ok of ["9,81", "9.81", " -1.5e-3 ", "+2", ",5", "5."]) expect(numberProblem(ok)).toBeNull();
@@ -26,4 +27,22 @@ it("reads answers and keys back for every type", () => {
   const base = { correct_boolean: null, reference_answer: null };
   expect(keyText({ ...base, type: "MULTIPLE_SELECT", options })).toBe("2; 3");
   expect(keyText({ ...base, type: "NUMERIC", options: [], correct_value: "9.81", absolute_tolerance: "0.05", unit: "m/s²" })).toBe("9.81 m/s² (± 0.05)");
+});
+
+it("labels review states in words with the semantic tone of each", () => {
+  expect(statusLabels.PENDING_REVIEW).toBe("Awaiting faculty review");
+  expect(statusTones).toEqual({ DRAFT: "neutral", PENDING_REVIEW: "pending", APPROVED: "success", REJECTED: "danger", ARCHIVED: "neutral" });
+  expect(sourceLabels).toEqual({ AI: "AI-generated", USER: "Written or imported" });
+});
+
+it("numbers paper items and keeps a staff label only when it says more than the number", () => {
+  expect(paperItemMeta(1, "1", 1)).toBe("1 point");
+  expect(paperItemMeta(2, null, 2)).toBe("2 points");
+  expect(paperItemMeta(3, " item 3 ", 2)).toBe("2 points");
+  expect(paperItemMeta(3, "3.", 2)).toBe("2 points");
+  expect(paperItemMeta(3, "Question 3", 2)).toBe("2 points");
+  expect(paperItemMeta(3, "Zadatak 3a", 2.5)).toBe("Zadatak 3a · 2.5 points");
+  expect(paperItemLabel(4, "4")).toBeNull();
+  expect(paperItemLabel(4, "  ")).toBeNull();
+  expect(paperItemLabel(4, "Zadatak 3a")).toBe("Zadatak 3a");
 });

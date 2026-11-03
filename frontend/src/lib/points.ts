@@ -14,3 +14,16 @@ export const penaltyLabels: Record<string, string> = { "0": "No negative points"
 export function penaltyText(fraction: number) {
   return penaltyLabels[String(fraction)] ?? `−${fraction} of the item's points`;
 }
+
+/** The paper's own label for an item, or null when it only repeats the item number the heading already shows ("3", "3.", "Item 3", "Question 3"). */
+export function paperItemLabel(number: number, label: string | null | undefined) {
+  const own = label?.trim();
+  if (!own) return null;
+  const plain = own.toLowerCase().replace(/\.$/, "");
+  return plain === String(number) || plain === `item ${number}` || plain === `question ${number}` ? null : own;
+}
+
+/** "Zadatak 3a · 2 points", or just "2 points" when the label says nothing the "Question 3 of N" heading does not. */
+export function paperItemMeta(number: number, label: string | null | undefined, points: number) {
+  return [paperItemLabel(number, label), pointsLabel(points)].filter(Boolean).join(" · ");
+}

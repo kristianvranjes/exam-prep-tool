@@ -121,8 +121,8 @@ test("moderator and student complete the core exam-preparation journey", async (
     await questionForm.getByRole("button", { name: "Save draft" }).click();
     const selectedQuestion = student.getByRole("article", { name: "Selected question" });
     await expect(selectedQuestion).toContainText(questionStem);
-    await expect(selectedQuestion).toContainText("draft");
-    await expect(selectedQuestion).toContainText("Source: USER");
+    await expect(selectedQuestion).toContainText("Draft");
+    await expect(selectedQuestion).toContainText("Source: Written or imported");
     await selectedQuestion.getByRole("button", { name: "Submit for review" }).click();
     await expect(selectedQuestion).toContainText("Awaiting faculty review");
 
@@ -139,7 +139,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await student.getByRole("button", { name: "Open question bank" }).click();
     await student.getByRole("list", { name: "Questions list" })
       .getByRole("button", { name: new RegExp(questionStem.replace("?", "\\?")) }).click();
-    await expect(student.getByRole("article", { name: "Selected question" })).toContainText("approved");
+    await expect(student.getByRole("article", { name: "Selected question" })).toContainText("Approved");
 
     await student.getByRole("button", { name: "Report issue" }).click();
     const reportForm = student.getByRole("form", { name: "Report question issue" });
@@ -181,7 +181,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await student.getByRole("list", { name: "Questions list" })
       .getByRole("button", { name: new RegExp(questionStem.replace("?", "\\?")) }).click();
     await expect(selectedQuestion).toContainText("Difficulty 3/5");
-    await expect(selectedQuestion).toContainText("approved");
+    await expect(selectedQuestion).toContainText("Approved");
 
     await studentNavigation.getByRole("button", { name: "Overview", exact: true }).click();
     await expect(student.getByRole("region", { name: "Materials", exact: true })).toContainText("1 study material");

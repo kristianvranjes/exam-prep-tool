@@ -51,12 +51,27 @@ export function SuggestQuestionEdit({ question }: { question: SuggestableQuestio
         changes.correct_option_positions = positions;
       }
     } else if (question.type === "NUMERIC") {
-      const value = String(data.get("correctValue") ?? "").trim();
-      if (value) {
-        const problem = numberProblem(value);
-        if (problem) { setError(`Proposed correct value: ${problem}.`); return; }
-        changes.correct_value = value;
+      const text = (name: string) => String(data.get(name) ?? "").trim();
+      const numbers: [keyof SuggestionChanges, string, string][] = [
+        ["correct_value", "Proposed correct value", text("correctValue")],
+        ["absolute_tolerance", "Proposed absolute tolerance", text("absoluteTolerance")],
+        ["relative_tolerance", "Proposed relative tolerance", text("relativeTolerance")],
+      ];
+      for (const [, name, value] of numbers) {
+        const problem = value && numberProblem(value);
+        if (problem) { setError(`${name}: ${problem}.`); return; }
       }
+      const [value, absolute, percent] = numbers.map(([, , entered]) => entered);
+      if (value) changes.correct_value = value;
+      if (absolute) changes.absolute_tolerance = absolute;
+      if (percent) {
+        // Students type a percentage, like the bank form; the API stores the share of the key (1 % = 0.01).
+        const share = Number(percent.replace(",", ".")) / 100;
+        if (share < 0 || share > 1) { setError("Proposed relative tolerance: Use a percentage from 0 to 100."); return; }
+        changes.relative_tolerance = String(Number(share.toPrecision(12)));
+      }
+      const unit = text("unit");
+      if (unit) changes.unit = unit;
     } else if (question.type === "TRUE_FALSE") {
       const answer = String(data.get("answer") ?? "");
       if (answer !== "") changes.correct_answer = answer === "true";
@@ -115,9 +130,20 @@ export function SuggestQuestionEdit({ question }: { question: SuggestableQuestio
             {question.options.map(option => <label key={option.position} className="block text-sm"><input type="checkbox" name="correctOptions" value={option.position} /> Option {option.position + 1}: {option.text}</label>)}
           </fieldset>
         </>}
-        {question.type === "NUMERIC" && <label className="block text-sm font-medium">Proposed correct value
-          <Input name="correctValue" inputMode="decimal" maxLength={40} className="mt-1 sm:w-48" />
-        </label>}
+        {question.type === "NUMERIC" && <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm font-medium">Proposed correct value
+            <Input name="correctValue" inputMode="decimal" maxLength={40} className="mt-1" placeholder="e.g. 9,81" />
+          </label>
+          <label className="block text-sm font-medium">Proposed unit
+            <Input name="unit" maxLength={20} className="mt-1" placeholder="e.g. m/s²" />
+          </label>
+          <label className="block text-sm font-medium">Proposed absolute tolerance
+            <Input name="absoluteTolerance" inputMode="decimal" maxLength={40} className="mt-1" placeholder="e.g. 0,05" />
+          </label>
+          <label className="block text-sm font-medium">Proposed relative tolerance in %
+            <Input name="relativeTolerance" inputMode="decimal" maxLength={40} className="mt-1" placeholder="e.g. 1" />
+          </label>
+        </div>}
         {question.type === "TRUE_FALSE" && <label className="block text-sm font-medium">Proposed correct answer
           <Select name="answer" defaultValue="" className="mt-1"><option value="">No answer change</option><option value="true">True</option><option value="false">False</option></Select>
         </label>}

@@ -10,7 +10,9 @@ const text = Atkinson_Hyperlegible_Next({ subsets: ["latin", "latin-ext"], displ
 const code = Atkinson_Hyperlegible_Mono({ subsets: ["latin", "latin-ext"], display: "swap", variable: "--font-code" });
 const heading = Literata({ subsets: ["latin", "latin-ext", "greek"], axes: ["opsz"], display: "swap", variable: "--font-heading" });
 
-export const metadata: Metadata = { title: "ExamPrep", description: "University courses, study materials and practice for your next exam." };
+// No title here: every route is rendered by the client AppShell, which sets a per-route <title>
+// ("Practice · <course> · ExamPrep") that React hoists into <head>. Two titles would compete.
+export const metadata: Metadata = { description: "University courses, study materials and practice for your next exam." };
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   // The interface copy is English; course content inside it is often Croatian.
   return <html lang="en" className={`${text.variable} ${code.variable} ${heading.variable}`} suppressHydrationWarning><body><ThemeProvider>{children}</ThemeProvider></body></html>;

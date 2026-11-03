@@ -1022,6 +1022,7 @@ it("takes a past paper with points, skips and clears answers, and hands it in wi
   fireEvent.click(await screen.findByRole("button", { name: "Resume session" }));
   await screen.findByText("Choose a number");
   expect(screen.getByText("Zadatak 1 · 2 points")).toBeVisible();
+  expect(screen.queryByText(/Item 1/)).not.toBeInTheDocument();
   // The paper header states the title, size, time limit and scoring rule above the questions.
   const header = screen.getByRole("banner", { name: "Exam paper" });
   expect(within(header).getByRole("heading", { level: 2 })).toBeVisible();

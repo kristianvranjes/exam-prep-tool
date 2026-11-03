@@ -46,14 +46,14 @@ export function MaterialUpload({ disabled, busy, upload }: {
       setError(`${cause instanceof Error ? cause.message : "Upload failed."} Your existing materials are unchanged. Try uploading again.`);
     } finally { pending.current = false; }
   }}>
-    <div className={cn("min-w-0 rounded-xl border-2 border-dashed border-line bg-surface p-5 focus-within:border-accent", dragging && "border-accent bg-accent-surface")}
+    <div className={cn("min-w-0 rounded-card border-2 border-dashed border-line bg-surface p-5 focus-within:border-accent", dragging && "border-accent bg-accent-surface")}
       onDragOver={event => { event.preventDefault(); if (!locked) { event.dataTransfer.dropEffect = "copy"; setDragging(true); } }}
       onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }}
       onDrop={event => { event.preventDefault(); setDragging(false); choose(Array.from(event.dataTransfer.files)); }}>
       <label htmlFor={id} className="block cursor-pointer text-base font-semibold">Drop a PDF here or choose a file</label>
       <p id={`${id}-help`} className="mt-2 text-sm text-muted">One non-empty PDF at a time. Upload starts only when you select Upload PDF.</p>
       <input ref={input} id={id} name="file" aria-label="PDF file" aria-describedby={`${id}-help${file ? ` ${id}-selected` : ""}${error ? ` ${id}-error` : ""}`} aria-invalid={!!error} type="file" accept=".pdf,application/pdf" disabled={locked}
-        className="mt-4 block min-h-11 w-full min-w-0 text-sm file:mr-3 file:min-h-11 file:rounded-lg file:border file:border-line file:bg-subtle file:px-3 file:text-foreground" onChange={event => choose(Array.from(event.target.files ?? []))} />
+        className="mt-4 block min-h-11 w-full min-w-0 text-sm file:mr-3 file:min-h-11 file:rounded-control file:border file:border-line file:bg-subtle file:px-3 file:text-foreground" onChange={event => choose(Array.from(event.target.files ?? []))} />
     </div>
     {file && <p id={`${id}-selected`} role="status" className="break-words text-sm">Selected: <span className="font-medium">{file.name}</span> · {formatFileSize(file.size)}</p>}
     {error && <Alert id={`${id}-error`}>{error}</Alert>}

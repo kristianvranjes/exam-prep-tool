@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatPoints, penaltyText, pointsLabel } from "../lib/points";
+import { formatPoints, paperItemLabel, penaltyText, pointsLabel } from "../lib/points";
 import { answerText, keyText } from "../lib/question-types";
 import { practiceApi, type Attempt, type Confidence, type PaperScore, type PaperSession, type ResultQuestion } from "../lib/practice-api";
 import { FavoriteToggle, useFavorites } from "./favorite-toggle";
@@ -154,14 +154,13 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
     {hasResults && <section aria-label="Answer review" className="space-y-5">
       <div role="group" aria-label="Result filters" className="flex flex-wrap gap-2">
         {(["INCORRECT", "PENDING", "ALL"] as const).map(filter => <Button key={filter} variant="secondary" aria-pressed={view === filter}
-          className={view === filter ? "underline underline-offset-4" : "text-muted"}
           disabled={filter !== "ALL" && counts[filter] === 0} onClick={() => setView(filter)}>{viewLabels[filter]}</Button>)}
       </div>
       <div><h3 ref={reviewHeading} tabIndex={-1} className="text-lg font-semibold">{viewLabels[view]}</h3><p role="status" className="mt-1 text-sm text-muted">{visibleQuestions.length} {visibleQuestions.length === 1 ? "answer" : "answers"}</p></div>
       <div className="space-y-5">{visibleQuestions.map(({ question, number }) => {
         const correct = question.grading_status === "CORRECT";
         const header = <div className="space-y-2"><h4 className="text-lg font-semibold">{number}. <RichText text={question.stem} /></h4><QuestionUnits units={question.units} />
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"><p className={cn("text-sm", statusTone(question))}>{[question.label, statusLabel(question), itemPoints(question), question.confidence && confidenceNotes[question.confidence]].filter(Boolean).join(" · ")}</p>
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"><p className={cn("text-sm", statusTone(question))}>{[paperItemLabel(number, question.label), statusLabel(question), itemPoints(question), question.confidence && confidenceNotes[question.confidence]].filter(Boolean).join(" · ")}</p>
             <FavoriteToggle favorites={favorites} question={question} label={`Favorite question ${number}`} /></div></div>;
         return <article key={question.id} aria-label={`Question ${number} result`} className="min-w-0">
           {correct ? <div className="space-y-3 border-b border-line py-4">

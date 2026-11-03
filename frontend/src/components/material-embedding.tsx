@@ -75,7 +75,7 @@ function EmbeddingPanel({ materialId }: { materialId: string }) {
   const label = !status || status.total_chunks === 0 ? "Not prepared"
     : status.is_current ? "Current" : "Needs refresh or partially stale";
 
-  return <details className="mt-5 min-w-0 rounded-lg border border-line p-3">
+  return <details className="mt-5 min-w-0 rounded-control border border-line p-3">
     <summary className="text-sm font-medium">Advanced: AI source preparation</summary>
     <Surface className="mt-3 min-w-0 space-y-3 bg-subtle/30" role="region" aria-label="Semantic sources">
     <div>

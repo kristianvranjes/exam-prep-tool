@@ -76,11 +76,11 @@ export function CourseUnits({ courseId, isOwner }: { courseId: string; isOwner: 
     {loading && <LoadingState>Loading course units…</LoadingState>}
     {loadError && <div className="space-y-3"><Alert>{loadError}</Alert><Button variant="secondary" onClick={() => { setLoading(true); setLoadError(""); setRevision((value) => value + 1); }}>Retry units</Button></div>}
     {error && <Alert>{error}</Alert>}
-    {notice && <p role="status" className="rounded-lg border border-accent/30 bg-accent-surface p-3 text-sm text-foreground">{notice}</p>}
+    {notice && <Alert tone="info">{notice}</Alert>}
 
     {!loading && !loadError && activeUnits.length === 0 && <EmptyState title="No course units yet.">{isOwner ? "Add the first unit below." : "The course owner has not added units yet."}</EmptyState>}
     {!loading && !loadError && activeUnits.length > 0 && <ol aria-label="Course units list" className="space-y-2">
-      {activeUnits.map((unit, index) => <li key={unit.id} className="min-w-0 rounded-lg border border-line bg-surface p-4">
+      {activeUnits.map((unit, index) => <li key={unit.id} className="min-w-0 rounded-control border border-line bg-surface p-4">
         {editing === unit.id
           ? <UnitEditForm unit={unit} busy={busy} cancel={() => setEditing(null)} save={async (body) => {
             if (await run(async () => replace(await api.updateUnit(unit.id, body)), `Saved unit ${body.title}.`)) setEditing(null);
@@ -115,10 +115,10 @@ export function CourseUnits({ courseId, isOwner }: { courseId: string; isOwner: 
       </DraftForm>
     </Surface>}
 
-    {isOwner && archivedUnits.length > 0 && <details className="rounded-lg border border-line p-3">
+    {isOwner && archivedUnits.length > 0 && <details className="rounded-control border border-line p-3">
       <summary className="text-sm font-medium">Archived units ({archivedUnits.length})</summary>
       <ul aria-label="Archived units list" className="mt-3 space-y-2">
-        {archivedUnits.map((unit) => <li key={unit.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-subtle p-3">
+        {archivedUnits.map((unit) => <li key={unit.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-control border border-line bg-subtle p-3">
           <span className="min-w-0 break-words [overflow-wrap:anywhere]">{unit.title} <span className="text-sm text-muted">· {questionCount(unit.approved_question_count)}</span></span>
           <Button variant="secondary" aria-label={`Restore ${unit.title}`} disabled={busy} onClick={() => void run(async () => replace(await api.restoreUnit(unit.id)), `Restored ${unit.title}.`)}>Restore</Button>
         </li>)}

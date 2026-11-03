@@ -75,7 +75,7 @@ export function ReadinessUnits({ readiness, onPracticeUnit }: {
         <p className="font-medium [overflow-wrap:anywhere]">{unit.title}{unit.is_archived && <span className="text-sm font-normal text-muted"> · Archived</span>}</p>
         <p className="text-sm text-muted tabular-nums">{unitSummary(unit)}</p>
       </li>)}</ul>
-      <p className="mt-4 max-w-prose text-sm text-muted">How it works (readiness-v1): the estimate is the share of this cycle&apos;s questions you would likely answer correctly today, from {plural(readiness.answer_count, "graded answer")} to {readiness.answered_count} of {plural(readiness.question_count, "question")}. A question counts as retained when your last answer was correct and it has not been overdue for review longer than its review interval. Questions you have not answered yet are estimated from how you did in the same unit, so fewer answers mean a wider range. Only approved multiple-choice and true/false questions count; short answers use self-review.</p>
+      <p className="mt-4 max-w-prose text-sm text-muted">How it works (readiness-v1): the estimate is the share of this cycle&apos;s questions you would likely answer correctly today, from {plural(readiness.answer_count, "graded answer")} to {readiness.answered_count} of {plural(readiness.question_count, "question")}. A question counts as retained when your last answer was correct and it has not been overdue for review longer than its review interval. Questions you have not answered yet are estimated from how you did in the same unit, so fewer answers mean a wider range. Every approved question that is graded automatically counts; short answers use self-review, so they do not.</p>
     </details>
   </div>;
 }
