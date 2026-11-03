@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { paperItemMeta } from "../src/lib/points";
+import { paperItemLabel, paperItemMeta } from "../src/lib/points";
 import { answerText, keyText, numberProblem, numericKey, sourceLabels, statusLabels, statusTones } from "../src/lib/question-types";
 
 it("checks numbers with the server's rules", () => {
@@ -36,8 +36,13 @@ it("labels review states in words with the semantic tone of each", () => {
 });
 
 it("numbers paper items and keeps a staff label only when it says more than the number", () => {
-  expect(paperItemMeta(1, "1", 1)).toBe("Item 1 · 1 point");
-  expect(paperItemMeta(2, null, 2)).toBe("Item 2 · 2 points");
-  expect(paperItemMeta(3, " item 3 ", 2)).toBe("Item 3 · 2 points");
-  expect(paperItemMeta(3, "Zadatak 3a", 2.5)).toBe("Item 3 · Zadatak 3a · 2.5 points");
+  expect(paperItemMeta(1, "1", 1)).toBe("1 point");
+  expect(paperItemMeta(2, null, 2)).toBe("2 points");
+  expect(paperItemMeta(3, " item 3 ", 2)).toBe("2 points");
+  expect(paperItemMeta(3, "3.", 2)).toBe("2 points");
+  expect(paperItemMeta(3, "Question 3", 2)).toBe("2 points");
+  expect(paperItemMeta(3, "Zadatak 3a", 2.5)).toBe("Zadatak 3a · 2.5 points");
+  expect(paperItemLabel(4, "4")).toBeNull();
+  expect(paperItemLabel(4, "  ")).toBeNull();
+  expect(paperItemLabel(4, "Zadatak 3a")).toBe("Zadatak 3a");
 });

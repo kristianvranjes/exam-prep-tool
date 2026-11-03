@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatPoints, penaltyText, pointsLabel } from "../lib/points";
+import { formatPoints, paperItemLabel, penaltyText, pointsLabel } from "../lib/points";
 import { answerText, keyText } from "../lib/question-types";
 import { practiceApi, type Attempt, type Confidence, type PaperScore, type PaperSession, type ResultQuestion } from "../lib/practice-api";
 import { FavoriteToggle, useFavorites } from "./favorite-toggle";
@@ -160,7 +160,7 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
       <div className="space-y-5">{visibleQuestions.map(({ question, number }) => {
         const correct = question.grading_status === "CORRECT";
         const header = <div className="space-y-2"><h4 className="text-lg font-semibold">{number}. <RichText text={question.stem} /></h4><QuestionUnits units={question.units} />
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"><p className={cn("text-sm", statusTone(question))}>{[question.label, statusLabel(question), itemPoints(question), question.confidence && confidenceNotes[question.confidence]].filter(Boolean).join(" · ")}</p>
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"><p className={cn("text-sm", statusTone(question))}>{[paperItemLabel(number, question.label), statusLabel(question), itemPoints(question), question.confidence && confidenceNotes[question.confidence]].filter(Boolean).join(" · ")}</p>
             <FavoriteToggle favorites={favorites} question={question} label={`Favorite question ${number}`} /></div></div>;
         return <article key={question.id} aria-label={`Question ${number} result`} className="min-w-0">
           {correct ? <div className="space-y-3 border-b border-line py-4">

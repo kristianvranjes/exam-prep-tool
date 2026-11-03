@@ -183,7 +183,7 @@ it("scores a past paper with negative marking, pending self-review and blanks", 
     { ...mistake, points: 2, label: "Zadatak 1", earned_points: -0.5 },
     { ...correct, points: 1, label: "Zadatak 2", earned_points: 1 },
     { ...short, points: 3, label: "Zadatak 3", earned_points: null },
-    { ...correct, id: "blank", position: 3, stem: "Left alone", answer: null, grading_status: "UNANSWERED", points: 0.5, label: null, earned_points: 0 },
+    { ...correct, id: "blank", position: 3, stem: "Left alone", answer: null, grading_status: "UNANSWERED", points: 0.5, label: "4", earned_points: 0 },
   ];
   render(<QuizResults attempt={{ ...submitted(questions), paper, score: { version: "paper-scoring-v1", earned: 0.5, max_points: 6.5, correct_points: 1, penalty_points: 0.5, pending_points: 3, unanswered_count: 1, passed: null } }}
     onPracticeAgain={vi.fn()} onBackToHistory={vi.fn()} />);

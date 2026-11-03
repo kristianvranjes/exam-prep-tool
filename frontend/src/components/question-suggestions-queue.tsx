@@ -16,6 +16,11 @@ function baseContent(question: OwnerQuestion): QuestionContent {
   return { ...common, type: question.type, reference_answer: question.reference_answer ?? "" };
 }
 
+/** Relative tolerance is stored as a share (0.025) but students propose it as a percentage, so moderators read it as one too. */
+function percentText(share: string) {
+  return `${Number((Number(share) * 100).toPrecision(12))} %`;
+}
+
 function contentFields(content: QuestionContent): [string, string][] {
   const fields: [string, string][] = [["Question text", content.stem], ["Difficulty", String(content.difficulty ?? "Not set")], ["Explanation", content.explanation ?? "Not set"]];
   if (content.type === "MULTIPLE_CHOICE") {
@@ -27,7 +32,7 @@ function contentFields(content: QuestionContent): [string, string][] {
   } else if (content.type === "NUMERIC") {
     fields.push(["Correct value", String(content.correct_value)]);
     fields.push(["Absolute tolerance", content.absolute_tolerance == null ? "None" : String(content.absolute_tolerance)]);
-    fields.push(["Relative tolerance", content.relative_tolerance == null ? "None" : String(content.relative_tolerance)]);
+    fields.push(["Relative tolerance", content.relative_tolerance == null ? "None" : percentText(content.relative_tolerance)]);
     fields.push(["Unit", content.unit ?? "None"]);
   } else if (content.type === "TRUE_FALSE") fields.push(["Correct answer", content.correct_answer ? "True" : "False"]);
   else fields.push(["Reference answer", content.reference_answer]);

@@ -151,6 +151,11 @@ it("lets a creator edit and submit without granting OWNER moderation", async () 
   expect(screen.getByText(/Material material1 · chunk 1/)).not.toBeVisible();
   fireEvent.click(screen.getByText("Source details"));
   expect(screen.getByText(/Material material1 · chunk 1/)).toBeVisible();
+  expect(screen.getByText("Source: AI-generated · Generation job job1")).toBeVisible();
+  // Review states are words in a semantic tone: a draft is neutral, never the raw enum.
+  const selectedCard = screen.getByRole("article", { name: "Selected question" });
+  expect(within(selectedCard).getByText("Draft")).toHaveClass("bg-subtle", "text-muted");
+  expect(selectedCard).not.toHaveTextContent("DRAFT");
   fireEvent.click(screen.getByRole("button", { name: "Edit question" }));
   fireEvent.change(screen.getByLabelText("Question text"), { target: { value: "Revised matrix question?" } });
   fireEvent.change(screen.getByLabelText("Option 2"), { target: { value: "Revised option" } });
@@ -160,10 +165,12 @@ it("lets a creator edit and submit without granting OWNER moderation", async () 
   fireEvent.click(await screen.findByRole("button", { name: "Submit for review" }));
   await waitFor(() => expect(screen.queryByRole("button", { name: "Submit for review" })).not.toBeInTheDocument());
   expect(screen.getByRole("article", { name: "Selected question" })).toHaveTextContent("Awaiting faculty review");
+  expect(within(screen.getByRole("article", { name: "Selected question" })).getByText("Awaiting faculty review")).toHaveClass("bg-pending-surface", "text-pending");
   expect(screen.queryByRole("button", { name: "Approve question" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Reject question" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "View versions" }));
-  expect(await screen.findByText(/Version 1/)).toBeInTheDocument();
+  expect(await screen.findByText(/^Version 1 · Created · /)).toBeInTheDocument();
+  expect(screen.queryByText(/CREATED/)).not.toBeInTheDocument();
   expect(mock.transitionQuestion.mock.calls.map(c => c[1])).toEqual(["submit"]);
 });
 
@@ -392,8 +399,11 @@ it("archives approved content as a moderator and retains version access", async 
   current.status = "APPROVED";
   await open();
   fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
-  fireEvent.click(await screen.findByRole("button", { name: "Archive question" }));
+  const archive = await screen.findByRole("button", { name: "Archive question" });
+  expect(within(screen.getByRole("article", { name: "Selected question" })).getByText("Approved")).toHaveClass("bg-success-surface", "text-success");
+  fireEvent.click(archive);
   await waitFor(() => expect(screen.queryByRole("button", { name: "Archive question" })).not.toBeInTheDocument());
+  expect(within(screen.getByRole("article", { name: "Selected question" })).getByText("Archived")).toHaveClass("bg-subtle", "text-muted");
   fireEvent.click(screen.getByRole("button", { name: "View versions" }));
   expect(await screen.findByText(/Version 1/)).toBeInTheDocument();
   expect(mock.transitionQuestion).toHaveBeenCalledWith("q1", "archive", undefined);

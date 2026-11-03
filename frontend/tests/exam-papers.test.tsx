@@ -109,6 +109,17 @@ it("locks the questions of a published paper and deletes only drafts after confi
   expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Unpublish" }));
   fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+  // The confirmation names the paper and only the confirm step is the solid danger button.
+  const deleteGroup = screen.getByRole("group", { name: "Delete this past exam" });
+  expect(within(deleteGroup).getByText("Delete Međuispit 2025/26 for good?")).toBeVisible();
+  expect(within(deleteGroup).getByRole("button", { name: "Confirm delete" })).toHaveClass("bg-danger", "text-danger-foreground");
+  expect(within(deleteGroup).queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+  fireEvent.click(within(deleteGroup).getByRole("button", { name: "Keep paper" }));
+  expect(within(deleteGroup).getByRole("button", { name: "Delete" })).toBeVisible();
+  expect(within(deleteGroup).queryByRole("button", { name: "Confirm delete" })).not.toBeInTheDocument();
+  expect(within(deleteGroup).queryByText(/for good\?/)).not.toBeInTheDocument();
+  expect(mock.deleteExamPaper).not.toHaveBeenCalled();
+  fireEvent.click(within(deleteGroup).getByRole("button", { name: "Delete" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
   await waitFor(() => expect(mock.deleteExamPaper).toHaveBeenCalledWith("p1"));
   expect(await screen.findByText("Deleted Međuispit 2025/26.")).toBeVisible();

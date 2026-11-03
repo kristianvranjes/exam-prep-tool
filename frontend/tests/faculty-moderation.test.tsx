@@ -514,6 +514,18 @@ describe("FacultyModeration suggestions", () => {
     expect(comparison).toHaveTextContent(type === "TRUE_FALSE" ? "True" : "Proposed reference");
   });
 
+  it("shows a proposed relative tolerance as the percentage the student entered", async () => {
+    const base = makeQuestion({ type: "NUMERIC", options: [], correct_value: "9.81", absolute_tolerance: null, relative_tolerance: null, unit: "m/s²" });
+    const proposed = { type: "NUMERIC" as const, stem: base.stem, explanation: base.explanation, difficulty: base.difficulty, correct_value: "9.81", absolute_tolerance: null, relative_tolerance: "0.025", unit: "m/s²" };
+    apiMock.questionSuggestions.mockResolvedValue([makeSuggestion({ base_snapshot: base, question: base, proposed_content: proposed })]);
+    await openSuggestions();
+    const comparison = within(suggestionCard()).getByRole("group", { name: "Relative tolerance comparison" });
+    expect(comparison).toHaveTextContent("Before · version 3None");
+    expect(comparison).toHaveTextContent("Proposed2.5 %");
+    expect(comparison).not.toHaveTextContent("0.025");
+    expect(comparison).toHaveTextContent("Changed");
+  });
+
   it("requires another moderator to review their own suggestion", async () => {
     apiMock.questionSuggestions.mockResolvedValue([makeSuggestion({ suggested_by_user_id: "user-1" })]);
     await openSuggestions();
