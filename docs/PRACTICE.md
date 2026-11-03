@@ -32,6 +32,7 @@ requests return 401. Payload ownership, status, timestamp and score fields are f
 | `GET /courses/{course_id}/attempts/{id}` | Saved ACTIVE attempt, frozen SUBMITTED result, or read-only ABANDONED history. |
 | `PATCH /courses/{course_id}/attempts/{id}/answers/{quiz_question_id}` | Upsert a typed answer while ACTIVE, return the saved attempt. |
 | `POST /courses/{course_id}/attempts/{id}/answers/{quiz_question_id}/check` | IMMEDIATE sessions only: grade and lock one saved answer, revealing only its key; optional `confidence`. See [immediate feedback](#immediate-feedback-in-guided-practice). |
+| `PATCH /courses/{course_id}/attempts/{id}/answers/{quiz_question_id}/self-review` | `{ "verdict": "CORRECT" \| "INCORRECT" \| null }`: record, change or clear the student's own verdict on a short answer whose reference answer is visible. Never a grade. See [short-answer self-assessment](#short-answer-self-assessment-r4). |
 | `POST /courses/{course_id}/attempts/{id}/submit` | Atomically freeze and grade all saved answers. Repeat returns the same result. |
 | `POST /courses/{course_id}/attempts/{id}/abandon` | Close an ACTIVE attempt without grading, preserve saved answers, and return read-only history. Repeat returns the same timestamp/state. |
 
@@ -120,6 +121,45 @@ applies review scheduling once for the whole session. Abandoning an IMMEDIATE
 session records no review progress, like any abandonment; its history keeps the
 feedback that was already shown. Confidence is stored and shown in results but does
 not change `leitner-v1` scheduling; it becomes a scheduling input with FSRS.
+
+## Short-answer self-assessment (R4)
+
+Short answers stay `grading_status: PENDING`; the student compares their answer with
+the reference answer and may record their own verdict: **I had it** or **I missed it**.
+Migration 0025 stores it on the answer as `self_review` (`CORRECT`/`INCORRECT`) with
+`self_reviewed_at`, apart from the grade.
+
+`PATCH .../answers/{quiz_question_id}/self-review` with `{"verdict": "CORRECT"}`,
+`{"verdict": "INCORRECT"}` or `{"verdict": null}` (clear) returns the attempt:
+
+- Only the attempt's owner; other users, unknown questions and other attempts' questions
+  return 404, unauthenticated requests 401, and an invalid body 422.
+- Only SHORT_ANSWER questions with a saved answer, and only while the reference answer is
+  visible: checked in an IMMEDIATE session, or after submission. An unchecked or END
+  ACTIVE answer, an objective question, a blank paper item and an ABANDONED attempt
+  return 409. A timed session's deadline does not block it, since the answer itself
+  does not change.
+- Idempotent: repeating the same verdict changes nothing, including `self_reviewed_at`;
+  a different verdict replaces it. The answer's `updated_at` is never touched.
+
+It never changes deterministic grading or anything derived from it: `grading_status`,
+grading provenance, a submitted attempt's frozen result and paper `score`, review
+progress and scheduling, readiness, and item analysis all ignore it. The database
+refuses a self-assessment on an answer that is not pending semantic review, and a 0025
+downgrade refuses while self-assessments exist.
+
+Responses show it separately and labelled as self-assessed:
+
+- `feedback.self_review` on a checked short answer, and `self_review` on each result
+  question;
+- submitted results add `self_review: {correct, incorrect, unreviewed}` counting the
+  pending short answers; paper sessions also report `correct_points` (self-assessed
+  correct) and `unreviewed_points`. Self-assessed points are never added to
+  `score.earned`, and a self-assessed miss carries no penalty.
+
+The results screen reads "Short answers 2 · 1 self-assessed correct · 1 to self-review",
+and a paper adds "Objective score X of Y · self-assessed +Z of W points". Rubric items
+(R4 package 4) and AI assessment (R9) will build on this field later.
 
 ## Keyboard shortcuts and continuing a session
 

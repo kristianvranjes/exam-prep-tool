@@ -204,7 +204,7 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
         </details>
       </>}
       {visibleAttempt?.status === "ACTIVE" && <ActiveQuiz key={visibleAttempt.id} attempt={visibleAttempt} experience={experience} setExperience={setExperience} update={updateAttempt} back={back} onDirtyChange={onAnswerDirtyChange} />}
-      {visibleAttempt?.status === "SUBMITTED" && <QuizResults key={visibleAttempt.id} attempt={visibleAttempt} busy={busy}
+      {visibleAttempt?.status === "SUBMITTED" && <QuizResults key={visibleAttempt.id} attempt={visibleAttempt} busy={busy} onUpdate={updateAttempt}
         onPracticeAgain={() => void run(async () => { await back(); setHistoryOpen(false); heading.current?.focus(); })}
         onViewProgress={onOpenProgress} onBackToCourse={onBackToCourse} onBackToHistory={() => void run(back)} />}
       {visibleAttempt?.status === "ABANDONED" && <><Button variant="secondary" className="self-start" disabled={busy} onClick={() => void run(back)}>Back to practice history</Button><AbandonedQuiz attempt={visibleAttempt} /></>}

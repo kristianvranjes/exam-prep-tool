@@ -94,6 +94,21 @@ checked grades and grades the rest; review progress still updates once, at
 submission. Submitted results include `confidence`; ABANDONED history keeps showing
 feedback for questions that were checked.
 
+## Short-answer self-assessment
+
+`PATCH /courses/{course_id}/attempts/{attempt_id}/answers/{quiz_question_id}/self-review`
+with `{"verdict": "CORRECT" | "INCORRECT" | null}` records, changes or clears (null) the
+owner's verdict on a SHORT_ANSWER whose reference answer is visible (checked in an
+IMMEDIATE attempt, or the attempt is SUBMITTED) and returns the attempt. Repeats are
+idempotent. Other users' attempts and unknown questions return 404; objective questions,
+missing answers, unchecked or END ACTIVE answers and ABANDONED attempts return 409.
+
+The verdict appears as `feedback.self_review` and as `self_review` on result questions.
+Submitted attempts add `self_review: {correct, incorrect, unreviewed, correct_points,
+unreviewed_points}` (points only for paper sessions). It is never a grade:
+`grading_status`, `score`, review progress, readiness and item analysis ignore it. See
+[practice](PRACTICE.md#short-answer-self-assessment-r4).
+
 ## Abandoning unfinished practice
 
 `POST /courses/{course_id}/attempts/{attempt_id}/abandon` closes the caller's

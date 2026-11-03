@@ -90,7 +90,9 @@ frozen points, grades and rule whenever the result is read:
   as wrong; there is no partial credit;
 - a blank earns 0;
 - a short answer awaiting self-review earns nothing yet and is reported as
-  `pending_points`, never guessed into the total;
+  `pending_points`, never guessed into the total; the student's
+  [self-assessment](PRACTICE.md#short-answer-self-assessment-r4) is reported beside it
+  as `self_review.correct_points` and never changes `earned` or `passed`;
 - `passed` is true or false once decided and null without a threshold, or while
   pending points could still change the outcome.
 

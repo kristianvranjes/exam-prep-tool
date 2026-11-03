@@ -133,6 +133,8 @@ AnswerPayload = Annotated[
     Field(discriminator="type"),
 ]
 Grade = Literal["PENDING", "CORRECT", "INCORRECT"]
+# A student's own verdict on a short answer; never a grade. See docs/PRACTICE.md.
+SelfReview = Literal["CORRECT", "INCORRECT"]
 # Results also mark questions left blank in a paper session.
 ResultGrade = Literal["PENDING", "CORRECT", "INCORRECT", "UNANSWERED"]
 
@@ -172,6 +174,23 @@ class CheckAnswer(StrictModel):
     confidence: Confidence | None = None
 
 
+class SelfReviewRequest(StrictModel):
+    # Null clears an earlier self-assessment.
+    verdict: SelfReview | None
+
+
+class SelfReviewSummary(BaseModel):
+    """Self-assessment of the short answers awaiting review; reported apart from grades."""
+
+    correct: int
+    incorrect: int
+    unreviewed: int
+    # Paper sessions only: points of items self-assessed as correct, and of items not yet
+    # self-assessed. Never added to the objective score.
+    correct_points: float | None = None
+    unreviewed_points: float | None = None
+
+
 class AttemptSummary(BaseModel):
     id: UUID
     course_id: UUID
@@ -202,6 +221,8 @@ class QuestionFeedback(BaseModel):
     reference_answer: str | None
     grading_status: Grade
     confidence: Confidence | None = None
+    # SHORT_ANSWER only: the student's self-assessment, separate from grading_status.
+    self_review: SelfReview | None = None
     # NUMERIC keys; null for other types.
     correct_value: Decimal | None = None
     absolute_tolerance: Decimal | None = None
@@ -239,6 +260,7 @@ class ResultQuestion(ActiveQuestion):
     reference_answer: str | None
     grading_status: ResultGrade
     confidence: Confidence | None = None
+    self_review: SelfReview | None = None
     correct_value: Decimal | None = None
     absolute_tolerance: Decimal | None = None
     relative_tolerance: Decimal | None = None
@@ -255,6 +277,7 @@ class SubmittedAttempt(AttemptSummary):
     status: Literal["SUBMITTED"] = "SUBMITTED"
     questions: list[ResultQuestion]
     score: PaperScore | None = None
+    self_review: SelfReviewSummary | None = None
 
 
 class AbandonedAttempt(AttemptSummary):

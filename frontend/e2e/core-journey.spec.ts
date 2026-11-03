@@ -237,7 +237,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(result.getByText("Correct · marked as sure", { exact: true })).toBeVisible();
     const results = student.getByRole("region", { name: "Practice results" });
     await expect(results.getByRole("heading", { name: "Practice complete" })).toBeFocused();
-    await expect(results.getByLabel("Results summary")).toContainText("Correct1Incorrect0Self-review required0");
+    await expect(results.getByLabel("Results summary")).toContainText("Correct1Incorrect0Short answers0");
     await expect(results.getByRole("button", { name: "Practice again" })).toHaveClass(primaryFill);
     await expect(results.getByRole("button", { name: "All answers" })).toHaveAttribute("aria-pressed", "true");
     await expect(results.getByRole("button", { name: "Mistakes", exact: true })).toBeDisabled();
@@ -326,7 +326,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     }
     await student.getByRole("button", { name: "Finish practice", exact: true }).click();
     await student.getByRole("button", { name: "Confirm final submission" }).click();
-    await expect(results.getByLabel("Results summary")).toContainText("Correct0Incorrect1Self-review required1");
+    await expect(results.getByLabel("Results summary")).toContainText("Correct0Incorrect1Short answers11 to self-review");
     for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
       await student.setViewportSize(viewport);
       const reviewMistakes = results.getByRole("button", { name: "Review mistakes", exact: true });
@@ -350,6 +350,11 @@ test("moderator and student complete the core exam-preparation journey", async (
       await results.getByRole("button", { name: "All answers", exact: true }).click();
       await expect(results.getByRole("article")).toHaveCount(2);
     }
+    // Self-assessment is saved apart from the grade: the item stays ungraded and the counts say so.
+    const hadIt = results.getByRole("article").filter({ hasText: "Reference answer" }).getByRole("button", { name: "I had it", exact: true });
+    await hadIt.click();
+    await expect(hadIt).toHaveAttribute("aria-pressed", "true");
+    await expect(results.getByLabel("Results summary")).toContainText("Correct0Incorrect1Short answers11 self-assessed correct");
     await results.getByRole("button", { name: "Practice again", exact: true }).click();
     await expect(results).toHaveCount(0);
     await expect(student.getByRole("form", { name: "Practice setup" })).toBeVisible();
@@ -361,6 +366,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(historyResults).toHaveCount(2);
     await historyResults.first().click();
     await expect(results.getByRole("button", { name: "Mistakes", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(results.getByLabel("Results summary")).toContainText("1 self-assessed correct");
     await results.getByRole("button", { name: "Back to course" }).click();
     await expect(student.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
     await studentNavigation.getByRole("button", { name: "Practice", exact: true }).click();

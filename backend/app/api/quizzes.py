@@ -13,6 +13,7 @@ from app.schemas.quiz import (
     CheckAnswer,
     PracticeAvailability,
     PracticeFilters,
+    SelfReviewRequest,
     StartQuiz,
 )
 from app.services import quizzes
@@ -98,6 +99,18 @@ def check(
     db: Session = Depends(get_db),
 ) -> AttemptResponse:
     return quizzes.check_answer(db, user, course_id, attempt_id, question_id, data)
+
+
+@router.patch("/{attempt_id}/answers/{question_id}/self-review", response_model=AttemptResponse)
+def self_review(
+    course_id: UUID,
+    attempt_id: UUID,
+    question_id: UUID,
+    data: SelfReviewRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AttemptResponse:
+    return quizzes.self_review_answer(db, user, course_id, attempt_id, question_id, data)
 
 
 @router.post("/{attempt_id}/submit", response_model=AttemptResponse)

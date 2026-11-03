@@ -6,6 +6,8 @@ export type SelectionMode = "STANDARD" | "ADAPTIVE" | "MISTAKES" | "DUE" | "FAVO
 export type FeedbackMode = "END" | "IMMEDIATE";
 export type Confidence = "SURE" | "UNSURE" | "GUESS";
 export type Grade = "PENDING" | "CORRECT" | "INCORRECT";
+/** The student's own verdict on a short answer. Never a grade: scores, progress and the review schedule ignore it. */
+export type SelfReview = "CORRECT" | "INCORRECT";
 
 export type PracticeAnswer =
   | { type: "MULTIPLE_CHOICE"; option_position: number }
@@ -32,6 +34,12 @@ export type PaperScore = {
   version: string; earned: number; max_points: number; correct_points: number; penalty_points: number;
   pending_points: number; unanswered_count: number; passed: boolean | null;
 };
+/** Self-assessment of the short answers awaiting review, reported apart from grades and score. */
+export type SelfReviewSummary = {
+  correct: number; incorrect: number; unreviewed: number;
+  /** Paper sessions only: points self-assessed as correct, and points not yet self-assessed. */
+  correct_points?: number | null; unreviewed_points?: number | null;
+};
 /** Optional practice focus: selected units or one exam scope. */
 export type PracticeFocus = { unit_ids: string[] } | { exam_scope_id: string };
 /** A course unit the source question belongs to now; read live, not frozen with the attempt. */
@@ -41,6 +49,8 @@ export type ResultOption = { position: number; text: string; is_correct: boolean
 export type QuestionFeedback = {
   options: ResultOption[]; explanation: string | null; correct_boolean: boolean | null;
   reference_answer: string | null; grading_status: Grade; confidence?: Confidence | null;
+  /** SHORT_ANSWER only: your self-assessment, kept apart from `grading_status`. */
+  self_review?: SelfReview | null;
   /** NUMERIC keys as exact decimal strings. */
   correct_value?: string | null; absolute_tolerance?: string | null; relative_tolerance?: string | null;
 };
@@ -62,13 +72,14 @@ export type ResultQuestion = Omit<ActiveQuestion, "options"> & {
   explanation: string | null; correct_boolean: boolean | null; reference_answer: string | null;
   /** UNANSWERED marks a question left blank in a paper session. */
   grading_status: Grade | "UNANSWERED"; confidence?: Confidence | null;
+  self_review?: SelfReview | null;
   correct_value?: string | null; absolute_tolerance?: string | null; relative_tolerance?: string | null;
   /** Paper sessions only; null while a short answer awaits self-review. */
   earned_points?: number | null;
 };
 export type Attempt = AttemptSummary & (
   | { status: "ACTIVE"; questions: ActiveQuestion[] }
-  | { status: "SUBMITTED"; questions: ResultQuestion[]; score?: PaperScore | null }
+  | { status: "SUBMITTED"; questions: ResultQuestion[]; score?: PaperScore | null; self_review?: SelfReviewSummary | null }
   | { status: "ABANDONED"; abandoned_at: string; questions: ActiveQuestion[] }
 );
 /** Advisory counts from the same rules the server uses to start a session. */
@@ -101,6 +112,8 @@ export const practiceApi = {
   read: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}`),
   save: (course: string, id: string, question: string, answer: PracticeAnswer) => request<Attempt>(`${path(course)}/${id}/answers/${question}`, { method: "PATCH", body: JSON.stringify(answer) }),
   check: (course: string, id: string, question: string, confidence: Confidence | null) => request<Attempt>(`${path(course)}/${id}/answers/${question}/check`, { method: "POST", body: JSON.stringify(confidence ? { confidence } : {}) }),
+  /** Record, change or clear (null) your verdict on a short answer whose reference answer you can see. */
+  selfReview: (course: string, id: string, question: string, verdict: SelfReview | null) => request<Attempt>(`${path(course)}/${id}/answers/${question}/self-review`, { method: "PATCH", body: JSON.stringify({ verdict }) }),
   clear: (course: string, id: string, question: string) => request<Attempt>(`${path(course)}/${id}/answers/${question}`, { method: "DELETE" }),
   /** One-click review: a guided session with up to 20 questions due now, earliest due first. */
   reviewDue: async (course: string): Promise<Attempt> => {
