@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from pydantic import TypeAdapter
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.models import User
@@ -34,6 +34,9 @@ from app.schemas.quiz import (
     QuestionFeedback,
     QuestionUnitLabel,
     ResultQuestion,
+    SelfReview,
+    SelfReviewRequest,
+    SelfReviewSummary,
     StartPaper,
     StartQuiz,
     SubmittedAttempt,
@@ -152,6 +155,7 @@ def feedback(content: OwnerQuestion, answer: Answer | None) -> QuestionFeedback:
         relative_tolerance=content.relative_tolerance,
         grading_status=cast(Grade, answer.grading_status) if answer else "PENDING",
         confidence=cast(Confidence | None, answer.confidence) if answer else None,
+        self_review=cast(SelfReview | None, answer.self_review) if answer else None,
     )
 
 
@@ -170,6 +174,7 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
     active: list[ActiveQuestion] = []
     results: list[ResultQuestion] = []
     items: list[ItemResult] = []
+    reviews = SelfReviewTally()
     for row in rows:
         content = OwnerQuestion.model_validate(row.snapshot)
         answer = answers.get(row.id)
@@ -202,6 +207,8 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
                 result.earned_points = None if earned is None else float(earned)
                 if answer is None:
                     result.grading_status = "UNANSWERED"
+            if answer is not None and result.grading_status == "PENDING":
+                reviews.add(answer.self_review, row.points)
             results.append(result)
             continue
         # The student already saw a checked key, so abandoned history keeps showing it.
@@ -210,11 +217,40 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
         active.append(public)
     fields = summary(attempt, quiz).model_dump(exclude={"status"})
     if attempt.status == "SUBMITTED":
-        return SubmittedAttempt(**fields, questions=results, score=paper_score(quiz, items))
+        return SubmittedAttempt(
+            **fields,
+            questions=results,
+            score=paper_score(quiz, items),
+            self_review=reviews.summary(paper=quiz.scoring is not None),
+        )
     if attempt.status == "ABANDONED":
         assert attempt.abandoned_at is not None
         return AbandonedAttempt(**fields, abandoned_at=attempt.abandoned_at, questions=active)
     return ActiveAttempt(**fields, questions=active)
+
+
+class SelfReviewTally:
+    """Counts self-assessments of pending short answers; kept apart from the score."""
+
+    def __init__(self) -> None:
+        self.counts = {"CORRECT": 0, "INCORRECT": 0, None: 0}
+        self.correct_points = self.unreviewed_points = Decimal(0)
+
+    def add(self, verdict: str | None, points: Decimal | None) -> None:
+        self.counts[verdict] += 1
+        if verdict == "CORRECT":
+            self.correct_points += points or 0
+        elif verdict is None:
+            self.unreviewed_points += points or 0
+
+    def summary(self, paper: bool) -> SelfReviewSummary:
+        return SelfReviewSummary(
+            correct=self.counts["CORRECT"],
+            incorrect=self.counts["INCORRECT"],
+            unreviewed=self.counts[None],
+            correct_points=float(self.correct_points) if paper else None,
+            unreviewed_points=float(self.unreviewed_points) if paper else None,
+        )
 
 
 def paper_score(quiz: Quiz, items: list[ItemResult]) -> PaperScore | None:
@@ -551,6 +587,54 @@ def check_answer(
             answer.checked_at = datetime.now(UTC)
             answer.confidence = data.confidence
             db.flush()
+        response = representation(db, attempt, course_id)
+        db.commit()
+        return response
+    except Exception:
+        db.rollback()
+        raise
+
+
+def self_review_answer(
+    db: Session,
+    user: User,
+    course_id: UUID,
+    attempt_id: UUID,
+    question_id: UUID,
+    data: SelfReviewRequest,
+) -> AttemptResponse:
+    """Record or clear the student's verdict on a short answer whose reference they can see.
+
+    Stored apart from the grade: grading_status, the frozen paper score, review progress,
+    readiness and item analysis never read it.
+    """
+    attempt = load_attempt(db, user, course_id, attempt_id)
+    if attempt.status == "ABANDONED":
+        raise HTTPException(409, "Quiz abandoned; answers are frozen")
+    question = attempt_question(db, attempt, question_id)
+    if OwnerQuestion.model_validate(question.snapshot).type != "SHORT_ANSWER":
+        raise HTTPException(409, "Only short answers are self-assessed; this one is graded")
+    try:
+        answer = saved_answer(db, attempt, question)
+        if answer is None:
+            raise HTTPException(409, "There is no saved answer to assess")
+        # The reference answer is visible only once checked, or after submission.
+        if attempt.status == "ACTIVE" and answer.checked_at is None:
+            raise HTTPException(409, "Check this answer before assessing it")
+        if answer.grading_method != "PENDING_SEMANTIC":
+            raise HTTPException(409, "Only short answers awaiting review are self-assessed")
+        if answer.self_review != data.verdict:
+            # Explicit columns only: updated_at keeps dating the answer itself.
+            db.execute(
+                update(Answer)
+                .where(Answer.id == answer.id)
+                .values(
+                    self_review=data.verdict,
+                    self_reviewed_at=None if data.verdict is None else datetime.now(UTC),
+                    updated_at=Answer.updated_at,
+                )
+            )
+            db.expire(answer)
         response = representation(db, attempt, course_id)
         db.commit()
         return response

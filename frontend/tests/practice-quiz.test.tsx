@@ -4,7 +4,7 @@ import { PracticeQuiz } from "../src/components/practice-quiz";
 import type { QuestionType } from "../src/lib/api";
 import type { Attempt, PracticeAnswer, PracticeAvailability, PracticeFocus } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), check: vi.fn(), clear: vi.fn(), submit: vi.fn(), availability: vi.fn(), units: vi.fn(), examScopes: vi.fn() }));
+const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), check: vi.fn(), selfReview: vi.fn(), clear: vi.fn(), submit: vi.fn(), availability: vi.fn(), units: vi.fn(), examScopes: vi.fn() }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 let current: Attempt;
@@ -185,13 +185,35 @@ it.each(["  MASS\n attracts  mass  ", "  My different\n explanation  "])("review
   expect(within(result).getByText("Mass attracts mass", { exact: true })).toBeInTheDocument();
   expect(within(result).getByText("Self-review required")).toBeInTheDocument();
   expect(within(result).getByText("Short answers are not graded automatically. Compare your answer with the reference answer.")).toBeInTheDocument();
-  expect(within(result).queryByRole("button")).not.toBeInTheDocument();
+  // The only actions on a frozen short answer are the student's own self-assessment.
+  expect(within(result).getAllByRole("button").map(button => button.textContent)).toEqual(["I had it", "I missed it"]);
   expect(within(result).queryByText(/moderator|semantic|AI grading|mark (correct|incorrect)/i)).not.toBeInTheDocument();
-  expect(screen.getByLabelText("Results summary")).toHaveTextContent("Self-review required1");
+  expect(screen.getByLabelText("Results summary")).toHaveTextContent("Short answers11 to self-review");
   expect(screen.getByLabelText("Results summary")).not.toHaveTextContent("Pending");
   expect(screen.queryByText(/score|%/i)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Save answer" })).not.toBeInTheDocument();
   expect(mock.submit).not.toHaveBeenCalled();
+});
+
+it("saves a short-answer self-assessment from results and keeps the grade pending", async () => {
+  const submitted = await mock.submit(); mock.submit.mockClear();
+  mock.history.mockResolvedValue([submitted]);
+  mock.selfReview.mockImplementation(async (_course, _id, question, verdict) => {
+    current = { ...current, questions: current.questions.map(q => q.id === question ? { ...q, self_review: verdict } : q) } as Attempt;
+    return structuredClone(current);
+  });
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByText("Practice history"));
+  fireEvent.click(await screen.findByRole("button", { name: /Review practice/ }));
+  await screen.findByText("Practice complete");
+  fireEvent.click(screen.getByRole("button", { name: "Self-review" }));
+  const result = screen.getByRole("article", { name: "Question 3 result" });
+  fireEvent.click(within(result).getByRole("button", { name: "I missed it" }));
+  await waitFor(() => expect(within(result).getByRole("button", { name: "I missed it" })).toHaveAttribute("aria-pressed", "true"));
+  expect(mock.selfReview).toHaveBeenCalledWith("course", "attempt", "sa", "INCORRECT");
+  expect(within(result).getByText("Self-assessed incorrect")).toBeVisible();
+  expect(screen.getByLabelText("Results summary")).toHaveTextContent("Incorrect0Short answers11 self-assessed incorrect");
+  expect(within(result).getByRole("status")).toHaveTextContent("Saved as self-assessed incorrect.");
 });
 
 it("returns submitted history to setup with preferences intact, keeping results on failure and preventing duplicate requests", async () => {
@@ -409,12 +431,12 @@ it("preserves answers on submit failure, retries, and derives result counts from
   fireEvent.click(await screen.findByRole("button", { name: "Confirm final submission" }));
   await screen.findByText("Practice complete");
   const summary = screen.getByLabelText("Results summary");
-  expect(summary).toHaveTextContent("Correct1Incorrect1Self-review required1");
+  expect(summary).toHaveTextContent("Correct1Incorrect1Short answers11 to self-review");
   fireEvent.click(screen.getByRole("button", { name: "All answers" }));
   const results = screen.getByRole("region", { name: "Practice results" });
   expect(results).toHaveTextContent("Correct1");
   expect(results).toHaveTextContent("Incorrect1");
-  expect(results).toHaveTextContent("Self-review required1");
+  expect(results).toHaveTextContent("Short answers1");
   expect(within(screen.getByRole("article", { name: "Question 1 result" })).getByText("Incorrect")).toBeInTheDocument();
   expect(within(screen.getByRole("article", { name: "Question 2 result" })).getByText("Correct")).toBeInTheDocument();
   expect(within(screen.getByRole("article", { name: "Question 3 result" })).getByText("Self-review required")).toBeInTheDocument();

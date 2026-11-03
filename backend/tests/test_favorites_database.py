@@ -270,7 +270,7 @@ def test_0023_roundtrip_drops_only_favorites(clients):
             assert history() == before
             command.upgrade(config, "head")
             with engine.connect() as conn:
-                assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0024"
+                assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0025"
             assert history() == before
             # No backfill: the favorite is gone, the session is not.
             assert favorites(member, course) == []

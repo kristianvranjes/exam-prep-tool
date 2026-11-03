@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Flag } from "lucide-react";
 import { penaltyText, pointsLabel } from "../lib/points";
 import { numberProblem } from "../lib/question-types";
-import { practiceApi, type Attempt, type Confidence, type PracticeAnswer } from "../lib/practice-api";
+import { practiceApi, type Attempt, type Confidence, type PracticeAnswer, type SelfReview } from "../lib/practice-api";
 import { Alert, Button } from "./ui";
 import { QuizAnswerEditor } from "./quiz-answer-editor";
 import { ExamTimer } from "./exam-timer";
@@ -122,6 +122,10 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
       update(checked);
       if (checked.status === "ACTIVE") setAnswer(checked.questions[index].answer);
     });
+  }
+  // Saved on its own like a favorite, so it never waits for or blocks an answer save.
+  async function selfReview(verdict: SelfReview | null) {
+    update(await practiceApi.selfReview(attempt.course_id, attempt.id, question.id, verdict));
   }
   // At the deadline the server freezes answers, so hand in what was saved.
   function handInAtDeadline() {
@@ -269,7 +273,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
         <QuestionUnits units={question.units} />
         <QuizAnswerEditor question={question} answer={answer} change={changeAnswer} disabled={busy} feedback={feedback} shortcuts />
         {immediate && !feedback && <ConfidencePicker name={question.id} value={confidence} onChange={setConfidence} disabled={busy} />}
-        <div aria-live="polite">{feedback && <CheckedFeedback question={question} feedback={feedback} headingRef={feedbackHeading} />}</div>
+        <div aria-live="polite">{feedback && <CheckedFeedback question={question} feedback={feedback} headingRef={feedbackHeading} onSelfReview={selfReview} />}</div>
         <div className="flex flex-col gap-3">
           {!valid && <p id="answer-help" className="text-sm text-muted">{paper ? "Answer, or skip and leave this question blank." : question.type === "SHORT_ANSWER" || question.type === "NUMERIC" ? "Enter your answer to continue." : "Choose an answer to continue."}</p>}
           <div className="flex flex-wrap justify-between gap-3">

@@ -181,13 +181,14 @@ experience as a newly finished session; abandoned entries open read-only saved-a
 
 ### Submitted Results / Review
 
-**Practice complete** shows compact Correct / Incorrect / Self-review required
-counts from the frozen grading statuses, without percentages. Client-side review
+**Practice complete** shows compact Correct / Incorrect / Short answers counts from
+the frozen grading statuses, without percentages; under Short answers a note such as
+"1 self-assessed correct · 1 to self-review" tracks self-assessment. Client-side review
 defaults to Mistakes when incorrect answers exist, otherwise Self-review when
 PENDING answers exist, otherwise All answers. Empty categories are disabled.
 
-The primary action is **Review mistakes**, **Review short answers**, or **Practice
-again**, respectively. Review actions select and focus the relevant review heading;
+The primary action is **Review mistakes**, **Review short answers** (while any short
+answer is not yet self-assessed), or **Practice again**, respectively. Review actions select and focus the relevant review heading;
 filter buttons retain keyboard focus and expose `aria-pressed` state. Mistakes show
 question text, Your answer, Correct answer and any existing Explanation together.
 Correct answers have quieter headers and native answer disclosures under All answers.
@@ -196,7 +197,14 @@ True/false answers display readable True / False labels. Missing explanations ar
 SHORT_ANSWER remains **Self-review required**, with the original submitted text,
 Reference answer and comparison guidance. Even exact text equality is not graded;
 PENDING is never counted as incorrect. These answers do not affect Progress or scheduling.
-There is no student self-score, AI grading or generated explanation.
+The student can record a self-assessment with **I had it** / **I missed it**
+(`aria-pressed` toggles in success/danger tones with icons; pressing the chosen one again
+clears it), saved on its own with an inline Saving / Saved / error line. The same
+control follows the reference answer in guided practice's checked feedback. The item
+then reads "Self-assessed correct" or "Self-assessed incorrect", never Correct or
+Incorrect; on a paper its points read "+3 of 3 points, not in the objective score" and
+the score adds "Objective score X of Y · self-assessed +Z of W points". There is no AI
+grading or generated explanation.
 
 Each result has a **Favorite question N** star toggle (`aria-pressed`); the active
 question has the same

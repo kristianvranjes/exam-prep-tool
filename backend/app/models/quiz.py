@@ -111,6 +111,18 @@ class Answer(Base):
         CheckConstraint(
             "checked_at IS NULL OR grading_method IS NOT NULL", name="ck_answer_checked_graded"
         ),
+        CheckConstraint(
+            "self_review IS NULL OR self_review IN ('CORRECT','INCORRECT')",
+            name="ck_answer_self_review",
+        ),
+        CheckConstraint(
+            "(self_review IS NULL) = (self_reviewed_at IS NULL)",
+            name="ck_answer_self_review_time",
+        ),
+        CheckConstraint(
+            "self_review IS NULL OR grading_method = 'PENDING_SEMANTIC'",
+            name="ck_answer_self_review_pending",
+        ),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     attempt_id: Mapped[UUID] = mapped_column(ForeignKey("quiz_attempts.id", ondelete="CASCADE"))
@@ -124,6 +136,10 @@ class Answer(Base):
     # Set once an IMMEDIATE answer is checked; the answer and its grade are then final.
     checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     confidence: Mapped[str | None] = mapped_column(String(10))
+    # The student's own verdict on a short answer awaiting review. Never a grade: it does
+    # not change grading_status, scores, scheduling, readiness or item analysis.
+    self_review: Mapped[str | None] = mapped_column(String(10))
+    self_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

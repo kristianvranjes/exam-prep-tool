@@ -1,7 +1,12 @@
+import { useState } from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import { QuizResults } from "../src/components/quiz-results";
-import type { Attempt, ResultQuestion } from "../src/lib/practice-api";
+import type { Attempt, ResultQuestion, SelfReview } from "../src/lib/practice-api";
+
+const api = vi.hoisted(() => ({ selfReview: vi.fn() }));
+vi.mock("../src/lib/practice-api", () => ({ practiceApi: api }));
+beforeEach(() => { vi.resetAllMocks(); });
 
 const mistake: ResultQuestion = {
   id: "private-question-id", position: 0, type: "MULTIPLE_CHOICE", stem: "Choose a number", difficulty: null,
@@ -31,7 +36,7 @@ function answerText(article: HTMLElement, label: string) { return within(article
 it("counts frozen statuses separately and defaults to mistakes without exposing IDs or scores", () => {
   open();
   expect(screen.getByRole("heading", { name: "Practice complete" })).toHaveFocus();
-  expect(screen.getByLabelText("Results summary")).toHaveTextContent("Correct1Incorrect1Self-review required1");
+  expect(screen.getByLabelText("Results summary")).toHaveTextContent("Correct1Incorrect1Short answers11 to self-review");
   expect(screen.getByRole("button", { name: "Mistakes" })).toHaveAttribute("aria-pressed", "true");
   expect(screen.getAllByRole("article")).toHaveLength(1);
   const result = screen.getByRole("article", { name: "Question 1 result" });
@@ -57,7 +62,7 @@ it("defaults to self-review without mistakes and preserves short-answer whitespa
   const actions = open([correct, short]);
   expect(screen.getByRole("button", { name: "Self-review" })).toHaveAttribute("aria-pressed", "true");
   expect(screen.getByRole("button", { name: "Mistakes" })).toBeDisabled();
-  expect(screen.getByLabelText("Results summary")).toHaveTextContent("Incorrect0Self-review required1");
+  expect(screen.getByLabelText("Results summary")).toHaveTextContent("Incorrect0Short answers11 to self-review");
   const result = screen.getByRole("article", { name: "Question 2 result" });
   expect(answerText(result, "Your answer")?.textContent).toBe("  Mass\n attracts  mass  ");
   expect(answerText(result, "Your answer")).toHaveClass("whitespace-pre-wrap");
@@ -199,4 +204,96 @@ it("states a decided pass mark", () => {
     onPracticeAgain={vi.fn()} onBackToHistory={vi.fn()} />);
   expect(screen.getByText("Passed · the pass mark is 1 point")).toHaveClass("text-success");
   expect(screen.queryByText(/Wrong answers \(/)).not.toBeInTheDocument();
+});
+
+type Submitted = Extract<Attempt, { status: "SUBMITTED" }>;
+/** Results whose parent adopts the attempt the self-review request returns. */
+function Live({ initial }: { initial: Submitted }) {
+  const [attempt, setAttempt] = useState(initial);
+  return <QuizResults attempt={attempt} onUpdate={next => setAttempt(next as Submitted)} onPracticeAgain={vi.fn()} onBackToHistory={vi.fn()} />;
+}
+function serveSelfReview(attempt: Submitted) {
+  api.selfReview.mockImplementation(async (_course: string, _id: string, question: string, verdict: SelfReview | null) => {
+    attempt = { ...attempt, questions: attempt.questions.map(q => q.id === question ? { ...q, self_review: verdict } : q) };
+    return structuredClone(attempt);
+  });
+}
+
+it("records a changeable self-assessment without turning it into a grade", async () => {
+  const attempt = submitted([correct, short]);
+  serveSelfReview(attempt);
+  render(<Live initial={attempt} />);
+  const result = screen.getByRole("article", { name: "Question 2 result" });
+  const group = within(result).getByRole("group", { name: "Did your answer match the reference answer?" });
+  const hadIt = within(group).getByRole("button", { name: "I had it" });
+  const missedIt = within(group).getByRole("button", { name: "I missed it" });
+  expect(group).toHaveAccessibleDescription(/not a grade/);
+  for (const button of [hadIt, missedIt]) {
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    expect(button).toHaveClass("min-h-11");
+    expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+  }
+  expect(hadIt).toHaveClass("aria-pressed:bg-success-surface");
+  expect(hadIt).not.toHaveClass("aria-pressed:bg-accent-surface");
+  expect(missedIt).toHaveClass("aria-pressed:bg-danger-surface");
+  expect(screen.getByRole("button", { name: "Review short answers" })).toBeInTheDocument();
+
+  fireEvent.click(hadIt);
+  expect(within(result).getByRole("status")).toHaveTextContent("Saving…");
+  await waitFor(() => expect(hadIt).toHaveAttribute("aria-pressed", "true"));
+  expect(api.selfReview).toHaveBeenCalledWith("course", "submitted", "short-answer", "CORRECT");
+  expect(within(result).getByRole("status")).toHaveTextContent("Saved as self-assessed correct.");
+  expect(within(result).getByText("Self-assessed correct")).toHaveClass("text-success");
+  const summary = screen.getByLabelText("Results summary");
+  expect(summary).toHaveTextContent("Correct1Incorrect0Short answers11 self-assessed correct");
+  expect(summary).not.toHaveTextContent("to self-review");
+  // Nothing is left to review, so practising again becomes the next step.
+  expect(screen.getByRole("button", { name: "Practice again" })).toHaveClass("bg-accent");
+  expect(screen.queryByText("All automatically graded answers were correct.")).not.toBeInTheDocument();
+
+  fireEvent.click(missedIt);
+  await waitFor(() => expect(missedIt).toHaveAttribute("aria-pressed", "true"));
+  expect(hadIt).toHaveAttribute("aria-pressed", "false");
+  expect(summary).toHaveTextContent("Short answers11 self-assessed incorrect");
+  // Pressing the chosen answer again clears it.
+  fireEvent.click(missedIt);
+  await waitFor(() => expect(missedIt).toHaveAttribute("aria-pressed", "false"));
+  expect(api.selfReview).toHaveBeenLastCalledWith("course", "submitted", "short-answer", null);
+  expect(within(result).getByRole("status")).toHaveTextContent("Self-assessment cleared.");
+  expect(within(result).getByText("Self-review required")).toBeVisible();
+  expect(summary).toHaveTextContent("Short answers11 to self-review");
+});
+
+it("keeps the saved self-assessment and explains a failed save", async () => {
+  api.selfReview.mockRejectedValue(new Error("Network error."));
+  render(<Live initial={submitted([{ ...short, self_review: "CORRECT" }])} />);
+  const result = screen.getByRole("article", { name: "Question 1 result" });
+  fireEvent.click(within(result).getByRole("button", { name: "I missed it" }));
+  expect(await within(result).findByRole("alert")).toHaveTextContent("Could not save your self-assessment. Network error.");
+  expect(within(result).getByRole("button", { name: "I had it" })).toHaveAttribute("aria-pressed", "true");
+  expect(within(result).getByRole("button", { name: "I missed it" })).toHaveAttribute("aria-pressed", "false");
+  expect(screen.getByLabelText("Results summary")).toHaveTextContent("1 self-assessed correct");
+});
+
+it("reports self-assessed paper points apart from the objective score", async () => {
+  const paper = { exam_paper_id: "p1", title: "MI 2025/26", total_points: 6, wrong_answer_penalty: 0.25, pass_threshold: 4, duration_minutes: 90 };
+  const score = { version: "paper-scoring-v1", earned: 0.5, max_points: 6, correct_points: 1, penalty_points: 0.5, pending_points: 3, unanswered_count: 0, passed: null };
+  const attempt: Submitted = { ...submitted([
+    { ...mistake, points: 2, label: "Zadatak 1", earned_points: -0.5 },
+    { ...correct, points: 1, label: "Zadatak 2", earned_points: 1 },
+    { ...short, points: 3, label: "Zadatak 3", earned_points: null },
+  ]), paper, score };
+  serveSelfReview(attempt);
+  render(<Live initial={attempt} />);
+  const summary = screen.getByRole("region", { name: "Score on MI 2025/26" });
+  expect(summary).toHaveTextContent("Objective score 0.5 of 6 · self-assessed +0 of 3 points");
+  expect(summary).toHaveTextContent("Awaiting your self-reviewup to 3");
+  fireEvent.click(screen.getByRole("button", { name: "Self-review" }));
+  fireEvent.click(screen.getByRole("button", { name: "I had it" }));
+  await waitFor(() => expect(summary).toHaveTextContent("Objective score 0.5 of 6 · self-assessed +3 of 3 points"));
+  // The objective score and its pass decision stay as graded.
+  expect(summary).toHaveTextContent("0.5 / 6 points");
+  expect(summary).not.toHaveTextContent("Awaiting your self-review");
+  expect(summary).toHaveTextContent("The objective score alone does not decide the pass mark of 4 points");
+  expect(screen.getByText("Zadatak 3 · Self-assessed correct · +3 of 3 points, not in the objective score")).toBeVisible();
 });

@@ -342,3 +342,14 @@ most 1, and the unit nonblank. Existing rows already satisfy the new checks, so 
 backfilled, and snapshots, answers and attempts are unchanged. `alembic downgrade 0023`
 refuses while any NUMERIC or MULTIPLE_SELECT question exists (delete them first), then
 restores the earlier constraints and drops the four columns.
+
+## Short-answer self-assessment migration 0025
+
+Revision 0025 follows 0024 and adds nullable `answers.self_review` (VARCHAR(10)) and
+`answers.self_reviewed_at` (TIMESTAMPTZ). `ck_answer_self_review` allows only `CORRECT`
+or `INCORRECT`, `ck_answer_self_review_time` sets both columns together, and
+`ck_answer_self_review_pending` allows a self-assessment only on an answer graded
+`PENDING_SEMANTIC`, so it can never sit beside a deterministic grade. Additive only:
+existing rows stay NULL and nothing is backfilled. `alembic downgrade 0024` refuses while
+any self-assessment exists (clear them first), then drops the constraints and columns.
+See [self-assessment](PRACTICE.md#short-answer-self-assessment-r4).
