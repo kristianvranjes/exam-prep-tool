@@ -21,12 +21,16 @@ export function focusRequest(focus: FocusChoice): PracticeFocus | undefined {
   return undefined;
 }
 
-function ModeChoice({ label, descriptionId, checked, disabled = false, onSelect, children }: {
-  label: string; descriptionId: string; checked: boolean; disabled?: boolean; onSelect: () => void; children: ReactNode;
+/** Choices kept under More options; they open it when one is already selected. */
+const moreModes: SelectionMode[] = ["STANDARD", "DUE", "FAVORITES"];
+
+/** Each fieldset is its own radio group, so Tab reaches it even while a mode from the other one is checked. */
+function ModeChoice({ label, descriptionId, checked, onSelect, children, group = "selection-mode" }: {
+  label: string; descriptionId: string; checked: boolean; onSelect: () => void; children: ReactNode; group?: string;
 }) {
-  return <label className={`flex min-h-11 items-start gap-3 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
-    <input className="mt-1" type="radio" name="selection-mode" aria-label={label} aria-describedby={descriptionId} checked={checked} disabled={disabled} onChange={onSelect} />
-    <span><span className={disabled ? "font-semibold text-muted" : "font-semibold"}>{label}</span><span id={descriptionId} className="mt-1 block text-sm text-muted">{children}</span></span>
+  return <label className="flex min-h-11 cursor-pointer items-start gap-3">
+    <input className="mt-1" type="radio" name={group} aria-label={label} aria-describedby={descriptionId} checked={checked} onChange={onSelect} />
+    <span><span className="font-semibold">{label}</span><span id={descriptionId} className="mt-1 block text-sm text-muted">{children}</span></span>
   </label>;
 }
 
@@ -35,6 +39,9 @@ function reviewNote(count: number | undefined, some: (count: number) => string, 
   if (count === undefined) return "";
   return ` ${count ? some(count) : none}`;
 }
+
+/** A review choice is listed only when it has questions, or when it is already chosen and must explain why it cannot start. */
+const offered = (count: number | undefined, chosen: boolean) => chosen || (count ?? 0) > 0;
 
 export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSession, mode, setMode,
   count, setCount, length, setLength, selectedTypes, setSelectedTypes, experience, setExperience, start,
@@ -54,6 +61,13 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
     if (mode === "MOCK" && next.kind !== "SCOPE") setMode("ADAPTIVE");
   };
   const [revision, setRevision] = useState(0);
+  // More options opens by itself when a choice kept there is selected, for example from a shortcut.
+  const [moreOpen, setMoreOpen] = useState(() => moreModes.includes(mode));
+  const [shownMode, setShownMode] = useState(mode);
+  if (shownMode !== mode) {
+    setShownMode(mode);
+    if (moreModes.includes(mode)) setMoreOpen(true);
+  }
   const [availability, setAvailability] = useState<Availability>({ loading: true, error: false, data: null });
   const [catalog, setCatalog] = useState<Catalog>({ units: [], scopes: [] });
   useEffect(() => {
@@ -83,7 +97,8 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
       if (!current) return;
       // Without a type there is nothing to count; the help text asks for one instead.
       if (!typesKey) { setAvailability(value => ({ ...value, loading: false })); return; }
-      setAvailability({ loading: true, error: false, data: null });
+      // Keep the last counts while checking, so choices do not disappear and return on every change.
+      setAvailability(value => ({ loading: true, error: false, data: value.data }));
       // An empty unit choice counts the whole course until a unit is chosen.
       const request: PracticeFocus | undefined = scopeKey ? { exam_scope_id: scopeKey } : unitsKey ? { unit_ids: unitsKey.split(",") } : undefined;
       void practiceApi.availability(courseId, typesKey.split(",") as QuestionType[], requestMode, request).then(data => {
@@ -135,30 +150,13 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
     </div>
   </div>;
 
-  return <form aria-label="Practice setup" className="flex max-w-2xl flex-col gap-4" onSubmit={event => {
+  return <form aria-label="Practice setup" className="flex max-w-2xl flex-col gap-group" onSubmit={event => {
     event.preventDefault(); if (!busy && !help) start();
   }}>
     {availability.error && <div>
       <Alert>Could not load practice questions. Try again.</Alert>
       <Button variant="secondary" className="mt-3" disabled={busy} onClick={() => setRevision(value => value + 1)}>Retry practice questions</Button>
     </div>}
-    <fieldset disabled={busy} className="space-y-3">
-      <legend className="mb-2 font-semibold">Practice choice</legend>
-      <ModeChoice label="Recommended practice" descriptionId={`${id}-recommended`} checked={mode === "ADAPTIVE"} onSelect={() => setMode("ADAPTIVE")}>Prioritizes questions due for review, then other useful course questions.</ModeChoice>
-      <ModeChoice label="Course questions" descriptionId={`${id}-standard`} checked={mode === "STANDARD"} onSelect={() => setMode("STANDARD")}>Uses shared approved questions and your own drafts or questions awaiting review.</ModeChoice>
-      <ModeChoice label="Mistakes" descriptionId={`${id}-mistakes`} checked={mode === "MISTAKES"} disabled={mistakes === 0 && mode !== "MISTAKES"} onSelect={() => setMode("MISTAKES")}>
-        Questions you last answered incorrectly, oldest first. A correct answer removes them.{reviewNote(mistakes, n => `${n} to review with these options.`, "None with these options.")}
-      </ModeChoice>
-      <ModeChoice label="Due for review" descriptionId={`${id}-due`} checked={mode === "DUE"} disabled={due === 0 && mode !== "DUE"} onSelect={() => setMode("DUE")}>
-        Only questions whose review is due now, earliest first.{reviewNote(due, n => `${n} due with these options.`, "Nothing is due with these options.")}
-      </ModeChoice>
-      <ModeChoice label="Favorites" descriptionId={`${id}-favorites`} checked={mode === "FAVORITES"} disabled={favorites === 0 && mode !== "FAVORITES"} onSelect={() => setMode("FAVORITES")}>
-        Questions you starred, in the order you saved them.{reviewNote(favorites, n => `${n} saved with these options.`, "None with these options yet. Star a question while you practice or in its results.")}
-      </ModeChoice>
-      {canMock && <ModeChoice label="Mock exam" descriptionId={`${id}-mock`} checked={mode === "MOCK"} disabled={!scope && mode !== "MOCK"} onSelect={() => { setMode("MOCK"); setExperience("EXAM"); }}>
-        {scope ? `Spreads the questions evenly across the units of ${scope.name}, like a real exam. Starts as exam practice, with results at the end.` : "Spreads the questions evenly across the units of an exam cycle. Choose an exam cycle under What to practice first."}
-      </ModeChoice>}
-    </fieldset>
     {activeUnits.length > 0 && <fieldset disabled={busy} className="space-y-3">
       <legend className="mb-2 font-semibold">What to practice</legend>
       <label className="flex min-h-11 cursor-pointer items-start gap-3">
@@ -189,7 +187,17 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
         </label>)}</div>
       </fieldset>}
     </fieldset>}
-    {hasUnfinishedSession && mode !== "STANDARD" && <p className="text-sm text-muted">{mode === "ADAPTIVE" ? "Recommended practice" : "This choice"} excludes questions in unfinished sessions, so fewer questions may be available. You can resume above or choose Course questions.</p>}
+    <fieldset disabled={busy} className="space-y-3">
+      <legend className="mb-2 font-semibold">How to practice</legend>
+      <ModeChoice label="Recommended practice" descriptionId={`${id}-recommended`} checked={mode === "ADAPTIVE"} onSelect={() => setMode("ADAPTIVE")}>Prioritizes questions due for review, then other useful course questions.</ModeChoice>
+      {offered(mistakes, mode === "MISTAKES") && <ModeChoice label="Mistakes" descriptionId={`${id}-mistakes`} checked={mode === "MISTAKES"} onSelect={() => setMode("MISTAKES")}>
+        Questions you last answered incorrectly, oldest first. A correct answer removes them.{reviewNote(mistakes, n => `${n} to review with these options.`, "None with these options.")}
+      </ModeChoice>}
+      {canMock && (scope ? <ModeChoice label="Mock exam" descriptionId={`${id}-mock`} checked={mode === "MOCK"} onSelect={() => { setMode("MOCK"); setExperience("EXAM"); }}>
+        Spreads the questions evenly across the units of {scope.name}, like a real exam. Starts as exam practice, with results at the end.
+      </ModeChoice> : <p className="text-sm text-muted">For a mock exam, choose Exam cycle under What to practice.</p>)}
+    </fieldset>
+    {hasUnfinishedSession && mode !== "STANDARD" && <p className="text-sm text-muted">{mode === "ADAPTIVE" ? "Recommended practice" : "This choice"} excludes questions in unfinished sessions, so fewer questions may be available. You can resume above or choose Course questions under More options.</p>}
     <fieldset disabled={busy}>
       <legend className="mb-2 font-semibold">Session length</legend>
       <div className="flex flex-wrap gap-2">{(["5", "10", "20", "custom"] as const).map(value => <label key={value} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm">
@@ -202,9 +210,19 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
       {help && <p id={`${id}-start-help`} role={availability.loading || busy ? "status" : undefined} className="mb-3 max-w-prose text-sm text-muted">{help}</p>}
       <Button type="submit" variant={hasUnfinishedSession ? "secondary" : "primary"} disabled={busy || Boolean(help)} aria-describedby={help ? `${id}-start-help` : undefined} className="w-full sm:w-auto">{mode === "MOCK" ? "Start mock exam" : "Start practice"}</Button>
     </div>
-    <details className="border-t border-line pt-3">
+    <details open={moreOpen} onToggle={event => setMoreOpen(event.currentTarget.open)} className="border-t border-line pt-3">
       <summary className="min-h-11 cursor-pointer py-2 font-medium">More options</summary>
       <div className="mt-3 flex flex-col gap-5">
+        <fieldset disabled={busy} className="space-y-3">
+          <legend className="mb-2 font-semibold">Other ways to practice</legend>
+          <ModeChoice group="selection-mode-more" label="Course questions" descriptionId={`${id}-standard`} checked={mode === "STANDARD"} onSelect={() => setMode("STANDARD")}>Uses shared approved questions and your own drafts or questions awaiting review.</ModeChoice>
+          {offered(due, mode === "DUE") && <ModeChoice group="selection-mode-more" label="Due for review" descriptionId={`${id}-due`} checked={mode === "DUE"} onSelect={() => setMode("DUE")}>
+            Only questions whose review is due now, earliest first.{reviewNote(due, n => `${n} due with these options.`, "Nothing is due with these options.")}
+          </ModeChoice>}
+          {offered(favorites, mode === "FAVORITES") && <ModeChoice group="selection-mode-more" label="Favorites" descriptionId={`${id}-favorites`} checked={mode === "FAVORITES"} onSelect={() => setMode("FAVORITES")}>
+            Questions you starred, in the order you saved them.{reviewNote(favorites, n => `${n} saved with these options.`, "None with these options yet. Star a question while you practice or in its results.")}
+          </ModeChoice>}
+        </fieldset>
         <fieldset disabled={busy} className="flex flex-wrap gap-x-6 gap-y-2"><legend className="mb-2 font-semibold">Question types</legend>
           {types.map(item => <label key={item.type}><input type="checkbox" checked={selectedTypes.includes(item.type)} onChange={event => setSelectedTypes(event.target.checked ? [...selectedTypes, item.type] : selectedTypes.filter(type => type !== item.type))} /> {item.label}</label>)}
         </fieldset>

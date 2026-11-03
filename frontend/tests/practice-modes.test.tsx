@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { PracticeQuiz } from "../src/components/practice-quiz";
 import type { QuestionType } from "../src/lib/api";
@@ -22,6 +22,9 @@ function serve(review: { mistakes: number; due: number; favorites?: number } = {
     return { course_total: 30, total, by_type: [{ type: types[0], count: total }], by_unit: [], mistakes_total: review.mistakes, due_total: review.due, favorites_total: favorites };
   });
 }
+const moreOptions = () => screen.getByText("More options").closest("details")!;
+const openMoreOptions = () => { if (!moreOptions().open) fireEvent.click(screen.getByText("More options")); };
+const ready = () => waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -32,13 +35,36 @@ beforeEach(() => {
   mock.start.mockImplementation(async () => structuredClone(attempt));
 });
 
-it("offers mistakes and due review with their counts, disabling empty choices", async () => {
+it("asks what to practice first, then how, with the other ways under More options", async () => {
+  mock.units.mockResolvedValue(units);
+  mock.examScopes.mockResolvedValue([midterm]);
+  render(<PracticeQuiz courseId="course" />);
+  await screen.findByRole("group", { name: "What to practice" });
+  await ready();
+  const legends = Array.from(document.querySelectorAll("legend")).map(legend => legend.textContent);
+  expect(legends.slice(0, 3)).toEqual(["What to practice", "How to practice", "Session length"]);
+  const how = screen.getByRole("group", { name: "How to practice" });
+  expect(within(how).getAllByRole("radio").map(radio => radio.getAttribute("aria-label"))).toEqual(["Recommended practice", "Mistakes"]);
+  // A mock exam needs an exam cycle; until one is chosen the setup says so instead of listing a dead choice.
+  expect(within(how).getByText("For a mock exam, choose Exam cycle under What to practice.")).toBeVisible();
+  expect(moreOptions()).not.toHaveAttribute("open");
+  openMoreOptions();
+  const other = screen.getByRole("group", { name: "Other ways to practice" });
+  // Nothing is due and nothing is starred, so only Course questions is listed.
+  expect(within(other).getAllByRole("radio").map(radio => radio.getAttribute("aria-label"))).toEqual(["Course questions"]);
+  for (const radio of screen.getAllByRole("radio")) expect(radio.closest("label")).toBeInTheDocument();
+  // Separate radio groups keep both fieldsets reachable with Tab while the other one holds the checked mode.
+  const groupName = (group: HTMLElement) => new Set(within(group).getAllByRole("radio").map(radio => radio.getAttribute("name")));
+  expect(groupName(how)).toEqual(new Set(["selection-mode"]));
+  expect(groupName(other)).toEqual(new Set(["selection-mode-more"]));
+});
+
+it("offers mistakes with their count and hides due review when nothing is due", async () => {
   render(<PracticeQuiz courseId="course" />);
   await waitFor(() => expect(screen.getByText(/3 to review with these options\./)).toBeVisible());
-  const due = screen.getByRole("radio", { name: "Due for review" });
-  expect(due).toBeDisabled();
-  expect(due).toHaveAccessibleDescription(/Nothing is due with these options\./);
+  expect(screen.queryByRole("radio", { name: "Due for review" })).not.toBeInTheDocument();
   expect(screen.queryByRole("radio", { name: "Mock exam" })).not.toBeInTheDocument();
+  expect(screen.queryByText(/For a mock exam/)).not.toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("radio", { name: "Mistakes" }));
   await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", allTypes, "MISTAKES", undefined));
@@ -52,17 +78,21 @@ it("offers mistakes and due review with their counts, disabling empty choices", 
   expect(mock.start).toHaveBeenCalledWith("course", 3, allTypes, "MISTAKES", undefined, "IMMEDIATE");
 });
 
-it("explains an empty review choice that is already selected", async () => {
+it("keeps an empty review choice listed while it is selected, to explain why it cannot start", async () => {
   serve({ mistakes: 0, due: 4 });
   render(<PracticeQuiz courseId="course" />);
-  await waitFor(() => expect(screen.getByRole("radio", { name: "Mistakes" })).toBeDisabled());
-  expect(screen.getByRole("radio", { name: "Due for review" })).toHaveAccessibleDescription(/4 due with these options\./);
-  fireEvent.click(screen.getByRole("radio", { name: "Due for review" }));
+  await ready();
+  expect(screen.queryByRole("radio", { name: "Mistakes" })).not.toBeInTheDocument();
+  openMoreOptions();
+  const due = screen.getByRole("radio", { name: "Due for review" });
+  expect(due).toHaveAccessibleDescription(/4 due with these options\./);
+  fireEvent.click(due);
   expect(await screen.findByText(/Only 4 due questions match your options/)).toBeVisible();
   serve({ mistakes: 0, due: 0 });
   fireEvent.click(screen.getByRole("checkbox", { name: "Short answer" }));
   expect(await screen.findByText(/Nothing is due for review with these options\./)).toBeVisible();
-  expect(screen.getByRole("radio", { name: "Due for review" })).toBeEnabled();
+  expect(screen.getByRole("radio", { name: "Due for review" })).toBeChecked();
+  expect(screen.getByRole("radio", { name: "Due for review" })).toHaveAccessibleDescription(/Nothing is due with these options\./);
   expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
 });
 
@@ -70,6 +100,8 @@ it("starts a focus session from favorites within the chosen units", async () => 
   serve({ mistakes: 0, due: 0, favorites: 4 });
   mock.units.mockResolvedValue(units);
   render(<PracticeQuiz courseId="course" />);
+  await ready();
+  openMoreOptions();
   const favorites = await screen.findByRole("radio", { name: "Favorites" });
   await waitFor(() => expect(favorites).toHaveAccessibleDescription(/in the order you saved them\. 4 saved with these options\./));
   fireEvent.click(screen.getByRole("radio", { name: "Selected units" }));
@@ -85,23 +117,33 @@ it("starts a focus session from favorites within the chosen units", async () => 
   expect(mock.start).toHaveBeenCalledWith("course", 4, allTypes, "FAVORITES", { unit_ids: ["u1"] }, "IMMEDIATE");
 });
 
-it("keeps favorites unavailable until a question is starred", async () => {
+it("leaves favorites out until a question is starred", async () => {
   render(<PracticeQuiz courseId="course" />);
-  const favorites = await screen.findByRole("radio", { name: "Favorites" });
-  await waitFor(() => expect(favorites).toBeDisabled());
-  expect(favorites).toHaveAccessibleDescription(/None with these options yet\. Star a question while you practice or in its results\./);
+  await ready();
+  openMoreOptions();
+  expect(screen.getByRole("radio", { name: "Course questions" })).toBeVisible();
+  expect(screen.queryByRole("radio", { name: "Favorites" })).not.toBeInTheDocument();
+});
+
+it("opens More options by itself when a choice kept there arrives from a shortcut", async () => {
+  render(<PracticeQuiz courseId="course" setupRequest={{ id: 1, mode: "STANDARD" }} />);
+  await waitFor(() => expect(screen.getByRole("radio", { name: "Course questions" })).toBeChecked());
+  expect(moreOptions()).toHaveAttribute("open");
+  // The student can still fold it away.
+  fireEvent.click(screen.getByText("More options"));
+  expect(moreOptions()).not.toHaveAttribute("open");
 });
 
 it("starts a mock exam for a chosen exam cycle as exam practice", async () => {
   mock.units.mockResolvedValue(units);
   mock.examScopes.mockResolvedValue([midterm]);
   render(<PracticeQuiz courseId="course" />);
-  const mockExam = await screen.findByRole("radio", { name: "Mock exam" });
-  expect(mockExam).toBeDisabled();
-  expect(mockExam).toHaveAccessibleDescription(/Choose an exam cycle under What to practice first\./);
+  expect(await screen.findByText("For a mock exam, choose Exam cycle under What to practice.")).toBeVisible();
+  expect(screen.queryByRole("radio", { name: "Mock exam" })).not.toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("radio", { name: "Exam cycle" }));
-  await waitFor(() => expect(mockExam).toBeEnabled());
+  const mockExam = await screen.findByRole("radio", { name: "Mock exam" });
+  expect(screen.queryByText(/For a mock exam/)).not.toBeInTheDocument();
   fireEvent.click(mockExam);
   expect(mockExam).toHaveAccessibleDescription(/evenly across the units of MI/);
   await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", allTypes, "MOCK", { exam_scope_id: "mi" }));
@@ -117,11 +159,12 @@ it("leaves the mock exam when the focus is no longer an exam cycle", async () =>
   mock.examScopes.mockResolvedValue([midterm]);
   render(<PracticeQuiz courseId="course" />);
   fireEvent.click(await screen.findByRole("radio", { name: "Exam cycle" }));
-  fireEvent.click(screen.getByRole("radio", { name: "Mock exam" }));
+  fireEvent.click(await screen.findByRole("radio", { name: "Mock exam" }));
   expect(screen.getByRole("radio", { name: "Mock exam" })).toBeChecked();
   fireEvent.click(screen.getByRole("radio", { name: "Whole course" }));
   expect(screen.getByRole("radio", { name: "Recommended practice" })).toBeChecked();
-  expect(screen.getByRole("radio", { name: "Mock exam" })).toBeDisabled();
+  expect(screen.queryByRole("radio", { name: "Mock exam" })).not.toBeInTheDocument();
+  expect(screen.getByText("For a mock exam, choose Exam cycle under What to practice.")).toBeVisible();
   await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", allTypes, "ADAPTIVE", undefined));
   expect(mock.availability).not.toHaveBeenCalledWith("course", allTypes, "MOCK", undefined);
 });

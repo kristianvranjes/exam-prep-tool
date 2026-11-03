@@ -68,7 +68,6 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
       <CourseOverview courseId={course.id} active={visible && destination === "overview"}
         knownAttemptId={knownAttemptId} knownAttempt={knownAttempt} checkingSession={checkingSession} activeSession={activeSession} materials={materials} onResume={onResume}
         onRecommendedPractice={() => openPractice("ADAPTIVE")}
-        onStandardPractice={() => openPractice("STANDARD")}
         onScopePractice={scopeId => openPractice("ADAPTIVE", { scopeId })} onUnitPractice={unitId => openPractice("ADAPTIVE", { unitIds: [unitId] })} onStartAttempt={onOpenAttempt}
         onPapers={() => navigate("papers")} onProgress={() => navigate("progress")} onMaterials={() => navigate("materials")}
         onQuestions={() => { setMoreDestination("questions"); navigate("more"); }} />

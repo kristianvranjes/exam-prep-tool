@@ -188,16 +188,16 @@ test("moderator and student complete the core exam-preparation journey", async (
     await student.getByRole("button", { name: "Start recommended practice" }).click();
     await expect(student.getByRole("radio", { name: "Recommended practice" })).toBeChecked();
     await expect(student.getByRole("heading", { name: "Question 1 of 1" })).toHaveCount(0);
-    await studentNavigation.getByRole("button", { name: "Overview", exact: true }).click();
-    await student.getByRole("button", { name: "Practice course questions", exact: true }).click();
-    await expect(student.getByRole("radio", { name: "Course questions", exact: true })).toBeChecked();
+    // Plain course questions are a setup choice under More options, not an Overview shortcut.
     await expect(student.getByLabel("Guided practice", { exact: true })).toBeHidden();
+    await expect(student.getByRole("radio", { name: "Course questions", exact: true })).toBeHidden();
+    const moreOptions = student.getByText("More options", { exact: true });
+    await moreOptions.focus(); await moreOptions.press("Enter");
+    await student.getByRole("radio", { name: "Course questions", exact: true }).check();
     await expect(student.getByRole("radio", { name: "5 questions", exact: true })).toBeChecked();
     await expect(student.getByRole("button", { name: "Start practice", exact: true })).toBeDisabled();
     await student.getByRole("radio", { name: "Custom", exact: true }).check();
     await student.getByRole("spinbutton", { name: "Custom question count" }).fill("1");
-    const moreOptions = student.getByText("More options", { exact: true });
-    await moreOptions.focus(); await moreOptions.press("Enter");
     await expect(student.getByRole("radio", { name: "Guided practice", exact: true })).toBeVisible();
     await student.getByRole("radio", { name: "Guided practice" }).check();
     await student.getByRole("checkbox", { name: "True / false" }).uncheck();
@@ -211,7 +211,8 @@ test("moderator and student complete the core exam-preparation journey", async (
     await studentNavigation.getByRole("button", { name: "Overview", exact: true }).click();
     await expect(student.getByRole("heading", { name: "Continue studying" })).toBeVisible();
     await expect(student.getByRole("button", { name: "Resume session" })).toHaveClass(primaryFill);
-    await expect(student.getByRole("button", { name: "Return to session" })).not.toHaveClass(primaryFill);
+    await expect(student.locator("#course-overview").getByRole("button", { name: "Start recommended practice" })).toHaveCount(0);
+    await expect(student.locator("#course-overview").locator("button.bg-accent")).toHaveCount(1);
     await test.info().attach("overview-resume", { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
     await student.getByRole("button", { name: "Resume session" }).click();
     await expect(student.getByRole("radio", { name: correctOption })).toBeChecked();
@@ -269,7 +270,9 @@ test("moderator and student complete the core exam-preparation journey", async (
       await expect(overview.getByRole("heading", { name: "What to study next" })).toBeVisible();
       await expect(overview.getByRole("button", { name: "Resume session" })).toHaveCount(0);
       await expect(overview.getByRole("button", { name: "Start recommended practice" })).toHaveClass(primaryFill);
-      await expect(overview.getByRole("region", { name: "Progress summary" })).toContainText("100.0%");
+      // Graded accuracy is shown in Progress; the overview summary keeps a count only.
+      await expect(overview.getByRole("region", { name: "Progress summary" })).toContainText(/\d+ questions? reviewed/);
+      await expect(overview.getByRole("region", { name: "Progress summary" })).not.toContainText("%");
       await expect(overview.getByRole("list", { name: "Recent materials" })).toContainText("e2e-notes.pdf");
       await expect.poll(() => student.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await test.info().attach(`overview-${viewport.width}`, { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
@@ -310,9 +313,9 @@ test("moderator and student complete the core exam-preparation journey", async (
     await questionForm.getByRole("button", { name: "Save draft" }).click();
     await expect(selectedQuestion).toContainText("Explain why regular practice helps learning.");
     await studentNavigation.getByRole("button", { name: "Practice", exact: true }).click();
+    await moreOptions.click();
     await student.getByRole("radio", { name: "Course questions", exact: true }).check();
     await student.getByRole("spinbutton", { name: "Custom question count" }).fill("2");
-    await moreOptions.click();
     await student.getByRole("checkbox", { name: "Short answer" }).check();
     await student.getByRole("radio", { name: "Exam practice", exact: true }).check();
     await student.getByRole("button", { name: "Start practice", exact: true }).click();

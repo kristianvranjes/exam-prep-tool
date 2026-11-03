@@ -245,7 +245,8 @@ it("returns submitted history to setup with preferences intact, keeping results 
   expect(screen.getByRole("heading", { name: "Practice" })).toHaveFocus();
   expect(screen.getByLabelText("Custom question count")).toHaveValue(3);
   expect(screen.getByLabelText("Course questions")).toBeChecked();
-  fireEvent.click(screen.getByText("More options"));
+  // Course questions is kept under More options, so the setup opens it to show the choice.
+  expect(screen.getByText("More options").closest("details")).toHaveAttribute("open");
   expect(screen.getByLabelText("Exam practice")).toBeChecked();
   expect(screen.getByLabelText("True / false")).not.toBeChecked();
   expect(screen.getByLabelText("Multiple choice")).toBeChecked();
@@ -540,8 +541,11 @@ it("opens a simple Recommended setup with secondary options and history collapse
   expect(screen.getByText("Practice history").closest("details")).not.toHaveAttribute("open");
   expect(screen.getByLabelText("Multiple choice")).not.toBeVisible();
   expect(screen.getByLabelText("Guided practice")).not.toBeVisible();
+  // Recommended practice and Mistakes are the visible ways; plain Course questions waits under More options.
+  expect(screen.getByLabelText("Course questions")).not.toBeVisible();
   expect(screen.getByRole("button", { name: "Start practice" })).toHaveClass("bg-accent");
   fireEvent.click(screen.getByText("More options"));
+  expect(screen.getByLabelText("Course questions")).toBeVisible();
   expect(screen.getByLabelText("Multiple choice")).toBeVisible();
   expect(screen.getByText(/Short answers require self-review after submission/)).toBeVisible();
 });

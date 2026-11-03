@@ -60,12 +60,14 @@ has a graded review for (`question_count`, `reviewed_count`). Pending short answ
 create no review, so they do not count as practiced.
 
 The course overview picks the dated cycle that is in progress or starts next in the
-viewer's local calendar (undated and finished cycles are ignored) and shows a
-**Next exam** card: the countdown ("In 34 days", "Tomorrow", "Today" or "In progress
-until …"), the dates, the number of covered units, the coverage, and **Practice for
-…**, which opens practice setup focused on that cycle. Below it, a Readiness section
-shows the caller's readiness range for the cycle and its weakest units, each with
-**Practice this**; see [exam readiness](PRACTICE.md#exam-readiness-readiness-v1).
+viewer's local calendar (undated and finished cycles are ignored) and leads with it
+as a ruled header section. The heading names the cycle and the countdown ("Međuispit
+in 34 days", "… tomorrow", "… today" or "… · in progress until …"); under it come the
+dates, the number of covered units, the caller's readiness range with the coverage in
+counts, and **Practice for …**, which opens practice setup focused on that cycle and is
+the overview's primary action unless a session is open. The past-exams link and the
+weakest units, each with **Practice this**, follow as secondary actions; see
+[exam readiness](PRACTICE.md#exam-readiness-readiness-v1).
 
 ## Practice by unit or exam cycle
 

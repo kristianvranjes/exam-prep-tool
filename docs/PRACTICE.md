@@ -467,9 +467,11 @@ them as exam practice. Questions outside the scope's units are never selected.
 `GET /courses/{course_id}/practice-availability` accepts the same modes (MOCK only with
 `exam_scope_id`) and counts through the same `selection_filters`. Whatever the requested
 mode, it also returns `mistakes_total` and `due_total`: what MISTAKES and DUE would
-select with the same types and focus. The practice setup uses them to describe and
-disable **Mistakes** and **Due for review**; **Mock exam** is listed when the course has
-exam cycles and can be chosen once an exam cycle is selected under What to practice.
+select with the same types and focus. The practice setup uses them to describe
+**Mistakes** (under How to practice) and **Due for review** (under More options), and
+leaves either out while it would select nothing, unless it is already selected and has
+to explain why it cannot start. **Mock exam** is listed under How to practice once an
+exam cycle is selected under What to practice; before that, a line says to choose one.
 Choosing another focus switches a mock exam back to Recommended practice.
 
 **Review due questions** on the course overview (shown when `due_total` > 0 and no
@@ -539,22 +541,23 @@ before an untouched one, and both rank before a well-practised unit. Units are s
 when they are archived (practice setup cannot choose them), have no questions, or have
 every question retained.
 
-**Course overview.** The [Next exam](COURSE_UNITS.md#exam-countdown) card gains a
-Readiness section. It shows:
+**Course overview.** Readiness is the one figure in the
+[next exam](COURSE_UNITS.md#exam-countdown) header section. It shows:
 
-- the range ("55–70%"), announced to screen readers as "Estimated readiness: 55 to 70
-  percent";
-- the evidence behind it (graded answers and answered questions);
+- the range ("55–70%") in Literata tabular figures, announced to screen readers as
+  "Estimated readiness: 55 to 70 percent", with the cycle's coverage in counts under it;
 - a note when the range is 30 points wide or more;
-- the weakest units, each with **Practice this**, which opens practice setup with
-  Recommended practice focused on that unit;
-- a collapsed **Readiness by unit** list with every unit's evidence and the rule in words.
+- the weakest units with their evidence in counts, each with **Practice this**, which
+  opens practice setup with Recommended practice focused on that unit;
+- a collapsed **Readiness by unit** list with every unit's evidence and the rule in
+  words, including the graded answers behind the range.
 
-**Practice this** is hidden while a session is open. Below the threshold the section
-says "Not enough answers yet" and how many more answers are needed, and lists the
-weakest units under "Start with". A scope without automatically graded questions says
-so instead of showing zeros. If readiness fails to load, the section is left out, like
-coverage.
+It is the overview's only percentage: unit evidence is given in counts, and graded
+accuracy stays in Progress. **Practice this** is hidden while a session is open. Below
+the threshold the section says "Not enough answers yet" and how many more answers are
+needed, and lists the weakest units under "Start with". A scope without automatically
+graded questions says so instead of showing zeros. If readiness fails to load, it is
+left out and coverage stands alone.
 
 Targeted tests: `python -m pytest tests/test_readiness.py` and
 `RUN_DB_TESTS=1 python -m pytest tests/test_readiness_database.py` from backend;
@@ -596,9 +599,9 @@ student can review the favorites of one midterm. It orders by the oldest favorit
 time, then question ID. Like the review modes, it skips sources in the student's
 ACTIVE attempts and returns the usual 409 when fewer questions qualify. Practice
 availability reports `favorites_total` whatever the requested mode; the setup lists
-**Favorites** with that count and disables it while there are none.
+**Favorites** under More options with that count, and leaves it out while there are none.
 
-**Quick quiz.** **Start quick quiz** on the course overview starts a guided
+**Quick quiz.** **Start quick quiz**, a compact secondary row on the course overview, starts a guided
 (IMMEDIATE) recommended (ADAPTIVE) session of five questions of every type in one
 click. The optional **Questions from** picker limits it to one exam cycle or one unit.
 It is a client preset over existing options, not a new engine: it reads ADAPTIVE

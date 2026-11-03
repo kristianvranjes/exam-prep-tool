@@ -196,7 +196,8 @@ The page grain (below) never drops a pair below AA. Measured on the darkest grai
   - Inside a sheet, and between page sections, separate content with hairline rules
     (`border-t border-line`, `border-y`) and whitespace rather than more boxes.
   - New screens should prefer ruled sections, like an exam sheet; existing card stacks
-    are left as they are until their screens are redesigned.
+    are left as they are until their screens are redesigned. The course overview is
+    ruled this way.
 - **Margins.** Generous outer margins and the 65ch measure do the work of a notebook
   margin. No decorative margin lines or ruled-paper backgrounds behind text.
 
@@ -274,6 +275,31 @@ The guided question keeps its controls quiet:
 - Everything else (mode switch, how the session works, reload, abandon) sits in one
   "Session" disclosure.
 
+### Course overview and practice setup
+
+Every screen should shorten the path to the next useful question, so each has one
+primary action.
+
+- **Course overview** (`course-overview.tsx`) is a column of ruled sections, not sheets.
+  - An open session comes first, with the same line as Home. **Resume session** is then
+    the only primary action.
+  - The next exam is a header section. Its heading carries the countdown ("Međuispit in
+    20 days"), with no eyebrow; the date is a `<time>`. Readiness is the one figure
+    (Literata `text-3xl`, tabular), with coverage in counts as its subtitle.
+    **Practice for …** is primary; past exams and the weakest units are quieter.
+  - Due review, recommended practice and a compact quick quiz row follow, then the
+    reviewed count and materials.
+  - Headings step down: the h2 is `text-xl`, h3 sections `text-lg`, h4 `text-base`. The
+    readiness range is the only percentage; graded accuracy lives in Progress.
+- **Practice setup** (`practice-setup.tsx`) asks *What to practice*, then *How to
+  practice*.
+  - How lists Recommended practice, Mistakes, and Mock exam once a cycle is chosen; a
+    line explains how to get it before that.
+  - Course questions, Due for review, Favorites, question types and Guided/Exam sit
+    under More options.
+  - A choice with nothing to select is left out, not shown faded, unless it is already
+    selected and has to explain itself.
+
 ## Interaction and accessibility
 
 - **Focus**: `:focus-visible` draws a 2 px accent outline, offset 2 px. On tabs the
@@ -304,8 +330,5 @@ The guided question keeps its controls quiet:
 
 These need markup changes and are left for the practice/results redesign (R13 follow-up):
 
-- The course overview's "Next exam" label sits above its heading like an eyebrow. Fold it
-  into the heading.
-- The overview is still a stack of sheets. Move it toward ruled sections.
 - Results open with three bare counts. Lead with "n of N correct", the weakest unit and a
   "practise these mistakes" action.

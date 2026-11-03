@@ -147,6 +147,38 @@ selected question unchanged and announces “Suggestion submitted for faculty re
 Success clears the form; failure (including duplicate 409) keeps input for retry.
 Pending submits deduplicate; selecting another question/course ignores late results.
 
+## Course overview and practice setup
+
+Both screens aim to shorten the path to the next useful question, so each offers one
+primary action.
+
+`CourseOverview` is a column of ruled sections (hairline `border-t border-line`, no
+sheets):
+
+1. **Continue studying**, when a session is open. It shows the same line as Home (mode,
+   focus, "n of N answered"), reading the session once if only its id is known.
+   **Resume session** is then the only primary action, and starting actions are hidden
+   while the session is mounted.
+2. **The next exam**, as a header section. The heading carries the countdown
+   ("Međuispit in 20 days"), the date is a `<time>`, and the readiness range is the one
+   figure (Literata, tabular), with coverage in counts under it. The actions are
+   **Practice for …** (primary), the past-exams link and the weakest units'
+   **Practice this** shortcuts.
+3. **What to study next**, or **Other ways to study** when the exam leads. It holds
+   **Review due questions** (primary when due questions lead), **Start recommended
+   practice** and a compact quick quiz row.
+4. **Progress summary** (a reviewed count; accuracy lives in Progress) and
+   **Materials**.
+
+`PracticeSetup` asks **What to practice** (whole course, exam cycle or units) first.
+**How to practice** follows, with Recommended practice, Mistakes and Mock exam. Mock
+exam is listed only once an exam cycle is chosen; until then a line says how to get
+it. Course questions, Due for review, Favorites, question types and Guided/Exam
+practice sit under **More options**, which opens by itself when one of its modes is
+selected, for example from a shortcut. Review choices with nothing to select are left
+out rather than shown disabled, unless already selected. The server's availability
+counts and its 409 on start stay authoritative.
+
 ## Study and Exam quizzes
 
 Quiz experience is a frontend presentation choice, separate from the server's
@@ -278,9 +310,11 @@ setup handoff with ADAPTIVE selected. It creates no attempt and preserves count,
 question types and Guided/Exam practice settings. A completed or abandoned view
 returns to setup through the existing history refresh; an active session and its
 unsaved answer remain mounted. Recommended practice is due-first, not due-only,
-and may include other eligible questions. The practice setup also offers Mistakes,
-Due for review and, for an exam cycle, Mock exam. The backend remains authoritative for
-membership, grading, scheduling and eligibility.
+and may include other eligible questions. The practice setup also offers Mistakes and,
+for an exam cycle, Mock exam, with Course questions, Due for review and Favorites under
+More options (see [course overview and practice setup](#course-overview-and-practice-setup)).
+The backend remains authoritative for membership, grading, scheduling and eligibility.
+Graded accuracy is shown here, not on the course overview.
 
 ## Materials upload and browsing
 

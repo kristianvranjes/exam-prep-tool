@@ -38,8 +38,9 @@ export function nextExam(scopes: ExamScope[], today: string): NextExam | null {
   return { scope, days: daysBetween(today, scope.starts_on), ongoing: scope.starts_on <= today };
 }
 
-export function countdownLabel({ scope, days, ongoing }: NextExam) {
-  if (ongoing) return scope.ends_on && scope.ends_on !== scope.starts_on ? `In progress until ${formatExamDate(scope.ends_on)}` : "Today";
-  if (days === 1) return "Tomorrow";
-  return `In ${days} days`;
+/** The overview's next-exam heading: the cycle's name and when it is, such as "Međuispit in 20 days". */
+export function countdownHeading({ scope, days, ongoing }: NextExam) {
+  if (ongoing) return scope.ends_on && scope.ends_on !== scope.starts_on ? `${scope.name} · in progress until ${formatExamDate(scope.ends_on)}` : `${scope.name} today`;
+  if (days === 1) return `${scope.name} tomorrow`;
+  return `${scope.name} in ${days} days`;
 }
