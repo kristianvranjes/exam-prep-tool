@@ -167,6 +167,10 @@ grounded “explain this” after a mistake, an evaluation set, then R9 rubric a
 R7 ingestion, and quality-of-life items (installable web app, reminders, calendar
 export, Anki export, study timer). Target: Phase B complete before the summer midterms.
 
+Content production runs outside the application: the planned local
+[Content Studio](CONTENT_STUDIO.md) turns course PDFs into reviewed questions now, and
+into per-unit lessons once the app gains them after the winter midterms.
+
 ## 3. Detailed near-term milestones
 
 ### R1 — Verify and prepare the hosted pilot
