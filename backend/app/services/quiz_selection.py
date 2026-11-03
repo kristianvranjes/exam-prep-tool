@@ -50,6 +50,33 @@ def _favorite(user_id: UUID) -> Select[Any]:
     )
 
 
+def in_focus(
+    course_id: UUID, question_types: Sequence[str], unit_ids: list[UUID]
+) -> list[ColumnElement[bool]]:
+    """Course, type and unit focus shared by practice and the lists that lead into it.
+
+    `unit_ids` is the resolved focus; empty means the whole course.
+    """
+    filters = [Question.course_id == course_id, Question.type.in_(question_types)]
+    if unit_ids:
+        # A question linked to any focused unit matches; unlinked questions do not.
+        filters.append(
+            Question.id.in_(
+                select(QuestionUnit.question_id).where(QuestionUnit.unit_id.in_(unit_ids))
+            )
+        )
+    return filters
+
+
+def is_mistake(user_id: UUID) -> ColumnElement[bool]:
+    """Whether this user's latest resolved review of the source question was incorrect.
+
+    Only resolved reviews are stored, so a pending short answer is never a mistake
+    and a later correct answer removes the question.
+    """
+    return _progress(user_id).where(UserQuestionProgress.last_result == "INCORRECT").exists()
+
+
 def selection_filters(
     user_id: UUID, course_id: UUID, data: PracticeFilters, unit_ids: list[UUID], as_of: datetime
 ) -> list[ColumnElement[bool]]:
@@ -59,23 +86,10 @@ def selection_filters(
     `unit_ids` is the resolved focus; empty means the whole course. `as_of` decides
     what is due.
     """
-    filters = [
-        Question.course_id == course_id,
-        practice_eligible(user_id),
-        Question.type.in_(data.question_types),
-    ]
-    if unit_ids:
-        # A question linked to any focused unit matches; unlinked questions do not.
-        filters.append(
-            Question.id.in_(
-                select(QuestionUnit.question_id).where(QuestionUnit.unit_id.in_(unit_ids))
-            )
-        )
+    filters = [*in_focus(course_id, data.question_types, unit_ids), practice_eligible(user_id)]
     progress = UserQuestionProgress
     if data.selection_mode == "MISTAKES":
-        # Only resolved reviews are stored, so a pending short answer is never a mistake
-        # and a later correct answer removes the question.
-        filters.append(_progress(user_id).where(progress.last_result == "INCORRECT").exists())
+        filters.append(is_mistake(user_id))
     elif data.selection_mode == "DUE":
         filters.append(_progress(user_id).where(progress.due_at <= as_of).exists())
     elif data.selection_mode == "FAVORITES":

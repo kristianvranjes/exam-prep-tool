@@ -92,6 +92,15 @@ export type PracticeAvailability = {
 };
 /** A private favorite after an idempotent add or remove; `favorited_at` is the first add. */
 export type FavoriteState = { question_id: string; favorite: boolean; favorited_at: string | null };
+/** A question you last answered incorrectly; never its key. `available` is false once it can no longer be practiced. */
+export type MistakeQuestion = {
+  question_id: string; type: QuestionType; stem: string; difficulty: number | null; units: QuestionUnitLabel[];
+  last_reviewed_at: string; incorrect_review_count: number; available: boolean;
+};
+/** One of your favorites, newest first; `available` is false once it can no longer be practiced. */
+export type FavoriteQuestion = {
+  question_id: string; favorited_at: string; type: QuestionType; stem: string; difficulty: number | null; available: boolean;
+};
 const path = (course: string) => `/courses/${course}/attempts`;
 const allTypes: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"];
 /** The most questions a generated session may hold. */
@@ -128,6 +137,9 @@ export const practiceApi = {
     if (!total) throw new Error("No questions are available for a quick quiz here yet.");
     return practiceApi.start(course, Math.min(total, QUICK_QUIZ_QUESTIONS), allTypes, "ADAPTIVE", focus, "IMMEDIATE", true);
   },
+  /** Your mistakes in the whole course: practice-eligible first, in the order Mistakes practice takes them. */
+  mistakes: (course: string, offset = 0, limit = 20) => request<MistakeQuestion[]>(`/courses/${course}/mistakes?limit=${limit}&offset=${offset}`),
+  favorites: (course: string, offset = 0, limit = 20) => request<FavoriteQuestion[]>(`/courses/${course}/favorites?limit=${limit}&offset=${offset}`),
   favorite: (course: string, question: string) => request<FavoriteState>(`/courses/${course}/favorites/${question}`, { method: "POST" }),
   unfavorite: (course: string, question: string) => request<FavoriteState>(`/courses/${course}/favorites/${question}`, { method: "DELETE" }),
   startPaper: (paperId: string, feedback_mode: FeedbackMode = "END", timed = true) => request<Attempt>(`/exam-papers/${paperId}/attempts`, { method: "POST", body: JSON.stringify({ feedback_mode, timed }) }),

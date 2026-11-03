@@ -15,6 +15,7 @@ from app.api.favorites import router as favorites_router
 from app.api.health import router as health_router
 from app.api.item_analysis import router as item_analysis_router
 from app.api.materials import router as materials_router
+from app.api.mistakes import router as mistakes_router
 from app.api.moderation import router as moderation_router
 from app.api.progress import router as progress_router
 from app.api.questions import router as questions_router
@@ -69,5 +70,6 @@ app.include_router(item_analysis_router)
 app.include_router(quizzes_router)
 app.include_router(availability_router)
 app.include_router(favorites_router)
+app.include_router(mistakes_router)
 
 app.include_router(progress_router)

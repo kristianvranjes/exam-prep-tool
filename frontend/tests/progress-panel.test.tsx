@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { ProgressPanel } from "../src/components/progress-panel";
 import type { ReviewProgress, ReviewProgressSummary, UnitProgress } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ reviewProgress: vi.fn(), reviewProgressSummary: vi.fn(), unitProgress: vi.fn(), reviewDue: vi.fn() }));
+const mock = vi.hoisted(() => ({ reviewProgress: vi.fn(), reviewProgressSummary: vi.fn(), unitProgress: vi.fn(), reviewDue: vi.fn(), mistakes: vi.fn(), favorites: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 
@@ -45,6 +45,9 @@ beforeEach(() => {
   mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 1 }));
   mock.reviewProgress.mockResolvedValue([]);
   mock.unitProgress.mockResolvedValue({ as_of: asOf, units: [] });
+  // The review lists have their own tests in review-lists.test.tsx.
+  mock.mistakes.mockResolvedValue([]);
+  mock.favorites.mockResolvedValue([]);
 });
 
 it("loads only when Progress becomes active and does not flash empty metrics", async () => {

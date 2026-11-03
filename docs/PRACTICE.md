@@ -466,6 +466,15 @@ by unit, each unit's in the order it chose them. Mock exams keep the 1–20 coun
 have no points or time limit, and use the requested feedback mode; the setup starts
 them as exam practice. Questions outside the scope's units are never selected.
 
+**Mistakes list.** `GET /courses/{course_id}/mistakes` ([API](API.md#mistakes-r5)) lists
+the same questions with their stems, reusing the MISTAKES predicate and the type and
+unit/scope focus from `services/quiz_selection.py`. Questions that are no longer
+practice-eligible stay listed, marked unavailable, after the available ones; it never
+returns keys or explanations. Progress shows it as the **Mistakes** section, with type,
+units, last miss and miss count per question, **Load more**, and **Practice these
+mistakes**, which opens practice setup with Mistakes selected. Questions in an unfinished
+session are left out of practice until you finish or abandon it.
+
 `GET /courses/{course_id}/practice-availability` accepts the same modes (MOCK only with
 `exam_scope_id`) and counts through the same `selection_filters`. Whatever the requested
 mode, it also returns `mistakes_total` and `due_total`: what MISTAKES and DUE would
@@ -603,6 +612,12 @@ ACTIVE attempts and returns the usual 409 when fewer questions qualify. Practice
 availability reports `favorites_total` whatever the requested mode; the setup lists
 **Favorites** under More options with that count, and leaves it out while there are none.
 
+**Favorites screen.** Progress lists the favorites (newest first, **Load more**) as the
+**Favorites** section, with each stem, type, save date, an **Unavailable for practice**
+badge where it applies, and the same **Favorite** star to remove one. A removed row stays
+until the next refresh so the star can undo it. **Practice favorites** opens practice
+setup with Favorites selected while a listed favorite can still be practiced.
+
 **Quick quiz.** **Start quick quiz**, a compact secondary row on the course overview, starts a guided
 (IMMEDIATE) recommended (ADAPTIVE) session of five questions of every type in one
 click. The optional **Questions from** picker limits it to one exam cycle or one unit.
@@ -614,8 +629,8 @@ quiz while a session is open. Its start request adds `quick_quiz: true`, which c
 nothing about selection and only records the session as `QUICK`
 ([recorded selection mode](#recorded-selection-mode-migration-0026)).
 
-Targeted tests: `RUN_DB_TESTS=1 python -m pytest tests/test_favorites_database.py`
-from backend; `npm test -- tests/favorites.test.tsx tests/practice-modes.test.tsx tests/course-overview.test.tsx tests/practice-api.test.ts`
+Targeted tests: `RUN_DB_TESTS=1 python -m pytest tests/test_favorites_database.py tests/test_mistakes_database.py`
+from backend; `npm test -- tests/favorites.test.tsx tests/review-lists.test.tsx tests/practice-modes.test.tsx tests/course-overview.test.tsx tests/practice-api.test.ts`
 from frontend.
 
 ## Recorded selection mode (migration 0026)

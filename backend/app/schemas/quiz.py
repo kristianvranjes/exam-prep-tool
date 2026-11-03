@@ -22,10 +22,9 @@ FeedbackMode = Literal["END", "IMMEDIATE"]
 Confidence = Literal["SURE", "UNSURE", "GUESS"]
 
 
-class PracticeFilters(StrictModel):
-    """Selection rules shared by session start and the availability summary."""
+class FocusFilters(StrictModel):
+    """Type and unit focus shared by practice and the review lists that lead into it."""
 
-    selection_mode: SelectionMode = "STANDARD"
     question_types: list[QuestionType] = Field(
         default_factory=default_types,
         min_length=1,
@@ -36,12 +35,22 @@ class PracticeFilters(StrictModel):
     exam_scope_id: UnitId | None = None
 
     @model_validator(mode="after")
-    def unique_types(self) -> Self:
+    def unique_focus(self) -> Self:
         if len(set(self.question_types)) != len(self.question_types):
             raise ValueError("Question types must be unique")
         unique_ids(self.unit_ids)
         if self.unit_ids and self.exam_scope_id:
             raise ValueError("Choose units or an exam scope, not both")
+        return self
+
+
+class PracticeFilters(FocusFilters):
+    """Selection rules shared by session start and the availability summary."""
+
+    selection_mode: SelectionMode = "STANDARD"
+
+    @model_validator(mode="after")
+    def mock_needs_scope(self) -> Self:
         if self.selection_mode == "MOCK" and self.exam_scope_id is None:
             raise ValueError("A mock exam needs an exam scope")
         return self

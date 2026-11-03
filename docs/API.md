@@ -374,6 +374,22 @@ scheduling.
   `stem`, `difficulty` and `available`, which is false once the question is archived,
   rejected or otherwise not practice-eligible.
 
+### Mistakes (R5)
+
+`GET /courses/{course_id}/mistakes?limit=20&offset=0` lists the caller's mistakes in the
+course (members only; limit 1–100, offset at most 10000). A mistake is a question whose
+latest resolved review is INCORRECT, the same predicate MISTAKES practice uses, so a later
+correct answer removes it and a pending short answer never counts, self-assessed or not.
+Optional `question_types`, `unit_ids` or `exam_scope_id` (not both) narrow it exactly as
+in [practice availability](#practice-availability-r2); a scope without units lists nothing.
+
+Each row has `question_id`, `type`, `stem`, `difficulty`, `units` (current active unit
+labels), `last_reviewed_at`, `incorrect_review_count` and `available`. `available` is
+false once the question is archived, rejected or otherwise not practice-eligible; such
+rows stay listed after the available ones, which come in the order MISTAKES practice
+takes them (oldest `last_reviewed_at`, then question ID). Keys, explanations and
+reference answers are never returned.
+
 Attempt questions (active, submitted and abandoned) also return `source_question_id`
 and a boolean `favorite`: whether the caller has a favorite for that source question.
 It depends only on the caller's favorites, never on the question's current status, so
