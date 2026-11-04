@@ -75,7 +75,8 @@ class Stage(Strict):
     provider: str
     model: str = Field(pattern=r"^~?[a-z0-9][a-z0-9._-]*/[A-Za-z0-9._:-]+$")
     timeout_seconds: float = Field(default=120, gt=0, le=600)
-    max_output_tokens: int = Field(default=4096, ge=64, le=32768)
+    # Eight questions per request need about 5000 tokens; reasoning verifiers need more.
+    max_output_tokens: int = Field(default=8192, ge=64, le=32768)
     # Free and low-cost tiers rate-limit; calls within a stage are spaced at least this far.
     min_interval_seconds: float = Field(default=1.0, ge=0, le=60)
 
