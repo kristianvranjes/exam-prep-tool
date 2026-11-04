@@ -63,7 +63,7 @@ it("abandons without saving local edits and retains only saved answers in a read
   fireEvent.click(screen.getByRole("button", { name: "Abandon attempt" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirm abandon" }));
   const view = await screen.findByRole("region", { name: "Abandoned attempt" });
-  expect(within(view).getByText("Attempt abandoned")).toHaveFocus();
+  await waitFor(() => expect(within(view).getByText("Attempt abandoned")).toHaveFocus());
   expect(mock.abandon).toHaveBeenCalledWith("course", "attempt");
   expect(mock.save).not.toHaveBeenCalled();
   expect(mock.submit).not.toHaveBeenCalled();

@@ -395,7 +395,7 @@ it("shows incomplete readiness and reviews unanswered without calling submit", a
   fireEvent.click(screen.getByRole("button", { name: "Revisit" }));
   fireEvent.click(screen.getByRole("button", { name: "Review and finish" }));
   const review = await screen.findByRole("region", { name: "Review practice" });
-  expect(within(review).getByText("Review practice")).toHaveFocus();
+  await waitFor(() => expect(within(review).getByText("Review practice")).toHaveFocus());
   expect(review).toHaveTextContent("0 of 3 answered and saved");
   expect(review).toHaveTextContent("3 questions still need an answer");
   expect(within(review).getByRole("button", { name: "Finish practice" })).toBeDisabled();
@@ -711,7 +711,7 @@ it("saves an edited answer before Previous and stays put when that save fails", 
   expect(screen.getByText("Question 2 of 3")).toBeVisible();
   expect(screen.getByLabelText("True")).toBeChecked();
   fireEvent.click(screen.getByRole("button", { name: "Previous" }));
-  expect(await screen.findByText("Question 1 of 3")).toHaveFocus();
+  await waitFor(() => expect(screen.getByText("Question 1 of 3")).toHaveFocus());
   expect(mock.save).toHaveBeenLastCalledWith("course", "attempt", "tf", { type: "TRUE_FALSE", value: true });
   expect(screen.queryByRole("region", { name: "Unsaved answer" })).not.toBeInTheDocument();
 });
@@ -719,7 +719,7 @@ it("saves an edited answer before Previous and stays put when that save fails", 
 it("advances a saved unchanged answer without another write", async () => {
   allAnswered(); await start();
   fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
-  expect(await screen.findByText("Question 2 of 3")).toHaveFocus();
+  await waitFor(() => expect(screen.getByText("Question 2 of 3")).toHaveFocus());
   expect(mock.save).not.toHaveBeenCalled();
 });
 
@@ -736,7 +736,7 @@ it("saves the final answer, reviews missing answers, and never submits implicitl
   expect(mock.save).toHaveBeenLastCalledWith("course", "attempt", "sa", { type: "SHORT_ANSWER", text: "My explanation" });
   expect(mock.submit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Review unanswered" }));
-  expect(await screen.findByText("Question 1 of 3")).toHaveFocus();
+  await waitFor(() => expect(screen.getByText("Question 1 of 3")).toHaveFocus());
 });
 
 it("does not enter review when the final answer fails to save", async () => {
