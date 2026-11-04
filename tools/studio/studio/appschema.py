@@ -36,6 +36,22 @@ def question_module() -> ModuleType:
     return module
 
 
+def numeric_match(answer: str, content: dict[str, object]) -> bool:
+    """The application's own numeric grading: its parser and tolerance rule."""
+    question_module()  # puts backend/ on the path
+    numbers = importlib.import_module("app.services.numbers")
+    try:
+        value = numbers.parse_number(answer)
+        key = numbers.parse_number(str(content["correct_value"]))
+        absolute, relative = (
+            numbers.parse_number(str(content[name])) if content.get(name) is not None else None
+            for name in ("absolute_tolerance", "relative_tolerance")
+        )
+    except (ValueError, KeyError):
+        return False
+    return bool(numbers.within_tolerance(value, key, absolute, relative))
+
+
 def first_error(exc: ValidationError) -> str:
     error = exc.errors()[0]
     where = ".".join(str(part) for part in error["loc"])

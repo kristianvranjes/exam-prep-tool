@@ -106,6 +106,11 @@ class Questions(Strict):
         return check_counts(counts)
 
 
+class Verification(Strict):
+    # Questions per verifier request; each request carries only the pages they cite.
+    questions_per_call: int = Field(default=6, ge=1, le=20)
+
+
 class Checks(Strict):
     # quiz-import JSON files already in the course bank, for duplicate checks.
     existing: list[str] = Field(default_factory=list)
@@ -117,6 +122,7 @@ class StudioConfig(Strict):
     providers: dict[str, Provider] = Field(min_length=1)
     stages: dict[StageName, Stage]
     questions: Questions = Field(default_factory=Questions)
+    verification: Verification = Field(default_factory=Verification)
     checks: Checks = Field(default_factory=Checks)
 
     @model_validator(mode="after")
@@ -165,6 +171,9 @@ timeout_seconds = 300
 [stages.verify]
 provider = "openrouter"
 model = "qwen/qwen3.8-27b"
+# The verifier reasons before it answers, and reasoning counts toward the output limit.
+max_output_tokens = 16384
+timeout_seconds = 300
 
 [questions]
 # Questions per unit by type; a unit in course.yaml may override this with `questions:`.

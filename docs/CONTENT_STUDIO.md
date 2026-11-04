@@ -167,7 +167,17 @@ Planned after the winter midterms; this needs a migration and new UI.
    true/false share swings (1 of 4, then 0 of 4 true), and PDF extraction drops
    superscripts ("2^40" reads "240"), which produced a wrong DES question that only
    the verifier or the reviewer can catch.
-3. **S2** verifier and flags.
+3. **S2** verifier and flags. *Done.* On the same 40 trial questions `qwen/qwen3.8-27b`
+   answered blind in 10 requests (7 to 82 seconds each, 0.07 USD in total, about seven
+   times the cost of generating them, because it reasons first). It agreed with every
+   objective key, found one short answer not answerable from its page, and named four
+   real defects: an option that is equally correct (1/|K| = 1/2^n for the one-time
+   pad), a fact not on the page (25 Caesar keys), a reference answer needing outside
+   knowledge (an SQL tautology example), and a false statement that differs from the
+   page only by one exponent. No deterministic check finds such defects. `studio
+   calibrate` derives a wrong key per objective question without further requests (the
+   verifier never sees keys) and counted all 36 as caught; 36 agreeing questions are a
+   small sample, so the PPJ calibration run remains the real measurement.
 4. **S3** local review page.
 5. **S4** publish and `studio push`.
 6. **S5** lessons.

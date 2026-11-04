@@ -3,8 +3,9 @@
 A local command-line tool that turns a course's lecture PDFs into reviewed ExamPrep
 import files. The plan and the decisions behind it are in
 [docs/CONTENT_STUDIO.md](../../docs/CONTENT_STUDIO.md). Built so far: **S0** (ingest,
-the `course.yaml` proposal, a provider check) and **S1** (question generation to a
-blueprint and deterministic checks). The verifier (S2) comes next.
+the `course.yaml` proposal, a provider check), **S1** (question generation to a
+blueprint and deterministic checks) and **S2** (an independent verifier). The local
+review page (S3) comes next.
 
 ## Install
 
@@ -30,7 +31,9 @@ studio status ../../../srs/studio      # sources, units, problems
 studio providers ../../../srs/studio   # one tiny request per AI stage
 studio generate ../../../srs/studio --dry-run   # requests and input size, nothing sent
 studio generate ../../../srs/studio --unit 03   # questions for one unit (all by default)
-studio check ../../../srs/studio       # deterministic checks on all generated units
+studio verify ../../../srs/studio      # blind answers from the verifier model
+studio check ../../../srs/studio       # deterministic checks, plus verifier flags
+studio calibrate ../../../srs/studio   # seeded wrong keys the verifier would catch
 ```
 
 `ingest` rereads only PDFs whose bytes changed (`--force` rereads all). After it, check
@@ -46,6 +49,7 @@ studio check ../../../srs/studio       # deterministic checks on all generated u
 | `course.proposed.yaml` | `ingest` | `studio-course-v1` proposal with warnings in its header |
 | `course.yaml` | you | The confirmed units (`id`, `title`, `sources: [{pdf, pages}]`) and `exam_cycles` |
 | `build/units/<id>/questions.json` | `generate` | `studio-questions-v1`: windows (pages, requested counts, outcome) and questions, each with its `content` in the application's `quiz-import-v2` shape, its `source` (`pdf`, `page`, `quote`) and `schema_error` |
+| `build/units/<id>/verify.json` | `verify` | `studio-verify-v1`: request batches and, per question, the verifier's answer, whether it matches the key, confidence, a named problem and its reason; the hash of the `questions.json` it verified |
 | `build/units/<id>/checks.json` | `check` | `studio-checks-v1`: flags per question and per unit, a summary, and the hash of the `questions.json` it checked |
 | `build/calls.jsonl` | AI stages | One line per call: stage, subject (unit and window), provider, model, routed model/provider, prompt version, outcome code, latency, token counts, cost. Never the key or prompt text |
 
@@ -83,6 +87,29 @@ A unit is sent again only when its pages, blueprint, model or prompt version cha
 (`--force` regenerates anyway). If some windows fail (rate limit, timeout), a rerun
 requests only those.
 
+## Verifying
+
+`studio verify` sends each valid question to the verifier model (a different family from
+the generator) **without its key**, with the text of the one page it cites, at most
+`[verification] questions_per_call` (6) questions per request. The verifier answers as a
+student who has only that page would, says when the page does not settle the answer,
+and may name a problem (two defensible answers, an ambiguous stem, a contradiction with
+the page, a flattened exponent). The studio compares its answer with the key
+deterministically; numbers go through the application's own parser and tolerance rule.
+Short answers are the exception: the verifier sees the reference answer and judges
+whether the page supports it.
+
+As with generation, unchanged units are not resent and a rerun repeats only failed
+batches; a batch where the verifier skipped a question counts as failed. Run
+`studio check` afterwards to merge the verifier's findings into `checks.json`.
+
+`studio calibrate` reports, without any request, how many deliberately wrong keys the
+verifier would have caught: for each objective question it derives a wrong key (true
+and false swapped, another option for multiple choice, one option flipped for multiple
+select) and counts it caught unless the verifier's blind answer equals exactly that
+wrong key with no named problem. This is only valid because the verifier never sees
+objective keys. Agreement between two models is still not proof: review stays the gate.
+
 ## Checks
 
 `studio check` flags, it never fixes. `error` means the question cannot be imported as
@@ -97,12 +124,16 @@ it is, `warn` needs a careful look in review, `info` is a hint.
 | Stem mentions the source, slides or lecture, which students never see | warn |
 | "All/none of the above" option; two options nearly identical | warn |
 | Negated stem; key clearly the longest option; no explanation | info |
+| Verifier answered differently from the key; found the question not answerable from its page; named a problem | warn |
+| Verifier agreed with low confidence | info |
 | Unit: failed or uncovered window | error / warn |
+| Unit: a verifier batch failed | warn |
 | Unit: fewer questions of a type than the blueprint; true/false share outside 30–70 %; the key in one position for over half the multiple-choice items; the key the longest in 40 % or more; one difficulty for all | warn |
 
 Checks cannot see wrong facts that the page text itself carries. PDF text extraction
 loses superscripts, so "2^40" on a slide reads "240" and a question built on it is
-wrong although its quote matches. That is the verifier's and the reviewer's job.
+wrong although its quote matches. The verifier prompt warns about flattened exponents;
+the reviewer remains the last line.
 
 ## Providers
 
