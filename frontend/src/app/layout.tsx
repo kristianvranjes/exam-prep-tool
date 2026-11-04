@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { Atkinson_Hyperlegible_Mono, Atkinson_Hyperlegible_Next, Literata } from "next/font/google";
 import "./globals.css";
+import { cookies } from "next/headers";
 import { ThemeProvider } from "../components/theme";
+import { LocaleProvider } from "../lib/i18n";
+import { LOCALE_COOKIE, parseLocale } from "../lib/locale";
 
 // A text face and its monospace sibling, chosen for telling apart l/I/1 and O/0 in
 // questions and code, plus a book serif for headings and question stems ("the exam
@@ -13,7 +16,8 @@ const heading = Literata({ subsets: ["latin", "latin-ext", "greek"], axes: ["ops
 // No title here: every route is rendered by the client AppShell, which sets a per-route <title>
 // ("Practice · <course> · ExamPrep") that React hoists into <head>. Two titles would compete.
 export const metadata: Metadata = { description: "University courses, study materials and practice for your next exam." };
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  // The interface copy is English; course content inside it is often Croatian.
-  return <html lang="en" className={`${text.variable} ${code.variable} ${heading.variable}`} suppressHydrationWarning><body><ThemeProvider>{children}</ThemeProvider></body></html>;
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // Croatian unless the visitor chose English; the cookie lets the first render use the right language.
+  const locale = parseLocale((await cookies()).get(LOCALE_COOKIE)?.value);
+  return <html lang={locale} className={`${text.variable} ${code.variable} ${heading.variable}`} suppressHydrationWarning><body><LocaleProvider initial={locale}><ThemeProvider>{children}</ThemeProvider></LocaleProvider></body></html>;
 }

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { english } from "./locale";
 import { makePdf } from "./pdf-fixture";
 
 const facultyName = "E2E Faculty";
@@ -31,8 +32,8 @@ async function expectMetricAtLeast(page: Page, label: string, minimum: number) {
 
 test("moderator and student complete the core exam-preparation journey", async ({ browser }) => {
   const baseURL = test.info().project.use.baseURL as string;
-  const moderatorContext = await browser.newContext({ baseURL });
-  const studentContext = await browser.newContext({ baseURL });
+  const moderatorContext = await browser.newContext({ baseURL, storageState: english });
+  const studentContext = await browser.newContext({ baseURL, storageState: english });
   try {
     const moderator = await moderatorContext.newPage();
     const student = await studentContext.newPage();

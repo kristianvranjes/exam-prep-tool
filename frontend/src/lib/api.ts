@@ -1,3 +1,5 @@
+import { translate } from "./i18n";
+
 export type User = { id: string; email: string; display_name: string; is_active: boolean; created_at: string };
 export type Faculty = { id: string; name: string; slug: string; university_name: string | null };
 export type CourseMembership = { course_id: string; user_id: string; role: "OWNER" | "MEMBER" };
@@ -37,14 +39,15 @@ function validationMessage(detail: unknown): string | null {
 
 export function errorMessage(path: string, status: number, payload: { detail?: unknown }, retryAfter?: string | null): string {
   const detail = typeof payload.detail === "string" ? payload.detail : null;
-  if (status === 401 && !SIGN_IN_PATHS.includes(path.split("?")[0])) return SESSION_EXPIRED_MESSAGE;
+  if (status === 401 && !SIGN_IN_PATHS.includes(path.split("?")[0])) return translate(SESSION_EXPIRED_MESSAGE);
   if (status === 429) {
     const seconds = retryAfterSeconds(retryAfter);
-    if (seconds !== null) return `Too many attempts. Try again in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`;
-    return detail ?? "Too many attempts. Try again shortly.";
+    if (seconds !== null) return translate(seconds === 1 ? "Too many attempts. Try again in {seconds} second." : "Too many attempts. Try again in {seconds} seconds.", { seconds });
+    return translate(detail ?? "Too many attempts. Try again shortly.");
   }
-  if (status === 422) return validationMessage(payload.detail) ?? detail ?? "Some fields are not valid. Check them and try again.";
-  return detail ?? "Request failed";
+  // Backend messages are English; known ones are translated, others are shown as they are.
+  if (status === 422) return validationMessage(payload.detail) ?? translate(detail ?? "Some fields are not valid. Check them and try again.");
+  return translate(detail ?? "Request failed");
 }
 
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
