@@ -7,6 +7,7 @@ where grounding checks are weak. A PDF whose bytes have not changed is not re-re
 """
 
 import hashlib
+import json
 import os
 import re
 import unicodedata
@@ -19,6 +20,7 @@ import pypdfium2 as pdfium
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from studio.config import StudioError
+from studio.ocr import cached_pages
 from studio.store import write_json
 
 PAGES_VERSION: Literal["studio-pages-v1"] = "studio-pages-v1"
@@ -30,7 +32,8 @@ REPEAT_SHARE = 0.6
 REPEAT_MIN_PAGES = 4
 EDGE_LINES = 2
 
-PageFlag = Literal["no_text", "ocr_noise"]
+# "ocr": the page's text comes from `studio ocr`, not from the PDF's own text layer.
+PageFlag = Literal["no_text", "ocr_noise", "ocr"]
 
 
 class Model(BaseModel):
@@ -59,6 +62,8 @@ class PdfPages(Model):
     outline: list[OutlineEntry]
     repeated_lines: list[str]
     pages: list[Page]
+    # Hash of the `studio ocr` pages used, so new OCR text triggers a fresh ingest.
+    ocr_digest: str | None = None
 
     def count(self, flag: PageFlag) -> int:
         return sum(1 for p in self.pages if flag in p.flags)
@@ -189,15 +194,33 @@ def load_pages(path: Path) -> PdfPages | None:
         return None
 
 
+def ocr_digest(ocr: dict[int, str]) -> str | None:
+    if not ocr:
+        return None
+    encoded = json.dumps(sorted(ocr.items()), ensure_ascii=False).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def ingest_pdf(pdf: Path, slug: str, studio_dir: Path, *, force: bool = False) -> IngestResult:
     out = pages_dir(studio_dir) / f"{slug}.json"
     digest = sha256_file(pdf)
+    ocr = cached_pages(studio_dir, slug, digest)
+    ocr_hash = ocr_digest(ocr)
     if not force and out.is_file():
         existing = load_pages(out)
-        if existing is not None and existing.sha256 == digest:
+        if existing is not None and existing.sha256 == digest and existing.ocr_digest == ocr_hash:
             return IngestResult(existing, out, skipped=True)
     texts, outline = read_pdf(pdf)
+    # Pages read again by `studio ocr` replace the PDF's own text layer.
+    for page, text in ocr.items():
+        if 1 <= page <= len(texts):
+            texts[page - 1] = _normalize(text.replace("\f", ""))
     repeated = find_repeated(texts)
+
+    def flags(page: int, text: str) -> list[PageFlag]:
+        found = page_flags(text)
+        return [*found, "ocr"] if page in ocr else found
+
     doc = PdfPages(
         version=PAGES_VERSION,
         slug=slug,
@@ -207,9 +230,10 @@ def ingest_pdf(pdf: Path, slug: str, studio_dir: Path, *, force: bool = False) -
         outline=outline,
         repeated_lines=sorted(repeated.values()),
         pages=[
-            Page(page=i + 1, text=text, body=page_body(text, repeated), flags=page_flags(text))
+            Page(page=i + 1, text=text, body=page_body(text, repeated), flags=flags(i + 1, text))
             for i, text in enumerate(texts)
         ],
+        ocr_digest=ocr_hash,
     )
     write_json(out, doc)
     return IngestResult(doc, out, skipped=False)

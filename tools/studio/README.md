@@ -28,6 +28,7 @@ folder per course (the studio refuses a folder inside the repository):
 ```sh
 studio init ../../../srs/studio --name "Sigurnost računalnih sustava" --code SRS --pdfs "../pdfpreze/*.pdf"
 studio ingest ../../../srs/studio      # page text + course.proposed.yaml
+studio ocr ../../../srs/studio         # re-read scanned or damaged pages with Tesseract
 studio status ../../../srs/studio      # sources, units, problems
 studio providers ../../../srs/studio   # one tiny request per AI stage
 studio generate ../../../srs/studio --dry-run   # requests and input size, nothing sent
@@ -75,6 +76,25 @@ Only the first and last two lines of a page can count as header or footer lines 
 they appear on at least 60 % of the pages with text, with numbers ignored). This
 removes "Laboratorij za … Sigurnost računalnih sustava" and "12/62" without touching
 content lines like "Korak 1".
+
+## Reading scanned and damaged PDFs (OCR)
+
+`studio ocr` reads pages again with [Tesseract](https://github.com/tesseract-ocr/tesseract)
+in Croatian and English and `studio ingest` then uses that text instead of the PDF's own
+text layer. By default it reads the pages ingest flagged (no text, or OCR damage such as
+`■` for č/ć/đ); `--all-pages` reads every page, `--pdf` limits it to some PDFs, and
+`--jobs` sets how many pages are read in parallel. Page numbers never change and the
+PDF is not modified; the text is cached in `build/ocr/` per PDF hash, language and DPI.
+
+On PPJ's 1061-page lecture collection this took about ten minutes and left no page with
+OCR damage (783 before); diacritics come back, while code slides and diagrams stay
+imperfect.
+
+Setup on Windows: `winget install UB-Mannheim.TesseractOCR`, then put `hrv.traineddata`
+from [tessdata](https://github.com/tesseract-ocr/tessdata) next to a copy of
+`eng.traineddata` and `osd.traineddata` in `%LOCALAPPDATA%\examprep-studio	essdata`
+(or point `STUDIO_TESSDATA` at a folder with them; `STUDIO_TESSERACT` overrides the
+program path).
 
 ## Generating questions
 

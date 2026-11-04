@@ -42,8 +42,16 @@ from studio.generate import (
     unit_counts,
     unit_pages,
 )
-from studio.ingest import PdfPages, ingest_all, load_all_pages, sha256_file
+from studio.ingest import (
+    PdfPages,
+    assign_slugs,
+    ingest_all,
+    ingest_pdf,
+    load_all_pages,
+    sha256_file,
+)
 from studio.llm import ChatClient, LLMError, calls_log
+from studio.ocr import ocr_pages
 from studio.prompts import QUESTIONS_SYSTEM
 from studio.proposal import proposal_header, propose
 from studio.publish import publish
@@ -383,6 +391,53 @@ def cmd_review(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ocr(args: argparse.Namespace) -> int:
+    studio_dir: Path = args.dir
+    ensure_outside_repo(studio_dir)
+    config = load_config(studio_dir)
+    chosen = [
+        (pdf, slug)
+        for pdf, slug in assign_slugs(resolve_sources(studio_dir, config.sources))
+        if not args.pdf or any(name in slug for name in args.pdf)
+    ]
+    if not chosen:
+        raise StudioError("no source PDF matches --pdf")
+    for pdf, slug in chosen:
+        before = ingest_pdf(pdf, slug, studio_dir).doc
+        pages = [
+            p.page
+            for p in before.pages
+            if args.all_pages or {"no_text", "ocr_noise"} & set(p.flags) or "ocr" in p.flags
+        ]
+        if not pages:
+            print(f"{slug}: no page needs OCR")
+            continue
+        print(f"{slug}: reading {len(pages)} pages with Tesseract ({args.lang}, {args.dpi} dpi)")
+
+        def progress(done: int, total: int) -> None:
+            if done == total or done % 25 == 0:
+                print(f"  {done}/{total}", flush=True)
+
+        ocr_pages(
+            pdf,
+            slug,
+            before.sha256,
+            pages,
+            studio_dir,
+            lang=args.lang,
+            dpi=args.dpi,
+            jobs=args.jobs,
+            progress=progress,
+        )
+        after = ingest_pdf(pdf, slug, studio_dir).doc
+        print(
+            f"  OCR damage on {before.count('ocr_noise')} -> {after.count('ocr_noise')} pages, "
+            f"no text on {before.count('no_text')} -> {after.count('no_text')} pages"
+        )
+    print(f"\nnext: studio ingest {studio_dir} (refreshes the proposal), then generate")
+    return 0
+
+
 def cmd_publish(args: argparse.Namespace) -> int:
     studio_dir: Path = args.dir
     course = confirmed_course(studio_dir)
@@ -564,6 +619,17 @@ def parser() -> argparse.ArgumentParser:
     )
     push_cmd.add_argument("--dry-run", action="store_true", help="show counts, send nothing")
     push_cmd.set_defaults(run=cmd_push)
+
+    ocr = commands.add_parser("ocr", help="read scanned or damaged pages again with Tesseract")
+    ocr.add_argument("dir", type=Path)
+    ocr.add_argument("--pdf", action="append", help="part of a PDF slug; repeat for several")
+    ocr.add_argument("--all-pages", action="store_true", help="read every page, not only flagged")
+    ocr.add_argument("--lang", default="hrv+eng", help="Tesseract languages (default hrv+eng)")
+    ocr.add_argument("--dpi", type=int, default=300, help="render resolution (default 300)")
+    ocr.add_argument(
+        "--jobs", type=int, default=max(1, (os.cpu_count() or 2) // 2), help="parallel readers"
+    )
+    ocr.set_defaults(run=cmd_ocr)
     return root
 
 
