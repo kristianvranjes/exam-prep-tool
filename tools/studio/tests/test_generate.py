@@ -22,6 +22,7 @@ from studio.generate import (
     plan_windows,
     shuffle_options,
     to_content,
+    unit_counts,
 )
 from studio.ingest import Page, PdfPages
 from studio.llm import ChatClient
@@ -285,17 +286,32 @@ def test_cli_generate_check_and_status(
     handler = FakeGenerator()
     monkeypatch.setattr(studio.cli, "stage_client", lambda *a: client(handler, tmp_path))
     assert main(["generate", str(studio_dir), "--unit", "01"]) == 0
-    assert "generated  01 Kripto: 20 questions" in capsys.readouterr().out
+    assert "generated  01 Kripto: 10 questions" in capsys.readouterr().out
     assert main(["status", str(studio_dir)]) == 0
-    assert "20 questions, not checked" in capsys.readouterr().out
+    assert "10 questions, not checked" in capsys.readouterr().out
 
     # The fake model's options differ by one digit and its keys all come first. The
     # checks report the former; reordering removed the latter. Nothing fails the
     # import schema and every quote is on its page.
     assert main(["check", str(studio_dir)]) == 0
     out = capsys.readouterr().out
-    assert "01: 20 questions, 0 errors" in out
+    assert "01: 10 questions, 0 errors" in out
     assert "options_too_similar" in out
     assert "answer_position" not in out and "quote_not_found" not in out
     assert main(["status", str(studio_dir)]) == 0
-    assert "20 questions, 0 errors" in capsys.readouterr().out
+    assert "10 questions, 0 errors" in capsys.readouterr().out
+
+
+def test_question_counts_can_scale_with_the_unit() -> None:
+    scaled = Questions(questions_per_page=0.3, min_per_unit=10, max_per_unit=40)
+    assert unit_counts(UNIT, scaled, 85) == {
+        "MULTIPLE_CHOICE": 15,
+        "TRUE_FALSE": 5,
+        "MULTIPLE_SELECT": 3,
+        "SHORT_ANSWER": 3,
+    }
+    assert sum(unit_counts(UNIT, scaled, 6).values()) == 10  # floor
+    assert sum(unit_counts(UNIT, scaled, 500).values()) == 40  # ceiling
+    assert sum(unit_counts(UNIT, Questions(), 500).values()) == 20  # fixed blueprint
+    own = UNIT.model_copy(update={"questions": {"TRUE_FALSE": 7}})
+    assert unit_counts(own, scaled, 85) == {"TRUE_FALSE": 7}  # the unit's own counts win

@@ -391,17 +391,25 @@ def make_server(
                 self._json(status, {"error": str(exc)})
 
         def do_POST(self) -> None:  # noqa: N802
+            # Read the body before any refusal: answering with unread request data on the
+            # socket makes Windows reset the connection instead of delivering the answer.
+            try:
+                length = max(0, int(self.headers.get("Content-Length") or 0))
+            except ValueError:
+                length = 0
+            if length > MAX_BODY:
+                self.close_connection = True
+                self._json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "body too large"})
+                return
+            raw = self.rfile.read(length)
             if not self._guard():
                 return
             parts = self.path.split("?", 1)[0].strip("/").split("/")
             try:
                 if not self.headers.get("Content-Type", "").startswith("application/json"):
                     raise ReviewError(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "send JSON")
-                length = int(self.headers.get("Content-Length") or 0)
-                if length > MAX_BODY:
-                    raise ReviewError(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "body too large")
                 try:
-                    body = json.loads(self.rfile.read(length) or b"{}")
+                    body = json.loads(raw or b"{}")
                 except ValueError:
                     raise ReviewError(HTTPStatus.BAD_REQUEST, "invalid JSON") from None
                 if not isinstance(body, dict):

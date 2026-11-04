@@ -1,7 +1,9 @@
 """`studio` command line: from ingesting PDFs to reviewing generated questions."""
 
 import argparse
+import getpass
 import hashlib
+import os
 import sys
 import webbrowser
 from collections import Counter
@@ -14,6 +16,7 @@ from pydantic import BaseModel, ConfigDict
 from studio.checks import check_course, load_checks
 from studio.config import (
     CONFIG_NAME,
+    App,
     StudioConfig,
     StudioError,
     ensure_outside_repo,
@@ -43,6 +46,9 @@ from studio.ingest import PdfPages, ingest_all, load_all_pages, sha256_file
 from studio.llm import ChatClient, LLMError, calls_log
 from studio.prompts import QUESTIONS_SYSTEM
 from studio.proposal import proposal_header, propose
+from studio.publish import publish
+from studio.push import plan as push_plan
+from studio.push import push
 from studio.review import make_server
 from studio.verify import Calibration, calibration, fresh_verify, plan_batches, verify_unit
 
@@ -228,10 +234,9 @@ def cmd_generate(args: argparse.Namespace) -> int:
     if args.dry_run:
         total_chars = total_calls = 0
         for unit in units:
-            counts = unit_counts(unit, blueprint)
-            windows = plan_windows(
-                unit_pages(unit, docs, blueprint.max_input_chars), counts, blueprint
-            )
+            pages = unit_pages(unit, docs, blueprint.max_input_chars)
+            counts = unit_counts(unit, blueprint, len(pages))
+            windows = plan_windows(pages, counts, blueprint)
             chars = sum(w.chars for w in windows)
             calls = sum(1 for w in windows if w.counts)
             total_chars, total_calls = total_chars + chars, total_calls + calls
@@ -378,6 +383,58 @@ def cmd_review(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_publish(args: argparse.Namespace) -> int:
+    studio_dir: Path = args.dir
+    course = confirmed_course(studio_dir)
+    manifest = publish(studio_dir, course, selected_units(course, args.unit))
+    chosen = {u.id for u in selected_units(course, args.unit)}
+    for entry in manifest.units:
+        if entry.unit not in chosen:
+            continue
+        where = entry.file or "no file (nothing accepted)"
+        print(
+            f"{entry.unit}: {entry.questions} accepted, {entry.rejected} rejected, "
+            f"{entry.undecided} undecided -> {where}"
+        )
+    print(f"\nimport files and manifest.json are in {studio_dir / 'out'}")
+    return 0
+
+
+def password_for(app: App) -> str:
+    password = os.environ.get(app.password_env, "")
+    if password:
+        return password
+    if not sys.stdin.isatty():
+        raise StudioError(f"set {app.password_env} or run push in a terminal to type the password")
+    return getpass.getpass(f"ExamPrep password for {app.email}: ")
+
+
+def cmd_push(args: argparse.Namespace) -> int:
+    studio_dir: Path = args.dir
+    config = load_config(studio_dir)
+    if config.app is None:
+        raise StudioError(f"add an [app] table to {studio_dir / CONFIG_NAME} to push")
+    course = confirmed_course(studio_dir)
+    units = selected_units(course, args.unit)
+    plans = push_plan(studio_dir, config.app, units)
+    pending = sum(len(p.new) for p in plans)
+    for p in plans:
+        print(f"{p.unit.id}: {len(p.new)} to import, {p.already} already pushed")
+    if not pending:
+        print("nothing new to push")
+        return 0
+    if args.dry_run:
+        print(f"\n{pending} questions would be imported into course {config.app.course_id}")
+        return 0
+    results = push(studio_dir, config.app, units, password_for(config.app), approve=args.approve)
+    for result in results:
+        line = f"{result.unit.id}: imported {result.imported} into unit {result.app_unit}"
+        if args.approve:
+            line += f", approved {result.approved}"
+        print(line + (f" ({result.note})" if result.note else ""))
+    return 1 if any(r.note for r in results) else 0
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     studio_dir: Path = args.dir
     config = load_config(studio_dir)
@@ -493,6 +550,20 @@ def parser() -> argparse.ArgumentParser:
     review.add_argument("--port", type=int, default=0, help="port on 127.0.0.1 (default: any)")
     review.add_argument("--no-browser", action="store_true", help="only print the address")
     review.set_defaults(run=cmd_review)
+
+    publish_cmd = commands.add_parser("publish", help="write accepted questions as import files")
+    publish_cmd.add_argument("dir", type=Path)
+    publish_cmd.add_argument("--unit", action="append", help="unit id; repeat for several")
+    publish_cmd.set_defaults(run=cmd_publish)
+
+    push_cmd = commands.add_parser("push", help="import accepted questions through the app API")
+    push_cmd.add_argument("dir", type=Path)
+    push_cmd.add_argument("--unit", action="append", help="unit id; repeat for several")
+    push_cmd.add_argument(
+        "--approve", action="store_true", help="approve imported questions (owner-moderator)"
+    )
+    push_cmd.add_argument("--dry-run", action="store_true", help="show counts, send nothing")
+    push_cmd.set_defaults(run=cmd_push)
     return root
 
 

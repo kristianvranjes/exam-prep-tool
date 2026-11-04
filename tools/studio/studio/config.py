@@ -96,6 +96,11 @@ class Questions(Strict):
     """The per-unit blueprint and how generation splits a unit into bounded requests."""
 
     types: TypeCounts = Field(default_factory=lambda: dict(DEFAULT_TYPES))
+    # When set, a unit gets this many questions per slide page with text (bounded by
+    # min/max per unit), and `types` only give the mix. Unset: `types` are exact counts.
+    questions_per_page: float | None = Field(default=None, gt=0, le=3)
+    min_per_unit: int = Field(default=10, ge=1, le=200)
+    max_per_unit: int = Field(default=150, ge=1, le=500)
     # Characters of page text per request; a unit is never sent whole.
     max_input_chars: int = Field(default=12000, ge=2000, le=60000)
     max_questions_per_call: int = Field(default=8, ge=1, le=20)
@@ -111,6 +116,53 @@ class Verification(Strict):
     questions_per_call: int = Field(default=6, ge=1, le=20)
 
 
+UUID_PATTERN = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def app_url(url: str, *, origin: bool) -> str:
+    """An ExamPrep address: https, or plain http only on this machine."""
+    parsed = urlsplit(url)
+    secure = parsed.scheme == "https" or (
+        parsed.scheme == "http" and (parsed.hostname or "") in LOCAL_HOSTS
+    )
+    if (
+        not secure
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or (origin and parsed.path not in ("", "/"))
+    ):
+        raise ValueError(
+            "must be an https URL (plain http only for localhost) without credentials or query"
+            + (" or path" if origin else "")
+        )
+    return url.rstrip("/")
+
+
+class App(Strict):
+    """Where `studio push` imports accepted questions. The password is never stored."""
+
+    api_url: str
+    # The frontend address the API trusts for writes (its Origin check).
+    origin: str
+    course_id: str = Field(pattern=UUID_PATTERN)
+    email: str = Field(min_length=3, max_length=254)
+    password_env: str = Field(default="EXAMPREP_PASSWORD", pattern=r"^[A-Z_][A-Z0-9_]*$")
+
+    @field_validator("api_url")
+    @classmethod
+    def valid_api(cls, url: str) -> str:
+        return app_url(url, origin=False)
+
+    @field_validator("origin")
+    @classmethod
+    def valid_origin(cls, url: str) -> str:
+        return app_url(url, origin=True)
+
+
 class Checks(Strict):
     # quiz-import JSON files already in the course bank, for duplicate checks.
     existing: list[str] = Field(default_factory=list)
@@ -124,6 +176,7 @@ class StudioConfig(Strict):
     questions: Questions = Field(default_factory=Questions)
     verification: Verification = Field(default_factory=Verification)
     checks: Checks = Field(default_factory=Checks)
+    app: App | None = None
 
     @model_validator(mode="after")
     def consistent(self) -> Self:
@@ -176,12 +229,26 @@ max_output_tokens = 16384
 timeout_seconds = 300
 
 [questions]
-# Questions per unit by type; a unit in course.yaml may override this with `questions:`.
+# The mix of question types. With questions_per_page set, a unit gets that many
+# questions per slide page with text (at least min_per_unit, at most max_per_unit) in
+# this mix; without it, these are exact counts per unit. A unit in course.yaml may set
+# its own exact counts with `questions:`.
 types = {{ MULTIPLE_CHOICE = 12, TRUE_FALSE = 4, MULTIPLE_SELECT = 2, SHORT_ANSWER = 2 }}
+questions_per_page = 0.3
+min_per_unit = 10
+max_per_unit = 150
 
 [checks]
 # quiz-import JSON files already in the course bank, checked for duplicate stems.
 existing = []
+
+# Uncomment for `studio push`. The password is asked for at push time (or read from the
+# environment variable named by password_env) and never stored.
+# [app]
+# api_url = "https://api.example.org"
+# origin = "https://examprep.example.org"
+# course_id = "00000000-0000-0000-0000-000000000000"
+# email = "owner@example.org"
 """
 
 
