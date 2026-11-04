@@ -7,6 +7,8 @@ import os
 import sys
 import webbrowser
 from collections import Counter
+from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
 from typing import Literal
@@ -256,15 +258,16 @@ def cmd_generate(args: argparse.Namespace) -> int:
         print(f"\n{total_calls} requests, roughly {tokens:,.0f} input tokens; nothing was sent")
         return 0
 
-    client = stage_client(config, studio_dir, "generate")
-    failed = 0
-    for unit in units:
+    stage = config.stages.get("generate")
+
+    def one(unit: Unit) -> tuple[list[str], int]:
+        # Each unit gets its own client, so parallel units never share pacing state.
         result = generate_unit(
             course_name=config.course.name,
             unit=unit,
             docs=docs,
             blueprint=blueprint,
-            client=client,
+            client=stage_client(config, studio_dir, "generate"),
             studio_dir=studio_dir,
             force=args.force,
         )
@@ -275,11 +278,15 @@ def cmd_generate(args: argparse.Namespace) -> int:
             line += f", {invalid} fail the import schema"
         if result.calls:
             line += f" ({result.calls} requests)"
-        print(line)
-        for window in made.windows:
-            if window.error:
-                failed += 1
-                print(f"  window {window.index}: {window.error}; rerun to retry only this window")
+        lines = [line]
+        errors = [w for w in made.windows if w.error]
+        lines += [f"  window {w.index}: {w.error}; rerun to retry only this window" for w in errors]
+        return lines, len(errors)
+
+    failed = 0
+    for lines, errors in run_parallel(units, one, stage.parallel if stage else 1):
+        print("\n".join(lines))
+        failed += errors
     print(f"\nnext: studio check {studio_dir}")
     return 1 if failed else 0
 
@@ -308,13 +315,13 @@ def cmd_verify(args: argparse.Namespace) -> int:
         print(f"\n{total} requests; nothing was sent")
         return 0
 
-    client = stage_client(config, studio_dir, "verify")
-    failed = 0
-    for questions in units:
+    stage = config.stages.get("verify")
+
+    def one(questions: UnitQuestions) -> tuple[list[str], int]:
         result = verify_unit(
             questions=questions,
             docs=docs,
-            client=client,
+            client=stage_client(config, studio_dir, "verify"),
             studio_dir=studio_dir,
             batch_size=size,
             force=args.force,
@@ -328,11 +335,15 @@ def cmd_verify(args: argparse.Namespace) -> int:
             f"{result.state:9}  {questions.unit}: {len(verdicts)} verified, {agree} agree, "
             f"{disagree} disagree, {unanswerable} not answerable, {problems} with a problem"
         )
-        print(line + (f" ({result.calls} requests)" if result.calls else ""))
-        for batch in result.verify.batches:
-            if batch.error:
-                failed += 1
-                print(f"  batch {batch.index}: {batch.error}; rerun to retry only this batch")
+        lines = [line + (f" ({result.calls} requests)" if result.calls else "")]
+        errors = [b for b in result.verify.batches if b.error]
+        lines += [f"  batch {b.index}: {b.error}; rerun to retry only this batch" for b in errors]
+        return lines, len(errors)
+
+    failed = 0
+    for lines, errors in run_parallel(units, one, stage.parallel if stage else 1):
+        print("\n".join(lines))
+        failed += errors
     print(f"\nnext: studio check {studio_dir}")
     return 1 if failed else 0
 
@@ -490,6 +501,18 @@ def cmd_push(args: argparse.Namespace) -> int:
     return 1 if any(r.note for r in results) else 0
 
 
+def run_parallel[Item, Outcome](
+    items: list[Item], work: Callable[[Item], Outcome], workers: int
+) -> Iterator[Outcome]:
+    """Results of work(item) for every item, as they finish (in order when workers is 1)."""
+    if workers <= 1 or len(items) <= 1:
+        yield from (work(item) for item in items)
+        return
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for future in as_completed([pool.submit(work, item) for item in items]):
+            yield future.result()
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     studio_dir: Path = args.dir
     config = load_config(studio_dir)
@@ -637,7 +660,8 @@ def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is not None:  # Windows consoles default to a legacy code page
-            reconfigure(encoding="utf-8", errors="replace")
+            # Line buffering: progress shows at once even when output goes to a file.
+            reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     args = parser().parse_args(argv)
     try:
         code: int = args.run(args)

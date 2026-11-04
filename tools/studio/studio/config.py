@@ -79,6 +79,10 @@ class Stage(Strict):
     max_output_tokens: int = Field(default=8192, ge=64, le=32768)
     # Free and low-cost tiers rate-limit; calls within a stage are spaced at least this far.
     min_interval_seconds: float = Field(default=1.0, ge=0, le=60)
+    # OpenRouter providers this stage skips, e.g. ["Crusoe"] when one is slow or verbose.
+    ignore_providers: list[str] = Field(default_factory=list, max_length=20)
+    # Units handled at the same time; requests within a unit stay in order.
+    parallel: int = Field(default=1, ge=1, le=8)
 
     @property
     def family(self) -> str:

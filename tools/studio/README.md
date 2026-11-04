@@ -171,6 +171,15 @@ requires the random token from the printed address on every API call and sends a
 strict Content-Security-Policy. The page loads nothing from the internet and inserts
 generated text only as text, never as HTML.
 
+## Speed
+
+Requests to ZDR endpoints take 30 seconds to several minutes, so a stage can handle
+several units at once: `parallel = 4` under `[stages.generate]` or `[stages.verify]`
+(requests within a unit stay in order). `ignore_providers = ["Crusoe"]` makes OpenRouter
+skip a provider; on 4 November Crusoe wrote up to 16 000 tokens for eight questions where
+others wrote about 2 500, and was truncated. Progress lines appear as each unit
+finishes.
+
 ## Publishing and pushing
 
 `studio publish` writes one import file per unit with the accepted questions only, and
