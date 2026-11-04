@@ -1,4 +1,4 @@
-"""`studio` command line: init, ingest, status, providers, generate and check."""
+"""`studio` command line: init, ingest, status, providers, generate, check, verify, calibrate."""
 
 import argparse
 import hashlib
@@ -30,6 +30,7 @@ from studio.course import (
     load_course,
 )
 from studio.generate import (
+    UnitQuestions,
     generate_unit,
     load_questions,
     plan_windows,
@@ -41,6 +42,7 @@ from studio.ingest import PdfPages, ingest_all, load_all_pages, sha256_file
 from studio.llm import ChatClient, LLMError, calls_log
 from studio.prompts import QUESTIONS_SYSTEM
 from studio.proposal import proposal_header, propose
+from studio.verify import Calibration, calibration, fresh_verify, plan_batches, verify_unit
 
 PING_VERSION = "ping-v1"
 PING_SYSTEM = "You answer with JSON that matches the given schema and nothing else."
@@ -157,10 +159,18 @@ def question_state(studio_dir: Path, unit_id: str) -> str:
     state = f": {len(questions.questions)} questions"
     if not questions.complete:
         state += ", some windows failed"
+    verify = fresh_verify(studio_dir, unit_id)
+    if verify is not None:
+        agreed = sum(v.agrees is True for v in verify.verdicts)
+        state += f", verifier agrees on {agreed} of {len(verify.verdicts)}"
+        if not verify.complete:
+            state += " (some batches failed)"
     checks = load_checks(studio_dir, unit_id)
     path = questions_path(studio_dir, unit_id)
     if checks is None or checks.questions_hash != hashlib.sha256(path.read_bytes()).hexdigest():
         return state + ", not checked"
+    if verify is not None and checks.summary.get("verified", 0) != len(verify.verdicts):
+        return state + ", checks predate verification: rerun check"
     s = checks.summary
     return state + f", {s['error']} errors, {s['warn']} warnings"
 
@@ -259,6 +269,93 @@ def cmd_generate(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def generated_units(studio_dir: Path, units: list[Unit]) -> list[UnitQuestions]:
+    found = [q for u in units if (q := load_questions(studio_dir, u.id)) is not None]
+    if not found:
+        raise StudioError(f"no generated questions yet; run `studio generate {studio_dir}`")
+    return found
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    studio_dir: Path = args.dir
+    config = load_config(studio_dir)
+    course = confirmed_course(studio_dir)
+    docs = ready_pages(course, studio_dir)
+    units = generated_units(studio_dir, selected_units(course, args.unit))
+    size = config.verification.questions_per_call
+
+    if args.dry_run:
+        total = sum(len(plan_batches(q, size)) for q in units)
+        for questions in units:
+            batches = plan_batches(questions, size)
+            count = sum(len(b) for b in batches)
+            print(f"{questions.unit}: {count} questions in {len(batches)} requests")
+        print(f"\n{total} requests; nothing was sent")
+        return 0
+
+    client = stage_client(config, studio_dir, "verify")
+    failed = 0
+    for questions in units:
+        result = verify_unit(
+            questions=questions,
+            docs=docs,
+            client=client,
+            studio_dir=studio_dir,
+            batch_size=size,
+            force=args.force,
+        )
+        verdicts = result.verify.verdicts
+        agree = sum(v.agrees is True for v in verdicts)
+        disagree = sum(v.agrees is False for v in verdicts)
+        unanswerable = sum(v.agrees is None for v in verdicts)
+        problems = sum(v.problem is not None for v in verdicts)
+        line = (
+            f"{result.state:9}  {questions.unit}: {len(verdicts)} verified, {agree} agree, "
+            f"{disagree} disagree, {unanswerable} not answerable, {problems} with a problem"
+        )
+        print(line + (f" ({result.calls} requests)" if result.calls else ""))
+        for batch in result.verify.batches:
+            if batch.error:
+                failed += 1
+                print(f"  batch {batch.index}: {batch.error}; rerun to retry only this batch")
+    print(f"\nnext: studio check {studio_dir}")
+    return 1 if failed else 0
+
+
+def cmd_calibrate(args: argparse.Namespace) -> int:
+    studio_dir: Path = args.dir
+    course = confirmed_course(studio_dir)
+    total = Calibration(0, 0, 0)
+    for questions in generated_units(studio_dir, course.units):
+        verify = fresh_verify(studio_dir, questions.unit)
+        if verify is None:
+            print(f"{questions.unit}: not verified on the current questions")
+            continue
+        c = calibration(questions, verify)
+        total = Calibration(
+            total.objective + c.objective, total.agreed + c.agreed, total.caught + c.caught
+        )
+        print(f"{questions.unit}: {calibration_line(c)}")
+    if not total.objective:
+        raise StudioError("no verified objective questions; run `studio verify` first")
+    print(f"\nall: {calibration_line(total)}")
+    print(
+        "A seeded wrong key counts as caught when the verifier's blind answer differs from "
+        "it, the verifier found the question unanswerable, or it named a problem."
+    )
+    return 0
+
+
+def calibration_line(c: Calibration) -> str:
+    if not c.objective:
+        return "no objective questions verified"
+    return (
+        f"verifier agrees with {c.agreed} of {c.objective} keys ({c.agreed / c.objective:.0%}); "
+        f"would catch {c.caught} of {c.objective} seeded wrong keys "
+        f"({c.caught / c.objective:.0%})"
+    )
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     studio_dir: Path = args.dir
     config = load_config(studio_dir)
@@ -353,6 +450,21 @@ def parser() -> argparse.ArgumentParser:
     check = commands.add_parser("check", help="deterministic checks on questions (stage 4)")
     check.add_argument("dir", type=Path)
     check.set_defaults(run=cmd_check)
+
+    verify = commands.add_parser("verify", help="independent blind answers to questions (stage 5)")
+    verify.add_argument("dir", type=Path)
+    verify.add_argument("--unit", action="append", help="unit id; repeat for several")
+    verify.add_argument("--force", action="store_true", help="verify unchanged units again")
+    verify.add_argument(
+        "--dry-run", action="store_true", help="show the requests without sending them"
+    )
+    verify.set_defaults(run=cmd_verify)
+
+    calibrate = commands.add_parser(
+        "calibrate", help="how many seeded wrong keys the verifier would catch (no requests)"
+    )
+    calibrate.add_argument("dir", type=Path)
+    calibrate.set_defaults(run=cmd_calibrate)
     return root
 
 

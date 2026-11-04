@@ -4,7 +4,9 @@ Per question: the application's import schema, a cited page that was actually sh
 the quote found on that page (fuzzy, so OCR damage and diacritics do not break it),
 duplicate stems across the course and against the existing bank, and option heuristics.
 Per unit: failed or uncovered windows, the blueprint, true/false balance, the position
-of the correct option and the difficulty spread.
+of the correct option and the difficulty spread. When `studio verify` has run on the
+current questions, its disagreements, unanswerable questions and named problems are
+added as review flags.
 
 Severities: `error` means the question cannot be imported as it is; `warn` needs a
 careful look in review; `info` is a hint.
@@ -32,6 +34,7 @@ from studio.generate import (
 )
 from studio.ingest import PdfPages
 from studio.store import unit_dir, write_json
+from studio.verify import Verdict, fresh_verify, key_letters
 
 CHECKS_FILE = "checks.json"
 Severity = Literal["error", "warn", "info"]
@@ -176,6 +179,45 @@ def option_flags(content: dict[str, Any]) -> list[Flag]:
     return flags
 
 
+def key_text(content: dict[str, Any]) -> str:
+    kind = content["type"]
+    if kind in OPTION_TYPES:
+        return ", ".join(key_letters(content))
+    if kind == "TRUE_FALSE":
+        return "true" if content["correct_answer"] else "false"
+    if kind == "NUMERIC":
+        return str(content["correct_value"])
+    return "the reference answer"
+
+
+def answer_text(question: StoredQuestion, verdict: Verdict) -> str:
+    kind = question.content["type"]
+    if kind in OPTION_TYPES:
+        return ", ".join(verdict.choice) or "nothing"
+    if kind == "TRUE_FALSE":
+        return "nothing" if verdict.truth is None else str(verdict.truth).lower()
+    if kind == "NUMERIC":
+        return verdict.value or "nothing"
+    return "not supported" if verdict.reference_supported is False else "nothing"
+
+
+def verifier_flags(question: StoredQuestion, verdict: Verdict) -> list[Flag]:
+    flags = []
+    if verdict.agrees is False:
+        detail = (
+            f"verifier: {answer_text(question, verdict)}, key: {key_text(question.content)} "
+            f"({verdict.confidence}). {verdict.reason}"
+        )
+        flags.append(flag("verifier_disagrees", "warn", detail))
+    elif verdict.agrees is None:
+        flags.append(flag("verifier_unanswerable", "warn", f"not answerable: {verdict.reason}"))
+    elif verdict.confidence == "low":
+        flags.append(flag("verifier_unsure", "info", verdict.reason))
+    if verdict.problem:
+        flags.append(flag("verifier_problem", "warn", verdict.problem))
+    return flags
+
+
 def glob_files(studio_dir: Path, pattern: str) -> list[Path]:
     candidate = Path(pattern)
     if candidate.is_absolute():
@@ -275,9 +317,13 @@ def check_course(
     duplicates = duplicate_flags(units, load_bank(studio_dir, config))
     results = []
     for unit in units:
+        verify = fresh_verify(studio_dir, unit.unit)
+        verdicts = {v.id: v for v in verify.verdicts} if verify else {}
         questions = []
         for question in unit.questions:
             flags = []
+            if question.id in verdicts:
+                flags += verifier_flags(question, verdicts[question.id])
             if question.schema_error:
                 flags.append(flag("invalid_schema", "error", question.schema_error))
             flags += grounding(question, docs)
@@ -293,6 +339,12 @@ def check_course(
         spec = specs[unit.unit]
         valid = [q for q in unit.questions if not q.schema_error]
         own = window_flags(unit) + balance_flags(spec.questions or config.questions.types, valid)
+        if verify is not None:
+            own += [
+                flag("verify_failed", "warn", f"batch {b.index}: {b.error}; rerun verify")
+                for b in verify.batches
+                if b.error
+            ]
         severities = Counter(f.severity for q in questions for f in q.flags)
         severities.update(f.severity for f in own)
         text_pages = {p for w in unit.windows for p in w.pages}
@@ -311,6 +363,8 @@ def check_course(
                 "info": severities["info"],
                 "pages": len(text_pages),
                 "cited_pages": len(cited & text_pages),
+                "verified": len(verdicts),
+                "verifier_agrees": sum(v.agrees is True for v in verdicts.values()),
             },
         )
         write_json(unit_dir(studio_dir, unit.unit) / CHECKS_FILE, result)
