@@ -1,13 +1,16 @@
-"""`studio` command line: init, ingest, status and providers."""
+"""`studio` command line: init, ingest, status, providers, generate and check."""
 
 import argparse
+import hashlib
 import sys
+from collections import Counter
 from datetime import date
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from studio.checks import check_course, load_checks
 from studio.config import (
     CONFIG_NAME,
     StudioConfig,
@@ -17,9 +20,26 @@ from studio.config import (
     render_template,
     resolve_sources,
 )
-from studio.course import COURSE_NAME, PROPOSAL_NAME, check_pages, dump_course, load_course
+from studio.course import (
+    COURSE_NAME,
+    PROPOSAL_NAME,
+    CourseFile,
+    Unit,
+    check_pages,
+    dump_course,
+    load_course,
+)
+from studio.generate import (
+    generate_unit,
+    load_questions,
+    plan_windows,
+    questions_path,
+    unit_counts,
+    unit_pages,
+)
 from studio.ingest import PdfPages, ingest_all, load_all_pages, sha256_file
 from studio.llm import ChatClient, LLMError, calls_log
+from studio.prompts import QUESTIONS_SYSTEM
 from studio.proposal import proposal_header, propose
 
 PING_VERSION = "ping-v1"
@@ -121,7 +141,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"\n{COURSE_NAME}: {len(course.units)} units, {len(course.exam_cycles)} exam cycles")
     for unit in course.units:
         pages = sum(s.bounds[1] - s.bounds[0] + 1 for s in unit.sources)
-        print(f"  {unit.id} {unit.title} ({pages} pages)")
+        print(f"  {unit.id} {unit.title} ({pages} pages){question_state(studio_dir, unit.id)}")
     for cycle in course.exam_cycles:
         print(f"  {cycle.name}: units {', '.join(cycle.units)}")
     problems = check_pages(course, ingested)
@@ -130,15 +150,143 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 1 if problems or stale else 0
 
 
-def ping_stage(config: StudioConfig, studio_dir: Path, name: Literal["generate", "verify"]) -> bool:
-    stage = config.stages[name]
-    client = ChatClient(
+def question_state(studio_dir: Path, unit_id: str) -> str:
+    questions = load_questions(studio_dir, unit_id)
+    if questions is None:
+        return ""
+    state = f": {len(questions.questions)} questions"
+    if not questions.complete:
+        state += ", some windows failed"
+    checks = load_checks(studio_dir, unit_id)
+    path = questions_path(studio_dir, unit_id)
+    if checks is None or checks.questions_hash != hashlib.sha256(path.read_bytes()).hexdigest():
+        return state + ", not checked"
+    s = checks.summary
+    return state + f", {s['error']} errors, {s['warn']} warnings"
+
+
+def stage_client(
+    config: StudioConfig, studio_dir: Path, name: Literal["generate", "verify"]
+) -> ChatClient:
+    stage = config.stages.get(name)
+    if stage is None:
+        raise StudioError(f"stage not configured in {CONFIG_NAME}: [stages.{name}]")
+    return ChatClient(
         stage_name=name,
         provider_name=stage.provider,
         provider=config.providers[stage.provider],
         stage=stage,
         log_path=calls_log(studio_dir),
     )
+
+
+def confirmed_course(studio_dir: Path) -> CourseFile:
+    course = load_course(studio_dir)
+    if course is None:
+        raise StudioError(f"{studio_dir / COURSE_NAME} not found; confirm {PROPOSAL_NAME} first")
+    return course
+
+
+def selected_units(course: CourseFile, ids: list[str] | None) -> list[Unit]:
+    if not ids:
+        return course.units
+    known = {u.id: u for u in course.units}
+    missing = [i for i in ids if i not in known]
+    if missing:
+        raise StudioError(f"unknown unit ids: {', '.join(missing)}")
+    return [known[i] for i in ids]
+
+
+def ready_pages(course: CourseFile, studio_dir: Path) -> dict[str, PdfPages]:
+    docs = load_all_pages(studio_dir)
+    problems = check_pages(course, docs)
+    if problems:
+        raise StudioError(f"{COURSE_NAME} does not match the ingested PDFs: {problems[0]}")
+    return docs
+
+
+def cmd_generate(args: argparse.Namespace) -> int:
+    studio_dir: Path = args.dir
+    config = load_config(studio_dir)
+    course = confirmed_course(studio_dir)
+    docs = ready_pages(course, studio_dir)
+    units = selected_units(course, args.unit)
+    blueprint = config.questions
+
+    if args.dry_run:
+        total_chars = total_calls = 0
+        for unit in units:
+            counts = unit_counts(unit, blueprint)
+            windows = plan_windows(
+                unit_pages(unit, docs, blueprint.max_input_chars), counts, blueprint
+            )
+            chars = sum(w.chars for w in windows)
+            calls = sum(1 for w in windows if w.counts)
+            total_chars, total_calls = total_chars + chars, total_calls + calls
+            print(
+                f"{unit.id} {unit.title}: {sum(counts.values())} questions in {calls} requests, "
+                f"{chars} characters of page text"
+            )
+        tokens = (total_chars + total_calls * len(QUESTIONS_SYSTEM)) / 3.5
+        print(f"\n{total_calls} requests, roughly {tokens:,.0f} input tokens; nothing was sent")
+        return 0
+
+    client = stage_client(config, studio_dir, "generate")
+    failed = 0
+    for unit in units:
+        result = generate_unit(
+            course_name=config.course.name,
+            unit=unit,
+            docs=docs,
+            blueprint=blueprint,
+            client=client,
+            studio_dir=studio_dir,
+            force=args.force,
+        )
+        made = result.questions
+        invalid = sum(1 for q in made.questions if q.schema_error)
+        line = f"{result.state:9}  {unit.id} {unit.title}: {len(made.questions)} questions"
+        if invalid:
+            line += f", {invalid} fail the import schema"
+        if result.calls:
+            line += f" ({result.calls} requests)"
+        print(line)
+        for window in made.windows:
+            if window.error:
+                failed += 1
+                print(f"  window {window.index}: {window.error}; rerun to retry only this window")
+    print(f"\nnext: studio check {studio_dir}")
+    return 1 if failed else 0
+
+
+def cmd_check(args: argparse.Namespace) -> int:
+    studio_dir: Path = args.dir
+    config = load_config(studio_dir)
+    course = confirmed_course(studio_dir)
+    results = check_course(config, course, ready_pages(course, studio_dir), studio_dir)
+    if not results:
+        raise StudioError(f"no generated questions yet; run `studio generate {studio_dir}`")
+    errors = 0
+    for result in results:
+        s = result.summary
+        errors += s["error"]
+        codes = Counter(f.code for q in result.questions for f in q.flags)
+        codes.update(f.code for f in result.unit_flags)
+        listed = ", ".join(f"{code} {n}" for code, n in codes.most_common())
+        print(
+            f"{result.unit}: {s['questions']} questions, {s['error']} errors, {s['warn']} warnings,"
+            f" {s['info']} hints; {s['cited_pages']} of {s['pages']} pages cited"
+        )
+        if listed:
+            print(f"  {listed}")
+        for unit_flag in result.unit_flags:
+            print(f"  {unit_flag.severity}: {unit_flag.code} {unit_flag.detail}")
+    return 1 if errors else 0
+
+
+def ping_stage(config: StudioConfig, studio_dir: Path, name: Literal["generate", "verify"]) -> bool:
+    stage = config.stages[name]
+    client = stage_client(config, studio_dir, name)
     try:
         reply = client.complete_json(
             system=PING_SYSTEM, user=PING_USER, response_model=Ping, prompt_version=PING_VERSION
@@ -192,6 +340,19 @@ def parser() -> argparse.ArgumentParser:
     providers.add_argument("dir", type=Path)
     providers.add_argument("--stage", choices=["generate", "verify"])
     providers.set_defaults(run=cmd_providers)
+
+    generate = commands.add_parser("generate", help="generate questions per unit (stage 3)")
+    generate.add_argument("dir", type=Path)
+    generate.add_argument("--unit", action="append", help="unit id; repeat for several")
+    generate.add_argument("--force", action="store_true", help="regenerate unchanged units")
+    generate.add_argument(
+        "--dry-run", action="store_true", help="show the requests without sending them"
+    )
+    generate.set_defaults(run=cmd_generate)
+
+    check = commands.add_parser("check", help="deterministic checks on questions (stage 4)")
+    check.add_argument("dir", type=Path)
+    check.set_defaults(run=cmd_check)
     return root
 
 

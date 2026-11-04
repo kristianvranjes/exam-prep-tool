@@ -10,7 +10,7 @@ from typing import Literal, Self
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from studio.config import Course, StudioError
+from studio.config import Course, StudioError, TypeCounts, check_counts
 from studio.ingest import PdfPages
 
 COURSE_NAME = "course.yaml"
@@ -49,6 +49,13 @@ class Unit(Strict):
     id: str = Field(pattern=r"^\d{2,3}$")
     title: str = Field(min_length=1, max_length=200)
     sources: list[SourceRange] = Field(min_length=1)
+    # Overrides the studio.toml blueprint for this unit.
+    questions: TypeCounts | None = None
+
+    @field_validator("questions")
+    @classmethod
+    def valid_counts(cls, counts: TypeCounts | None) -> TypeCounts | None:
+        return None if counts is None else check_counts(counts)
 
 
 class ExamCycle(Strict):
@@ -107,5 +114,6 @@ def load_course(studio_dir: Path) -> CourseFile | None:
 
 def dump_course(course: CourseFile, header: list[str]) -> str:
     comments = "".join(f"# {line}\n" if line else "#\n" for line in header)
-    body = yaml.safe_dump(course.model_dump(), allow_unicode=True, sort_keys=False, width=100)
+    data = course.model_dump(exclude_none=True)
+    body = yaml.safe_dump(data, allow_unicode=True, sort_keys=False, width=100)
     return comments + body

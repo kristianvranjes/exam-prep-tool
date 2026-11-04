@@ -2,8 +2,9 @@
 
 A local command-line tool that turns a course's lecture PDFs into reviewed ExamPrep
 import files. The plan and the decisions behind it are in
-[docs/CONTENT_STUDIO.md](../../docs/CONTENT_STUDIO.md). This is **S0**: ingest, the
-`course.yaml` proposal and a provider check. Question generation (S1) comes next.
+[docs/CONTENT_STUDIO.md](../../docs/CONTENT_STUDIO.md). Built so far: **S0** (ingest,
+the `course.yaml` proposal, a provider check) and **S1** (question generation to a
+blueprint and deterministic checks). The verifier (S2) comes next.
 
 ## Install
 
@@ -13,7 +14,9 @@ python -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev]"   # Windows; on Linux/macOS: .venv/bin/python
 ```
 
-The studio does not import the application and needs no database.
+The studio needs no database and no backend install. It loads only the application's
+question schemas, straight from `backend/` of the same checkout, so install it from an
+ExamPrep checkout.
 
 ## Use
 
@@ -25,6 +28,9 @@ studio init ../../../srs/studio --name "Sigurnost računalnih sustava" --code SR
 studio ingest ../../../srs/studio      # page text + course.proposed.yaml
 studio status ../../../srs/studio      # sources, units, problems
 studio providers ../../../srs/studio   # one tiny request per AI stage
+studio generate ../../../srs/studio --dry-run   # requests and input size, nothing sent
+studio generate ../../../srs/studio --unit 03   # questions for one unit (all by default)
+studio check ../../../srs/studio       # deterministic checks on all generated units
 ```
 
 `ingest` rereads only PDFs whose bytes changed (`--force` rereads all). After it, check
@@ -39,7 +45,9 @@ studio providers ../../../srs/studio   # one tiny request per AI stage
 | `build/pages/<slug>.json` | `ingest` | `studio-pages-v1`: per page the raw `text`, the `body` without repeated header/footer lines, and `flags` (`no_text`, `ocr_noise`); the PDF outline; the SHA-256 of the PDF |
 | `course.proposed.yaml` | `ingest` | `studio-course-v1` proposal with warnings in its header |
 | `course.yaml` | you | The confirmed units (`id`, `title`, `sources: [{pdf, pages}]`) and `exam_cycles` |
-| `build/calls.jsonl` | AI stages | One line per call: stage, provider, model, routed model/provider, prompt version, outcome code, latency, token counts, cost. Never the key or prompt text |
+| `build/units/<id>/questions.json` | `generate` | `studio-questions-v1`: windows (pages, requested counts, outcome) and questions, each with its `content` in the application's `quiz-import-v2` shape, its `source` (`pdf`, `page`, `quote`) and `schema_error` |
+| `build/units/<id>/checks.json` | `check` | `studio-checks-v1`: flags per question and per unit, a summary, and the hash of the `questions.json` it checked |
+| `build/calls.jsonl` | AI stages | One line per call: stage, subject (unit and window), provider, model, routed model/provider, prompt version, outcome code, latency, token counts, cost. Never the key or prompt text |
 
 ### How units are proposed
 
@@ -54,6 +62,47 @@ Only the first and last two lines of a page can count as header or footer lines 
 they appear on at least 60 % of the pages with text, with numbers ignored). This
 removes "Laboratorij za … Sigurnost računalnih sustava" and "12/62" without touching
 content lines like "Korak 1".
+
+## Generating questions
+
+The blueprint is `[questions] types` in `studio.toml` (12 multiple choice, 4 true/false,
+2 multiple select, 2 short answer by default); a unit in `course.yaml` may override it
+with its own `questions:` mapping. A unit's pages with text are split into windows of
+consecutive pages, at most `max_input_chars` (12000) characters and roughly
+`max_questions_per_call` (8) questions each, and the blueprint is shared out across
+windows in proportion to their text. Each request sees only its window, with pages
+labelled S1, S2, … that the studio maps back to PDF and page.
+
+Each question is validated with the application's own schemas, loaded from
+`backend/app/schemas/question.py` in this checkout, so a question the studio accepts is
+one the application imports. Options are reordered deterministically (seeded by the
+question id): models put the key first far more often than chance, and the application
+shows options in stored order.
+
+A unit is sent again only when its pages, blueprint, model or prompt version change
+(`--force` regenerates anyway). If some windows fail (rate limit, timeout), a rerun
+requests only those.
+
+## Checks
+
+`studio check` flags, it never fixes. `error` means the question cannot be imported as
+it is, `warn` needs a careful look in review, `info` is a hint.
+
+| Check | Severity |
+| --- | --- |
+| Fails the application's import schema | error |
+| Cites a label that was not in its window | error |
+| Quote not found on the cited page (fuzzy: case, diacritics, OCR `■`, LaTeX commands and `...` joins are tolerated) / found only partly / too short | warn / info / warn |
+| Same or nearly the same stem as another question of the course or of the existing bank (`[checks] existing`) | warn |
+| Stem mentions the source, slides or lecture, which students never see | warn |
+| "All/none of the above" option; two options nearly identical | warn |
+| Negated stem; key clearly the longest option; no explanation | info |
+| Unit: failed or uncovered window | error / warn |
+| Unit: fewer questions of a type than the blueprint; true/false share outside 30–70 %; the key in one position for over half the multiple-choice items; the key the longest in 40 % or more; one difficulty for all | warn |
+
+Checks cannot see wrong facts that the page text itself carries. PDF text extraction
+loses superscripts, so "2^40" on a slide reads "240" and a question built on it is
+wrong although its quote matches. That is the verifier's and the reviewer's job.
 
 ## Providers
 

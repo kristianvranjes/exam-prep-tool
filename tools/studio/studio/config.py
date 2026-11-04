@@ -14,6 +14,23 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 CONFIG_NAME = "studio.toml"
 StageName = Literal["generate", "verify"]
+QuestionType = Literal[
+    "MULTIPLE_CHOICE", "TRUE_FALSE", "MULTIPLE_SELECT", "SHORT_ANSWER", "NUMERIC"
+]
+QUESTION_TYPES: tuple[QuestionType, ...] = (
+    "MULTIPLE_CHOICE",
+    "TRUE_FALSE",
+    "MULTIPLE_SELECT",
+    "SHORT_ANSWER",
+    "NUMERIC",
+)
+TypeCounts = dict[QuestionType, int]
+DEFAULT_TYPES: TypeCounts = {
+    "MULTIPLE_CHOICE": 12,
+    "TRUE_FALSE": 4,
+    "MULTIPLE_SELECT": 2,
+    "SHORT_ANSWER": 2,
+}
 
 
 class StudioError(Exception):
@@ -67,11 +84,40 @@ class Stage(Strict):
         return self.model.lstrip("~").split("/", 1)[0]
 
 
+def check_counts(counts: TypeCounts) -> TypeCounts:
+    if any(n < 0 or n > 100 for n in counts.values()):
+        raise ValueError("question counts must be between 0 and 100")
+    if not 1 <= sum(counts.values()) <= 200:
+        raise ValueError("a unit needs between 1 and 200 questions in total")
+    return {t: n for t, n in counts.items() if n}
+
+
+class Questions(Strict):
+    """The per-unit blueprint and how generation splits a unit into bounded requests."""
+
+    types: TypeCounts = Field(default_factory=lambda: dict(DEFAULT_TYPES))
+    # Characters of page text per request; a unit is never sent whole.
+    max_input_chars: int = Field(default=12000, ge=2000, le=60000)
+    max_questions_per_call: int = Field(default=8, ge=1, le=20)
+
+    @field_validator("types")
+    @classmethod
+    def valid_counts(cls, counts: TypeCounts) -> TypeCounts:
+        return check_counts(counts)
+
+
+class Checks(Strict):
+    # quiz-import JSON files already in the course bank, for duplicate checks.
+    existing: list[str] = Field(default_factory=list)
+
+
 class StudioConfig(Strict):
     course: Course
     sources: Sources
     providers: dict[str, Provider] = Field(min_length=1)
     stages: dict[StageName, Stage]
+    questions: Questions = Field(default_factory=Questions)
+    checks: Checks = Field(default_factory=Checks)
 
     @model_validator(mode="after")
     def consistent(self) -> Self:
@@ -112,10 +158,21 @@ api_key_env = "OPENROUTER_API_KEY"
 [stages.generate]
 provider = "openrouter"
 model = "deepseek/deepseek-v4-flash"
+max_output_tokens = 8192
+# ZDR endpoints took 30 to 150 seconds per eight-question request in the first runs.
+timeout_seconds = 300
 
 [stages.verify]
 provider = "openrouter"
 model = "qwen/qwen3.8-27b"
+
+[questions]
+# Questions per unit by type; a unit in course.yaml may override this with `questions:`.
+types = {{ MULTIPLE_CHOICE = 12, TRUE_FALSE = 4, MULTIPLE_SELECT = 2, SHORT_ANSWER = 2 }}
+
+[checks]
+# quiz-import JSON files already in the course bank, checked for duplicate stems.
+existing = []
 """
 
 

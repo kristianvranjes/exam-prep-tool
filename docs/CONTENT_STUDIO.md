@@ -153,7 +153,20 @@ Planned after the winter midterms; this needs a migration and new UI.
    endpoints; the defaults are `deepseek/deepseek-v4-flash` (generator) and
    `qwen/qwen3.8-27b` (verifier). The verifier reasons before answering (536 output
    tokens for a two-word ping), which S2 must budget for.
-2. **S1** question generation with blueprints and stage 4 checks.
+2. **S1** question generation with blueprints and stage 4 checks. *Done.* Trial on
+   3–4 November with two SRS decks (symmetric cryptography, web security; 40
+   questions): no question failed the application's import schema, and generation
+   cost under 0.01 USD per prompt version for both units together. Requests took 30 to
+   150 seconds on ZDR endpoints, so the generator timeout is 300 seconds; a timeout and
+   a dropped connection in the second run were recovered by a rerun that sent only
+   those two windows. The first prompt (`questions-v1`) put the key first in 10 of 12
+   multiple-choice items, wrote stems such as "navedene u izvoru", and quoted by
+   stitching bullets with "..." or rewriting symbols as LaTeX. Options are now reordered
+   deterministically, the checks catch source-referring stems and tolerate stitched or
+   LaTeX quotes, and `questions-v2` cut the warnings from 10 to 3. Still open: the
+   true/false share swings (1 of 4, then 0 of 4 true), and PDF extraction drops
+   superscripts ("2^40" reads "240"), which produced a wrong DES question that only
+   the verifier or the reviewer can catch.
 3. **S2** verifier and flags.
 4. **S3** local review page.
 5. **S4** publish and `studio push`.
