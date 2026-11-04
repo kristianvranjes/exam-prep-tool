@@ -159,9 +159,12 @@ cross-course review queue in the frontend.
 
 ## Operator-only provisioning
 
-No public API creates faculties or grants moderator status. A trusted operator
-verifies exact registered user/faculty UUIDs and faculty activity before executing
-on a trusted database connection, substituting the verified IDs:
+No public API grants moderator status on an existing faculty. Since revision 0027 a
+moderator of any active faculty can add a new faculty (`POST /faculties`, "Add a
+faculty" in Faculty tools) and becomes moderator of that new faculty only;
+`faculty_creators` records who added it. Every other grant stays with a trusted
+operator, who verifies exact registered user/faculty UUIDs and faculty activity before
+executing on a trusted database connection, substituting the verified IDs:
 
 ```sql
 BEGIN;
@@ -176,7 +179,7 @@ with `DELETE FROM faculty_moderators WHERE faculty_id = '<verified-faculty-uuid>
 AND user_id = '<verified-user-uuid>';`. Record grants/revokes in the operator change
 log; never distribute database credentials to students. Assign a second distinct
 reviewer when moderators contribute themselves. Existing owners are not promoted
-automatically. Faculty provisioning follows the existing trusted catalog procedure.
+automatically. Faculties can still be provisioned through the trusted catalog procedure.
 
 ## Uniqueness and migration 0011
 

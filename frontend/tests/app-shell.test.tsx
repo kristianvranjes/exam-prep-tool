@@ -18,6 +18,7 @@ const apiMock = vi.hoisted(() => ({
   updateCourse: vi.fn(),
   deleteCourse: vi.fn(),
   createCourse: vi.fn(),
+  createFaculty: vi.fn(),
   facultyCourses: vi.fn(),
   questionReview: vi.fn().mockResolvedValue([]),
   transitionQuestion: vi.fn(),
@@ -94,6 +95,35 @@ describe("authentication and course flow", () => {
     await waitFor(() => expect(apiMock.createCourse).toHaveBeenCalledWith({ faculty_id: "faculty-1", name: "Algorithms", code: undefined, description: undefined }));
     expect(await screen.findByRole("heading", { name: "Algorithms" })).toBeVisible();
     expect(screen.queryByRole("heading", { name: "Home" })).not.toBeInTheDocument();
+  });
+
+  it("lets a moderator add a faculty and offers it for new courses", async () => {
+    const fer = { id: "faculty-2", name: "Fakultet elektrotehnike i računarstva", slug: "fakultet-elektrotehnike-i-racunarstva", university_name: "Sveučilište u Zagrebu" };
+    apiMock.me.mockResolvedValue(user);
+    apiMock.createFaculty.mockResolvedValue(fer);
+    render(<AppShell />);
+    await openManagement();
+    const form = screen.getByRole("form", { name: "Add a faculty" });
+    fireEvent.change(within(form).getByLabelText("Faculty name"), { target: { value: fer.name } });
+    fireEvent.change(within(form).getByLabelText("University (optional)"), { target: { value: " Sveučilište u Zagrebu " } });
+    fireEvent.submit(form);
+    await waitFor(() => expect(apiMock.createFaculty).toHaveBeenCalledWith({ name: fer.name, university_name: "Sveučilište u Zagrebu" }));
+    expect(await within(form).findByText(`${fer.name} added. You moderate it, so you can create its courses below.`)).toBeInTheDocument();
+    const courseForm = screen.getByRole("form", { name: "Create a course" });
+    const options = within(within(courseForm).getByLabelText("Faculty")).getAllByRole("option").map(option => option.textContent);
+    expect(options).toEqual(["Select a faculty", "Engineering", fer.name]);
+  });
+
+  it("shows why a faculty could not be added", async () => {
+    apiMock.me.mockResolvedValue(user);
+    apiMock.createFaculty.mockRejectedValue(new Error("A faculty with this address already exists"));
+    render(<AppShell />);
+    await openManagement();
+    const form = screen.getByRole("form", { name: "Add a faculty" });
+    fireEvent.change(within(form).getByLabelText("Faculty name"), { target: { value: "Engineering" } });
+    fireEvent.submit(form);
+    expect(await within(form).findByText("A faculty with this address already exists")).toBeInTheDocument();
+    expect(within(form).getByRole("button", { name: "Add faculty" })).toBeEnabled();
   });
 
   it("shows login errors", async () => {
