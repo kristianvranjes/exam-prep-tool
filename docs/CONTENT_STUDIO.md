@@ -1,8 +1,9 @@
 # Content Studio: lessons, quizzes and exams from course PDFs
 
-**Status:** proposal, not implemented. Written 3 November 2026; decisions below are the
-project owner's from the same day. Nothing here changes the application before the
-16 November feature freeze.
+**Status:** S0–S3 implemented in [`tools/studio/`](../tools/studio/README.md) (ingest,
+generation, checks, verifier, review page); S4 onwards are proposals. Written 3 November
+2026; decisions below are the project owner's from the same day. Nothing here changes
+the application before the 16 November feature freeze.
 
 ## 1. Problem
 
@@ -142,10 +143,47 @@ Planned after the winter midterms; this needs a migration and new UI.
 
 ## 8. Build order for the tool
 
-1. **S0** skeleton, ingest and `course.yaml` proposal.
-2. **S1** question generation with blueprints and stage 4 checks.
-3. **S2** verifier and flags.
-4. **S3** local review page.
+1. **S0** skeleton, ingest and `course.yaml` proposal. *Done.* First runs on 3 November:
+   SRS (14 decks, 743 pages) ingests in about 3 seconds into 14 proposed units, with the
+   repeated deck header removed from every page. PPJ's single 1061-page PDF has no
+   outline and 783 OCR-damaged pages (`■` for č/ć/đ), so its twelve units need page
+   ranges by hand and quote grounding there will be weaker. The SRS scripts
+   (`ultskripte/`) are scans without text and cannot be sources without OCR. The
+   OpenRouter account enforces zero data retention, which rules out models without ZDR
+   endpoints; the defaults are `deepseek/deepseek-v4-flash` (generator) and
+   `qwen/qwen3.8-27b` (verifier). The verifier reasons before answering (536 output
+   tokens for a two-word ping), which S2 must budget for.
+2. **S1** question generation with blueprints and stage 4 checks. *Done.* Trial on
+   3–4 November with two SRS decks (symmetric cryptography, web security; 40
+   questions): no question failed the application's import schema, and generation
+   cost under 0.01 USD per prompt version for both units together. Requests took 30 to
+   150 seconds on ZDR endpoints, so the generator timeout is 300 seconds; a timeout and
+   a dropped connection in the second run were recovered by a rerun that sent only
+   those two windows. The first prompt (`questions-v1`) put the key first in 10 of 12
+   multiple-choice items, wrote stems such as "navedene u izvoru", and quoted by
+   stitching bullets with "..." or rewriting symbols as LaTeX. Options are now reordered
+   deterministically, the checks catch source-referring stems and tolerate stitched or
+   LaTeX quotes, and `questions-v2` cut the warnings from 10 to 3. Still open: the
+   true/false share swings (1 of 4, then 0 of 4 true), and PDF extraction drops
+   superscripts ("2^40" reads "240"), which produced a wrong DES question that only
+   the verifier or the reviewer can catch.
+3. **S2** verifier and flags. *Done.* On the same 40 trial questions `qwen/qwen3.8-27b`
+   answered blind in 10 requests (7 to 82 seconds each, 0.07 USD in total, about seven
+   times the cost of generating them, because it reasons first). It agreed with every
+   objective key, found one short answer not answerable from its page, and named four
+   real defects: an option that is equally correct (1/|K| = 1/2^n for the one-time
+   pad), a fact not on the page (25 Caesar keys), a reference answer needing outside
+   knowledge (an SQL tautology example), and a false statement that differs from the
+   page only by one exponent. No deterministic check finds such defects. `studio
+   calibrate` derives a wrong key per objective question without further requests (the
+   verifier never sees keys) and counted all 36 as caught; 36 agreeing questions are a
+   small sample, so the PPJ calibration run remains the real measurement.
+4. **S3** local review page. *Done.* `studio review` serves the page on 127.0.0.1 with a
+   token; decisions are tied to a content hash, edits pass the application schema, and
+   unflagged questions are sampled before a bulk acceptance. Trying it on the SRS trial
+   showed that explanations name options by letter ("opcija B …"), which the option
+   shuffle from S1 makes wrong: 3 of 14 option questions in one unit. A new check flags
+   such explanations and `questions-v3` forbids them.
 5. **S4** publish and `studio push`.
 6. **S5** lessons.
 7. **S6** mock papers and past-paper transcription.
