@@ -15,6 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from studio.appschema import content_error
 from studio.checks import check_course, load_checks
 from studio.config import (
     CONFIG_NAME,
@@ -60,6 +61,9 @@ from studio.publish import publish
 from studio.push import plan as push_plan
 from studio.push import push
 from studio.review import make_server
+from studio.rewrite import rewrite
+from studio.sources import references
+from studio.store import write_json
 from studio.verify import Calibration, calibration, fresh_verify, plan_batches, verify_unit
 
 PING_VERSION = "ping-v1"
@@ -288,6 +292,51 @@ def cmd_generate(args: argparse.Namespace) -> int:
         print("\n".join(lines))
         failed += errors
     print(f"\nnext: studio check {studio_dir}")
+    return 1 if failed else 0
+
+
+def cmd_rewrite(args: argparse.Namespace) -> int:
+    """Drop or rephrase text that cites the slides in already generated questions."""
+    studio_dir: Path = args.dir
+    config = load_config(studio_dir)
+    course = confirmed_course(studio_dir)
+    units = generated_units(studio_dir, selected_units(course, args.unit))
+    stage = config.stages.get("generate")
+    if not args.dry_run:
+        stage_client(config, studio_dir, "generate")  # fail early when not configured
+
+    def one(questions: UnitQuestions) -> tuple[list[str], int]:
+        client = None if args.dry_run else stage_client(config, studio_dir, "generate")
+        cited = sum(1 for q in questions.questions if references(q.content))
+        fixed = rewrite(
+            {q.id: q.content for q in questions.questions}, client, f"unit {questions.unit}"
+        )
+        changed = 0
+        for question in questions.questions:
+            if fixed.contents[question.id] != question.content:
+                changed += 1
+                question.content = fixed.contents[question.id]
+                question.schema_error = content_error(question.content)
+        if changed and not args.dry_run:
+            write_json(questions_path(studio_dir, questions.unit), questions)
+        verb = "would change" if args.dry_run else "changed"
+        line = (
+            f"{questions.unit} {questions.title}: {cited} cite a source, {changed} {verb}, "
+            f"{len(fixed.left)} still {'need the model' if args.dry_run else 'do'}"
+        )
+        lines = [line + (f" ({fixed.calls} requests)" if fixed.calls else "")]
+        lines += [f"  request failed: {code}; rerun to retry" for code in fixed.errors]
+        lines += [f"  {qid}: {', '.join(names)}" for qid, names in sorted(fixed.left.items())]
+        return lines, len(fixed.errors)
+
+    failed = 0
+    for lines, errors in run_parallel(units, one, stage.parallel if stage else 1):
+        print("\n".join(lines))
+        failed += errors
+    if args.dry_run:
+        print("\nnothing was written or sent")
+    else:
+        print(f"\nnext: studio verify {studio_dir} (changed units), then studio check {studio_dir}")
     return 1 if failed else 0
 
 
@@ -603,6 +652,16 @@ def parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true", help="show the requests without sending them"
     )
     generate.set_defaults(run=cmd_generate)
+
+    rewrite_cmd = commands.add_parser(
+        "rewrite", help="remove mentions of slides and sources from generated questions"
+    )
+    rewrite_cmd.add_argument("dir", type=Path)
+    rewrite_cmd.add_argument("--unit", action="append", help="unit id; repeat for several")
+    rewrite_cmd.add_argument(
+        "--dry-run", action="store_true", help="only report; write and send nothing"
+    )
+    rewrite_cmd.set_defaults(run=cmd_rewrite)
 
     check = commands.add_parser("check", help="deterministic checks on questions (stage 4)")
     check.add_argument("dir", type=Path)

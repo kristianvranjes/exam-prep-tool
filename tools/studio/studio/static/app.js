@@ -22,7 +22,7 @@ const FLAGS = {
   quote_short: "Citat je prekratak",
   duplicate: "Duplikat",
   near_duplicate: "Gotovo duplikat",
-  stem_refers_to_source: "Pitanje spominje izvor ili slajd",
+  refers_to_source: "Tekst spominje izvor, slajd ili predavanje",
   all_or_none_option: "Opcija »sve/ništa od navedenog«",
   options_too_similar: "Preslične opcije",
   negated_stem: "Negirano pitanje",

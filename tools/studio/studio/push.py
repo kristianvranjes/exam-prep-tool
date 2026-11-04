@@ -22,11 +22,11 @@ import httpx
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from studio.appschema import import_error, question_module
-from studio.checks import fold
 from studio.config import App, StudioError
 from studio.course import Unit
 from studio.publish import Accepted, import_document, out_dir, unit_decisions
 from studio.review import content_hash
+from studio.sources import fold
 from studio.store import write_json
 
 APPROVE_BATCH = 50

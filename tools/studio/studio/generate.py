@@ -28,6 +28,7 @@ from studio.course import Unit
 from studio.ingest import PdfPages
 from studio.llm import ChatClient, LLMError
 from studio.prompts import QUESTIONS_SYSTEM, QUESTIONS_VERSION, questions_user
+from studio.rewrite import rewrite
 from studio.store import unit_dir, write_json
 
 QUESTIONS_FILE = "questions.json"
@@ -59,7 +60,7 @@ class GenQuestion(Strict):
     unit: str | None
     explanation: str
     difficulty: int
-    source: str
+    page: str
     quote: str
 
 
@@ -124,7 +125,7 @@ class Window:
 
     @property
     def labelled(self) -> list[tuple[str, PageText]]:
-        return [(f"S{i}", page) for i, page in enumerate(self.pages, start=1)]
+        return [(f"P{i}", page) for i, page in enumerate(self.pages, start=1)]
 
 
 @dataclass(frozen=True)
@@ -274,7 +275,7 @@ def stored(unit: Unit, window: Window, batch: GenBatch) -> list[StoredQuestion]:
     result = []
     for k, question in enumerate(batch.questions, start=1):
         qid = f"{unit.id}-w{window.index:02d}-{k:02d}"
-        page = pages.get(question.source.strip().upper())
+        page = pages.get(question.page.strip().upper())
         content = to_content(question)
         shuffle_options(content, qid)
         result.append(
@@ -352,6 +353,14 @@ def generate_unit(
                 record.error = exc.code
             else:
                 new = stored(unit, window, batch)
+                # Students never see the slides: drop or rephrase text that cites them.
+                fixed = rewrite(
+                    {q.id: q.content for q in new}, client, f"unit {unit.id} window {window.index}"
+                )
+                calls += fixed.calls
+                for question in new:
+                    question.content = fixed.contents[question.id]
+                    question.schema_error = content_error(question.content)
                 record.received = len(new)
                 questions += new
         records.append(record)

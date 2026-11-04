@@ -106,22 +106,6 @@ def test_stitched_and_latex_quotes_are_matched_piece_by_piece() -> None:
     assert fold(r"$m \in \{0,1\}^n$") == fold("m ∈ {0,1}n") == "m 0 1 n"
 
 
-@pytest.mark.parametrize(
-    ("stem", "flagged"),
-    [
-        ("Koje su metode navedene u izvoru?", True),
-        ("Što se spominje na slajdu o AES-u?", True),
-        ("Što je rečeno na predavanju o DES-u?", True),
-        ("Što leksički analizator čita iz izvornog koda?", False),
-        ("Koju uslugu pruža prezentacijski sloj?", False),
-    ],
-)
-def test_stems_that_point_at_the_sources(stem: str, flagged: bool) -> None:
-    from studio.checks import REFERS_TO_SOURCE
-
-    assert bool(REFERS_TO_SOURCE.search(fold(stem))) is flagged
-
-
 def test_missing_short_and_out_of_range_sources() -> None:
     assert codes(grounding(question(), docs())) == ["no_source"]
     assert codes(grounding(question(quote="analizator"), docs())) == ["quote_short"]
