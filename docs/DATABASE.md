@@ -369,3 +369,12 @@ backfilled. Nothing reads it back; see
 column; sessions, answers and grades are unchanged, and upgrading again leaves every
 earlier session NULL. Run the pilot metrics before a downgrade if the recorded modes
 matter.
+
+## Faculty creators migration 0027
+
+Revision 0027 follows 0026 and adds `faculty_creators`: `faculty_id` (primary key,
+references faculties, ON DELETE CASCADE), nullable indexed `user_id` (references users,
+ON DELETE SET NULL) and `created_at`. A row exists for each faculty a moderator added
+through `POST /faculties`; seeded or operator-provisioned faculties have none. The
+creator lives in its own table rather than a column on `faculties` so that removing an
+account never touches the faculty. Downgrade drops the table and keeps every faculty.

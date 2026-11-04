@@ -160,6 +160,9 @@ export const api = {
   updateCourse: (id: string, body: { name: string; code: string | null; description: string | null }) => request<Course>(`/courses/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteCourse: (id: string) => request<void>(`/courses/${id}`, { method: "DELETE" }),
   createCourse: (body: { faculty_id: string; name: string; code?: string; description?: string }) => request<Course>("/courses", { method: "POST", body: JSON.stringify(body) }),
+  // Moderators of any faculty may add one; the creator becomes its first moderator.
+  createFaculty: (body: { name: string; university_name?: string }) => request<Faculty>("/faculties", { method: "POST", body: JSON.stringify(body) }),
+  canCreateFaculty: () => request<{ can_create: boolean }>("/faculties/can-create"),
 };
 
 export type Material = { id: string; course_id: string; uploaded_by_user_id: string; original_filename: string; media_type: string; file_size_bytes: number; status: 'UPLOADED' | 'PROCESSING' | 'READY' | 'FAILED'; processing_error: string | null; created_at: string; updated_at: string };

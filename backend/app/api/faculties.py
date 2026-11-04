@@ -7,10 +7,31 @@ from app.dependencies import get_current_user, get_db
 from app.models import Course, User
 from app.models.faculty import Faculty
 from app.schemas.course import CourseResponse
-from app.schemas.faculty import FacultyResponse
-from app.services.faculties import list_faculties, list_faculty_courses
+from app.schemas.faculty import FacultyCreate, FacultyCreation, FacultyResponse
+from app.services.faculties import (
+    can_create_faculty,
+    create_faculty,
+    list_faculties,
+    list_faculty_courses,
+)
 
 router = APIRouter(prefix="/faculties", tags=["faculties"])
+
+
+@router.post("", response_model=FacultyResponse, status_code=201)
+def add_faculty(
+    data: FacultyCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Faculty:
+    return create_faculty(db, user, data)
+
+
+@router.get("/can-create", response_model=FacultyCreation)
+def faculty_creation(
+    user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> FacultyCreation:
+    return FacultyCreation(can_create=can_create_faculty(db, user))
 
 
 @router.get("", response_model=list[FacultyResponse])

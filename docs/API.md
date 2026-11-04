@@ -541,6 +541,14 @@ All endpoints require authentication (401 otherwise):
   ordered by name then id. Returns normal course metadata, including faculty_id and
   is_active, but no materials/questions/answers. Unknown/inactive faculty is 404.
 - Both catalogs accept `limit` (1-100, default 100) and `offset` (0-10000, default 0).
+- `POST /faculties`: body `name` (1-150 characters, trimmed), optional
+  `university_name` (1-200) and optional `slug` (lower-case words joined by single
+  hyphens, at most 100; derived from the name without diacritics when omitted). Only a
+  moderator of at least one active faculty may call it (403 otherwise). Creates the
+  faculty, makes the caller its moderator and records the caller in
+  `faculty_creators`, in one transaction. 201 with the faculty; 409 when the slug is
+  taken; 422 for invalid fields or a name without letters or digits.
+- `GET /faculties/can-create`: `{"can_create": bool}` for the current user.
 - `POST /courses/{course_id}/join`: no request body required. Authenticated identity
   determines the user; role is always MEMBER for a new membership. Returns 200 with
   `{course_id, user_id, role}`. Repeated/concurrent requests return the same existing

@@ -245,7 +245,7 @@ export function AppShell() {
     </div>
     <div hidden={view !== "management"}>
       {view === "management" && (checkingFaculties ? <LoadingState>Checking faculty access…</LoadingState> : faculties.length === 0 && <><Alert>Faculty tools are available to faculty moderators.</Alert><Button className="mt-4" onClick={() => navigate("/")}>Back to Home</Button></>)}
-      {managementVisited && faculties.length > 0 && <UnsavedChangesProvider onDirtyChange={setManagementEdited}><FacultyWorkspace faculties={faculties} currentUserId={user.id} busy={busy} createCourse={createCourse} goHome={() => navigate("/")} /></UnsavedChangesProvider>}
+      {managementVisited && faculties.length > 0 && <UnsavedChangesProvider onDirtyChange={setManagementEdited}><FacultyWorkspace faculties={faculties} currentUserId={user.id} busy={busy} createCourse={createCourse} onFacultyCreated={faculty => setFaculties(current => [...current, faculty].sort((a, b) => a.name.localeCompare(b.name, "hr")))} goHome={() => navigate("/")} /></UnsavedChangesProvider>}
     </div>
   </ApplicationFrame></>;
 }

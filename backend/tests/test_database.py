@@ -13,4 +13,4 @@ def test_database_and_migration() -> None:
     assert check_database(engine).status == "ok"
     with engine.connect() as connection:
         assert connection.scalar(text("SELECT extname FROM pg_extension WHERE extname='vector'"))
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0026"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0027"
