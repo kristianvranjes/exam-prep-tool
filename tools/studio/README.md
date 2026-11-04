@@ -92,7 +92,7 @@ imperfect.
 
 Setup on Windows: `winget install UB-Mannheim.TesseractOCR`, then put `hrv.traineddata`
 from [tessdata](https://github.com/tesseract-ocr/tessdata) next to a copy of
-`eng.traineddata` and `osd.traineddata` in `%LOCALAPPDATA%\examprep-studio	essdata`
+`eng.traineddata` and `osd.traineddata` in `%LOCALAPPDATA%\examprep-studio\tessdata`
 (or point `STUDIO_TESSDATA` at a folder with them; `STUDIO_TESSERACT` overrides the
 program path).
 
