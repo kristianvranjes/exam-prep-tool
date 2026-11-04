@@ -125,6 +125,7 @@ def test_title_from_filename_strips_numbering_and_years() -> None:
         "Sigurnost programske podrske 2 i SDLC"
     )
     assert title_from_filename("00. Uvod[8]") == "Uvod"
+    assert title_from_filename("07-Sigurnost-web-aplikacija - 2026") == "Sigurnost web aplikacija"
 
 
 def test_course_file_round_trips_and_checks_page_ranges(tmp_path: Path) -> None:

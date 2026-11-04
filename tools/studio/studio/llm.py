@@ -44,6 +44,7 @@ class CallRecord(BaseModel):
     routed_model: str | None = None
     routed_provider: str | None = None
     prompt_version: str
+    subject: str | None = None
     ok: bool
     error: str | None = None
     latency_ms: int
@@ -146,7 +147,13 @@ class ChatClient:
         return body
 
     def complete_json(
-        self, *, system: str, user: str, response_model: type[T], prompt_version: str
+        self,
+        *,
+        system: str,
+        user: str,
+        response_model: type[T],
+        prompt_version: str,
+        subject: str | None = None,
     ) -> T:
         key = self._key()
         self._pace()
@@ -157,6 +164,7 @@ class ChatClient:
             provider=self.provider_name,
             model=self.stage.model,
             prompt_version=prompt_version,
+            subject=subject,
             ok=False,
             latency_ms=0,
         )

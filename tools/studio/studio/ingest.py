@@ -7,7 +7,6 @@ where grounding checks are weak. A PDF whose bytes have not changed is not re-re
 """
 
 import hashlib
-import json
 import os
 import re
 import unicodedata
@@ -20,6 +19,7 @@ import pypdfium2 as pdfium
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from studio.config import StudioError
+from studio.store import write_json
 
 PAGES_VERSION: Literal["studio-pages-v1"] = "studio-pages-v1"
 # The black square and the replacement character mark letters an OCR pass could not
@@ -99,10 +99,12 @@ def line_key(line: str) -> str:
 
 
 def edge_lines(text: str) -> list[str]:
+    """The first and last lines of a page: at most two, and a quarter of a short page."""
     lines = [line for line in text.splitlines() if line.strip()]
-    if len(lines) <= 2 * EDGE_LINES:
+    edge = min(EDGE_LINES, max(1, len(lines) // 4))
+    if len(lines) <= 2 * edge:
         return lines
-    return lines[:EDGE_LINES] + lines[-EDGE_LINES:]
+    return lines[:edge] + lines[-edge:]
 
 
 def find_repeated(texts: list[str]) -> dict[str, str]:
@@ -209,10 +211,7 @@ def ingest_pdf(pdf: Path, slug: str, studio_dir: Path, *, force: bool = False) -
             for i, text in enumerate(texts)
         ],
     )
-    out.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(doc.model_dump(), ensure_ascii=False, indent=1), encoding="utf-8")
-    tmp.replace(out)
+    write_json(out, doc)
     return IngestResult(doc, out, skipped=False)
 
 

@@ -37,6 +37,8 @@ def title_from_filename(stem: str) -> str:
     title = re.sub(r"^\s*\d+\s*[.)_-]*\s*", "", title)
     title = re.sub(r"\s*-\s*(19|20)\d\d\s*$", "", title)
     title = " ".join(title.split()).strip(" -.")
+    if " " not in title:  # "Sigurnost-web-aplikacija"
+        title = title.replace("-", " ")
     return title or stem
 
 
