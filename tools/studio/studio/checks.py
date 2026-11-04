@@ -51,6 +51,12 @@ ALL_OR_NONE = re.compile(
 )
 NEGATED = re.compile(r"\b(?:nije|nisu|ne|osim|netocn\w*|pogresn\w*|not|except|incorrect)\b")
 # Students never see the slides, so a stem that points at them cannot be answered as asked.
+# Options are reordered after generation, so "opcija B" in an explanation may point at
+# the wrong option. Matched against folded text.
+OPTION_LETTER = re.compile(
+    r"\b(?:opcij\w*|odgovor\w*|ponud\w*|option|answer)\s+\(?[a-f]\)?(?=\W|$)"
+    r"|\b(?:prv|drug|trec|cetvrt|zadnj)\w*\s+(?:opcij\w*|odgovor\w*|ponud\w*)"
+)
 # Only the noun "izvor" (not "izvorni kod") and lecture phrases (not "prezentacijski sloj").
 REFERS_TO_SOURCE = re.compile(
     r"\b(?:izvor(?:a|u|om|i|ima|e)?|slajd\w*|(?:na|sa|s|u) predavanj\w*|u (?:navedenom )?tekstu"
@@ -332,6 +338,12 @@ def check_course(
             if REFERS_TO_SOURCE.search(fold(str(question.content.get("stem", "")))):
                 detail = "the stem mentions the source or slides, which students never see"
                 flags.append(flag("stem_refers_to_source", "warn", detail))
+            explanation = fold(str(question.content.get("explanation") or ""))
+            if question.content["type"] in OPTION_TYPES and OPTION_LETTER.search(explanation):
+                detail = (
+                    "the explanation names an option by letter or position; options are shuffled"
+                )
+                flags.append(flag("explanation_names_option_letter", "warn", detail))
             if not question.content.get("explanation"):
                 flags.append(flag("no_explanation", "info", "no explanation for the answer"))
             questions.append(QuestionChecks(id=question.id, flags=flags))

@@ -23,6 +23,9 @@ studio = "studio.cli:main"
 [tool.setuptools.packages.find]
 include = ["studio*"]
 
+[tool.setuptools.package-data]
+studio = ["static/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

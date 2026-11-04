@@ -1,8 +1,9 @@
-"""`studio` command line: init, ingest, status, providers, generate, check, verify, calibrate."""
+"""`studio` command line: from ingesting PDFs to reviewing generated questions."""
 
 import argparse
 import hashlib
 import sys
+import webbrowser
 from collections import Counter
 from datetime import date
 from pathlib import Path
@@ -42,6 +43,7 @@ from studio.ingest import PdfPages, ingest_all, load_all_pages, sha256_file
 from studio.llm import ChatClient, LLMError, calls_log
 from studio.prompts import QUESTIONS_SYSTEM
 from studio.proposal import proposal_header, propose
+from studio.review import make_server
 from studio.verify import Calibration, calibration, fresh_verify, plan_batches, verify_unit
 
 PING_VERSION = "ping-v1"
@@ -356,6 +358,26 @@ def calibration_line(c: Calibration) -> str:
     )
 
 
+def cmd_review(args: argparse.Namespace) -> int:
+    studio_dir: Path = args.dir
+    course = confirmed_course(studio_dir)
+    docs = ready_pages(course, studio_dir)
+    generated_units(studio_dir, course.units)
+    server, token = make_server(studio_dir, course, docs, port=args.port)
+    url = f"http://127.0.0.1:{server.server_port}/?t={token}"
+    print(f"review page: {url}", flush=True)
+    print("decisions are saved as you make them; press Ctrl+C to stop", flush=True)
+    if not args.no_browser:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nstopped")
+    finally:
+        server.server_close()
+    return 0
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     studio_dir: Path = args.dir
     config = load_config(studio_dir)
@@ -465,6 +487,12 @@ def parser() -> argparse.ArgumentParser:
     )
     calibrate.add_argument("dir", type=Path)
     calibrate.set_defaults(run=cmd_calibrate)
+
+    review = commands.add_parser("review", help="local page to accept, edit or reject (stage 6)")
+    review.add_argument("dir", type=Path)
+    review.add_argument("--port", type=int, default=0, help="port on 127.0.0.1 (default: any)")
+    review.add_argument("--no-browser", action="store_true", help="only print the address")
+    review.set_defaults(run=cmd_review)
     return root
 
 

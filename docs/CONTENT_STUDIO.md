@@ -1,7 +1,7 @@
 # Content Studio: lessons, quizzes and exams from course PDFs
 
-**Status:** S0 implemented in [`tools/studio/`](../tools/studio/README.md) (ingest, the
-`course.yaml` proposal, provider check); S1 onwards are proposals. Written 3 November
+**Status:** S0–S3 implemented in [`tools/studio/`](../tools/studio/README.md) (ingest,
+generation, checks, verifier, review page); S4 onwards are proposals. Written 3 November
 2026; decisions below are the project owner's from the same day. Nothing here changes
 the application before the 16 November feature freeze.
 
@@ -178,7 +178,12 @@ Planned after the winter midterms; this needs a migration and new UI.
    calibrate` derives a wrong key per objective question without further requests (the
    verifier never sees keys) and counted all 36 as caught; 36 agreeing questions are a
    small sample, so the PPJ calibration run remains the real measurement.
-4. **S3** local review page.
+4. **S3** local review page. *Done.* `studio review` serves the page on 127.0.0.1 with a
+   token; decisions are tied to a content hash, edits pass the application schema, and
+   unflagged questions are sampled before a bulk acceptance. Trying it on the SRS trial
+   showed that explanations name options by letter ("opcija B …"), which the option
+   shuffle from S1 makes wrong: 3 of 14 option questions in one unit. A new check flags
+   such explanations and `questions-v3` forbids them.
 5. **S4** publish and `studio push`.
 6. **S5** lessons.
 7. **S6** mock papers and past-paper transcription.

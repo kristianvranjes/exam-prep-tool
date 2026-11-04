@@ -4,8 +4,8 @@ A local command-line tool that turns a course's lecture PDFs into reviewed ExamP
 import files. The plan and the decisions behind it are in
 [docs/CONTENT_STUDIO.md](../../docs/CONTENT_STUDIO.md). Built so far: **S0** (ingest,
 the `course.yaml` proposal, a provider check), **S1** (question generation to a
-blueprint and deterministic checks) and **S2** (an independent verifier). The local
-review page (S3) comes next.
+blueprint and deterministic checks), **S2** (an independent verifier) and **S3** (a
+local review page). Publishing accepted questions as import files (S4) comes next.
 
 ## Install
 
@@ -34,6 +34,7 @@ studio generate ../../../srs/studio --unit 03   # questions for one unit (all by
 studio verify ../../../srs/studio      # blind answers from the verifier model
 studio check ../../../srs/studio       # deterministic checks, plus verifier flags
 studio calibrate ../../../srs/studio   # seeded wrong keys the verifier would catch
+studio review ../../../srs/studio      # local page: accept, edit or reject each question
 ```
 
 `ingest` rereads only PDFs whose bytes changed (`--force` rereads all). After it, check
@@ -50,6 +51,7 @@ studio calibrate ../../../srs/studio   # seeded wrong keys the verifier would ca
 | `course.yaml` | you | The confirmed units (`id`, `title`, `sources: [{pdf, pages}]`) and `exam_cycles` |
 | `build/units/<id>/questions.json` | `generate` | `studio-questions-v1`: windows (pages, requested counts, outcome) and questions, each with its `content` in the application's `quiz-import-v2` shape, its `source` (`pdf`, `page`, `quote`) and `schema_error` |
 | `build/units/<id>/verify.json` | `verify` | `studio-verify-v1`: request batches and, per question, the verifier's answer, whether it matches the key, confidence, a named problem and its reason; the hash of the `questions.json` it verified |
+| `build/units/<id>/review.json` | `review` | `studio-review-v1`: per question id the owner's decision (`accept`, `edit` with the edited content, `reject` with an optional note), whether it was a bulk acceptance, when, and the hash of the generated content it was made on |
 | `build/units/<id>/checks.json` | `check` | `studio-checks-v1`: flags per question and per unit, a summary, and the hash of the `questions.json` it checked |
 | `build/calls.jsonl` | AI stages | One line per call: stage, subject (unit and window), provider, model, routed model/provider, prompt version, outcome code, latency, token counts, cost. Never the key or prompt text |
 
@@ -110,6 +112,33 @@ select) and counts it caught unless the verifier's blind answer equals exactly t
 wrong key with no named problem. This is only valid because the verifier never sees
 objective keys. Agreement between two models is still not proof: review stays the gate.
 
+## Reviewing
+
+`studio review` starts a local server on 127.0.0.1 (any free port, or `--port`) and opens
+the page in the browser (`--no-browser` only prints the address). Per unit it lists the
+questions with flagged ones first; for each it shows the stem, options with the key
+marked in words, the explanation, every flag, the verifier's blind answer and reason,
+and the cited page with the quote highlighted.
+
+Keys: `j`/`k` next/previous, `a` accept, `r` reject (with the optional note typed in the
+note field), `e` edit, `u` undo the decision, `Esc` leave the editor. An edit is checked
+with the application's import schema and keeps the question type; saving it accepts the
+edited version. A question that fails the import schema can only be accepted by editing.
+
+Decisions are saved at once to `review.json` and are tied to a hash of the generated
+content: if a unit is regenerated, a decision never carries over to different text.
+A damaged `review.json` stops the studio instead of being replaced.
+
+Unflagged questions are sampled. After at least a fifth of them (minimum three) have
+been reviewed one by one with none rejected, "accept the remaining unflagged" accepts
+the rest, marked as bulk decisions. A rejection in the sample means the checks miss a
+problem in this unit, so bulk acceptance stays off and each question needs a look.
+
+The server only answers on 127.0.0.1, checks the Host header (against DNS rebinding),
+requires the random token from the printed address on every API call and sends a
+strict Content-Security-Policy. The page loads nothing from the internet and inserts
+generated text only as text, never as HTML.
+
 ## Checks
 
 `studio check` flags, it never fixes. `error` means the question cannot be imported as
@@ -122,6 +151,7 @@ it is, `warn` needs a careful look in review, `info` is a hint.
 | Quote not found on the cited page (fuzzy: case, diacritics, OCR `■`, LaTeX commands and `...` joins are tolerated) / found only partly / too short | warn / info / warn |
 | Same or nearly the same stem as another question of the course or of the existing bank (`[checks] existing`) | warn |
 | Stem mentions the source, slides or lecture, which students never see | warn |
+| Explanation names an option by letter or position, which shuffling breaks | warn |
 | "All/none of the above" option; two options nearly identical | warn |
 | Negated stem; key clearly the longest option; no explanation | info |
 | Verifier answered differently from the key; found the question not answerable from its page; named a problem | warn |

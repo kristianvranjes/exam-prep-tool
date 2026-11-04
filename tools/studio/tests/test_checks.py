@@ -211,3 +211,19 @@ def test_bank_files_are_read_and_bad_ones_rejected(tmp_path: Path) -> None:
     (tmp_path / "kvizovi" / "02.json").write_text("[]", encoding="utf-8")
     with pytest.raises(StudioError, match="not a quiz import file"):
         load_bank(tmp_path, config)
+
+
+@pytest.mark.parametrize(
+    ("explanation", "flagged"),
+    [
+        ("Opcija B je broj ključeva supstitucijske šifre.", True),
+        ("Odgovor (c) opisuje DES, a ne AES.", True),
+        ("Prvi odgovor miješa pojmove.", True),
+        ("Cezarova šifra ima 25 ključeva, a supstitucijska mnogo više.", False),
+        ("Odgovor a i b se razlikuju", True),
+    ],
+)
+def test_explanations_that_name_an_option_letter(explanation: str, flagged: bool) -> None:
+    from studio.checks import OPTION_LETTER
+
+    assert bool(OPTION_LETTER.search(fold(explanation))) is flagged

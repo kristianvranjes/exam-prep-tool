@@ -5,7 +5,8 @@ import json
 from studio.config import TypeCounts
 
 # v2 (3 Nov): stems must not mention sources, slides or texts; quotes are one stretch.
-QUESTIONS_VERSION = "questions-v2"
+# v3 (4 Nov): explanations name options by content, never by letter (options are shuffled).
+QUESTIONS_VERSION = "questions-v3"
 
 QUESTIONS_SYSTEM = """\
 You write exam practice questions for a university course from lecture slides.
@@ -28,7 +29,9 @@ Rules:
   characters), character for character, that shows the correct answer is right. Do not
   join separate pieces with "...", and do not rewrite symbols into LaTeX in the quote.
 - `explanation`: two or three sentences saying why the answer is correct and, for
-  options, why the most tempting wrong option is wrong. No page references.
+  options, why the most tempting wrong option is wrong. No page references. Options
+  are shown to students in a different order, so never refer to an option by its
+  letter or position ("opcija B", "prvi odgovor"); name what it says instead.
 - `difficulty` is an integer from 1 (recall of a definition) to 5 (applying several
   ideas together); spread the questions across levels.
 - Stems are self-contained exam questions. Students never see the sources, so a stem
