@@ -1,12 +1,13 @@
 import { expect, test } from "@playwright/test";
+import { english } from "./locale";
 
 const api = "http://localhost:8000";
 const password = "ExamPrepE2E!2026";
 
 for (const width of [1280, 390]) {
   test(`deep links, refresh and protected Back/Forward at ${width}px`, async ({ browser }) => {
-    const owner = await browser.newContext({ extraHTTPHeaders: { Origin: "http://localhost:3000" } });
-    const student = await browser.newContext({ viewport: { width, height: 900 }, extraHTTPHeaders: { Origin: "http://localhost:3000" } });
+    const owner = await browser.newContext({ storageState: english, extraHTTPHeaders: { Origin: "http://localhost:3000" } });
+    const student = await browser.newContext({ storageState: english, viewport: { width, height: 900 }, extraHTTPHeaders: { Origin: "http://localhost:3000" } });
     const courseIds: string[] = [];
     let failed = false;
     try {
@@ -98,7 +99,7 @@ for (const width of [1280, 390]) {
       await page.goto(attemptUrl);
       await expect(page).toHaveURL(`${attemptUrl}/results`);
       await expect(page.getByRole("button", { name: "Save and next" })).toHaveCount(0);
-      const signedOut = await browser.newContext();
+      const signedOut = await browser.newContext({ storageState: english });
       try {
         const login = await signedOut.newPage();
         await login.goto(`${attemptUrl}/results`);
