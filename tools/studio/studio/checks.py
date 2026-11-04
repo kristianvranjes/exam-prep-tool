@@ -31,6 +31,7 @@ from studio.generate import (
     UnitQuestions,
     load_questions,
     questions_path,
+    unit_counts,
 )
 from studio.ingest import PdfPages
 from studio.store import unit_dir, write_json
@@ -350,7 +351,9 @@ def check_course(
 
         spec = specs[unit.unit]
         valid = [q for q in unit.questions if not q.schema_error]
-        own = window_flags(unit) + balance_flags(spec.questions or config.questions.types, valid)
+        text_page_count = len({p for w in unit.windows for p in w.pages})
+        counts = unit_counts(spec, config.questions, text_page_count)
+        own = window_flags(unit) + balance_flags(counts, valid)
         if verify is not None:
             own += [
                 flag("verify_failed", "warn", f"batch {b.index}: {b.error}; rerun verify")

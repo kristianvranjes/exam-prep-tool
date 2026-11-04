@@ -10,7 +10,7 @@ from typing import Literal, Self
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from studio.config import Course, StudioError, TypeCounts, check_counts
+from studio.config import UUID_PATTERN, Course, StudioError, TypeCounts, check_counts
 from studio.ingest import PdfPages
 
 COURSE_NAME = "course.yaml"
@@ -51,6 +51,8 @@ class Unit(Strict):
     sources: list[SourceRange] = Field(min_length=1)
     # Overrides the studio.toml blueprint for this unit.
     questions: TypeCounts | None = None
+    # The matching course unit in the application, for `studio push`.
+    app_unit: str | None = Field(default=None, pattern=UUID_PATTERN)
 
     @field_validator("questions")
     @classmethod

@@ -301,15 +301,15 @@ def test_cli_verify_check_calibrate_and_status(
     verifier = FakeVerifier(questions)
     monkeypatch.setattr(studio.cli, "stage_client", lambda *a: client(verifier, tmp_path))
     assert main(["verify", str(studio_dir)]) == 0
-    assert "20 verified, 20 agree, 0 disagree" in capsys.readouterr().out
+    assert "10 verified, 10 agree, 0 disagree" in capsys.readouterr().out
 
     assert main(["status", str(studio_dir)]) == 0
-    assert "verifier agrees on 20 of 20, not checked" in capsys.readouterr().out
+    assert "verifier agrees on 10 of 10, not checked" in capsys.readouterr().out
     assert main(["check", str(studio_dir)]) == 0
     assert main(["status", str(studio_dir)]) == 0
-    assert "verifier agrees on 20 of 20, 0 errors" in capsys.readouterr().out
+    assert "verifier agrees on 10 of 10, 0 errors" in capsys.readouterr().out
 
     assert main(["calibrate", str(studio_dir)]) == 0
     out = capsys.readouterr().out
-    assert "agrees with 18 of 18 keys (100%)" in out
-    assert "would catch 18 of 18 seeded wrong keys" in out
+    assert "agrees with 9 of 9 keys (100%)" in out
+    assert "would catch 9 of 9 seeded wrong keys" in out

@@ -134,8 +134,17 @@ class UnitResult:
     calls: int
 
 
-def unit_counts(unit: Unit, blueprint: Questions) -> TypeCounts:
-    return dict(unit.questions or blueprint.types)
+def unit_counts(unit: Unit, blueprint: Questions, text_pages: int) -> TypeCounts:
+    """Questions per type: a unit's own counts, the fixed blueprint, or scaled by its size."""
+    if unit.questions:
+        return dict(unit.questions)
+    if blueprint.questions_per_page is None:
+        return dict(blueprint.types)
+    total = round(text_pages * blueprint.questions_per_page)
+    total = max(blueprint.min_per_unit, min(blueprint.max_per_unit, total))
+    kinds = list(blueprint.types)
+    shares = apportion(total, [blueprint.types[k] for k in kinds])
+    return {k: n for k, n in zip(kinds, shares, strict=True) if n}
 
 
 def unit_pages(unit: Unit, docs: dict[str, PdfPages], max_chars: int) -> list[PageText]:
@@ -294,10 +303,10 @@ def generate_unit(
     studio_dir: Path,
     force: bool = False,
 ) -> UnitResult:
-    counts = unit_counts(unit, blueprint)
     pages = unit_pages(unit, docs, blueprint.max_input_chars)
     if not pages:
         raise StudioError(f"unit {unit.id} has no pages with text")
+    counts = unit_counts(unit, blueprint, len(pages))
     windows = plan_windows(pages, counts, blueprint)
     digest = input_hash(windows, counts, client.stage.model)
 

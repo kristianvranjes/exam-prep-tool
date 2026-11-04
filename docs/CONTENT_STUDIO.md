@@ -1,7 +1,7 @@
 # Content Studio: lessons, quizzes and exams from course PDFs
 
-**Status:** S0–S3 implemented in [`tools/studio/`](../tools/studio/README.md) (ingest,
-generation, checks, verifier, review page); S4 onwards are proposals. Written 3 November
+**Status:** S0–S4 implemented in [`tools/studio/`](../tools/studio/README.md) (ingest,
+generation, checks, verifier, review page, publish and push); S5 onwards are proposals. Written 3 November
 2026; decisions below are the project owner's from the same day. Nothing here changes
 the application before the 16 November feature freeze.
 
@@ -184,7 +184,12 @@ Planned after the winter midterms; this needs a migration and new UI.
    showed that explanations name options by letter ("opcija B …"), which the option
    shuffle from S1 makes wrong: 3 of 14 option questions in one unit. A new check flags
    such explanations and `questions-v3` forbids them.
-5. **S4** publish and `studio push`.
+5. **S4** publish and `studio push`. *Done.* `studio publish` writes per-unit
+   `quiz-import-v2` files of accepted questions plus a provenance manifest; `studio push`
+   imports only questions not pushed before, links each to its course unit and with
+   `--approve` approves them as an owner-moderator. Checked end to end on 4 November
+   against a local stack with the e2e seed: ten reviewed SRS questions (one edited) were
+   imported, linked to the right units and approved, and a second push sent nothing.
 6. **S5** lessons.
 7. **S6** mock papers and past-paper transcription.
 

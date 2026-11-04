@@ -4,8 +4,9 @@ A local command-line tool that turns a course's lecture PDFs into reviewed ExamP
 import files. The plan and the decisions behind it are in
 [docs/CONTENT_STUDIO.md](../../docs/CONTENT_STUDIO.md). Built so far: **S0** (ingest,
 the `course.yaml` proposal, a provider check), **S1** (question generation to a
-blueprint and deterministic checks), **S2** (an independent verifier) and **S3** (a
-local review page). Publishing accepted questions as import files (S4) comes next.
+blueprint and deterministic checks), **S2** (an independent verifier), **S3** (a local
+review page) and **S4** (import files and a push into the application). Lessons (S5)
+come next.
 
 ## Install
 
@@ -27,6 +28,7 @@ folder per course (the studio refuses a folder inside the repository):
 ```sh
 studio init ../../../srs/studio --name "Sigurnost računalnih sustava" --code SRS --pdfs "../pdfpreze/*.pdf"
 studio ingest ../../../srs/studio      # page text + course.proposed.yaml
+studio ocr ../../../srs/studio         # re-read scanned or damaged pages with Tesseract
 studio status ../../../srs/studio      # sources, units, problems
 studio providers ../../../srs/studio   # one tiny request per AI stage
 studio generate ../../../srs/studio --dry-run   # requests and input size, nothing sent
@@ -35,6 +37,9 @@ studio verify ../../../srs/studio      # blind answers from the verifier model
 studio check ../../../srs/studio       # deterministic checks, plus verifier flags
 studio calibrate ../../../srs/studio   # seeded wrong keys the verifier would catch
 studio review ../../../srs/studio      # local page: accept, edit or reject each question
+studio publish ../../../srs/studio     # accepted questions as quiz-import-v2 files in out/
+studio push ../../../srs/studio --dry-run    # what would be imported, nothing sent
+studio push ../../../srs/studio --approve    # import new accepted questions and approve them
 ```
 
 `ingest` rereads only PDFs whose bytes changed (`--force` rereads all). After it, check
@@ -52,6 +57,9 @@ studio review ../../../srs/studio      # local page: accept, edit or reject each
 | `build/units/<id>/questions.json` | `generate` | `studio-questions-v1`: windows (pages, requested counts, outcome) and questions, each with its `content` in the application's `quiz-import-v2` shape, its `source` (`pdf`, `page`, `quote`) and `schema_error` |
 | `build/units/<id>/verify.json` | `verify` | `studio-verify-v1`: request batches and, per question, the verifier's answer, whether it matches the key, confidence, a named problem and its reason; the hash of the `questions.json` it verified |
 | `build/units/<id>/review.json` | `review` | `studio-review-v1`: per question id the owner's decision (`accept`, `edit` with the edited content, `reject` with an optional note), whether it was a bulk acceptance, when, and the hash of the generated content it was made on |
+| `out/<id>-<title>.quiz-import-v2.json` | `publish` | The unit's accepted questions (edited ones as edited) in the application's import format, validated with its `QuizImport` |
+| `out/manifest.json` | `publish` | `studio-publish-v1`: per unit the file, its SHA-256, counts of accepted, rejected and undecided questions, and per question the studio id, decision and cited PDF page (the import format has no room for provenance) |
+| `out/pushed-<course id>.json` | `push` | `studio-push-v1`: every pushed question by studio id, a hash of its final content and its id in the application, per push with the target unit and how many were approved |
 | `build/units/<id>/checks.json` | `check` | `studio-checks-v1`: flags per question and per unit, a summary, and the hash of the `questions.json` it checked |
 | `build/calls.jsonl` | AI stages | One line per call: stage, subject (unit and window), provider, model, routed model/provider, prompt version, outcome code, latency, token counts, cost. Never the key or prompt text |
 
@@ -69,11 +77,35 @@ they appear on at least 60 % of the pages with text, with numbers ignored). This
 removes "Laboratorij za … Sigurnost računalnih sustava" and "12/62" without touching
 content lines like "Korak 1".
 
+## Reading scanned and damaged PDFs (OCR)
+
+`studio ocr` reads pages again with [Tesseract](https://github.com/tesseract-ocr/tesseract)
+in Croatian and English and `studio ingest` then uses that text instead of the PDF's own
+text layer. By default it reads the pages ingest flagged (no text, or OCR damage such as
+`■` for č/ć/đ); `--all-pages` reads every page, `--pdf` limits it to some PDFs, and
+`--jobs` sets how many pages are read in parallel. Page numbers never change and the
+PDF is not modified; the text is cached in `build/ocr/` per PDF hash, language and DPI.
+
+On PPJ's 1061-page lecture collection this took about ten minutes and left no page with
+OCR damage (783 before); diacritics come back, while code slides and diagrams stay
+imperfect.
+
+Setup on Windows: `winget install UB-Mannheim.TesseractOCR`, then put `hrv.traineddata`
+from [tessdata](https://github.com/tesseract-ocr/tessdata) next to a copy of
+`eng.traineddata` and `osd.traineddata` in `%LOCALAPPDATA%\examprep-studio\tessdata`
+(or point `STUDIO_TESSDATA` at a folder with them; `STUDIO_TESSERACT` overrides the
+program path).
+
 ## Generating questions
 
-The blueprint is `[questions] types` in `studio.toml` (12 multiple choice, 4 true/false,
-2 multiple select, 2 short answer by default); a unit in `course.yaml` may override it
-with its own `questions:` mapping. A unit's pages with text are split into windows of
+The blueprint is `[questions]` in `studio.toml`. `types` gives the mix (12 multiple
+choice, 4 true/false, 2 multiple select, 2 short answer by default). With
+`questions_per_page` (0.3 in new configurations) a unit gets that many questions per
+slide page with text, at least `min_per_unit` (10) and at most `max_per_unit` (150), in
+that mix: a 25-slide deck gets 10, a 182-slide deck 55. Without it, `types` are exact
+counts per unit. A unit in `course.yaml` may set its own exact counts with
+`questions:`. More questions cost little to generate; the limit is review time.
+A unit's pages with text are split into windows of
 consecutive pages, at most `max_input_chars` (12000) characters and roughly
 `max_questions_per_call` (8) questions each, and the blueprint is shared out across
 windows in proportion to their text. Each request sees only its window, with pages
@@ -138,6 +170,30 @@ The server only answers on 127.0.0.1, checks the Host header (against DNS rebind
 requires the random token from the printed address on every API call and sends a
 strict Content-Security-Policy. The page loads nothing from the internet and inserts
 generated text only as text, never as HTML.
+
+## Publishing and pushing
+
+`studio publish` writes one import file per unit with the accepted questions only, and
+refuses to write anything if a unit's file would fail the application's import schema
+(for example two accepted questions with the same stem). A unit with nothing accepted
+loses its earlier file. The files can be imported by hand in the question bank, one
+unit at a time.
+
+`studio push` does the import through the application's API instead. It needs an
+`[app]` table in `studio.toml` (API address, the frontend origin the API trusts,
+course id, owner email); the password is read from `EXAMPREP_PASSWORD` (or the variable
+named by `password_env`) or typed when asked, and never stored. Per unit it imports only
+accepted questions not pushed before, so pushing again after reviewing more questions
+never duplicates the bank. Each unit is linked to the application's course unit named in
+`app_unit` in `course.yaml`, or else to the one active unit with the same title
+(ignoring case, diacritics and punctuation); otherwise the push stops before importing
+anything and lists the units to choose from. With `--approve`, the imported questions
+are approved in batches of 50, which works for an owner who is also a faculty
+moderator; anyone else gets drafts and a note. API addresses must be https, except on
+localhost.
+
+Imported questions get the application's `USER` source and no source links, as for any
+quiz import; the cited pages stay in `out/manifest.json`.
 
 ## Checks
 
