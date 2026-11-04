@@ -125,7 +125,8 @@ it("waits for the session check before showing signed-in Home", async () => {
   expect(screen.getByRole("status")).toHaveTextContent("Loading your study space");
   expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
   await act(async () => session.resolve(user));
-  expect(await screen.findByRole("heading", { name: "Home" })).toHaveFocus();
+  const home = await screen.findByRole("heading", { name: "Home" });
+  await waitFor(() => expect(home).toHaveFocus());
   expect(screen.getByRole("region", { name: "Your courses" })).toBeVisible();
 });
 
