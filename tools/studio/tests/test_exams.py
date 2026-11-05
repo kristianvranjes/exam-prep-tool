@@ -133,6 +133,11 @@ class FakeModel:
         self.requests.append(payload)
         if "file" in payload:
             return reply({"items": self.extract[payload["file"]]})
+        if "rewrite" in payload["questions"][0]:
+            fields = [{"field": "explanation", "text": "LEX gradi analizator iz definicije."}]
+            return reply(
+                {"questions": [{"id": q["id"], "fields": fields} for q in payload["questions"]]}
+            )
         defaults = {
             "truth": None,
             "reference_answer": None,
@@ -297,3 +302,37 @@ def test_a_question_moves_to_the_unit_of_the_slide_that_supports_it(tmp_path: Pa
     heap = heap_unit.questions[0]
     assert heap.id.startswith("02-x") and heap.origin is not None
     assert [f.code for f in heap.origin.flags] == ["exam_unit_moved"]
+
+
+def test_explanations_that_cite_the_slides_are_reworded_once(tmp_path: Path) -> None:
+    handler = model()
+    handler.keys[LEX_STEM]["explanation"] = "Izvor navodi dva ulaza: definiciju i pravila."
+    run(handler, tmp_path)
+    rewrites = [r for r in handler.requests if "questions" in r and "rewrite" in r["questions"][0]]
+    assert len(rewrites) == 1
+    lex_unit = load_questions(tmp_path, "01")
+    assert lex_unit is not None
+    lex = next(q for q in lex_unit.questions if q.content["stem"] == LEX_STEM)
+    assert lex.content["explanation"] == "LEX gradi analizator iz definicije."
+
+    again = model()
+    again.keys[LEX_STEM]["explanation"] = "Izvor navodi dva ulaza: definiciju i pravila."
+    assert run(again, tmp_path).calls == 0
+
+
+def test_a_marked_key_without_a_slide_is_a_warning_not_an_error(tmp_path: Path) -> None:
+    from studio.checks import exam_grounding
+
+    run(model(), tmp_path)
+    lex_unit = load_questions(tmp_path, "01")
+    assert lex_unit is not None
+    lex = next(q for q in lex_unit.questions if q.content["stem"] == LEX_STEM)
+    lex.source = None
+    assert [(f.code, f.severity) for f in exam_grounding(lex, lecture())] == [
+        ("exam_no_slide", "warn")
+    ]
+    assert lex.origin is not None
+    lex.origin.key = "model"
+    assert [(f.code, f.severity) for f in exam_grounding(lex, lecture())] == [
+        ("no_source", "error")
+    ]

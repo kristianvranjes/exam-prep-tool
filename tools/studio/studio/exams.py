@@ -56,7 +56,8 @@ from studio.prompts import (
     extract_user,
     key_user,
 )
-from studio.sources import fold, strip_content
+from studio.rewrite import rewrite
+from studio.sources import fold, references, strip_content
 from studio.store import write_json
 
 DOC_VERSION: Literal["studio-exam-doc-v1"] = "studio-exam-doc-v1"
@@ -794,12 +795,47 @@ def run_exams(
             skipped.append((where, why or "left out"))
             continue
         by_unit[settle_unit(question, f.item.unit, index, titles)].append(question)
+    calls += reword(by_unit, store, hashes, make_client)
+    write_json(exams_dir(studio_dir) / "keys.json", store)
     for unit in units:
         merge(studio_dir, unit, by_unit[unit.id])
     added = {uid: len(qs) for uid, qs in by_unit.items() if qs}
     tasks = [(i, e.file) for _, e, _ in documents for i in e.items if i.kind == "task"]
     write_report(studio_dir, documents, added, skipped, tasks, titles)
     return ExamsResult(documents, added, skipped, tasks, calls, errors)
+
+
+def reword(
+    by_unit: dict[str, list[StoredQuestion]],
+    store: KeyStore,
+    hashes: dict[str, str],
+    make_client: Callable[[], ChatClient],
+) -> int:
+    """Rephrase text that still cites the slides, as generation does; returns requests sent.
+
+    A rephrased explanation goes back into the key store, so a rerun does not send it again.
+    """
+    calls = 0
+    for unit_id, questions in by_unit.items():
+        if not any(references(q.content) for q in questions):
+            continue
+        fixed = rewrite(
+            {q.id: q.content for q in questions}, make_client(), f"exams unit {unit_id}"
+        )
+        calls += fixed.calls
+        for question in questions:
+            content = fixed.contents[question.id]
+            question.content = content
+            question.schema_error = content_error(content)
+            entry = store.entries.get(hashes.get(origin_id(question), ""))
+            if entry is not None and content.get("explanation"):
+                entry.answer.explanation = str(content["explanation"])
+    return calls
+
+
+def origin_id(question: StoredQuestion) -> str:
+    """The id the question had before it moved to the unit of its slide."""
+    return question.origin.first_id if question.origin and question.origin.first_id else question.id
 
 
 def settle_unit(
@@ -814,6 +850,7 @@ def settle_unit(
     if unit != named:
         detail = f"named unit {named} ({titles.get(named, '')}); the quoted slide is in this one"
         flags.append(OriginFlag(code="exam_unit_moved", severity="info", detail=detail))
+        question.origin.first_id = question.id
         question.id = question_id(unit, str(question.content["stem"]))
     question.origin.flags = flags
     return unit

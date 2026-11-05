@@ -113,6 +113,27 @@ def flag(code: str, severity: Severity, detail: str = "") -> Flag:
     return Flag(code=code, severity=severity, detail=detail)
 
 
+# A past paper's options are what students met in the exam: similar or "none of the
+# above" options are a hint there, not something to fix.
+EXAM_HINTS = frozenset({"options_too_similar", "all_or_none_option"})
+
+
+def exam_options(flags: list[Flag], question: StoredQuestion) -> list[Flag]:
+    if question.origin is None:
+        return flags
+    return [f.model_copy(update={"severity": "info"}) if f.code in EXAM_HINTS else f for f in flags]
+
+
+def exam_grounding(question: StoredQuestion, docs: dict[str, PdfPages]) -> list[Flag]:
+    """A key from the exam's own solutions stands without a slide; a key the model set does not."""
+    if question.source is not None:
+        return grounding(question, docs)
+    if question.origin is not None and question.origin.key == "marked":
+        detail = "no slide quote supports the exam's marked key; the verifier cannot check it"
+        return [flag("exam_no_slide", "warn", detail)]
+    return [flag("no_source", "error", "the model set the key without quoting a slide")]
+
+
 def grounding(question: StoredQuestion, docs: dict[str, PdfPages]) -> list[Flag]:
     source = question.source
     if source is None:
@@ -314,9 +335,11 @@ def check_course(
                 flags += verifier_flags(question, verdicts[question.id])
             if question.schema_error:
                 flags.append(flag("invalid_schema", "error", question.schema_error))
-            flags += grounding(question, docs)
+            flags += (
+                exam_grounding(question, docs) if question.origin else grounding(question, docs)
+            )
             flags += duplicates.get(question.id, [])
-            flags += option_flags(question.content)
+            flags += exam_options(option_flags(question.content), question)
             if cites := references(question.content):
                 where = ", ".join(f'{name} ("{text}")' for name, text in cites.items())
                 detail = (

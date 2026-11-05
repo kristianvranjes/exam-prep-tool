@@ -101,6 +101,8 @@ class ExamOrigin(Strict):
     # "marked": the document marks the answer (bold); "model": set from the unit's slides.
     key: Literal["marked", "model"]
     flags: list[OriginFlag] = []
+    # The id under the unit the model named, when the question moved to its slide's unit.
+    first_id: str | None = None
 
 
 class StoredQuestion(Strict):
