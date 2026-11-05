@@ -170,6 +170,7 @@ def item(
         "rank": rank,
         "flagged": flagged(flags),
         "source": source,
+        "origin": question.origin.model_dump() if question.origin else None,
         "verdict": verdict,
         "decision": decision.model_dump() if decision else None,
     }

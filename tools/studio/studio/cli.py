@@ -36,6 +36,7 @@ from studio.course import (
     dump_course,
     load_course,
 )
+from studio.exams import exam_pdfs, plan_extract, read_exam, run_exams
 from studio.generate import (
     UnitQuestions,
     generate_unit,
@@ -293,6 +294,63 @@ def cmd_generate(args: argparse.Namespace) -> int:
         failed += errors
     print(f"\nnext: studio check {studio_dir}")
     return 1 if failed else 0
+
+
+def cmd_exams(args: argparse.Namespace) -> int:
+    """Transcribe past exams, sort their questions into units and add them to the pools."""
+    studio_dir: Path = args.dir
+    config = load_config(studio_dir)
+    if config.exams is None:
+        raise StudioError(f"add an [exams] table with pdfs to {studio_dir / CONFIG_NAME}")
+    course = confirmed_course(studio_dir)
+    docs = ready_pages(course, studio_dir)
+    exam_docs = [
+        read_exam(pdf, slug, studio_dir) for pdf, slug in exam_pdfs(studio_dir, config.exams)
+    ]
+    for doc in exam_docs:
+        ocr = sum(p.ocr for p in doc.pages)
+        empty = sum(1 for p in doc.pages if not p.text)
+        note = (f", {ocr} read by OCR" if ocr else "") + (
+            f", {empty} without text" if empty else ""
+        )
+        print(f"{doc.file}: {len(doc.pages)} pages{note}, {len(plan_extract(doc))} requests")
+    if args.dry_run:
+        print("\nthen one key request per few questions; nothing was sent")
+        return 0
+
+    stage = config.stages.get("generate")
+    result = run_exams(
+        studio_dir=studio_dir,
+        course_name=config.course.name,
+        course=course,
+        docs=docs,
+        exam_docs=exam_docs,
+        make_client=lambda: stage_client(config, studio_dir, "generate"),
+        questions_per_call=config.exams.questions_per_call,
+        workers=stage.parallel if stage else 1,
+        force=args.force,
+    )
+    print()
+    for doc, extracted, keyed in result.documents:
+        kinds = Counter(i.kind for i in extracted.items)
+        parts = [f"{n} {kind}" for kind, n in sorted(kinds.items())]
+        mark = ", answers marked in bold" if keyed else ""
+        print(f"{doc.file}: {', '.join(parts) or 'no items'}{mark}")
+    titles = {u.id: u.title for u in course.units}
+    print()
+    for uid, count in result.added.items():
+        print(f"{uid} {titles[uid]}: {count} questions from exams")
+    total = sum(result.added.values())
+    print(
+        f"\n{total} questions added, {len(result.tasks)} tasks listed in build/exams/tasks.md, "
+        f"{len(result.skipped)} left out ({result.calls} requests)"
+    )
+    for where, why in result.skipped:
+        print(f"  left out {where}: {why}")
+    for error in result.errors:
+        print(f"  failed {error}; rerun to retry")
+    print(f"\nnext: studio verify {studio_dir}, studio check {studio_dir}, then review")
+    return 1 if result.errors else 0
 
 
 def cmd_rewrite(args: argparse.Namespace) -> int:
@@ -652,6 +710,16 @@ def parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true", help="show the requests without sending them"
     )
     generate.set_defaults(run=cmd_generate)
+
+    exams = commands.add_parser(
+        "exams", help="add questions from past exams to their units (needs [exams])"
+    )
+    exams.add_argument("dir", type=Path)
+    exams.add_argument("--force", action="store_true", help="transcribe every document again")
+    exams.add_argument(
+        "--dry-run", action="store_true", help="read and OCR the documents, send nothing"
+    )
+    exams.set_defaults(run=cmd_exams)
 
     rewrite_cmd = commands.add_parser(
         "rewrite", help="remove mentions of slides and sources from generated questions"

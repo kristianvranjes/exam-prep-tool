@@ -1,0 +1,299 @@
+import json
+from pathlib import Path
+from typing import Any
+
+import httpx
+
+from studio.config import Course, Provider, Questions, Stage
+from studio.course import CourseFile, SourceRange, Unit
+from studio.exams import (
+    ExamDoc,
+    ExamPage,
+    ExamsResult,
+    Extracted,
+    XItem,
+    XOption,
+    exams_dir,
+    group,
+    keyed_document,
+    mark_bold,
+    run_exams,
+)
+from studio.generate import generate_unit, load_questions
+from studio.ingest import Page, PdfPages
+from studio.llm import ChatClient
+
+LEX = "Program LEX na ulazu prima definiciju leksičkog analizatora i gradi leksički analizator."
+HEAP = "Gomila je dio memorije koji se dinamički dodjeljuje tijekom izvođenja programa."
+
+
+def lecture() -> dict[str, PdfPages]:
+    texts = [LEX, "Leksička analiza grupira znakove u leksičke jedinke.", HEAP, "Stog i gomila."]
+    return {
+        "ppj": PdfPages(
+            version="studio-pages-v1",
+            slug="ppj",
+            source="ppj.pdf",
+            sha256="0" * 64,
+            page_count=len(texts),
+            outline=[],
+            repeated_lines=[],
+            pages=[Page(page=i, text=t, body=t, flags=[]) for i, t in enumerate(texts, start=1)],
+        )
+    }
+
+
+COURSE = CourseFile(
+    version="studio-course-v1",
+    course=Course(name="PPJ", code="PPJ"),
+    units=[
+        Unit(id="01", title="Leksička analiza", sources=[SourceRange(pdf="ppj", pages="1-2")]),
+        Unit(id="02", title="Potpora izvođenju", sources=[SourceRange(pdf="ppj", pages="3-4")]),
+    ],
+)
+
+
+def test_bold_runs_are_marked_per_line_and_keep_symbols() -> None:
+    def chars(text: str, bold: str) -> list[tuple[str, bool]]:
+        return [(c, b == "B") for c, b in zip(text, bold, strict=True)]
+
+    assert mark_bold(chars("a. A\nb. Glavni\n", "....\nBBBBBBBBB\n")) == "a. A\n**b. Glavni**\n"
+    # A symbol in a regular font inside a bold formula does not split the run.
+    assert mark_bold(chars("d. <X>h", "BBB.B.B")) == "**d. <X>h**"
+    # Bold words with plain spaces between them are one run; a plain word ends it.
+    assert mark_bold(chars("x  y z", "B..B..")) == "**x  y** z"
+
+
+def item(stem: str, options: list[tuple[str, bool]], **extra: Any) -> XItem:
+    fields: dict[str, Any] = {
+        "number": "1",
+        "page": 1,
+        "kind": "choice",
+        "original": stem,
+        "stem": stem,
+        "options": [XOption(original=t, text=t, marked=m) for t, m in options],
+        "answer": None,
+        "unit": "01",
+    } | extra
+    return XItem(**fields)
+
+
+def test_a_document_counts_as_keyed_only_when_bold_marks_most_answers() -> None:
+    marked = [
+        item("Što je ulaz u LEX?", [("Stablo", False), ("Definicija", True)]),
+        item("Drugo pitanje?", [("a", True), ("b", False)]),
+    ]
+    assert keyed_document(marked)
+    assert not keyed_document([item("Naslov?", [("x", True), ("y", True)])])
+    assert not keyed_document([item("Bez rješenja?", [("x", False), ("y", False)])])
+
+
+def test_the_same_question_from_several_papers_is_one_question() -> None:
+    def doc(file: str, items: list[XItem]) -> Extracted:
+        return Extracted(
+            version="studio-exam-extract-v1", file=file, input_hash="", windows=[], items=items
+        )
+
+    recalled = item(
+        "Sto je ulaz u program LEX",
+        [("Sintaksno stablo", False), ("Definicija leksickog analizatora", False)],
+    )
+    no_options = item("Što je ulaz u program LEX?", [], kind="short", number="2")
+    keyed = item(
+        "Što je ulaz u program LEX?",
+        [("Sintaksno stablo", False), ("Definicija leksičkog analizatora", True)],
+        number="6",
+    )
+    found = group(
+        [(doc("jir.pdf", [recalled, no_options]), False), (doc("teorija.pdf", [keyed]), True)],
+        {"01", "02"},
+    )
+    assert len(found) == 1
+    assert found[0].keyed and found[0].item.number == "6"
+    assert [a.file for a in found[0].appearances] == ["jir.pdf", "jir.pdf", "teorija.pdf"]
+
+
+def reply(body: dict[str, Any]) -> httpx.Response:
+    content = json.dumps(body, ensure_ascii=False)
+    return httpx.Response(
+        200, json={"choices": [{"message": {"content": content}, "finish_reason": "stop"}]}
+    )
+
+
+class FakeModel:
+    """Transcribes the fake exam pages and answers key requests with canned replies."""
+
+    def __init__(self, extract: dict[str, list[dict[str, Any]]], keys: dict[str, dict[str, Any]]):
+        self.extract = extract
+        self.keys = keys
+        self.requests: list[dict[str, Any]] = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        payload = json.loads(json.loads(request.content)["messages"][1]["content"])
+        self.requests.append(payload)
+        if "file" in payload:
+            return reply({"items": self.extract[payload["file"]]})
+        defaults = {
+            "truth": None,
+            "reference_answer": None,
+            "difficulty": 2,
+            "page": "P1",
+            "problem": None,
+        }
+        answers = []
+        for q in payload["questions"]:
+            canned = self.keys[str(q["stem"])]
+            # Cite the page that holds the quote, as a model would.
+            label = next(p["label"] for p in payload["pages"] if canned["quote"] in p["text"])
+            answers.append({"id": q["id"]} | defaults | {"page": label} | canned)
+        return reply({"answers": answers})
+
+
+def client_for(handler: Any, tmp_path: Path) -> ChatClient:
+    return ChatClient(
+        stage_name="generate",
+        provider_name="openrouter",
+        provider=Provider(base_url="https://openrouter.ai/api/v1", api_key_env="KEY"),
+        stage=Stage(
+            provider="openrouter", model="deepseek/deepseek-v4-flash", min_interval_seconds=0
+        ),
+        log_path=tmp_path / "calls.jsonl",
+        env={"KEY": "secret-key-123"},
+        transport=httpx.MockTransport(handler),
+    )
+
+
+def exam(file: str) -> ExamDoc:
+    return ExamDoc(
+        version="studio-exam-doc-v1",
+        file=file,
+        slug=file.removesuffix(".pdf"),
+        sha256="1" * 64,
+        pages=[ExamPage(page=1, text=f"Tekst ispita {file}", ocr=False)],
+    )
+
+
+def option(text: str, marked: bool = False) -> dict[str, Any]:
+    return {"original": text, "text": text, "marked": marked}
+
+
+def entry(
+    number: str, kind: str, stem: str, unit: str, options: list[dict[str, Any]]
+) -> dict[str, Any]:
+    return {
+        "number": number,
+        "page": 1,
+        "kind": kind,
+        "original": stem,
+        "stem": stem,
+        "options": options,
+        "answer": None,
+        "unit": unit,
+    }
+
+
+LEX_STEM = "Što je ulaz u program LEX?"
+KEY_STEM = "Koliko bitova ima ključ?"
+HEAP_STEM = "Što od navedenog vrijedi za gomilu?"
+
+
+def model() -> FakeModel:
+    lex_options = [option("Sintaksno stablo"), option("Definicija leksičkog analizatora", True)]
+    heap_options = [option("Dinamički dodijeljena memorija"), option("Područje za statičke")]
+    return FakeModel(
+        extract={
+            "teorija.pdf": [
+                entry("1", "choice", LEX_STEM, "01", lex_options),
+                entry("2", "choice", KEY_STEM, "01", [option("56", True), option("128")]),
+            ],
+            "zi.pdf": [
+                entry("1", "choice", HEAP_STEM, "02", heap_options),
+                entry("2", "task", "Za gramatiku izgradite potisni automat.", "01", []),
+                entry("3", "incomplete", "Onaj zadatak s Pi", "01", []),
+            ],
+        },
+        keys={
+            LEX_STEM: {"correct": [2], "explanation": "LEX gradi analizator.", "quote": LEX[:60]},
+            # The slides point elsewhere than the marked key: kept, flagged for review.
+            KEY_STEM: {"correct": [2], "explanation": "Ključ ima 128 bitova.", "quote": LEX[:40]},
+            HEAP_STEM: {"correct": [1], "explanation": "Gomila je dinamička.", "quote": HEAP[:50]},
+        },
+    )
+
+
+def run(handler: FakeModel, tmp_path: Path) -> ExamsResult:
+    return run_exams(
+        studio_dir=tmp_path,
+        course_name="PPJ",
+        course=COURSE,
+        docs=lecture(),
+        exam_docs=[exam("teorija.pdf"), exam("zi.pdf")],
+        make_client=lambda: client_for(handler, tmp_path),
+        questions_per_call=6,
+    )
+
+
+def test_exam_questions_join_their_units_with_keys_and_origins(tmp_path: Path) -> None:
+    result = run(model(), tmp_path)
+
+    assert result.errors == [] and result.added == {"01": 2, "02": 1}
+    assert result.skipped == [] and len(result.tasks) == 1
+    lex_unit = load_questions(tmp_path, "01")
+    assert lex_unit is not None
+    by_stem = {q.content["stem"]: q for q in lex_unit.questions}
+
+    lex = by_stem[LEX_STEM]
+    assert lex.origin is not None and lex.origin.key == "marked" and lex.origin.flags == []
+    assert [o["is_correct"] for o in lex.content["options"]] == [False, True]
+    assert lex.source is not None and (lex.source.pdf, lex.source.page) == ("ppj", 1)
+    assert lex.schema_error is None and lex.window == 0
+
+    disputed = by_stem[KEY_STEM]
+    assert [o["is_correct"] for o in disputed.content["options"]] == [True, False]
+    assert disputed.origin is not None
+    assert [f.code for f in disputed.origin.flags] == ["exam_key_disputed"]
+
+    heap_unit = load_questions(tmp_path, "02")
+    assert heap_unit is not None
+    heap = heap_unit.questions[0]
+    assert heap.origin is not None and heap.origin.key == "model"
+    assert [o["is_correct"] for o in heap.content["options"]] == [True, False]
+
+    tasks = (exams_dir(tmp_path) / "tasks.md").read_text(encoding="utf-8")
+    assert "zi.pdf, zadatak 2: Za gramatiku izgradite potisni automat." in tasks
+
+    # Unchanged documents and questions are not sent again.
+    again = model()
+    assert run(again, tmp_path).calls == 0 and again.requests == []
+
+
+def test_generation_keeps_the_exam_questions(tmp_path: Path) -> None:
+    run(model(), tmp_path)
+
+    def generator(request: httpx.Request) -> httpx.Response:
+        return reply({"questions": []})
+
+    generate_unit(
+        course_name="PPJ",
+        unit=COURSE.units[0],
+        docs=lecture(),
+        blueprint=Questions(min_per_unit=1, types={"MULTIPLE_CHOICE": 1}),
+        client=client_for(generator, tmp_path),
+        studio_dir=tmp_path,
+    )
+    kept = load_questions(tmp_path, "01")
+    assert kept is not None
+    assert {q.content["stem"] for q in kept.questions} == {LEX_STEM, KEY_STEM}
+
+
+def test_a_question_moves_to_the_unit_of_the_slide_that_supports_it(tmp_path: Path) -> None:
+    handler = model()
+    # The model files the heap question under lexical analysis; its slide is in unit 02.
+    handler.extract["zi.pdf"][0]["unit"] = "01"
+    result = run(handler, tmp_path)
+    assert result.added == {"01": 2, "02": 1}
+    heap_unit = load_questions(tmp_path, "02")
+    assert heap_unit is not None
+    heap = heap_unit.questions[0]
+    assert heap.id.startswith("02-x") and heap.origin is not None
+    assert [f.code for f in heap.origin.flags] == ["exam_unit_moved"]

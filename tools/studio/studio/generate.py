@@ -80,12 +80,37 @@ class Source(Strict):
     quote: str
 
 
+class Appearance(Strict):
+    file: str
+    page: int
+    number: str
+
+
+class OriginFlag(Strict):
+    code: str
+    severity: Literal["error", "warn", "info"]
+    detail: str
+
+
+class ExamOrigin(Strict):
+    """Where a question transcribed from past exams came from, and how its key was set."""
+
+    appearances: list[Appearance]
+    # The text as the exam has it, before typo fixes; shown next to the cleaned question.
+    original: str
+    # "marked": the document marks the answer (bold); "model": set from the unit's slides.
+    key: Literal["marked", "model"]
+    flags: list[OriginFlag] = []
+
+
 class StoredQuestion(Strict):
     id: str
     window: int
     content: dict[str, Any]
     source: Source | None
     schema_error: str | None
+    # Set for questions from `studio exams`; generation keeps them when it reruns.
+    origin: ExamOrigin | None = None
 
 
 class WindowRecord(Strict):
@@ -311,7 +336,9 @@ def generate_unit(
     windows = plan_windows(pages, counts, blueprint)
     digest = input_hash(windows, counts, client.stage.model)
 
-    previous = None if force else load_questions(studio_dir, unit.id)
+    stored_before = load_questions(studio_dir, unit.id)
+    from_exams = [q for q in stored_before.questions if q.origin] if stored_before else []
+    previous = None if force else stored_before
     if previous is not None and previous.input_hash != digest:
         previous = None
     if previous is not None and previous.complete:
@@ -331,7 +358,9 @@ def generate_unit(
             error=None,
         )
         if previous is not None and window.index in kept:
-            reused = [q for q in previous.questions if q.window == window.index]
+            reused = [
+                q for q in previous.questions if q.window == window.index and q.origin is None
+            ]
             record.received = len(reused)
             questions += reused
         elif window.counts:
@@ -374,7 +403,7 @@ def generate_unit(
         input_hash=digest,
         generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         windows=records,
-        questions=questions,
+        questions=questions + from_exams,
     )
     write_json(questions_path(studio_dir, unit.id), result)
     return UnitResult(result, "generated" if result.complete else "partial", calls)

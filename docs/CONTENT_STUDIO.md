@@ -199,7 +199,10 @@ Planned after the winter midterms; this needs a migration and new UI.
    the key kept out of reach. `studio rewrite` applies the same to older questions, and
    the check is now an error on every text field.
 6. **S5** lessons.
-7. **S6** mock papers and past-paper transcription.
+7. **S6** mock papers and past-paper transcription. *Questions done:* `studio exams`
+   transcribes past papers and question lists into the units' pools (keys from bold
+   solution marks or from the slides, construction tasks listed for later). Paper
+   definitions and mock papers remain.
 
 Measure S1–S3 on the PPJ calibration run before the SRS pilot: time per unit, share
 of flagged items, verifier catch rate on seeded wrong keys and the owner's rejection rate.

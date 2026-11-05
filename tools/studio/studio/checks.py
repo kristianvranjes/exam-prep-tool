@@ -331,10 +331,14 @@ def check_course(
                 flags.append(flag("explanation_names_option_letter", "warn", detail))
             if not question.content.get("explanation"):
                 flags.append(flag("no_explanation", "info", "no explanation for the answer"))
+            if question.origin is not None:
+                flags += [flag(f.code, f.severity, f.detail) for f in question.origin.flags]
             questions.append(QuestionChecks(id=question.id, flags=flags))
 
         spec = specs[unit.unit]
-        valid = [q for q in unit.questions if not q.schema_error]
+        # Exam questions keep their papers' options and order; the blueprint and the
+        # balance of keys concern generated questions only.
+        valid = [q for q in unit.questions if not q.schema_error and q.origin is None]
         text_page_count = len({p for w in unit.windows for p in w.pages})
         counts = unit_counts(spec, config.questions, text_page_count)
         own = window_flags(unit) + balance_flags(counts, valid)
