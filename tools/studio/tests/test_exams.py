@@ -358,3 +358,74 @@ def test_points_copied_options_and_spelling_variants_do_not_split_a_question() -
     assert len(found) == 1
     assert found[0].item.stem == "Koji postupak nije dio generatora?"
     assert len(found[0].appearances) == 2
+
+
+def test_a_rerun_keeps_reviewed_questions_exactly_as_they_are(tmp_path: Path) -> None:
+    run(model(), tmp_path)
+    before = load_questions(tmp_path, "01")
+    assert before is not None
+
+    # A changed prompt or model would explain differently; existing questions stay.
+    changed = model()
+    changed.keys[LEX_STEM]["explanation"] = "Drugačije objašnjenje."
+    assert run(changed, tmp_path).calls == 0 and changed.requests == []
+    assert load_questions(tmp_path, "01") == before
+
+
+def test_a_failed_key_request_never_drops_a_question(tmp_path: Path) -> None:
+    run(model(), tmp_path)
+
+    retranscribed = model()
+    # The LEX question is transcribed differently, so it needs a new key ...
+    retranscribed.extract["teorija.pdf"][0]["stem"] = "Što je ulaz programa LEX?"
+
+    def failing(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(json.loads(request.content)["messages"][1]["content"])
+        if "file" in payload:
+            return retranscribed(request)
+        return httpx.Response(429, json={"error": {"message": "slow down"}})
+
+    # ... and that request fails: the question stays as it was.
+    result = run_exams(
+        studio_dir=tmp_path,
+        course_name="PPJ",
+        course=COURSE,
+        docs=lecture(),
+        exam_docs=[exam("teorija.pdf"), exam("zi.pdf")],
+        make_client=lambda: client_for(failing, tmp_path),
+        questions_per_call=6,
+        force=True,  # transcribe again
+    )
+    assert result.errors and result.added == {"01": 2, "02": 1}
+    lex_unit = load_questions(tmp_path, "01")
+    assert lex_unit is not None
+    assert LEX_STEM in {q.content["stem"] for q in lex_unit.questions}
+
+
+def test_a_decided_question_is_frozen_whatever_the_new_transcription(tmp_path: Path) -> None:
+    from studio.review import decide
+
+    run(model(), tmp_path)
+    before = load_questions(tmp_path, "01")
+    assert before is not None
+    lex = next(q for q in before.questions if q.content["stem"] == LEX_STEM)
+    decide(tmp_path, "01", lex.id, "accept")
+
+    # The paper is transcribed again with its points note in the stem.
+    again = model()
+    again.extract["teorija.pdf"][0]["stem"] = "(4 boda) " + LEX_STEM
+    again.extract["teorija.pdf"][0]["original"] = "(4 boda) Sto je ulaz u program LEX?"
+    run_exams(
+        studio_dir=tmp_path,
+        course_name="PPJ",
+        course=COURSE,
+        docs=lecture(),
+        exam_docs=[exam("teorija.pdf"), exam("zi.pdf")],
+        make_client=lambda: client_for(again, tmp_path),
+        questions_per_call=6,
+        force=True,
+    )
+    after = load_questions(tmp_path, "01")
+    assert after is not None
+    assert [q for q in after.questions if q.id == lex.id] == [lex]
+    assert not any("questions" in r for r in again.requests)  # no new key was needed

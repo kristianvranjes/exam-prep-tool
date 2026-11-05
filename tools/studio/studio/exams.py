@@ -56,6 +56,7 @@ from studio.prompts import (
     extract_user,
     key_user,
 )
+from studio.review import current_decisions, load_review
 from studio.rewrite import rewrite
 from studio.sources import fold, references, strip_content
 from studio.store import write_json
@@ -376,11 +377,23 @@ def without_number(item: XItem) -> XItem:
     )
 
 
+def similar(a: str, b: str) -> bool:
+    """Whether two folded texts say the same, allowing small spelling differences.
+
+    Texts sharing few words are told apart cheaply first; the character comparison is
+    slow and runs once for every pair of questions.
+    """
+    if a == b:
+        return True
+    words_a, words_b = set(a.split()), set(b.split())
+    if not words_a or not words_b or len(words_a & words_b) < 0.34 * len(words_a | words_b):
+        return False
+    return min(partial_ratio(a, b), partial_ratio(b, a)) >= SAME_STEM
+
+
 def same_option(text: str, others: list[str]) -> bool:
     """Whether an option says the same as one of the others ("podacima" / "podatcima")."""
-    return any(
-        min(partial_ratio(text, other), partial_ratio(other, text)) >= SAME_STEM for other in others
-    )
+    return any(similar(text, other) for other in others)
 
 
 def keyed_document(items: list[XItem]) -> bool:
@@ -394,7 +407,7 @@ def keyed_document(items: list[XItem]) -> bool:
 
 def same_question(a: XItem, b: XItem) -> bool:
     left_stem, right_stem = fold(a.stem), fold(b.stem)
-    if min(partial_ratio(left_stem, right_stem), partial_ratio(right_stem, left_stem)) < SAME_STEM:
+    if not similar(left_stem, right_stem):
         return False
     if a.options and b.options:
         left = [fold(o.text) for o in a.options]
@@ -574,12 +587,12 @@ def plan_keys(found: list[Found], index: PageIndex, size: int, model: str) -> li
                 current, merged = KeyRequest(), list(pages)
             current.found.append(f)
             current.pages = merged
+            # The cache key is the question and its own pages, not the whole request, so
+            # regrouping requests never sends an answered question again.
+            own = [[p.pdf, p.page, p.text] for p in pages]
+            current.hashes[f.qid] = digest(KEY_VERSION, KEY_SYSTEM, model, key_question(f), own)
         if current.found:
             requests.append(current)
-    for request in requests:
-        texts = [[p.pdf, p.page, p.text] for p in request.pages]
-        for f in request.found:
-            request.hashes[f.qid] = digest(KEY_VERSION, KEY_SYSTEM, model, key_question(f), texts)
     return requests
 
 
@@ -777,11 +790,29 @@ def run_exams(
     for f in found:
         unit_flag(f, index, titles)
 
+    # A question already in a unit whose transcription is unchanged stays exactly as it
+    # is: its review decision and push record are tied to its content.
+    previous = previous_questions(studio_dir, units)
+    # A question the owner has decided on is frozen: it stays exactly as it is and
+    # stands for every transcription of it, so neither its decision nor its push
+    # record is ever lost. Only undecided questions are rebuilt or merged.
+    decided = decided_ids(studio_dir, units)
+    frozen = [q for q in previous.values() if q.id in decided]
+    kept: dict[str, list[StoredQuestion]] = {}
+    for f in found:
+        if matches := [q for q in frozen if stored_match(f.item, q)]:
+            kept[f.qid] = matches
+        elif (
+            (old := previous.get(f.qid)) is not None
+            and old.origin is not None
+            and old.origin.original == original_text(f.item)
+        ):
+            kept[f.qid] = [old]
+    fresh = [f for f in found if f.qid not in kept and f.item.unit in titles]
+
     store = load_keys(studio_dir)
     model = make_client().stage.model
-    requests = plan_keys(
-        [f for f in found if f.item.unit in titles], index, questions_per_call, model
-    )
+    requests = plan_keys(fresh, index, questions_per_call, model)
     hashes = {qid: h for r in requests for qid, h in r.hashes.items()}
     todo = [r for r in requests if any(h not in store.entries for h in r.hashes.values())]
 
@@ -800,19 +831,43 @@ def run_exams(
     write_json(exams_dir(studio_dir) / "keys.json", store)
 
     by_unit: dict[str, list[StoredQuestion]] = {u.id: [] for u in units}
+    new: dict[str, list[StoredQuestion]] = {u.id: [] for u in units}
     skipped: list[tuple[str, str]] = []
+    placed: set[str] = set()
     for f in found:
         first = f.appearances[0]
         where = f"{first.file} #{first.number}"
+        if f.qid in kept:
+            for same in kept[f.qid]:
+                if same.id not in placed:
+                    placed.add(same.id)
+                    by_unit[same.id.split("-x")[0]].append(same)
+            continue
         if f.item.unit not in titles:
             skipped.append((where, "no unit"))
             continue
-        question, why = build(f, store.entries.get(hashes.get(f.qid, "")))
-        if question is None:
+        entry = store.entries.get(hashes.get(f.qid, ""))
+        if entry is None and f.qid in previous:
+            # The key request failed: keep the question as it was rather than lose it.
+            old = previous[f.qid]
+            by_unit[old.id.split("-x")[0]].append(old)
+            continue
+        if entry is None:
+            skipped.append((where, "the key request failed; rerun"))
+            continue
+        built, why = build(f, entry)
+        if built is None:
             skipped.append((where, why or "left out"))
             continue
-        by_unit[settle_unit(question, f.item.unit, index, titles)].append(question)
-    calls += reword(by_unit, store, hashes, make_client)
+        unit_id = settle_unit(built, f.item.unit, index, titles)
+        by_unit[unit_id].append(built)
+        new[unit_id].append(built)
+    produced = {q.id for qs in by_unit.values() for q in qs}
+    for question in previous.values():
+        # Decided questions always stay; after a failed request nothing is dropped.
+        if question.id not in produced and (question.id in decided or errors):
+            by_unit[question.id.split("-x")[0]].append(question)
+    calls += reword(new, store, hashes, make_client)
     write_json(exams_dir(studio_dir) / "keys.json", store)
     for unit in units:
         merge(studio_dir, unit, by_unit[unit.id])
@@ -820,6 +875,40 @@ def run_exams(
     tasks = [(i, e.file) for _, e, _ in documents for i in e.items if i.kind == "task"]
     write_report(studio_dir, documents, added, skipped, tasks, titles)
     return ExamsResult(documents, added, skipped, tasks, calls, errors)
+
+
+def decided_ids(studio_dir: Path, units: list[Unit]) -> set[str]:
+    ids: set[str] = set()
+    for unit in units:
+        stored = load_questions(studio_dir, unit.id)
+        if stored is not None:
+            ids |= set(current_decisions(load_review(studio_dir, unit.id), stored))
+    return ids
+
+
+def stored_match(item: XItem, question: StoredQuestion) -> bool:
+    """Whether a stored question asks what the transcribed item asks."""
+    options = question.content.get("options") or []
+    stem = fold(tidy(str(question.content.get("stem", "")), bool(options)))
+    mine = fold(item.stem)
+    if not similar(mine, stem):
+        return False
+    if item.options and options:
+        theirs = [fold(str(o.get("text", ""))) for o in options]
+        shared = sum(1 for o in item.options if same_option(fold(o.text), theirs))
+        return shared >= 0.5 * min(len(item.options), len(theirs))
+    return True
+
+
+def previous_questions(studio_dir: Path, units: list[Unit]) -> dict[str, StoredQuestion]:
+    """The units' current exam questions, by the id they had before any move."""
+    found: dict[str, StoredQuestion] = {}
+    for unit in units:
+        stored = load_questions(studio_dir, unit.id)
+        for question in stored.questions if stored else []:
+            if question.origin is not None:
+                found[question.origin.first_id or question.id] = question
+    return found
 
 
 def reword(
