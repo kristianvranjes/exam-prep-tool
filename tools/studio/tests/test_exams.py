@@ -336,3 +336,25 @@ def test_a_marked_key_without_a_slide_is_a_warning_not_an_error(tmp_path: Path) 
     assert [(f.code, f.severity) for f in exam_grounding(lex, lecture())] == [
         ("no_source", "error")
     ]
+
+
+def test_points_copied_options_and_spelling_variants_do_not_split_a_question() -> None:
+    def doc(file: str, items: list[XItem]) -> Extracted:
+        return Extracted(
+            version="studio-exam-extract-v1", file=file, input_hash="", windows=[], items=items
+        )
+
+    options = ["Izrada adresa podacima", "Dodjela registara podacima", "Izbor redoslijeda"]
+    variant = ["izrada adresa podatcima", "dodjela registra podacima", "izbor redoslijeda"]
+    first = item(
+        "(4 boda) Koji postupak nije dio generatora?", [(t, False) for t in options], number="3"
+    )
+    second = item(
+        "Koji postupak nije dio generatora\na) izrada adresa podatcima\nb) dodjela",
+        [(t, False) for t in variant],
+        number="11",
+    )
+    found = group([(doc("ljir.pdf", [first]), False), (doc("jir.pdf", [second]), False)], {"01"})
+    assert len(found) == 1
+    assert found[0].item.stem == "Koji postupak nije dio generatora?"
+    assert len(found[0].appearances) == 2

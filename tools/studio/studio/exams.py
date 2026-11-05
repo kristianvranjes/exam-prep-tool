@@ -355,15 +355,31 @@ def question_id(unit_id: str, stem: str) -> str:
 
 
 LEADING_NUMBER = re.compile(r"^\s*(?:\(\d{1,3}\.?\)|\d{1,3}[.)])\s+")
+POINTS = re.compile(r"^\s*\(\s*\d+(?:[.,]\d+)?\s*bod\w*\s*\)\s*", re.IGNORECASE)
+# Options the model copied into the stem as well: "...?\na) Generiranje ..."
+INLINE_OPTIONS = re.compile(r"\s*\n\s*\(?a[.)]\s.*\Z", re.DOTALL)
+
+
+def tidy(text: str, has_options: bool) -> str:
+    text = POINTS.sub("", LEADING_NUMBER.sub("", text, count=1), count=1)
+    return INLINE_OPTIONS.sub("", text) if has_options else text
 
 
 def without_number(item: XItem) -> XItem:
-    """The item without a leading "10." or "(15.)" that the model left in its text."""
+    """The item without "10.", "(15.)", "(4 boda)" or copied options in its text."""
+    has_options = bool(item.options)
     return item.model_copy(
         update={
-            "stem": LEADING_NUMBER.sub("", item.stem, count=1),
-            "original": LEADING_NUMBER.sub("", item.original, count=1),
+            "stem": tidy(item.stem, has_options),
+            "original": tidy(item.original, has_options),
         }
+    )
+
+
+def same_option(text: str, others: list[str]) -> bool:
+    """Whether an option says the same as one of the others ("podacima" / "podatcima")."""
+    return any(
+        min(partial_ratio(text, other), partial_ratio(other, text)) >= SAME_STEM for other in others
     )
 
 
@@ -381,9 +397,10 @@ def same_question(a: XItem, b: XItem) -> bool:
     if min(partial_ratio(left_stem, right_stem), partial_ratio(right_stem, left_stem)) < SAME_STEM:
         return False
     if a.options and b.options:
-        left = {fold(o.text) for o in a.options}
-        right = {fold(o.text) for o in b.options}
-        return len(left & right) >= 0.5 * min(len(left), len(right))
+        left = [fold(o.text) for o in a.options]
+        right = [fold(o.text) for o in b.options]
+        shared = sum(1 for text in left if same_option(text, right))
+        return shared >= 0.5 * min(len(left), len(right))
     return True
 
 
