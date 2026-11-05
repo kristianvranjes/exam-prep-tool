@@ -55,9 +55,9 @@ def generated(kind: str, stem: str, label: str, quote: str) -> dict[str, Any]:
         "absolute_tolerance": None,
         "relative_tolerance": None,
         "unit": None,
-        "explanation": "Tako pise na slajdu.",
+        "explanation": "Isti kljuc kriptira i dekriptira poruke.",
         "difficulty": 2,
-        "source": label,
+        "page": label,
         "quote": quote,
     }
     if kind in ("MULTIPLE_CHOICE", "MULTIPLE_SELECT"):
@@ -92,7 +92,7 @@ class FakeGenerator:
         self.requests.append(payload)
         if len(self.requests) in self.fail_calls:
             return httpx.Response(429, json={"error": {"message": "slow down"}})
-        sources = payload["sources"]
+        sources = payload["pages"]
         questions = []
         for kind, n in payload["question_counts"].items():
             for k in range(n):
@@ -162,7 +162,7 @@ def test_generation_maps_labels_to_pages_and_validates_with_the_app_schema(
     made = result.questions
     assert len(made.questions) == 20
     assert len(handler.requests) == result.calls == len(made.windows)
-    assert all(len(r["sources"]) <= 4 for r in handler.requests)  # 12000 characters each
+    assert all(len(r["pages"]) <= 4 for r in handler.requests)  # 12000 characters each
     assert all(q.schema_error is None for q in made.questions)
     first = made.questions[0]
     assert first.id == "01-w01-01"
@@ -198,7 +198,7 @@ def test_a_rerun_requests_only_the_windows_that_failed(tmp_path: Path) -> None:
 
 def test_invalid_questions_and_unknown_labels_are_recorded_not_repaired(tmp_path: Path) -> None:
     def broken(request: httpx.Request) -> httpx.Response:
-        two_keys = generated("MULTIPLE_CHOICE", "Dva kljuca?", "S1", "x")
+        two_keys = generated("MULTIPLE_CHOICE", "Dva kljuca?", "P1", "x")
         for option in two_keys["options"][:2]:
             option["is_correct"] = True
         return reply([two_keys, generated("TRUE_FALSE", "Tvrdnja.", "S99", "x")])
@@ -214,10 +214,40 @@ def test_invalid_questions_and_unknown_labels_are_recorded_not_repaired(tmp_path
     assert made[1].source is None and made[1].schema_error is None
 
 
+def test_text_that_cites_the_slides_is_cleaned_or_rewritten(tmp_path: Path) -> None:
+    requests: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(json.loads(request.content)["messages"][1]["content"])
+        requests.append(payload)
+        if "question_counts" in payload:
+            cleanable = generated("TRUE_FALSE", "AES je simetricna sifra.", "P1", "x")
+            cleanable["explanation"] = "Prema izvoru, AES koristi isti kljuc."
+            rewritable = generated("TRUE_FALSE", "Koje su sifre navedene u izvoru?", "P1", "x")
+            return reply([cleanable, rewritable])
+        item = payload["questions"][0]
+        assert item["rewrite"] == ["stem"]
+        new = {"field": "stem", "text": "DES je simetricna sifra."}
+        return reply([{"id": item["id"], "fields": [new]}])
+
+    unit = Unit(
+        id="03",
+        title="T",
+        sources=[SourceRange(pdf="u", pages="1-2")],
+        questions={"TRUE_FALSE": 2},
+    )
+    result = run(handler, tmp_path, unit=unit)
+    first, second = (q.content for q in result.questions.questions)
+    assert first["explanation"] == "AES koristi isti kljuc."
+    assert second["stem"] == "DES je simetricna sifra."
+    assert second["correct_answer"] is True
+    assert len(requests) == 2 and result.calls == 2
+
+
 def test_options_are_reordered_deterministically_without_changing_the_key() -> None:
     def content() -> dict[str, Any]:
         return to_content(
-            GenQuestion.model_validate(generated("MULTIPLE_CHOICE", "Kljuc?", "S1", "q"))
+            GenQuestion.model_validate(generated("MULTIPLE_CHOICE", "Kljuc?", "P1", "q"))
         )
 
     original = content()
@@ -240,13 +270,13 @@ def test_options_are_reordered_deterministically_without_changing_the_key() -> N
 
 def test_numeric_content_keeps_only_numeric_fields() -> None:
     question = GenQuestion.model_validate(
-        generated("NUMERIC", "Koliko bitova?", "S1", "q")
+        generated("NUMERIC", "Koliko bitova?", "P1", "q")
         | {"correct_value": "128", "relative_tolerance": "0.01"}
     )
     assert to_content(question) == {
         "type": "NUMERIC",
         "stem": "Koliko bitova?",
-        "explanation": "Tako pise na slajdu.",
+        "explanation": "Isti kljuc kriptira i dekriptira poruke.",
         "difficulty": 2,
         "correct_value": "128",
         "relative_tolerance": "0.01",
@@ -300,6 +330,32 @@ def test_cli_generate_check_and_status(
     assert "answer_position" not in out and "quote_not_found" not in out
     assert main(["status", str(studio_dir)]) == 0
     assert "10 questions, 0 errors" in capsys.readouterr().out
+
+    # Questions generated before the cleanup can still cite the slides: check reports
+    # it as an error and rewrite removes it.
+    path = studio_dir / "build" / "units" / "01" / "questions.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["questions"][0]["content"]["explanation"] = "Prema izvoru, kljuc je isti."
+    data["questions"][1]["content"]["stem"] = "Koje su sifre navedene u izvorima?"
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    assert main(["check", str(studio_dir)]) == 1
+    assert "01: 10 questions, 2 errors" in capsys.readouterr().out
+    assert main(["rewrite", str(studio_dir), "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "2 cite a source, 1 would change, 1 still need the model" in out
+    assert json.loads(path.read_text(encoding="utf-8")) == data
+
+    target = data["questions"][1]["id"]
+
+    def rewriter(request: httpx.Request) -> httpx.Response:
+        new = {"field": "stem", "text": "Koje su simetricne sifre?"}
+        return reply([{"id": target, "fields": [new]}])
+
+    monkeypatch.setattr(studio.cli, "stage_client", lambda *a: client(rewriter, tmp_path))
+    assert main(["rewrite", str(studio_dir)]) == 0
+    assert "2 cite a source, 2 changed, 0 still do (1 requests)" in capsys.readouterr().out
+    assert main(["check", str(studio_dir)]) == 0
+    assert "01: 10 questions, 0 errors" in capsys.readouterr().out
 
 
 def test_question_counts_can_scale_with_the_unit() -> None:

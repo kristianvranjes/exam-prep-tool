@@ -190,6 +190,14 @@ Planned after the winter midterms; this needs a migration and new UI.
    `--approve` approves them as an owner-moderator. Checked end to end on 4 November
    against a local stack with the e2e seed: ten reviewed SRS questions (one edited) were
    imported, linked to the right units and approved, and a second push sent nothing.
+   The first full runs (SRS 238 questions, PPJ 314) showed that the stem rule was not
+   enough: 99 SRS and 173 PPJ questions still said where a fact came from, mostly
+   explanations opening "Prema izvoru, …" or "Izvor navodi …", because the prompt called
+   the pages "sources". `questions-v4` calls them pages and forbids such phrases in
+   every field; after each window the studio cuts the lead-ins it can remove without
+   breaking the sentence and has the generator rephrase the rest, field by field, with
+   the key kept out of reach. `studio rewrite` applies the same to older questions, and
+   the check is now an error on every text field.
 6. **S5** lessons.
 7. **S6** mock papers and past-paper transcription.
 

@@ -157,3 +157,14 @@ def test_calls_within_a_stage_are_spaced(tmp_path: Path) -> None:
     ask(c)
     assert slept == [pytest.approx(0.6)]
     assert [r["latency_ms"] for r in records(tmp_path)] == [250, 250]
+
+
+def test_openrouter_requests_skip_the_configured_providers(tmp_path: Path) -> None:
+    bodies: list[dict[str, object]] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json=completion(VALID))
+
+    ask(client(httpx.MockTransport(handle), tmp_path, ignore_providers=["Crusoe"]))
+    assert bodies[0]["provider"] == {"require_parameters": True, "ignore": ["Crusoe"]}

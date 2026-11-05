@@ -33,6 +33,7 @@ studio status ../../../srs/studio      # sources, units, problems
 studio providers ../../../srs/studio   # one tiny request per AI stage
 studio generate ../../../srs/studio --dry-run   # requests and input size, nothing sent
 studio generate ../../../srs/studio --unit 03   # questions for one unit (all by default)
+studio rewrite ../../../srs/studio     # remove mentions of slides/sources from older questions
 studio verify ../../../srs/studio      # blind answers from the verifier model
 studio check ../../../srs/studio       # deterministic checks, plus verifier flags
 studio calibrate ../../../srs/studio   # seeded wrong keys the verifier would catch
@@ -109,13 +110,26 @@ A unit's pages with text are split into windows of
 consecutive pages, at most `max_input_chars` (12000) characters and roughly
 `max_questions_per_call` (8) questions each, and the blueprint is shared out across
 windows in proportion to their text. Each request sees only its window, with pages
-labelled S1, S2, … that the studio maps back to PDF and page.
+labelled P1, P2, … that the studio maps back to PDF and page.
 
 Each question is validated with the application's own schemas, loaded from
 `backend/app/schemas/question.py` in this checkout, so a question the studio accepts is
 one the application imports. Options are reordered deterministically (seeded by the
 question id): models put the key first far more often than chance, and the application
 shows options in stored order.
+
+Students see a question in the app, never the slides, so no stem, option,
+explanation or reference answer may say where a fact comes from ("Prema izvoru, …",
+"Izvor navodi da …", "na slajdu", "s predavanja", "(S3)"). The prompt forbids it;
+after each window the studio removes such lead-ins and asides where the sentence stays
+whole ("Prema izvoru, AES …" becomes "AES …"), and sends what remains back to the
+generator model, which rephrases only the flagged fields. The reply never contains the
+type, the options' correctness, the true/false answer or numeric values, so the key
+cannot change; a rewrite that still cites a source or fails the schema is dropped.
+`studio rewrite` does the same for questions generated before this (`--dry-run` only
+reports). Rewritten units need `studio verify` again. "Izvor" alone is not flagged,
+since it is an ordinary word in these courses ("izvor prijetnje", "IP adresa izvora",
+"izvorni program").
 
 A unit is sent again only when its pages, blueprint, model or prompt version change
 (`--force` regenerates anyway). If some windows fail (rate limit, timeout), a rerun
@@ -171,6 +185,15 @@ requires the random token from the printed address on every API call and sends a
 strict Content-Security-Policy. The page loads nothing from the internet and inserts
 generated text only as text, never as HTML.
 
+## Speed
+
+Requests to ZDR endpoints take 30 seconds to several minutes, so a stage can handle
+several units at once: `parallel = 4` under `[stages.generate]` or `[stages.verify]`
+(requests within a unit stay in order). `ignore_providers = ["Crusoe"]` makes OpenRouter
+skip a provider; on 4 November Crusoe wrote up to 16 000 tokens for eight questions where
+others wrote about 2 500, and was truncated. Progress lines appear as each unit
+finishes.
+
 ## Publishing and pushing
 
 `studio publish` writes one import file per unit with the accepted questions only, and
@@ -206,7 +229,7 @@ it is, `warn` needs a careful look in review, `info` is a hint.
 | Cites a label that was not in its window | error |
 | Quote not found on the cited page (fuzzy: case, diacritics, OCR `■`, LaTeX commands and `...` joins are tolerated) / found only partly / too short | warn / info / warn |
 | Same or nearly the same stem as another question of the course or of the existing bank (`[checks] existing`) | warn |
-| Stem mentions the source, slides or lecture, which students never see | warn |
+| Stem, option, explanation or reference answer mentions the source, slides or lecture, which students never see (`studio rewrite` fixes it) | error |
 | Explanation names an option by letter or position, which shuffling breaks | warn |
 | "All/none of the above" option; two options nearly identical | warn |
 | Negated stem; key clearly the longest option; no explanation | info |

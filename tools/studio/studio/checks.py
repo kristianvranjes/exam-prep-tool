@@ -15,7 +15,6 @@ careful look in review; `info` is a hint.
 import hashlib
 import json
 import re
-import unicodedata
 from collections import Counter
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -34,6 +33,7 @@ from studio.generate import (
     unit_counts,
 )
 from studio.ingest import PdfPages
+from studio.sources import fold, references
 from studio.store import unit_dir, write_json
 from studio.verify import Verdict, fresh_verify, key_letters
 
@@ -44,24 +44,17 @@ GROUNDED = 0.9
 WEAK = 0.75
 MIN_QUOTE_CHARS = 12
 NEAR_DUPLICATE = 0.85
-FOLD = str.maketrans({"đ": "d", "Đ": "D", "■": None, "�": None})
 # Matched against folded text (no diacritics, lower case).
 ALL_OR_NONE = re.compile(
     r"\b(?:sv[eia]\w*\s+(?:od\s+)?navede\w*|nista\s+od\s+navede\w*|nijedn\w*\s+od\s+navede\w*"
     r"|(?:all|none)\s+of\s+the\s+above)\b"
 )
 NEGATED = re.compile(r"\b(?:nije|nisu|ne|osim|netocn\w*|pogresn\w*|not|except|incorrect)\b")
-# Students never see the slides, so a stem that points at them cannot be answered as asked.
 # Options are reordered after generation, so "opcija B" in an explanation may point at
 # the wrong option. Matched against folded text.
 OPTION_LETTER = re.compile(
     r"\b(?:opcij\w*|odgovor\w*|ponud\w*|option|answer)\s+\(?[a-f]\)?(?=\W|$)"
     r"|\b(?:prv|drug|trec|cetvrt|zadnj)\w*\s+(?:opcij\w*|odgovor\w*|ponud\w*)"
-)
-# Only the noun "izvor" (not "izvorni kod") and lecture phrases (not "prezentacijski sloj").
-REFERS_TO_SOURCE = re.compile(
-    r"\b(?:izvor(?:a|u|om|i|ima|e)?|slajd\w*|(?:na|sa|s|u) predavanj\w*|u (?:navedenom )?tekstu"
-    r"|the sources?|the slides?|the text)\b"
 )
 
 
@@ -87,18 +80,6 @@ class UnitChecks(Strict):
     questions: list[QuestionChecks]
     unit_flags: list[Flag]
     summary: dict[str, int]
-
-
-def fold(text: str) -> str:
-    """Lower case, no diacritics, OCR placeholders or LaTeX commands, punctuation as spaces.
-
-    Slides show symbols (∈, ←) that a model may quote as LaTeX (\\in, \\leftarrow); dropping
-    the command words lets both spellings meet.
-    """
-    text = re.sub(r"\\[A-Za-z]+", " ", text)
-    decomposed = unicodedata.normalize("NFKD", text.translate(FOLD))
-    plain = "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
-    return " ".join(re.sub(r"[\W_]+", " ", plain).split())
 
 
 def partial_ratio(needle: str, hay: str) -> float:
@@ -336,9 +317,12 @@ def check_course(
             flags += grounding(question, docs)
             flags += duplicates.get(question.id, [])
             flags += option_flags(question.content)
-            if REFERS_TO_SOURCE.search(fold(str(question.content.get("stem", "")))):
-                detail = "the stem mentions the source or slides, which students never see"
-                flags.append(flag("stem_refers_to_source", "warn", detail))
+            if cites := references(question.content):
+                where = ", ".join(f'{name} ("{text}")' for name, text in cites.items())
+                detail = (
+                    f"mentions the source, slides or lecture, which students never see: {where}"
+                )
+                flags.append(flag("refers_to_source", "error", detail + "; run studio rewrite"))
             explanation = fold(str(question.content.get("explanation") or ""))
             if question.content["type"] in OPTION_TYPES and OPTION_LETTER.search(explanation):
                 detail = (

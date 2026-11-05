@@ -12,6 +12,7 @@ never the key or prompt text.
 import json
 import os
 import re
+import threading
 import time
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
@@ -25,6 +26,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from studio.config import Provider, Stage, StudioError
 
 T = TypeVar("T", bound=BaseModel)
+# Parallel units share one calls.jsonl.
+_log_lock = threading.Lock()
 IDENTIFIER = re.compile(r"^[A-Za-z0-9_.:/@~ -]{1,120}$")
 
 
@@ -143,7 +146,10 @@ class ChatClient:
             },
         }
         if urlsplit(self.provider.base_url).hostname == "openrouter.ai":
-            body["provider"] = {"require_parameters": True}
+            preferences: dict[str, object] = {"require_parameters": True}
+            if self.stage.ignore_providers:
+                preferences["ignore"] = list(self.stage.ignore_providers)
+            body["provider"] = preferences
         return body
 
     def complete_json(
@@ -251,7 +257,7 @@ class ChatClient:
         if self.log_path is None:
             return
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.log_path.open("a", encoding="utf-8") as handle:
+        with _log_lock, self.log_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record.model_dump(), ensure_ascii=False) + "\n")
 
 
