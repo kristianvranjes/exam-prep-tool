@@ -34,6 +34,7 @@ studio providers ../../../srs/studio   # one tiny request per AI stage
 studio generate ../../../srs/studio --dry-run   # requests and input size, nothing sent
 studio generate ../../../srs/studio --unit 03   # questions for one unit (all by default)
 studio rewrite ../../../srs/studio     # remove mentions of slides/sources from older questions
+studio exams ../../../ppj/studio       # questions from past exams join their units ([exams])
 studio verify ../../../srs/studio      # blind answers from the verifier model
 studio check ../../../srs/studio       # deterministic checks, plus verifier flags
 studio calibrate ../../../srs/studio   # seeded wrong keys the verifier would catch
@@ -135,6 +136,38 @@ A unit is sent again only when its pages, blueprint, model or prompt version cha
 (`--force` regenerates anyway). If some windows fail (rate limit, timeout), a rerun
 requests only those.
 
+## Past exams
+
+`[exams] pdfs = ["../ispiti/**/*.pdf"]` in `studio.toml` names past papers and question
+lists. `studio exams` (with `--dry-run` it only reads and OCRs them) then:
+
+1. reads each PDF with bold text marked, since solution sheets set the correct option in
+   bold; scanned pages go through Tesseract as in `studio ocr`;
+2. has the generator transcribe each document into items: choice, true/false and short
+   questions, construction tasks ("izgradite parser", "konstruirajte automat") and
+   fragments that cannot be asked ("onaj zadatak s ..."). It fixes only obvious typos
+   and diacritics; the text as printed is kept and shown in review. It also names the
+   unit of each item, and the studio flags `unit_uncertain` when another unit's slides
+   match the question clearly better (BM25 over slide pages);
+3. merges the same question from several papers into one that lists every appearance,
+   preferring a version with options and a marked key;
+4. sets the key: from the bold marking when the document marks its answers (most of
+   its choice questions have some but not all options bold); otherwise the generator
+   decides it from the unit's best-matching slide pages, or leaves the question out
+   when they do not decide it. Either way it writes the explanation and quotes the page
+   that supports the key; `exam_key_disputed` means the slides point elsewhere than the
+   marked key;
+5. adds the questions to their units' `questions.json` with an `origin` (window 0,
+   ids `<unit>-x<hash of the stem>`, options in the paper's order). Generation keeps
+   them when it reruns.
+
+Construction tasks are not imported (the application cannot grade them); they are
+listed per unit in `build/exams/tasks.md`. `build/exams/report.json` counts items per
+document and lists what was left out and why. Transcriptions and keys are cached, so a
+rerun sends only what changed or failed. Then run `studio verify` and `studio check`
+as for generated questions, and review: the page shows where each exam question was
+asked and its original text.
+
 ## Verifying
 
 `studio verify` sends each valid question to the verifier model (a different family from
@@ -235,6 +268,7 @@ it is, `warn` needs a careful look in review, `info` is a hint.
 | Negated stem; key clearly the longest option; no explanation | info |
 | Verifier answered differently from the key; found the question not answerable from its page; named a problem | warn |
 | Verifier agreed with low confidence | info |
+| Exam question: unit uncertain; the slides point to another key than the marked one; the key request saw a problem or failed | warn |
 | Unit: failed or uncovered window | error / warn |
 | Unit: a verifier batch failed | warn |
 | Unit: fewer questions of a type than the blueprint; true/false share outside 30–70 %; the key in one position for over half the multiple-choice items; the key the longest in 40 % or more; one difficulty for all | warn |

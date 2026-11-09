@@ -23,6 +23,10 @@ const FLAGS = {
   duplicate: "Duplikat",
   near_duplicate: "Gotovo duplikat",
   refers_to_source: "Tekst spominje izvor, slajd ili predavanje",
+  unit_uncertain: "Cjelina nije sigurna",
+  exam_key_disputed: "Slajdovi upućuju na drugi odgovor od rješenja",
+  exam_key_problem: "Ključ s ispita: model vidi problem",
+  exam_unexplained: "Ključ i objašnjenje nisu dobiveni",
   all_or_none_option: "Opcija »sve/ništa od navedenog«",
   options_too_similar: "Preslične opcije",
   negated_stem: "Negirano pitanje",
@@ -256,6 +260,15 @@ function pageBlock(source) {
   ];
 }
 
+function originBlock(origin) {
+  const where = origin.appearances.map((a) => `${a.file}, zadatak ${a.number}`).join("; ");
+  const key = origin.key === "marked" ? "ključ iz rješenja na ispitu" : "ključ odredio model iz slajdova";
+  return [
+    el("p", null, `${where} (${key})`),
+    el("pre", { class: "original" }, origin.original),
+  ];
+}
+
 function renderDetail() {
   const detail = document.getElementById("detail");
   const item = current();
@@ -289,6 +302,8 @@ function renderDetail() {
       : el("p", { class: "empty" }, state.view.checked ? "Bez oznaka." : "Provjere nisu pokrenute."),
     el("h3", null, "Provjeravatelj"),
     verdictBlock(item),
+    item.origin && el("h3", null, "S ispita"),
+    item.origin && originBlock(item.origin),
     el("h3", null, "Izvor"),
     pageBlock(item.source),
     state.editing ? null : actions(item),

@@ -168,6 +168,15 @@ class App(Strict):
         return app_url(url, origin=True)
 
 
+class Exams(Strict):
+    """Past exams and question lists whose questions join the units' pools."""
+
+    # PDFs relative to the studio folder; glob patterns are allowed ("../ispiti/**/*.pdf").
+    pdfs: list[str] = Field(min_length=1)
+    # Questions per key-and-explain request; each brings its unit's best-matching pages.
+    questions_per_call: int = Field(default=6, ge=1, le=12)
+
+
 class Checks(Strict):
     # quiz-import JSON files already in the course bank, for duplicate checks.
     existing: list[str] = Field(default_factory=list)
@@ -181,6 +190,7 @@ class StudioConfig(Strict):
     questions: Questions = Field(default_factory=Questions)
     verification: Verification = Field(default_factory=Verification)
     checks: Checks = Field(default_factory=Checks)
+    exams: Exams | None = None
     app: App | None = None
 
     @model_validator(mode="after")
@@ -246,6 +256,10 @@ max_per_unit = 150
 [checks]
 # quiz-import JSON files already in the course bank, checked for duplicate stems.
 existing = []
+
+# Uncomment for `studio exams`: questions from past exams join the units' pools.
+# [exams]
+# pdfs = ["../ispiti/**/*.pdf"]
 
 # Uncomment for `studio push`. The password is asked for at push time (or read from the
 # environment variable named by password_env) and never stored.
