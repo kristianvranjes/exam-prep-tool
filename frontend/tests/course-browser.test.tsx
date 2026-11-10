@@ -23,7 +23,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 async function selectFaculty(value = "f1") {
-  fireEvent.change(await screen.findByLabelText("Browse by faculty"), { target: { value } });
+  fireEvent.change(await screen.findByLabelText("Pretraži po fakultetu"), { target: { value } });
 }
 beforeEach(() => {
   vi.resetAllMocks();
@@ -36,19 +36,19 @@ it("loads faculties in backend order, then courses only on selection", async () 
   const pending = deferred<Faculty[]>();
   mock.faculties.mockReturnValue(pending.promise);
   render(view());
-  expect(screen.getByText("Loading faculties…")).toBeInTheDocument();
+  expect(screen.getByText("Učitavam fakultete…")).toBeInTheDocument();
   expect(mock.facultyCourses).not.toHaveBeenCalled();
   pending.resolve(faculties);
-  await screen.findByLabelText("Browse by faculty");
-  expect(screen.getAllByRole("option").map(option => option.textContent)).toEqual(["Select a faculty", "Engineering — University of Zagreb", "Legacy / Unassigned"]);
+  await screen.findByLabelText("Pretraži po fakultetu");
+  expect(screen.getAllByRole("option").map(option => option.textContent)).toEqual(["Odaberite fakultet", "Engineering — University of Zagreb", "Legacy / Unassigned"]);
   expect(mock.facultyCourses).not.toHaveBeenCalled();
   const loading = deferred<Course[]>();
   mock.facultyCourses.mockReturnValueOnce(loading.promise);
   await selectFaculty();
-  expect(screen.getByText("Loading faculty courses…")).toBeInTheDocument();
+  expect(screen.getByText("Učitavam kolegije fakulteta…")).toBeInTheDocument();
   loading.resolve([course]);
-  expect(await screen.findByRole("button", { name: "Join course: Algorithms" })).toBeEnabled();
-  expect(screen.getByText("Not joined")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms" })).toBeEnabled();
+  expect(screen.getByText("Nije upisan")).toBeInTheDocument();
   await selectFaculty("f2");
   await waitFor(() => expect(mock.facultyCourses.mock.calls).toEqual([["f1"], ["f2"]]));
 });
@@ -59,7 +59,7 @@ it("ignores an old faculty response after a newer selection", async () => {
   render(view());
   await selectFaculty();
   await selectFaculty("f2");
-  expect(await screen.findByText("No courses available")).toBeInTheDocument();
+  expect(await screen.findByText("Nema dostupnih kolegija")).toBeInTheDocument();
   await act(async () => stale.resolve([course]));
   expect(screen.queryByText("Algorithms")).not.toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Legacy / Unassigned" })).toBeInTheDocument();
@@ -67,7 +67,7 @@ it("ignores an old faculty response after a newer selection", async () => {
 
 it("does not fetch courses on an external revision until a faculty is selected", async () => {
   const rendered = render(view());
-  await screen.findByLabelText("Browse by faculty");
+  await screen.findByLabelText("Pretraži po fakultetu");
   rendered.rerender(view([], false, 1));
   expect(mock.facultyCourses).not.toHaveBeenCalled();
   await selectFaculty("f2");
@@ -83,16 +83,16 @@ it("refreshes only the selected faculty and ignores a stale pre-refresh response
   const rendered = render(view());
   await selectFaculty("f1");
   rendered.rerender(view([], false, 1));
-  expect(await screen.findByRole("button", { name: "Join course: Algorithms II" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms II" })).toBeInTheDocument();
   await act(async () => old.resolve([course]));
-  expect(screen.queryByRole("button", { name: "Join course: Algorithms" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Upiši kolegij: Algorithms" })).not.toBeInTheDocument();
   expect(mock.facultyCourses.mock.calls).toEqual([["f1"], ["f1"]]);
 });
 
 it("shows an empty faculty catalog", async () => {
   mock.faculties.mockResolvedValue([]);
   render(view());
-  expect(await screen.findByText("No faculties available")).toBeInTheDocument();
+  expect(await screen.findByText("Nema dostupnih fakulteta")).toBeInTheDocument();
   expect(mock.facultyCourses).not.toHaveBeenCalled();
 });
 
@@ -100,12 +100,12 @@ it("retries faculty and course errors without fetching unrelated faculties", asy
   mock.faculties.mockRejectedValueOnce(new Error("Unavailable")).mockResolvedValue(faculties);
   mock.facultyCourses.mockRejectedValueOnce(new Error("Unavailable")).mockResolvedValue([]);
   render(view());
-  expect(await screen.findByRole("alert")).toHaveTextContent("faculty catalog");
-  fireEvent.click(screen.getByRole("button", { name: "Retry faculties" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Popis fakulteta nije učitan");
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj fakultete" }));
   await selectFaculty();
-  expect(await screen.findByRole("alert")).toHaveTextContent("courses for this faculty");
-  fireEvent.click(screen.getByRole("button", { name: "Retry courses" }));
-  expect(await screen.findByText("No courses available")).toBeInTheDocument();
+  expect(await screen.findByRole("alert")).toHaveTextContent("Kolegiji ovog fakulteta nisu učitani");
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj kolegije" }));
+  expect(await screen.findByText("Nema dostupnih kolegija")).toBeInTheDocument();
   expect(mock.facultyCourses.mock.calls).toEqual([["f1"], ["f1"]]);
 });
 
@@ -113,8 +113,8 @@ it("opens the existing joined course without posting another join", async () => 
   const joined = { ...course, description: "Joined course details" };
   render(view([joined]));
   await selectFaculty();
-  fireEvent.click(await screen.findByRole("button", { name: "Open course: Algorithms" }));
-  expect(screen.getByText("Joined")).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Otvori kolegij: Algorithms" }));
+  expect(screen.getByText("Upisan")).toBeInTheDocument();
   expect(onOpen).toHaveBeenCalledWith(joined);
   expect(mock.joinCourse).not.toHaveBeenCalled();
 });
@@ -124,29 +124,29 @@ it("disables joining while membership is loading and while that join is pending"
   mock.joinCourse.mockReturnValue(pending.promise);
   const rendered = render(view([], true));
   await selectFaculty();
-  expect(await screen.findByRole("button", { name: "Join course: Algorithms" })).toBeDisabled();
+  expect(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms" })).toBeDisabled();
   rendered.rerender(view());
-  fireEvent.click(screen.getByRole("button", { name: "Join course: Algorithms" }));
-  const joining = screen.getByRole("button", { name: "Joining course: Algorithms" });
+  fireEvent.click(screen.getByRole("button", { name: "Upiši kolegij: Algorithms" }));
+  const joining = screen.getByRole("button", { name: "Upisujem kolegij: Algorithms" });
   expect(joining).toBeDisabled();
   fireEvent.click(joining);
   pending.resolve(membership);
   await waitFor(() => expect(onJoined).toHaveBeenCalledWith(course));
-  expect(screen.getByRole("status")).toHaveTextContent("Algorithms added to Your courses.");
+  expect(screen.getByRole("status")).toHaveTextContent("Kolegij Algorithms dodan je u Vaše kolegije.");
   expect(mock.joinCourse).toHaveBeenCalledTimes(1);
   rendered.rerender(view([course]));
-  expect(screen.getByRole("button", { name: "Open course: Algorithms" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Otvori kolegij: Algorithms" })).toBeInTheDocument();
 });
 
 it("allows retrying a failed join and keeps the faculty selected", async () => {
   mock.joinCourse.mockRejectedValueOnce(new Error("Unavailable")).mockResolvedValue(membership);
   render(view());
   await selectFaculty();
-  fireEvent.click(await screen.findByRole("button", { name: "Join course: Algorithms" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Try again");
+  fireEvent.click(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Pokušajte ponovno");
   expect(onJoined).not.toHaveBeenCalled();
-  expect(screen.getByLabelText("Browse by faculty")).toHaveValue("f1");
-  fireEvent.click(screen.getByRole("button", { name: "Join course: Algorithms" }));
+  expect(screen.getByLabelText("Pretraži po fakultetu")).toHaveValue("f1");
+  fireEvent.click(screen.getByRole("button", { name: "Upiši kolegij: Algorithms" }));
   await waitFor(() => expect(onJoined).toHaveBeenCalledWith(course));
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
@@ -156,7 +156,7 @@ it("does not update a later session when a join finishes after unmount", async (
   mock.joinCourse.mockReturnValue(pending.promise);
   const rendered = render(view());
   await selectFaculty();
-  fireEvent.click(await screen.findByRole("button", { name: "Join course: Algorithms" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms" }));
   rendered.unmount();
   await act(async () => pending.resolve(membership));
   expect(onJoined).not.toHaveBeenCalled();

@@ -28,8 +28,8 @@ beforeEach(() => { vi.resetAllMocks(); });
 it("lists each unfinished session with its course, mode, focus and progress, leading with one primary action", () => {
   const algorithms = course("algorithms", "Algorithms"), grammars = course("grammars", "Formal languages");
   const onResume = home([{ course: algorithms, attempt: guided }, { course: grammars, attempt: { ...guided, id: "b", feedbackMode: "END", focusLabel: null, answered: 0, total: 5 } }]);
-  expect(screen.getByRole("heading", { name: "Continue studying" })).toBeVisible();
-  const rows = within(screen.getByRole("list", { name: "Unfinished practice sessions" })).getAllByRole("listitem");
+  expect(screen.getByRole("heading", { name: "Nastavite učiti" })).toBeVisible();
+  const rows = within(screen.getByRole("list", { name: "Nedovršene vježbe" })).getAllByRole("listitem");
   expect(rows).toHaveLength(2);
   expect(within(rows[0]).getByText("Algorithms")).toBeVisible();
   expect(rows[0]).toHaveTextContent("Guided practice · Grammars · 3 of 10 answered");

@@ -1,5 +1,3 @@
-import { translate } from "./i18n";
-
 export type User = { id: string; email: string; display_name: string; is_active: boolean; created_at: string };
 export type Faculty = { id: string; name: string; slug: string; university_name: string | null };
 export type CourseMembership = { course_id: string; user_id: string; role: "OWNER" | "MEMBER" };
@@ -7,7 +5,7 @@ export type Course = { id: string; faculty_id: string; is_active: boolean; name:
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
-export const SESSION_EXPIRED_MESSAGE = "Your session has expired. Sign in again; your saved answers are kept.";
+export const SESSION_EXPIRED_MESSAGE = "Sesija je istekla. Prijavite se ponovno; spremljeni odgovori su sačuvani.";
 /** Login and registration answer 401/422 about the credentials, not about a session. */
 const SIGN_IN_PATHS = ["/auth/login", "/auth/register"];
 
@@ -39,15 +37,29 @@ function validationMessage(detail: unknown): string | null {
 
 export function errorMessage(path: string, status: number, payload: { detail?: unknown }, retryAfter?: string | null): string {
   const detail = typeof payload.detail === "string" ? payload.detail : null;
-  if (status === 401 && !SIGN_IN_PATHS.includes(path.split("?")[0])) return translate(SESSION_EXPIRED_MESSAGE);
+  if (status === 401 && !SIGN_IN_PATHS.includes(path.split("?")[0])) return SESSION_EXPIRED_MESSAGE;
   if (status === 429) {
     const seconds = retryAfterSeconds(retryAfter);
-    if (seconds !== null) return translate(seconds === 1 ? "Too many attempts. Try again in {seconds} second." : "Too many attempts. Try again in {seconds} seconds.", { seconds });
-    return translate(detail ?? "Too many attempts. Try again shortly.");
+    if (seconds !== null) return `Previše pokušaja. Pokušajte ponovno za ${seconds} s.`;
+    return backendMessage(detail) ?? "Previše pokušaja. Pokušajte ponovno uskoro.";
   }
-  // Backend messages are English; known ones are translated, others are shown as they are.
-  if (status === 422) return validationMessage(payload.detail) ?? translate(detail ?? "Some fields are not valid. Check them and try again.");
-  return translate(detail ?? "Request failed");
+  if (status === 422) return validationMessage(payload.detail) ?? backendMessage(detail) ?? "Neka polja nisu ispravna. Provjerite ih i pokušajte ponovno.";
+  return backendMessage(detail) ?? "Zahtjev nije uspio";
+}
+
+// The backend answers in English; the messages people meet most are shown in Croatian,
+// the rest as they arrive.
+const BACKEND_MESSAGES: Readonly<Record<string, string>> = {
+  "Invalid email or password": "Neispravna e-pošta ili lozinka",
+  "An account with that email already exists": "Račun s tom e-poštom već postoji",
+  "Authentication required": "Potrebna je prijava",
+  "Course not found": "Kolegij nije pronađen",
+  "Faculty not found": "Fakultet nije pronađen",
+  "Faculty moderator access required": "Potrebna su prava moderatora fakulteta",
+};
+
+function backendMessage(detail: string | null): string | null {
+  return detail === null ? null : BACKEND_MESSAGES[detail] ?? detail;
 }
 
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {

@@ -19,7 +19,7 @@ it("reports an expired session on authenticated requests, including practice sav
 
 it("keeps the credential message for a failed sign-in", async () => {
   failWith(401, { detail: "Invalid email or password" });
-  await expect(api.login({ email: "a@example.com", password: "wrong" })).rejects.toThrow("Invalid email or password");
+  await expect(api.login({ email: "a@example.com", password: "wrong" })).rejects.toThrow("Neispravna e-pošta ili lozinka");
 });
 
 it("shows FastAPI validation messages instead of a generic failure", async () => {
@@ -36,17 +36,17 @@ it("keeps a string 422 detail and falls back when the array is unreadable", asyn
   failWith(422, { detail: "Exam paper has no items" });
   await expect(api.publishExamPaper("p1")).rejects.toThrow("Exam paper has no items");
   failWith(422, { detail: [{ loc: ["body"] }] });
-  await expect(api.publishExamPaper("p1")).rejects.toThrow("Some fields are not valid. Check them and try again.");
+  await expect(api.publishExamPaper("p1")).rejects.toThrow("Neka polja nisu ispravna. Provjerite ih i pokušajte ponovno.");
 });
 
 it("tells the student how long to wait after too many attempts", async () => {
   failWith(429, { detail: "Rate limited" }, { "Retry-After": "30" });
-  await expect(api.login({ email: "a@example.com", password: "pw" })).rejects.toThrow("Too many attempts. Try again in 30 seconds.");
+  await expect(api.login({ email: "a@example.com", password: "pw" })).rejects.toThrow("Previše pokušaja. Pokušajte ponovno za 30 s.");
 
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-11-03T10:00:00Z"));
   failWith(429, {}, { "Retry-After": "Tue, 03 Nov 2026 10:01:00 GMT" });
-  await expect(api.courses()).rejects.toThrow("Too many attempts. Try again in 60 seconds.");
+  await expect(api.courses()).rejects.toThrow("Previše pokušaja. Pokušajte ponovno za 60 s.");
 
   failWith(429, { detail: "Slow down" });
   await expect(api.courses()).rejects.toThrow("Slow down");
@@ -55,7 +55,7 @@ it("tells the student how long to wait after too many attempts", async () => {
 it("keeps string details and the generic fallback for other failures", async () => {
   failWith(409, { detail: "An account with that email already exists" });
   await expect(api.register({ email: "a@example.com", password: "long enough", display_name: "A" })).rejects.toBeInstanceOf(ApiError);
-  await expect(api.register({ email: "a@example.com", password: "long enough", display_name: "A" })).rejects.toThrow("An account with that email already exists");
+  await expect(api.register({ email: "a@example.com", password: "long enough", display_name: "A" })).rejects.toThrow("Račun s tom e-poštom već postoji");
   failWith(500, { detail: { internal: true } });
-  await expect(api.courses()).rejects.toThrow("Request failed");
+  await expect(api.courses()).rejects.toThrow("Zahtjev nije uspio");
 });

@@ -1,6 +1,5 @@
 import type { FormEvent } from "react";
 import { Brand } from "./application-frame";
-import { LanguageSelect, useT } from "../lib/i18n";
 import { ThemeSelect } from "./theme";
 import { Alert, Button, Input, Surface } from "./ui";
 
@@ -10,23 +9,22 @@ export function AuthScreen({ mode, busy, error, submit, changeMode }: {
   submit: (event: FormEvent<HTMLFormElement>) => void; changeMode: () => void;
 }) {
   const register = mode === "register";
-  const t = useT();
   return <div className="min-h-dvh">
-    <header className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-6 sm:px-8"><Brand /><div className="flex flex-wrap items-center gap-3"><LanguageSelect /><ThemeSelect /></div></header>
+    <header className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-6 sm:px-8"><Brand /><div className="flex flex-wrap items-center gap-3"><ThemeSelect /></div></header>
     <main className="mx-auto grid max-w-6xl items-center gap-8 px-5 py-8 sm:px-8 md:min-h-[75dvh] md:grid-cols-2 md:gap-16 md:py-14">
-      <div><h1 className="max-w-lg text-4xl leading-tight font-semibold tracking-tight sm:text-5xl">{t("Make room for focused study.")}</h1><p className="mt-5 max-w-md text-lg leading-relaxed text-muted">{t("Your university courses, study materials and practice questions, together in one place.")}</p><p className="mt-8 max-w-sm border-t border-line pt-5 text-sm leading-relaxed text-muted">{t("Practice at your own pace. Save your answers, return to a practice session, and keep track of what needs another review.")}</p></div>
+      <div><h1 className="max-w-lg text-4xl leading-tight font-semibold tracking-tight sm:text-5xl">Napravite prostor za usredotočeno učenje.</h1><p className="mt-5 max-w-md text-lg leading-relaxed text-muted">Vaši fakultetski kolegiji, materijali i pitanja za vježbu na jednom mjestu.</p><p className="mt-8 max-w-sm border-t border-line pt-5 text-sm leading-relaxed text-muted">Vježbajte svojim tempom. Spremite odgovore, vratite se nedovršenoj vježbi i pratite što treba ponoviti.</p></div>
       <Surface className="w-full max-w-md justify-self-center md:justify-self-end">
-        <h2 className="text-2xl font-semibold tracking-tight">{t(register ? "Create your account" : "Welcome back")}</h2>
-        <p className="mt-2 text-sm text-muted">{t(register ? "Set up your space for exam preparation." : "Log in to continue your exam preparation.")}</p>
-        <form key={mode} onSubmit={submit} aria-label={t(register ? "Registration" : "Login")} aria-describedby={error ? "auth-error" : undefined} className="mt-6 space-y-4">
-          <label className="block text-sm font-medium">{t("Email")}<Input name="email" type="email" autoComplete="email" spellCheck={false} required className="mt-2" /></label>
-          {register && <label className="block text-sm font-medium">{t("Display name")}<Input name="display_name" autoComplete="nickname" required minLength={1} maxLength={100} className="mt-2" /></label>}
-          <label className="block text-sm font-medium">{t("Password")}<Input name="password" type="password" autoComplete={register ? "new-password" : "current-password"} required minLength={register ? 8 : 1} aria-describedby={register ? "password-hint" : undefined} className="mt-2" /></label>
-          {register && <p id="password-hint" className="text-sm text-muted">{t("Use at least 8 characters.")}</p>}
+        <h2 className="text-2xl font-semibold tracking-tight">{register ? "Izradite račun" : "Dobro došli natrag"}</h2>
+        <p className="mt-2 text-sm text-muted">{register ? "Pripremite svoj prostor za pripremu ispita." : "Prijavite se i nastavite s pripremom ispita."}</p>
+        <form key={mode} onSubmit={submit} aria-label={register ? "Registracija" : "Prijava"} aria-describedby={error ? "auth-error" : undefined} className="mt-6 space-y-4">
+          <label className="block text-sm font-medium">E-pošta<Input name="email" type="email" autoComplete="email" spellCheck={false} required className="mt-2" /></label>
+          {register && <label className="block text-sm font-medium">Ime za prikaz<Input name="display_name" autoComplete="nickname" required minLength={1} maxLength={100} className="mt-2" /></label>}
+          <label className="block text-sm font-medium">Lozinka<Input name="password" type="password" autoComplete={register ? "new-password" : "current-password"} required minLength={register ? 8 : 1} aria-describedby={register ? "password-hint" : undefined} className="mt-2" /></label>
+          {register && <p id="password-hint" className="text-sm text-muted">Upotrijebite barem 8 znakova.</p>}
           {error && <Alert id="auth-error">{error}</Alert>}
-          <Button type="submit" disabled={busy} className="w-full">{t(busy ? "Working…" : register ? "Register" : "Log in")}</Button>
+          <Button type="submit" disabled={busy} className="w-full">{busy ? "Radim…" : register ? "Registriraj se" : "Prijavi se"}</Button>
         </form>
-        <Button variant="ghost" disabled={busy} className="mt-3 w-full" onClick={changeMode}>{t(register ? "Already have an account? Log in" : "Create an account")}</Button>
+        <Button variant="ghost" disabled={busy} className="mt-3 w-full" onClick={changeMode}>{register ? "Već imate račun? Prijavite se" : "Izradi račun"}</Button>
       </Surface>
     </main>
   </div>;
