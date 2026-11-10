@@ -68,7 +68,7 @@ for (const width of [1280, 390]) {
       await page.reload();
       await expect(answer).toHaveValue("My unsaved explanation");
       await answer.fill("Changed answer after refresh");
-      await page.locator("summary").filter({ hasText: /^Course navigation$/ }).click();
+      await page.locator("summary").filter({ hasText: /^Navigacija kolegija$/ }).click();
       await navigation.getByRole("button", { name: "Napredak", exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`${base}/progress$`));
       await expect(page.getByRole("region", { name: "Napredak", exact: true })).toBeVisible();

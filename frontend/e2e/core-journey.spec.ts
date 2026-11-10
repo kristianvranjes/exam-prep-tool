@@ -50,7 +50,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     const moderatorCourses = moderator.getByRole("region", { name: "Vaši kolegiji" });
     await expect(moderator.getByRole("heading", { name: courseName, exact: true })).toBeVisible();
     await expect(moderatorCourses).toBeHidden();
-    await moderator.getByRole("button", { name: "Back to Home" }).click();
+    await moderator.getByRole("button", { name: "Natrag na početnu" }).click();
     await expect(moderatorCourses.getByRole("button", { name: new RegExp(courseName) })).toHaveCount(1);
     await moderator.getByRole("button", { name: "Alati fakulteta", exact: true }).click();
 
@@ -184,7 +184,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(selectedQuestion).toContainText("Odobreno");
 
     await studentNavigation.getByRole("button", { name: "Pregled", exact: true }).click();
-    await expect(student.getByRole("region", { name: "Materijali", exact: true })).toContainText("1 study material");
+    await expect(student.getByRole("region", { name: "Materijali", exact: true })).toContainText("1 materijal");
     await student.getByRole("button", { name: "Započni preporučenu vježbu" }).click();
     await expect(student.getByRole("radio", { name: "Preporučena vježba" })).toBeChecked();
     await expect(student.getByRole("heading", { name: "Pitanje 1 od 1" })).toHaveCount(0);
@@ -235,7 +235,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await student.getByRole("button", { name: "Završi vježbu", exact: true }).click();
     await student.getByRole("button", { name: "Potvrdi konačnu predaju" }).click();
     const result = student.getByRole("article", { name: "Rezultat pitanja 1" });
-    await expect(result.getByText("Correct · marked as sure", { exact: true })).toBeVisible();
+    await expect(result.getByText("Točno · označeno: siguran sam", { exact: true })).toBeVisible();
     const results = student.getByRole("region", { name: "Rezultati vježbe" });
     await expect(results.getByRole("heading", { name: "Vježba je završena" })).toBeFocused();
     await expect(results.getByLabel("Sažetak rezultata")).toContainText("Točno1Netočno0Kratki odgovori0");
@@ -245,7 +245,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
       await student.setViewportSize(viewport);
       await student.screenshot({ path: test.info().outputPath(`results-correct-${viewport.width}.png`), fullPage: true });
-      const answerDetails = result.getByText("View answer and explanation", { exact: true });
+      const answerDetails = result.getByText("Pogledaj odgovor i objašnjenje", { exact: true });
       await answerDetails.focus(); await answerDetails.press("Enter");
       await expect(result.getByText("Paris is the French capital.", { exact: true })).toBeVisible();
       await expect.poll(() => student.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -256,7 +256,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expectMetricAtLeast(student, "Ponovljena pitanja", 1);
     const progress = student.getByRole("region", { name: "Napredak", exact: true });
     await expect(progress.getByText("Točnost automatski ocijenjenih odgovora", { exact: true }).locator("..")).toContainText("100.0%");
-    await expect(progress.getByText("1 correct out of 1 automatically graded answers")).toBeVisible();
+    await expect(progress.getByText("Točno: 1 od 1 automatski ocijenjenih odgovora")).toBeVisible();
     await progress.getByRole("button", { name: "Započni preporučenu vježbu" }).click();
     await expect(student.locator("#practice")).toBeFocused();
     await expect(student.getByRole("region", { name: "Rezultati vježbe" })).toHaveCount(0);
@@ -281,13 +281,13 @@ test("moderator and student complete the core exam-preparation journey", async (
       await expect(progress.getByRole("heading", { name: "Što treba pažnju" })).toBeVisible();
       await expect(progress.getByText("Trenutno ništa ne treba ponoviti")).toBeVisible();
       const scheduling = progress.getByText("Detalji rasporeda", { exact: true });
-      await expect(progress.getByText("Stage 1: 1", { exact: true })).toBeHidden();
+      await expect(progress.getByText("Faza 1: 1", { exact: true })).toBeHidden();
       await expect.poll(() => student.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await student.screenshot({ path: test.info().outputPath(`progress-${viewport.width}.png`), fullPage: true });
       await scheduling.focus(); await scheduling.press("Enter");
-      await expect(progress.getByRole("heading", { name: "Reviewed question 1" })).toBeVisible();
-      await expect(progress.getByText("Stage 1: 1", { exact: true })).toBeVisible();
-      await expect(progress.getByText(/Question ID:/)).toBeHidden();
+      await expect(progress.getByRole("heading", { name: "Ponovljeno pitanje 1" })).toBeVisible();
+      await expect(progress.getByText("Faza 1: 1", { exact: true })).toBeVisible();
+      await expect(progress.getByText(/ID pitanja:/)).toBeHidden();
       await expect.poll(() => student.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await student.screenshot({ path: test.info().outputPath(`progress-details-${viewport.width}.png`), fullPage: true });
       await scheduling.focus(); await scheduling.press("Enter");
@@ -321,7 +321,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await student.getByRole("button", { name: "Započni vježbu", exact: true }).click();
     const rawShortAnswer = "  Practice helps me recall.\n" + "A long explanation with an unbroken word: " + "learning".repeat(40) + "  ";
     for (let index = 0; index < 2; index++) {
-      await expect(student.getByRole("heading", { name: `Question ${index + 1} of 2` })).toBeVisible();
+      await expect(student.getByRole("heading", { name: `Pitanje ${index + 1} od 2` })).toBeVisible();
       const shortAnswer = student.getByRole("textbox", { name: "Vaš kratki odgovor" });
       if (await shortAnswer.isVisible()) await shortAnswer.fill(rawShortAnswer);
       else await student.getByRole("radio", { name: "Lyon", exact: true }).check();
@@ -375,7 +375,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await studentNavigation.getByRole("button", { name: "Vježba", exact: true }).click();
     await results.getByRole("button", { name: "Otvori napredak" }).click();
     await expect(progress).toBeVisible();
-    await expect(progress.getByText("1 correct out of 2 automatically graded answers")).toBeVisible();
+    await expect(progress.getByText("Točno: 1 od 2 automatski ocijenjenih odgovora")).toBeVisible();
     expect(pageErrors).toEqual([]);
   } finally {
     await studentContext.close();

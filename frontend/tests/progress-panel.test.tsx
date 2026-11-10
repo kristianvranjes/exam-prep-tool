@@ -99,7 +99,7 @@ it("prioritizes due reviews, shows historical accuracy with its denominator, and
   expect(screen.getByText("Zakazano za kasnije: 1 pitanje.")).toBeVisible();
   expect(metric("Ponovljena pitanja")).toHaveTextContent("2");
   expect(metric("Točnost automatski ocijenjenih odgovora")).toHaveTextContent("75.0%");
-  expect(screen.getByText("3 točnih od 4 automatski ocijenjenih odgovora")).toBeVisible();
+  expect(screen.getByText("Točno: 3 od 4 automatski ocijenjenih odgovora")).toBeVisible();
   expect(metric("Zadnja vježba")?.querySelector("time")).toHaveAttribute("datetime", "2030-01-01T10:00:00Z");
   expect(screen.getByRole("button", { name: "Započni preporučenu vježbu" })).toHaveClass("bg-accent");
   expect(screen.getByText(/Prvo daje pitanja koja treba ponoviti i može uključiti druga dostupna pitanja/)).toBeVisible();
@@ -146,7 +146,7 @@ it("shows past and future non-actionable rows as history while keeping cumulativ
   await open();
   expect(metric("Ponovljena pitanja")).toHaveTextContent("2");
   expect(metric("Točnost automatski ocijenjenih odgovora")).toHaveTextContent("66.7%");
-  expect(screen.getByText("4 točnih od 6 automatski ocijenjenih odgovora")).toBeVisible();
+  expect(screen.getByText("Točno: 4 od 6 automatski ocijenjenih odgovora")).toBeVisible();
   expect(screen.getByText("Trenutno nema zakazanih ponavljanja dostupnih za vježbu.")).toBeVisible();
   expect(screen.queryByText(/Napredak će se pojaviti/)).not.toBeInTheDocument();
   expect(screen.getByText(/Povijest vježbi uključuje prije ponavljana pitanja/)).toBeVisible();
@@ -190,7 +190,7 @@ it("keeps the due workload independent of cumulative historical reviewed questio
   expect(screen.getByText("Za ponavljanje: 4 pitanja")).toBeVisible();
   expect(metric("Ponovljena pitanja")).toHaveTextContent("12");
   expect(metric("Točnost automatski ocijenjenih odgovora")).toHaveTextContent("78.0%");
-  expect(screen.getByText("32 točnih od 41 automatski ocijenjenih odgovora")).toBeVisible();
+  expect(screen.getByText("Točno: 32 od 41 automatski ocijenjenih odgovora")).toBeVisible();
 });
 
 it("does not invent accuracy or treat short-answer self-review as incorrect when there are no graded answers", async () => {
@@ -208,7 +208,7 @@ it("explains that short answers do not contribute even when graded accuracy is a
   render(<ProgressPanel courseId="course" />);
   await open();
   expect(metric("Točnost automatski ocijenjenih odgovora")).toHaveTextContent("50.0%");
-  expect(screen.getByText("1 točnih od 2 automatski ocijenjenih odgovora")).toBeVisible();
+  expect(screen.getByText("Točno: 1 od 2 automatski ocijenjenih odgovora")).toBeVisible();
   expect(screen.getByText(/Kratki odgovori zahtijevaju samoprocjenu i ne mijenjaju točnost ni raspored ponavljanja/)).toBeVisible();
 });
 
