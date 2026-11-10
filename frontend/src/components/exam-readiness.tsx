@@ -5,14 +5,14 @@ import type { ExamScopeReadiness, UnitReadiness } from "../lib/api";
 import { Button } from "./ui";
 
 const percent = (share: number) => Math.round(share * 100);
-const plural = (count: number, word: string) => `${count} ${count === 1 ? word : `${word}s`}`;
+import { ANSWERS, QUESTIONS, plural } from "../lib/plural";
 
 /** Counts, not percentages: the readiness figure is the only percentage on the overview. */
 function unitSummary(unit: UnitReadiness) {
-  if (unit.question_count === 0) return "No automatically graded questions yet";
-  const answered = `${unit.answered_count} of ${plural(unit.question_count, "question")} answered`;
-  if (unit.answered_count === 0) return `Not practiced yet · ${answered}`;
-  return `${answered} · ${unit.retained_count} retained · ${unit.correct_answer_count} of ${plural(unit.answer_count, "answer")} correct`;
+  if (unit.question_count === 0) return "Još nema automatski ocijenjenih pitanja";
+  const answered = `odgovoreno ${unit.answered_count} od ${plural(unit.question_count, QUESTIONS)}`;
+  if (unit.answered_count === 0) return `Još nije vježbano · ${answered}`;
+  return `${answered} · zapamćeno ${unit.retained_count} · točno ${unit.correct_answer_count} od ${plural(unit.answer_count, ANSWERS)}`;
 }
 
 /**
@@ -24,25 +24,25 @@ export function ReadinessFigure({ readiness, subtitle }: { readiness: ExamScopeR
   const remaining = Math.max(readiness.min_answered - readiness.answered_count, 1);
   const subline = subtitle && <p className="mt-1 max-w-prose text-sm text-muted">{subtitle}</p>;
   if (readiness.question_count === 0) return <div>
-    <p className="max-w-prose text-sm text-muted">No automatically graded questions are linked to this cycle&apos;s units yet, so readiness cannot be estimated.</p>
+    <p className="max-w-prose text-sm text-muted">Cjeline ovog roka još nemaju automatski ocijenjenih pitanja, pa se spremnost ne može procijeniti.</p>
     {subline}
   </div>;
   if (!range) return <div>
-    <p className="font-semibold">Not enough answers yet</p>
-    <p className="mt-1 max-w-prose text-sm text-muted">Answer {plural(remaining, "more question")} from this cycle to see a readiness range. You have answered {readiness.answered_count} of {readiness.question_count} automatically graded questions.</p>
+    <p className="font-semibold">Još nema dovoljno odgovora</p>
+    <p className="mt-1 max-w-prose text-sm text-muted">Odgovorite na još {plural(remaining, QUESTIONS)} iz ovog roka da vidite raspon spremnosti. Odgovorili ste na {readiness.answered_count} od {readiness.question_count} automatski ocijenjenih pitanja.</p>
     {subline}
   </div>;
   const low = percent(range.low);
   const high = percent(range.high);
   const shown = low === high ? `${low}%` : `${low}–${high}%`;
-  const spoken = low === high ? `${low} percent` : `${low} to ${high} percent`;
+  const spoken = low === high ? `${low} posto` : `${low} do ${high} posto`;
   return <div>
     <p className="font-display text-3xl font-semibold tabular-nums">
-      <span aria-hidden="true">{shown}</span><span className="sr-only">Estimated readiness: {spoken}</span>
+      <span aria-hidden="true">{shown}</span><span className="sr-only">Procijenjena spremnost: {spoken}</span>
     </p>
-    <p aria-hidden="true" className="text-sm font-medium">Estimated readiness</p>
+    <p aria-hidden="true" className="text-sm font-medium">Procijenjena spremnost</p>
     {subline}
-    {range.high - range.low >= 0.3 && <p className="mt-1 max-w-prose text-sm text-muted">The range is wide because some units have few or no answers yet.</p>}
+    {range.high - range.low >= 0.3 && <p className="mt-1 max-w-prose text-sm text-muted">Raspon je širok jer neke cjeline imaju malo odgovora ili ih nemaju.</p>}
   </div>;
 }
 
@@ -58,24 +58,24 @@ export function ReadinessUnits({ readiness, onPracticeUnit }: {
   if (readiness.question_count === 0) return null;
   return <div className="mt-group">
     {weakest.length > 0 && <>
-      <h4 id={`${id}-weakest`} className="text-base font-semibold">{readiness.readiness ? "Weakest units" : "Start with"}</h4>
+      <h4 id={`${id}-weakest`} className="text-base font-semibold">{readiness.readiness ? "Najslabije cjeline" : "Počnite s"}</h4>
       <ul aria-labelledby={`${id}-weakest`} className="mt-2 divide-y divide-line border-y border-line">{weakest.map(unit => <li key={unit.unit_id} className="flex min-w-0 flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="font-medium [overflow-wrap:anywhere]">{unit.title}</p>
           <p className="text-sm text-muted tabular-nums">{unitSummary(unit)}</p>
         </div>
         {onPracticeUnit && <Button variant="ghost" className="w-full shrink-0 sm:w-auto" onClick={() => onPracticeUnit(unit.unit_id)}>
-          Practice this<span className="sr-only"> unit: {unit.title}</span>
+          Vježbaj<span className="sr-only"> cjelinu: {unit.title}</span>
         </Button>}
       </li>)}</ul>
     </>}
     <details className="mt-stack">
-      <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">Readiness by unit</summary>
-      <ul aria-label="Readiness by unit" className="mt-2 space-y-3">{readiness.units.map(unit => <li key={unit.unit_id} className="min-w-0">
-        <p className="font-medium [overflow-wrap:anywhere]">{unit.title}{unit.is_archived && <span className="text-sm font-normal text-muted"> · Archived</span>}</p>
+      <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">Spremnost po cjelinama</summary>
+      <ul aria-label="Spremnost po cjelinama" className="mt-2 space-y-3">{readiness.units.map(unit => <li key={unit.unit_id} className="min-w-0">
+        <p className="font-medium [overflow-wrap:anywhere]">{unit.title}{unit.is_archived && <span className="text-sm font-normal text-muted"> · Arhivirano</span>}</p>
         <p className="text-sm text-muted tabular-nums">{unitSummary(unit)}</p>
       </li>)}</ul>
-      <p className="mt-4 max-w-prose text-sm text-muted">How it works (readiness-v1): the estimate is the share of this cycle&apos;s questions you would likely answer correctly today, from {plural(readiness.answer_count, "graded answer")} to {readiness.answered_count} of {plural(readiness.question_count, "question")}. A question counts as retained when your last answer was correct and it has not been overdue for review longer than its review interval. Questions you have not answered yet are estimated from how you did in the same unit, so fewer answers mean a wider range. Every approved question that is graded automatically counts; short answers use self-review, so they do not.</p>
+      <p className="mt-4 max-w-prose text-sm text-muted">Kako radi (readiness-v1): procjena je udio pitanja ovog roka na koja biste danas vjerojatno točno odgovorili, iz {plural(readiness.answer_count, ANSWERS)} na {readiness.answered_count} od {plural(readiness.question_count, QUESTIONS)}. Pitanje se smatra zapamćenim kad je zadnji odgovor bio točan i ponavljanje mu nije kasnilo dulje od njegova intervala. Pitanja na koja još niste odgovorili procjenjuju se prema vašem uspjehu u istoj cjelini, pa manje odgovora znači širi raspon. Broji se svako odobreno automatski ocijenjeno pitanje; kratki odgovori koriste samoprocjenu, pa se ne broje.</p>
     </details>
   </div>;
 }

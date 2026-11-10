@@ -18,8 +18,8 @@ import type { ResumableAttempt } from "./use-resumable-sessions";
 
 export type { CourseDestination } from "../lib/workspace-route";
 const destinations: { id: CourseDestination; label: string }[] = [
-  { id: "overview", label: "Overview" }, { id: "practice", label: "Practice" }, { id: "papers", label: "Past exams" },
-  { id: "progress", label: "Progress" }, { id: "materials", label: "Materials" }, { id: "more", label: "More" },
+  { id: "overview", label: "Pregled" }, { id: "practice", label: "Vježba" }, { id: "papers", label: "Prošli ispiti" },
+  { id: "progress", label: "Napredak" }, { id: "materials", label: "Materijali" }, { id: "more", label: "Više" },
 ];
 
 export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = false, visible, destination, navigate, goHome, checkingSession,
@@ -53,17 +53,17 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
     setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode, ...focus }));
     navigate("practice", true);
   }
-  const navigation = <nav aria-label="Course navigation" className="flex overflow-x-auto [scrollbar-width:none] shadow-[inset_0_-1px_0_var(--line)] sm:gap-x-1">
+  const navigation = <nav aria-label="Navigacija kolegija" className="flex overflow-x-auto [scrollbar-width:none] shadow-[inset_0_-1px_0_var(--line)] sm:gap-x-1">
       {destinations.map(item => <Button key={item.id} variant="tab" aria-current={destination === item.id ? "page" : undefined} aria-controls={`course-${item.id}`} onClick={() => navigate(item.id)}>{item.label}</Button>)}
     </nav>;
   // Hide destinations instead of unmounting: answers, drafts and uploads stay in memory.
   return <section aria-labelledby="selected-course-heading">
-    {!focused && <Button variant="ghost" className="mb-4" onClick={goHome}>Back to Home</Button>}
-    <h1 id="selected-course-heading" tabIndex={-1} className={focused ? "break-words text-lg font-semibold" : "break-words text-3xl font-semibold tracking-tight"}>{course.name}{focused && " · Practice"}</h1>
+    {!focused && <Button variant="ghost" className="mb-4" onClick={goHome}>Natrag na početnu</Button>}
+    <h1 id="selected-course-heading" tabIndex={-1} className={focused ? "break-words text-lg font-semibold" : "break-words text-3xl font-semibold tracking-tight"}>{course.name}{focused && " · Vježba"}</h1>
     {!focused && course.code && <p className="mt-2 text-sm text-muted">{course.code}</p>}
     {!focused && <div className="mt-6">{navigation}</div>}
     <section id="course-overview" hidden={destination !== "overview"} aria-labelledby="overview-heading" className="mt-6">
-      <h2 id="overview-heading" className="text-xl font-semibold">Overview</h2>
+      <h2 id="overview-heading" className="text-xl font-semibold">Pregled</h2>
       {course.description && <p className="mt-3 max-w-prose text-muted">{course.description}</p>}
       <CourseOverview courseId={course.id} active={visible && destination === "overview"}
         knownAttemptId={knownAttemptId} knownAttempt={knownAttempt} checkingSession={checkingSession} activeSession={activeSession} materials={materials} onResume={onResume}
@@ -80,9 +80,9 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         onOpenProgress={() => navigate("progress")} onBackToCourse={() => navigate("overview")} /></div>
     </div>
     {focused && <details className="mt-6 border-t border-line pt-3">
-      <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">Course navigation</summary>
-      <p className="my-3 text-sm text-muted">Your session stays open when visiting another course screen. Use Save and leave to save your answer and return to Practice history.</p>
-      <Button variant="ghost" className="mb-4" onClick={goHome}>Back to Home</Button>
+      <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">Navigacija kolegija</summary>
+      <p className="my-3 text-sm text-muted">Vježba ostaje otvorena kad odete na drugi zaslon kolegija. Odaberite Spremi i izađi da spremite odgovor i vratite se na povijest vježbi.</p>
+      <Button variant="ghost" className="mb-4" onClick={goHome}>Natrag na početnu</Button>
       {navigation}
     </details>}
     {/* Past papers are the main way to rehearse an exam, so they get their own destination. */}
@@ -90,13 +90,13 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
     <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} onStartAttempt={onOpenAttempt}
       onPracticeMistakes={() => openPractice("MISTAKES")} onPracticeFavorites={() => openPractice("FAVORITES")} /></div>
     <div id="course-materials" hidden={destination !== "materials"}><CourseMaterials courseId={course.id} currentUserId={currentUserId} onSummaryChange={setMaterials} /></div>
-    <section id="course-more" hidden={destination !== "more"} aria-label="More course tools" className="mt-6">
-      <h2 className="text-xl font-semibold">More</h2>
+    <section id="course-more" hidden={destination !== "more"} aria-label="Više alata kolegija" className="mt-6">
+      <h2 className="text-xl font-semibold">Više</h2>
       <div className="mt-4 flex flex-wrap gap-3">
-        <Button variant="secondary" aria-pressed={moreDestination === "questions"} onClick={() => setMoreDestination("questions")}>Question bank</Button>
-        <Button variant="secondary" aria-pressed={moreDestination === "units"} onClick={() => { setUnitsOpened(true); setMoreDestination("units"); }}>Course units</Button>
-        {manager && <Button variant="secondary" aria-pressed={moreDestination === "analysis"} onClick={() => setMoreDestination("analysis")}>Item analysis</Button>}
-        {isOwner && <Button variant="secondary" aria-pressed={moreDestination === "settings"} onClick={() => setMoreDestination("settings")}>Course settings</Button>}
+        <Button variant="secondary" aria-pressed={moreDestination === "questions"} onClick={() => setMoreDestination("questions")}>Baza pitanja</Button>
+        <Button variant="secondary" aria-pressed={moreDestination === "units"} onClick={() => { setUnitsOpened(true); setMoreDestination("units"); }}>Cjeline kolegija</Button>
+        {manager && <Button variant="secondary" aria-pressed={moreDestination === "analysis"} onClick={() => setMoreDestination("analysis")}>Analiza pitanja</Button>}
+        {isOwner && <Button variant="secondary" aria-pressed={moreDestination === "settings"} onClick={() => setMoreDestination("settings")}>Postavke kolegija</Button>}
       </div>
       <div hidden={moreDestination !== "questions"}><QuestionBank courseId={course.id} focus={questionFocus} onOpenMaterials={() => navigate("materials")} /></div>
       {unitsOpened && <div hidden={moreDestination !== "units"}><CourseUnits courseId={course.id} isOwner={isOwner} /></div>}

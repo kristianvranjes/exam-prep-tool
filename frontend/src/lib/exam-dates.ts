@@ -1,4 +1,5 @@
 import type { ExamScope } from "./api";
+import { pluralForm } from "./plural";
 
 /** Today's calendar date in the viewer's time zone, as YYYY-MM-DD. */
 export function localIsoDate(now = new Date()) {
@@ -17,7 +18,7 @@ export function daysBetween(from: string, to: string) {
 }
 
 export function formatExamDate(iso: string) {
-  return new Date(utcDay(iso)).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  return new Date(utcDay(iso)).toLocaleDateString("hr-HR", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 }
 
 export function formatScopeDates(scope: Pick<ExamScope, "starts_on" | "ends_on">) {
@@ -38,9 +39,9 @@ export function nextExam(scopes: ExamScope[], today: string): NextExam | null {
   return { scope, days: daysBetween(today, scope.starts_on), ongoing: scope.starts_on <= today };
 }
 
-/** The overview's next-exam heading: the cycle's name and when it is, such as "Međuispit in 20 days". */
+/** The overview's next-exam heading: the cycle's name and when it is, such as "Međuispit za 20 dana". */
 export function countdownHeading({ scope, days, ongoing }: NextExam) {
-  if (ongoing) return scope.ends_on && scope.ends_on !== scope.starts_on ? `${scope.name} · in progress until ${formatExamDate(scope.ends_on)}` : `${scope.name} today`;
-  if (days === 1) return `${scope.name} tomorrow`;
-  return `${scope.name} in ${days} days`;
+  if (ongoing) return scope.ends_on && scope.ends_on !== scope.starts_on ? `${scope.name} · traje do ${formatExamDate(scope.ends_on)}` : `${scope.name} danas`;
+  if (days === 1) return `${scope.name} sutra`;
+  return `${scope.name} za ${days} ${pluralForm(days, ["dan", "dana", "dana"])}`;
 }

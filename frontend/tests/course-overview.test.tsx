@@ -18,7 +18,7 @@ const material: Material = { id: "m", course_id: "course", original_filename: "n
 const props = () => ({ courseId: "course", active: true, knownAttemptId: null as string | null,
   materials: { materials: [material], loading: false, error: false }, onResume: vi.fn(), onRecommendedPractice: vi.fn(),
   onProgress: vi.fn(), onMaterials: vi.fn(), onQuestions: vi.fn() });
-const loaded = () => screen.findByText("questions reviewed");
+const loaded = () => screen.findByText(/^Ponovljeno:/);
 
 beforeEach(() => {
   vi.resetAllMocks(); mock.reviewProgressSummary.mockResolvedValue(summary); mock.availability.mockResolvedValue(counts(1));
@@ -27,22 +27,22 @@ beforeEach(() => {
 
 it("shows one recommendation, a reviewed count without percentages and recent materials without management tools", async () => {
   render(<CourseOverview {...props()} />);
-  expect(screen.getByRole("heading", { name: "What to study next" })).toBeVisible();
-  expect(screen.getByRole("button", { name: "Start recommended practice" })).toHaveClass("bg-accent");
-  expect(screen.queryByRole("button", { name: "Resume session" })).not.toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Što dalje učiti" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Započni preporučenu vježbu" })).toHaveClass("bg-accent");
+  expect(screen.queryByRole("button", { name: "Nastavi vježbu" })).not.toBeInTheDocument();
   // Course questions are a setup choice under More options, not another way to start here.
   expect(screen.queryByRole("button", { name: "Practice course questions" })).not.toBeInTheDocument();
-  const progress = screen.getByRole("region", { name: "Progress summary" });
-  expect(await within(progress).findByText("questions reviewed")).toBeVisible();
+  const progress = screen.getByRole("region", { name: "Sažetak napretka" });
+  expect(await within(progress).findByText(/^Ponovljeno:/)).toBeVisible();
   expect(within(progress).getByText("3")).toBeVisible();
   // Graded accuracy lives in Progress; the overview keeps at most one percentage group.
   expect(progress).not.toHaveTextContent("%");
-  expect(within(progress).getByText("Accuracy and the review schedule are in Progress.")).toBeVisible();
+  expect(within(progress).getByText("Točnost i raspored ponavljanja nalaze se u Napretku.")).toBeVisible();
   expect(screen.queryByText(/due now|Stage|mastery|readiness|Private question text/i)).not.toBeInTheDocument();
-  const materials = screen.getByRole("region", { name: "Materials" });
-  expect(within(materials).getByText("1 study material")).toBeVisible();
+  const materials = screen.getByRole("region", { name: "Materijali" });
+  expect(within(materials).getByText("1 materijal")).toBeVisible();
   expect(within(materials).getByText("notes.pdf")).toBeVisible();
-  for (const name of ["Question bank", "Import questions", "Course settings", "AI generation", "Moderation"]) {
+  for (const name of ["Baza pitanja", "Import questions", "Postavke kolegija", "AI generation", "Moderation"]) {
     expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
   }
 });
@@ -58,13 +58,13 @@ it("makes Resume the only primary action and shows the session like Home does", 
   const attempt: ResumableAttempt = { id: "attempt", feedbackMode: "IMMEDIATE", paperTitle: null, focusLabel: "Grammars", answered: 3, total: 10, deadline: null };
   const p = { ...props(), knownAttemptId: "attempt", knownAttempt: attempt };
   render(<CourseOverview {...p} />);
-  const resume = screen.getByRole("region", { name: "Continue studying" });
-  expect(resume).toHaveTextContent("Guided practice · Grammars · 3 of 10 answered");
-  expect(within(resume).getByRole("button", { name: "Resume session" })).toHaveClass("bg-accent");
+  const resume = screen.getByRole("region", { name: "Nastavite učiti" });
+  expect(resume).toHaveTextContent("Vođena vježba · Grammars · odgovoreno 3 od 10");
+  expect(within(resume).getByRole("button", { name: "Nastavi vježbu" })).toHaveClass("bg-accent");
   expect(screen.getAllByRole("button").filter(button => button.classList.contains("bg-accent"))).toHaveLength(1);
-  expect(screen.getByRole("button", { name: "Start recommended practice" })).not.toHaveClass("bg-accent");
-  fireEvent.click(within(resume).getByRole("button", { name: "Resume session" })); expect(p.onResume).toHaveBeenCalledOnce();
-  expect(screen.getByText(/An open session is kept/)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Započni preporučenu vježbu" })).not.toHaveClass("bg-accent");
+  fireEvent.click(within(resume).getByRole("button", { name: "Nastavi vježbu" })); expect(p.onResume).toHaveBeenCalledOnce();
+  expect(screen.getByText(/Otvorena vježba ostaje sačuvana/)).toBeVisible();
   await loaded();
   expect(mock.read).not.toHaveBeenCalled();
 });
@@ -73,16 +73,16 @@ it("reads an open session once when only its id is known, so its progress still 
   mock.read.mockResolvedValue({ id: "attempt", course_id: "course", status: "ACTIVE", feedback_mode: "END", focus_label: null,
     questions: [{ answer: { type: "TRUE_FALSE", value: true } }, { answer: null }] } as unknown as Attempt);
   render(<CourseOverview {...props()} knownAttemptId="attempt" />);
-  const resume = screen.getByRole("region", { name: "Continue studying" });
-  await waitFor(() => expect(resume).toHaveTextContent("Exam practice · 1 of 2 answered"));
+  const resume = screen.getByRole("region", { name: "Nastavite učiti" });
+  await waitFor(() => expect(resume).toHaveTextContent("Ispitna vježba · odgovoreno 1 od 2"));
   expect(mock.read).toHaveBeenCalledExactlyOnceWith("course", "attempt");
 });
 
 it("connects recommendation, progress and materials actions", async () => {
   const p = props(); render(<CourseOverview {...p} />);
-  fireEvent.click(screen.getByRole("button", { name: "Start recommended practice" }));
-  fireEvent.click(screen.getByRole("button", { name: "View progress" }));
-  fireEvent.click(screen.getByRole("button", { name: "View materials" }));
+  fireEvent.click(screen.getByRole("button", { name: "Započni preporučenu vježbu" }));
+  fireEvent.click(screen.getByRole("button", { name: "Otvori napredak" }));
+  fireEvent.click(screen.getByRole("button", { name: "Otvori materijale" }));
   for (const callback of [p.onRecommendedPractice, p.onProgress, p.onMaterials]) expect(callback).toHaveBeenCalledOnce();
   await loaded();
 });
@@ -90,41 +90,41 @@ it("connects recommendation, progress and materials actions", async () => {
 it("offers materials and a secondary contribution path when the course has no practice-eligible questions", async () => {
   mock.availability.mockResolvedValue(counts(0));
   const p = props(); render(<CourseOverview {...p} />);
-  expect(await screen.findByText("No practice questions are available for this course yet.")).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Start recommended practice" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "View materials" })); expect(p.onMaterials).toHaveBeenCalledOnce();
-  const contribution = screen.getByRole("button", { name: "Contribute a question" });
+  expect(await screen.findByText("Ovaj kolegij još nema pitanja za vježbu.")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Započni preporučenu vježbu" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Otvori materijale" })); expect(p.onMaterials).toHaveBeenCalledOnce();
+  const contribution = screen.getByRole("button", { name: "Predloži pitanje" });
   expect(contribution).not.toHaveClass("bg-accent"); fireEvent.click(contribution); expect(p.onQuestions).toHaveBeenCalledOnce();
 });
 
 it("asks for course-wide availability across every practice type, ignoring the current setup", async () => {
   render(<CourseOverview {...props()} />);
   await waitFor(() => expect(mock.availability).toHaveBeenCalledExactlyOnceWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"]));
-  expect(screen.getByRole("button", { name: "Start recommended practice" })).toBeVisible();
-  expect(screen.queryByText("No practice questions are available for this course yet.")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Započni preporučenu vježbu" })).toBeVisible();
+  expect(screen.queryByText("Ovaj kolegij još nema pitanja za vježbu.")).not.toBeInTheDocument();
 });
 
 it("uses concise empty states instead of a dashboard of zeros", async () => {
   mock.reviewProgressSummary.mockResolvedValue({ ...summary, reviewed_questions: 0, resolved_review_count: 0, correct_review_count: 0 });
   render(<CourseOverview {...props()} materials={{ materials: [], loading: false, error: false }} />);
-  expect(await screen.findByText(/Progress appears after completing automatically graded practice/)).toBeVisible();
-  expect(screen.getByText("No study materials have been added yet.")).toBeVisible();
+  expect(await screen.findByText(/Napredak se pojavljuje nakon vježbe s automatski ocijenjenim pitanjima/)).toBeVisible();
+  expect(screen.getByText("Još nema dodanih materijala.")).toBeVisible();
   expect(screen.queryByText("0")).not.toBeInTheDocument();
 });
 
 it("keeps failures distinct from empty data and allows normal navigation", async () => {
   mock.reviewProgressSummary.mockRejectedValue(new Error("Offline")); mock.availability.mockRejectedValue(new Error("Offline"));
   render(<CourseOverview {...props()} materials={{ materials: [], loading: false, error: true }} />);
-  expect(await screen.findByText(/Progress summary could not be loaded/)).toBeVisible();
-  expect(screen.getByText(/Materials summary could not be loaded/)).toBeVisible();
-  expect(screen.queryByText("No practice questions are available for this course yet.")).not.toBeInTheDocument();
-  expect(screen.queryByText("No study materials have been added yet.")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Start recommended practice" })).toBeEnabled();
+  expect(await screen.findByText(/Sažetak napretka nije učitan/)).toBeVisible();
+  expect(screen.getByText(/Sažetak materijala nije učitan/)).toBeVisible();
+  expect(screen.queryByText("Ovaj kolegij još nema pitanja za vježbu.")).not.toBeInTheDocument();
+  expect(screen.queryByText("Još nema dodanih materijala.")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Započni preporučenu vježbu" })).toBeEnabled();
 });
 
 it("only shows the two most recent filenames, without processing information", async () => {
   render(<CourseOverview {...props()} materials={{ materials: [material, { ...material, id: "new", original_filename: "newest.pdf", created_at: "2026-10-03", status: "PROCESSING" }, { ...material, id: "older", original_filename: "older.pdf", created_at: "2026-09-01" }], loading: false, error: false }} />);
-  const list = screen.getByRole("list", { name: "Recent materials" });
+  const list = screen.getByRole("list", { name: "Nedavni materijali" });
   expect(within(list).getAllByRole("listitem").map(item => item.textContent)).toEqual(["newest.pdf", "notes.pdf"]);
   expect(screen.queryByText(/processing|chunks|embedding/i)).not.toBeInTheDocument();
   await loaded();
@@ -153,23 +153,23 @@ it("leads with the next exam: the countdown in its heading, coverage in counts a
   mock.examScopes.mockResolvedValue([dated("undated", null), dated("zi", "2027-02-01"), dated("mi", "2026-11-23", "2026-12-01")]);
   mock.examScopeCoverage.mockResolvedValue({ scope_id: "mi", question_count: 40, reviewed_count: 10 });
   render(<CourseOverview {...props()} onScopePractice={vi.fn()} onStartAttempt={vi.fn()} />);
-  const exam = await screen.findByRole("region", { name: "Međuispit in 34 days" });
+  const exam = await screen.findByRole("region", { name: "Međuispit za 34 dana" });
   expect(within(exam).getByRole("heading", { level: 3 })).toHaveClass("text-lg");
-  expect(within(exam).getByText("Mon 23 Nov – Tue 1 Dec")).toHaveAttribute("datetime", "2026-11-23");
-  expect(await within(exam).findByText("You have practiced 10 of 40 approved questions")).toBeVisible();
+  expect(within(exam).getByText("pon, 23. stu – uto, 1. pro")).toHaveAttribute("datetime", "2026-11-23");
+  expect(await within(exam).findByText("Vježbali ste 10 od 40 odobrenih pitanja")).toBeVisible();
   expect(mock.examScopeCoverage).toHaveBeenCalledWith("mi");
-  expect(within(exam).getByRole("button", { name: "Practice for Međuispit" })).toHaveClass("bg-accent");
-  // Everything else steps back under "Other ways to study".
-  const other = screen.getByRole("region", { name: "Other ways to study" });
-  expect(within(other).getByRole("button", { name: "Start recommended practice" })).not.toHaveClass("bg-accent");
+  expect(within(exam).getByRole("button", { name: "Vježbaj za Međuispit" })).toHaveClass("bg-accent");
+  // Everything else steps back under "Drugi načini učenja".
+  const other = screen.getByRole("region", { name: "Drugi načini učenja" });
+  expect(within(other).getByRole("button", { name: "Započni preporučenu vježbu" })).not.toHaveClass("bg-accent");
   expect(screen.getAllByRole("button").filter(button => button.classList.contains("bg-accent"))).toHaveLength(1);
 });
 
 const paper = (id: string, exam_scope_id: string | null, status: ExamPaper["status"] = "PUBLISHED") => ({ id, exam_scope_id, status }) as ExamPaper;
 
 it("names past exams for the coming cycle, falling back to every published paper", () => {
-  expect(pastExamsLabel([paper("a", "mi"), paper("b", "zi"), paper("c", "mi")], "mi")).toBe("Take a past exam for this cycle (2)");
-  expect(pastExamsLabel([paper("a", "zi")], "mi")).toBe("Take a past exam (1)");
+  expect(pastExamsLabel([paper("a", "mi"), paper("b", "zi"), paper("c", "mi")], "mi")).toBe("Riješi prošli ispit za ovaj rok (2)");
+  expect(pastExamsLabel([paper("a", "zi")], "mi")).toBe("Riješi prošli ispit (1)");
 });
 
 it("offers published past exams as a secondary action next to the countdown and leaves drafts out", async () => {
@@ -179,8 +179,8 @@ it("offers published past exams as a secondary action next to the countdown and 
   mock.examPapers.mockResolvedValue({ can_manage: false, papers: [paper("a", "mi"), paper("b", "mi", "DRAFT")] });
   const onPapers = vi.fn();
   render(<CourseOverview {...props()} onPapers={onPapers} />);
-  const exam = await screen.findByRole("region", { name: "Međuispit in 34 days" });
-  const papers = await within(exam).findByRole("button", { name: "Take a past exam for this cycle (1)" });
+  const exam = await screen.findByRole("region", { name: "Međuispit za 34 dana" });
+  const papers = await within(exam).findByRole("button", { name: "Riješi prošli ispit za ovaj rok (1)" });
   expect(papers).not.toHaveClass("bg-accent");
   fireEvent.click(papers);
   expect(onPapers).toHaveBeenCalled();
@@ -192,7 +192,7 @@ it("passes the cycle to practice and hides the countdown without dated upcoming 
   mock.examScopeCoverage.mockRejectedValue(new Error("Offline"));
   const onScopePractice = vi.fn();
   const view = render(<CourseOverview {...props()} onScopePractice={onScopePractice} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Practice for Međuispit" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Vježbaj za Međuispit" }));
   expect(onScopePractice).toHaveBeenCalledWith("mi");
   expect(screen.queryByText(/approved questions/)).not.toBeInTheDocument();
   view.unmount();
@@ -200,7 +200,7 @@ it("passes the cycle to practice and hides the countdown without dated upcoming 
   render(<CourseOverview {...props()} onScopePractice={onScopePractice} />);
   await loaded();
   expect(screen.queryByRole("region", { name: /in \d+ days|today|tomorrow/ })).not.toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "What to study next" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Što dalje učiti" })).toBeVisible();
 });
 
 const readiness: ExamScopeReadiness = { scope_id: "mi", rule: "readiness-v1", as_of: "2026-10-20T12:00:00Z", question_count: 40,
@@ -216,24 +216,24 @@ it("sets readiness as the exam's one figure with coverage under it and weakest-u
   mock.examScopeReadiness.mockResolvedValue({ ...readiness, readiness: { low: 0.55, high: 0.7 } });
   const onUnitPractice = vi.fn();
   const view = render(<CourseOverview {...props()} onScopePractice={vi.fn()} onUnitPractice={onUnitPractice} />);
-  const exam = await screen.findByRole("region", { name: "Međuispit in 34 days" });
-  expect(await within(exam).findByText("Estimated readiness: 55 to 70 percent")).toBeInTheDocument();
-  expect(await within(exam).findByText("You have practiced 4 of 40 approved questions")).toBeVisible();
+  const exam = await screen.findByRole("region", { name: "Međuispit za 34 dana" });
+  expect(await within(exam).findByText("Procijenjena spremnost: 55 do 70 posto")).toBeInTheDocument();
+  expect(await within(exam).findByText("Vježbali ste 4 od 40 odobrenih pitanja")).toBeVisible();
   expect(mock.examScopeReadiness).toHaveBeenCalledExactlyOnceWith("mi");
   // The readiness range is the only percentage on the page.
   expect(screen.getAllByText(/%/)).toHaveLength(1);
-  fireEvent.click(within(exam).getByRole("button", { name: "Practice this unit: Skupovi" }));
+  fireEvent.click(within(exam).getByRole("button", { name: "Vježbaj cjelinu: Skupovi" }));
   expect(onUnitPractice).toHaveBeenCalledExactlyOnceWith("u2");
   view.unmount();
   // An open session keeps the evidence but hides practice shortcuts; Resume is the only primary.
   mock.examScopeReadiness.mockResolvedValue(readiness);
   render(<CourseOverview {...props()} activeSession knownAttemptId="attempt" onScopePractice={vi.fn()} onUnitPractice={onUnitPractice} />);
-  const busy = await screen.findByRole("region", { name: "Međuispit in 34 days" });
-  expect(await within(busy).findByText("Not enough answers yet")).toBeVisible();
+  const busy = await screen.findByRole("region", { name: "Međuispit za 34 dana" });
+  expect(await within(busy).findByText("Još nema dovoljno odgovora")).toBeVisible();
   expect(within(busy).queryByRole("button", { name: /Practice this|Practice for/ })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Start recommended practice" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Započni preporučenu vježbu" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Return to session" })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Resume session" })).toHaveClass("bg-accent");
+  expect(screen.getByRole("button", { name: "Nastavi vježbu" })).toHaveClass("bg-accent");
 });
 
 it("starts a guided review of due questions in one click", async () => {
@@ -242,11 +242,11 @@ it("starts a guided review of due questions in one click", async () => {
   mock.reviewDue.mockResolvedValue(attempt);
   const onStartAttempt = vi.fn();
   render(<CourseOverview {...props()} onStartAttempt={onStartAttempt} />);
-  expect(await screen.findByText("7 questions are due for review. Review due questions starts a guided session with all of them, earliest due first.")).toBeVisible();
+  expect(await screen.findByText("Za ponavljanje: 7 pitanja. Ponovi dospjela pitanja pokreće vođenu vježbu s njima, od najranije dospjelih.")).toBeVisible();
   // One primary action at a time: due review leads, recommended practice steps back.
-  expect(screen.getByRole("button", { name: "Review due questions" })).toHaveClass("bg-accent");
-  expect(screen.getByRole("button", { name: "Start recommended practice" })).not.toHaveClass("bg-accent");
-  fireEvent.click(screen.getByRole("button", { name: "Review due questions" }));
+  expect(screen.getByRole("button", { name: "Ponovi dospjela pitanja" })).toHaveClass("bg-accent");
+  expect(screen.getByRole("button", { name: "Započni preporučenu vježbu" })).not.toHaveClass("bg-accent");
+  fireEvent.click(screen.getByRole("button", { name: "Ponovi dospjela pitanja" }));
   await waitFor(() => expect(onStartAttempt).toHaveBeenCalledExactlyOnceWith(attempt));
   expect(mock.reviewDue).toHaveBeenCalledExactlyOnceWith("course");
 });
@@ -256,10 +256,10 @@ it("reports a failed due review and keeps it available", async () => {
   mock.reviewDue.mockRejectedValue(new Error("Only 3 eligible questions available; requested 20."));
   const onStartAttempt = vi.fn();
   render(<CourseOverview {...props()} onStartAttempt={onStartAttempt} />);
-  expect(await screen.findByText(/25 questions are due for review\. Review due questions starts a guided session with the 20 earliest/)).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Review due questions" }));
+  expect(await screen.findByText(/Za ponavljanje: 25 pitanja\. Ponovi dospjela pitanja pokreće vođenu vježbu s 20 najranije dospjelih/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Ponovi dospjela pitanja" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Only 3 eligible questions available");
-  expect(screen.getByRole("button", { name: "Review due questions" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Ponovi dospjela pitanja" })).toBeEnabled();
   expect(onStartAttempt).not.toHaveBeenCalled();
 });
 
@@ -274,51 +274,51 @@ it("keeps the quick quiz a compact secondary control, optionally for one unit or
   mock.quickQuiz.mockResolvedValue(attempt);
   const onStartAttempt = vi.fn();
   render(<CourseOverview {...props()} onStartAttempt={onStartAttempt} />);
-  const quick = await screen.findByRole("group", { name: "Quick quiz" });
-  expect(quick).toHaveAccessibleDescription(/Five questions, each checked as you answer/);
-  expect(screen.queryByRole("heading", { name: "Quick quiz" })).not.toBeInTheDocument();
+  const quick = await screen.findByRole("group", { name: "Brzi kviz" });
+  expect(quick).toHaveAccessibleDescription(/Pet pitanja, svako se provjerava čim odgovorite/);
+  expect(screen.queryByRole("heading", { name: "Brzi kviz" })).not.toBeInTheDocument();
   // One primary action at a time: the quick quiz stays secondary to recommended practice.
-  expect(within(quick).getByRole("button", { name: "Start quick quiz" })).not.toHaveClass("bg-accent");
-  fireEvent.click(within(quick).getByRole("button", { name: "Start quick quiz" }));
+  expect(within(quick).getByRole("button", { name: "Započni brzi kviz" })).not.toHaveClass("bg-accent");
+  fireEvent.click(within(quick).getByRole("button", { name: "Započni brzi kviz" }));
   await waitFor(() => expect(onStartAttempt).toHaveBeenCalledExactlyOnceWith(attempt));
   expect(mock.quickQuiz).toHaveBeenLastCalledWith("course", undefined);
 
-  const target = await within(quick).findByRole("combobox", { name: "Questions from" });
+  const target = await within(quick).findByRole("combobox", { name: "Pitanja iz" });
   await waitFor(() => expect(within(target).getByRole("option", { name: /^MI 2026\/27/ })).toBeInTheDocument());
   fireEvent.change(target, { target: { value: "unit:u1" } });
-  fireEvent.click(screen.getByRole("button", { name: "Start quick quiz" }));
+  fireEvent.click(screen.getByRole("button", { name: "Započni brzi kviz" }));
   await waitFor(() => expect(mock.quickQuiz).toHaveBeenLastCalledWith("course", { unit_ids: ["u1"] }));
   fireEvent.change(target, { target: { value: "scope:mi" } });
-  fireEvent.click(screen.getByRole("button", { name: "Start quick quiz" }));
+  fireEvent.click(screen.getByRole("button", { name: "Započni brzi kviz" }));
   await waitFor(() => expect(mock.quickQuiz).toHaveBeenLastCalledWith("course", { exam_scope_id: "mi" }));
   expect(onStartAttempt).toHaveBeenCalledTimes(3);
 });
 
 it("reports a quick quiz that cannot start and hides it while a session is open", async () => {
   mock.availability.mockResolvedValue(counts(30));
-  mock.quickQuiz.mockRejectedValue(new Error("No questions are available for a quick quiz here yet."));
+  mock.quickQuiz.mockRejectedValue(new Error("Ovdje još nema pitanja za brzi kviz."));
   const onStartAttempt = vi.fn();
   const view = render(<CourseOverview {...props()} onStartAttempt={onStartAttempt} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Start quick quiz" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("No questions are available for a quick quiz here yet.");
-  expect(screen.getByRole("button", { name: "Start quick quiz" })).toBeEnabled();
+  fireEvent.click(await screen.findByRole("button", { name: "Započni brzi kviz" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Ovdje još nema pitanja za brzi kviz.");
+  expect(screen.getByRole("button", { name: "Započni brzi kviz" })).toBeEnabled();
   // Without units or exam cycles there is nothing to choose: the quiz covers the whole course.
-  expect(screen.queryByRole("combobox", { name: "Questions from" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("combobox", { name: "Pitanja iz" })).not.toBeInTheDocument();
   expect(onStartAttempt).not.toHaveBeenCalled();
   view.unmount();
   render(<CourseOverview {...props()} activeSession knownAttemptId="attempt" onStartAttempt={vi.fn()} />);
   await loaded();
-  expect(screen.queryByRole("group", { name: "Quick quiz" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("group", { name: "Brzi kviz" })).not.toBeInTheDocument();
 });
 
 it("hides due review when nothing is due or a session is open", async () => {
   mock.availability.mockResolvedValue(counts(30, 0));
   const view = render(<CourseOverview {...props()} onStartAttempt={vi.fn()} />);
   await loaded();
-  expect(screen.queryByRole("button", { name: "Review due questions" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Ponovi dospjela pitanja" })).not.toBeInTheDocument();
   view.unmount();
   mock.availability.mockResolvedValue(counts(30, 4));
   render(<CourseOverview {...props()} activeSession knownAttemptId="attempt" onStartAttempt={vi.fn()} />);
   await loaded();
-  expect(screen.queryByRole("button", { name: "Review due questions" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Ponovi dospjela pitanja" })).not.toBeInTheDocument();
 });

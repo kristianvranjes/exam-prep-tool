@@ -295,9 +295,9 @@ describe("FacultyModeration", () => {
 
     const mcq = await screen.findByRole("article", { name: "What is 2 + 2?" });
     expect(within(mcq).getByText("Course: Algorithms")).toBeInTheDocument();
-    expect(within(mcq).getByText("Multiple choice")).toBeInTheDocument();
-    expect(within(mcq).getByText("Written or imported")).toBeInTheDocument();
-    expect(within(mcq).getByText("Awaiting faculty review")).toBeInTheDocument();
+    expect(within(mcq).getByText("Jedan točan odgovor")).toBeInTheDocument();
+    expect(within(mcq).getByText("Napisano ili uvezeno")).toBeInTheDocument();
+    expect(within(mcq).getByText("Čeka pregled fakulteta")).toBeInTheDocument();
     expect(within(mcq).queryByText(/MULTIPLE_CHOICE|USER/)).not.toBeInTheDocument();
     expect(within(mcq).getByText("Difficulty: 2")).toBeInTheDocument();
     expect(within(mcq).getByText("Correct answer: 4")).toBeInTheDocument();
@@ -311,7 +311,7 @@ describe("FacultyModeration", () => {
     expect(within(self).queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
     expect(within(self).queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
     const short = screen.getByRole("article", { name: "Describe the result" });
-    expect(within(short).getByText("Short answer")).toBeInTheDocument();
+    expect(within(short).getByText("Kratki odgovor")).toBeInTheDocument();
     expect(within(short).getByText("AI-generated")).toBeInTheDocument();
     expect(within(short).getByText("Reference answer: Four")).toBeInTheDocument();
   });

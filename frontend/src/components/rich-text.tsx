@@ -78,12 +78,12 @@ export function RichText({ text, className }: { text: string | null | undefined;
 }
 
 const examples: [string, string][] = [
-  ["Formula in a sentence", "Neka je $f(x) = x^2 + 1$."],
-  ["Formula on its own line", "$$\n\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}\n$$"],
-  ["Decimal comma", "$3{,}5 \\cdot 10^{-3}$"],
-  ["Code in a sentence", "Što ispisuje `printf(\"%d\", 7 / 2 * 2)`?"],
-  ["Code block", "```c\nint a = 7;\nreturn a % 3; // 1\n```"],
-  ["Dollar sign", "Cijena je \\$5."],
+  ["Formula u rečenici", "Neka je $f(x) = x^2 + 1$."],
+  ["Formula u zasebnom retku", "$$\n\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}\n$$"],
+  ["Decimalni zarez", "$3{,}5 \\cdot 10^{-3}$"],
+  ["Kôd u rečenici", "Što ispisuje `printf(\"%d\", 7 / 2 * 2)`?"],
+  ["Blok koda", "```c\nint a = 7;\nreturn a % 3; // 1\n```"],
+  ["Znak dolara", "Cijena je \\$5."],
 ];
 
 const Syntax = ({ children }: { children: string }) => <code className={cn(inlineCode, "whitespace-nowrap")}>{children}</code>;
@@ -92,15 +92,15 @@ const Syntax = ({ children }: { children: string }) => <code className={cn(inlin
 export function FormattingHelp({ id, children }: { id?: string; children?: ReactNode }) {
   return <div className="text-sm font-normal">
     <p id={id} className="text-muted">
-      Question text, options, explanations and reference answers can use <Syntax>$…$</Syntax> for a formula
-      (LaTeX), <Syntax>$$…$$</Syntax> for a formula on its own line, <Syntax>`…`</Syntax> for code and lines
-      of <Syntax>```</Syntax> around a code block. Write <Syntax>\$</Syntax> for a dollar sign. HTML is shown as
-      text. {children}
+      Tekst pitanja, odgovori, objašnjenja i referentni odgovori mogu koristiti <Syntax>$…$</Syntax> za formulu
+      (LaTeX), <Syntax>$$…$$</Syntax> za formulu u zasebnom retku, <Syntax>`…`</Syntax> za kôd i retke
+      <Syntax>```</Syntax> oko bloka koda. Napišite <Syntax>\$</Syntax> za znak dolara. HTML se prikazuje kao
+      tekst. {children}
     </p>
     <details className="mt-1">
-      <summary className="font-medium text-accent">Formatting examples</summary>
+      <summary className="font-medium text-accent">Primjeri oblikovanja</summary>
       <table className="mt-2 w-full table-fixed text-left align-top">
-        <thead><tr className="border-b border-line text-muted"><th scope="col" className="w-1/2 py-1 pr-3 font-medium">You type</th><th scope="col" className="py-1 font-medium">Students see</th></tr></thead>
+        <thead><tr className="border-b border-line text-muted"><th scope="col" className="w-1/2 py-1 pr-3 font-medium">Vi upisujete</th><th scope="col" className="py-1 font-medium">Studenti vide</th></tr></thead>
         <tbody>{examples.map(([name, source]) => <tr key={name} className="border-b border-line align-top last:border-b-0">
           <td className="py-2 pr-3"><span className="block text-xs text-muted">{name}</span><code className="block whitespace-pre-wrap">{source}</code></td>
           <td className="min-w-0 py-2"><RichText text={source} /></td>

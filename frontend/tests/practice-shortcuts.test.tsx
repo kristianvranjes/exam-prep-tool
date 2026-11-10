@@ -25,7 +25,7 @@ function Quiz({ initial, experience = "STUDY" }: { initial: Active; experience?:
   return value.status === "ACTIVE" ? <ActiveQuiz attempt={value} experience={mode} setExperience={setMode} update={setValue} back={async () => undefined} /> : <p>Handed in</p>;
 }
 const press = (key: string, init: KeyboardEventInit = {}, target: Element = document.activeElement ?? document.body) => fireEvent.keyDown(target, { key, ...init });
-const question = (number: number) => screen.findByRole("heading", { name: new RegExp(`^Question ${number} of`) });
+const question = (number: number) => screen.findByRole("heading", { name: new RegExp(`^Pitanje ${number} od`) });
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -96,14 +96,14 @@ it("answers true/false with T, F, 1 and 2", async () => {
   render(<Quiz initial={current} />);
   await question(1);
   press("t", {}, document.body);
-  expect(screen.getByRole("radio", { name: "True" })).toBeChecked();
+  expect(screen.getByRole("radio", { name: "Točno" })).toBeChecked();
   press("F");
-  expect(screen.getByRole("radio", { name: "False" })).toBeChecked();
+  expect(screen.getByRole("radio", { name: "Netočno" })).toBeChecked();
   press("1");
-  expect(screen.getByRole("radio", { name: "True" })).toBeChecked();
+  expect(screen.getByRole("radio", { name: "Točno" })).toBeChecked();
   press("2");
-  expect(screen.getByRole("radio", { name: "False" })).toBeChecked();
-  expect(screen.getByRole("radio", { name: "True" })).toHaveAttribute("aria-keyshortcuts", "T 1");
+  expect(screen.getByRole("radio", { name: "Netočno" })).toBeChecked();
+  expect(screen.getByRole("radio", { name: "Točno" })).toHaveAttribute("aria-keyshortcuts", "T 1");
 });
 
 it("checks with Enter in guided practice and goes on with Enter once the answer is checked and locked", async () => {
@@ -111,7 +111,7 @@ it("checks with Enter in guided practice and goes on with Enter once the answer 
   render(<Quiz initial={current} />);
   await question(1);
   press("1"); press("Enter");
-  await screen.findByRole("button", { name: "Next question" });
+  await screen.findByRole("button", { name: "Sljedeće pitanje" });
   expect(mock.check).toHaveBeenCalledWith("course", "attempt", "mcq", null);
   press("2", {}, document.body);
   // Checked options also carry their verdict in the name.
@@ -128,19 +128,19 @@ it("moves between questions with N, J, P and K only where the visible controls a
   await question(1);
   // Guided practice checks an answer before moving on, as its buttons do.
   press("n");
-  expect(screen.getByRole("heading", { name: "Question 1 of 3" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Pitanje 1 od 3" })).toBeInTheDocument();
   view.unmount();
   render(<Quiz initial={current} experience="EXAM" />);
   await question(1);
   press("n"); await question(2);
   press("j"); await question(3);
   press("j");
-  expect(screen.getByRole("heading", { name: "Question 3 of 3" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Pitanje 3 od 3" })).toBeInTheDocument();
   press("p"); await question(2);
   press("k"); await question(1);
   press("k");
-  expect(screen.getByRole("heading", { name: "Question 1 of 3" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Previous" })).toHaveAttribute("aria-keyshortcuts", "P K");
+  expect(screen.getByRole("heading", { name: "Pitanje 1 od 3" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Prethodno" })).toHaveAttribute("aria-keyshortcuts", "P K");
   expect(mock.save).not.toHaveBeenCalled();
 });
 
@@ -148,16 +148,16 @@ it("ignores keys while typing a short answer or in an editable region", async ()
   current = attempt([sa, mcq], { paper: { exam_paper_id: "paper", title: "MI 2025", total_points: 2, wrong_answer_penalty: 0, pass_threshold: null, duration_minutes: null } });
   render(<Quiz initial={current} />);
   await question(1);
-  const textarea = screen.getByLabelText("Your short answer");
+  const textarea = screen.getByLabelText("Vaš kratki odgovor");
   textarea.focus();
   for (const key of ["1", "n", "j", "?", "Enter"]) press(key, {}, textarea);
-  expect(screen.getByRole("heading", { name: "Question 1 of 2" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Pitanje 1 od 2" })).toBeInTheDocument();
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   const editable = document.createElement("div");
   editable.setAttribute("contenteditable", "true");
   textarea.closest("form")!.append(editable);
   press("n", {}, editable);
-  expect(screen.getByRole("heading", { name: "Question 1 of 2" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Pitanje 1 od 2" })).toBeInTheDocument();
   editable.remove();
   press("n", {}, document.body);
   await question(2);
@@ -181,7 +181,7 @@ it("ignores keys while the quiz is hidden", async () => {
   await waitFor(() => expect(screen.getByText("Choose a number")).toBeInTheDocument());
   press("1", {}, document.body); press("?", { shiftKey: true }, document.body);
   expect(screen.getByLabelText("One")).not.toBeChecked();
-  expect(screen.getByText("Keyboard shortcuts").closest("dialog")).not.toHaveAttribute("open");
+  expect(screen.getByText("Tipkovnički prečaci").closest("dialog")).not.toHaveAttribute("open");
 });
 
 it("opens the shortcut list with ? and closes it with Escape, returning focus", async () => {
@@ -190,10 +190,10 @@ it("opens the shortcut list with ? and closes it with Escape, returning focus", 
   const heading = await question(1);
   expect(heading).toHaveFocus();
   press("?", { shiftKey: true });
-  const dialog = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
+  const dialog = await screen.findByRole("dialog", { name: "Tipkovnički prečaci" });
   expect(dialog).toHaveAttribute("open");
-  expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
-  expect(screen.getByText("Choose an answer option, or toggle one on multiple-select")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Zatvori" })).toHaveFocus();
+  expect(screen.getByText("Odaberite odgovor ili ga uključite/isključite kod višestrukog odabira")).toBeVisible();
   // Answer keys wait while the list is open.
   press("1");
   expect(screen.getByRole("radio", { name: "One", hidden: true })).not.toBeChecked();
@@ -208,12 +208,12 @@ it("offers the shortcut list from a discreet hint button", async () => {
   current = attempt([mcq]);
   render(<Quiz initial={current} />);
   await question(1);
-  const hint = screen.getByRole("button", { name: "Press ? for shortcuts" });
+  const hint = screen.getByRole("button", { name: "Pritisnite ? za prečace" });
   expect(hint).toHaveAttribute("aria-keyshortcuts", "?");
   expect(hint).toHaveClass("hidden", "pointer-fine:inline-flex");
   act(() => hint.focus());
   fireEvent.click(hint);
-  expect(await screen.findByRole("dialog", { name: "Keyboard shortcuts" })).toHaveAttribute("open");
-  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(await screen.findByRole("dialog", { name: "Tipkovnički prečaci" })).toHaveAttribute("open");
+  fireEvent.click(screen.getByRole("button", { name: "Zatvori" }));
   await waitFor(() => expect(hint).toHaveFocus());
 });

@@ -34,13 +34,13 @@ it("formats points without trailing zeros", () => {
 it("shows members published papers with their structure and no management tools", async () => {
   mock.examPapers.mockResolvedValue({ can_manage: false, papers: [{ ...paper, status: "PUBLISHED", item_count: 3, total_points: 6.5 }] });
   render(<ExamPapers courseId="course" />);
-  const list = await screen.findByRole("list", { name: "Past exams 2025/26" });
+  const list = await screen.findByRole("list", { name: "Prošli ispiti 2025/26" });
   expect(list).toHaveTextContent("Međuispit 2025/26");
-  expect(list).toHaveTextContent("Jesenski rok · Mon 24 Nov");
-  expect(list).toHaveTextContent("3 questions · 6.5 points · 90 min · −¼ of the item's points");
-  expect(screen.getByText(/Questions stay hidden until you take a paper/)).toBeVisible();
+  expect(list).toHaveTextContent("Jesenski rok · pon, 24. stu");
+  expect(list).toHaveTextContent("3 pitanja · 6.5 boda · 90 min · −¼ bodova zadatka");
+  expect(screen.getByText(/Pitanja ostaju skrivena dok ne počnete rješavati ispit/)).toBeVisible();
   expect(screen.queryByRole("button", { name: /Open|Add past exam/ })).not.toBeInTheDocument();
-  expect(within(list).queryByText("Published")).not.toBeInTheDocument();
+  expect(within(list).queryByText("Objavljeno")).not.toBeInTheDocument();
 });
 
 it("adds a paper, chooses and orders its questions with points, and publishes after saving", async () => {
@@ -53,44 +53,44 @@ it("adds a paper, chooses and orders its questions with points, and publishes af
   }));
   mock.publishExamPaper.mockResolvedValue(detail({ status: "PUBLISHED", published_at: "2026-10-21T10:00:00Z" }));
   render(<ExamPapers courseId="course" />);
-  fireEvent.click(await screen.findByRole("button", { name: "Add past exam" }));
-  const form = screen.getByRole("form", { name: "Add past exam" });
-  expect(within(form).getByLabelText("Title")).toBeInvalid();
-  fireEvent.change(within(form).getByLabelText("Title"), { target: { value: "Međuispit 2025/26" } });
-  fireEvent.change(within(form).getByLabelText("Academic year"), { target: { value: "2025/26" } });
-  fireEvent.change(within(form).getByLabelText(/Time limit/), { target: { value: "90" } });
-  fireEvent.change(within(form).getByLabelText("Wrong answers"), { target: { value: "0.25" } });
-  fireEvent.click(within(form).getByRole("button", { name: "Add past exam" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Dodaj prošli ispit" }));
+  const form = screen.getByRole("form", { name: "Dodaj prošli ispit" });
+  expect(within(form).getByLabelText("Naslov")).toBeInvalid();
+  fireEvent.change(within(form).getByLabelText("Naslov"), { target: { value: "Međuispit 2025/26" } });
+  fireEvent.change(within(form).getByLabelText("Akademska godina"), { target: { value: "2025/26" } });
+  fireEvent.change(within(form).getByLabelText(/Vremensko ograničenje/), { target: { value: "90" } });
+  fireEvent.change(within(form).getByLabelText("Netočni odgovori"), { target: { value: "0.25" } });
+  fireEvent.click(within(form).getByRole("button", { name: "Dodaj prošli ispit" }));
   await waitFor(() => expect(mock.createExamPaper).toHaveBeenCalledWith("course", {
     title: "Međuispit 2025/26", academic_year: "2025/26", kind: "MIDTERM", term_label: null, exam_date: null,
     exam_scope_id: null, duration_minutes: 90, wrong_answer_penalty: 0.25, pass_threshold: null,
   }));
-  expect(await screen.findByText(/Now choose its questions/)).toBeVisible();
+  expect(await screen.findByText(/Sada odaberite pitanja/)).toBeVisible();
 
-  const picker = await screen.findByRole("region", { name: "Add questions" });
-  fireEvent.click(await within(picker).findByRole("button", { name: "Add What is a matrix?" }));
-  fireEvent.click(within(picker).getByRole("button", { name: "Add Define a determinant." }));
-  expect(within(picker).queryByRole("button", { name: "Add What is a matrix?" })).not.toBeInTheDocument();
-  const questions = screen.getByRole("region", { name: "Questions in Međuispit 2025/26" });
-  expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
-  fireEvent.click(within(questions).getByRole("button", { name: "Move question 2 up" }));
-  const points = within(questions).getAllByLabelText("Points");
+  const picker = await screen.findByRole("region", { name: "Dodaj pitanja" });
+  fireEvent.click(await within(picker).findByRole("button", { name: "Dodaj What is a matrix?" }));
+  fireEvent.click(within(picker).getByRole("button", { name: "Dodaj Define a determinant." }));
+  expect(within(picker).queryByRole("button", { name: "Dodaj What is a matrix?" })).not.toBeInTheDocument();
+  const questions = screen.getByRole("region", { name: "Pitanja u ispitu Međuispit 2025/26" });
+  expect(screen.getByRole("button", { name: "Objavi" })).toBeDisabled();
+  fireEvent.click(within(questions).getByRole("button", { name: "Pomakni pitanje 2 gore" }));
+  const points = within(questions).getAllByLabelText("Bodovi");
   fireEvent.change(points[0], { target: { value: "2.5" } });
-  fireEvent.change(within(questions).getAllByLabelText(/Label/)[0], { target: { value: "Zadatak 1" } });
-  expect(within(questions).getByText("2 questions · 3.5 points")).toBeVisible();
+  fireEvent.change(within(questions).getAllByLabelText(/Oznaka/)[0], { target: { value: "Zadatak 1" } });
+  expect(within(questions).getByText("2 pitanja · 3.5 boda")).toBeVisible();
   fireEvent.change(points[1], { target: { value: "0.125" } });
-  expect(within(questions).getByText(/at most two decimals/)).toBeVisible();
-  expect(within(questions).getByRole("button", { name: "Save questions" })).toBeDisabled();
+  expect(within(questions).getByText(/najviše dvije decimale/)).toBeVisible();
+  expect(within(questions).getByRole("button", { name: "Spremi pitanja" })).toBeDisabled();
   fireEvent.change(points[1], { target: { value: "1" } });
-  fireEvent.click(within(questions).getByRole("button", { name: "Save questions" }));
+  fireEvent.click(within(questions).getByRole("button", { name: "Spremi pitanja" }));
   await waitFor(() => expect(mock.setExamPaperItems).toHaveBeenCalledWith("p1", [
     { question_id: "q2", points: 2.5, label: "Zadatak 1" }, { question_id: "q1", points: 1, label: null },
   ]));
-  expect(await screen.findByText("Saved questions.")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Publish" }));
-  expect(await screen.findByText(/Published Međuispit 2025\/26/)).toBeVisible();
+  expect(await screen.findByText("Pitanja su spremljena.")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Objavi" }));
+  expect(await screen.findByText(/Objavljeno: Međuispit 2025\/26/)).toBeVisible();
   expect(mock.publishExamPaper).toHaveBeenCalledWith("p1");
-  expect(screen.getByRole("button", { name: "Unpublish" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Povuci objavu" })).toBeVisible();
 });
 
 it("locks the questions of a published paper and deletes only drafts after confirmation", async () => {
@@ -101,28 +101,28 @@ it("locks the questions of a published paper and deletes only drafts after confi
   mock.unpublishExamPaper.mockResolvedValue({ ...published, status: "DRAFT", published_at: null });
   mock.deleteExamPaper.mockResolvedValue(undefined);
   render(<ExamPapers courseId="course" />);
-  expect(await screen.findByText("Published")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Open Međuispit 2025/26" }));
-  expect(await screen.findByText(/Unpublish this paper to change its questions/)).toBeVisible();
-  expect(screen.getByLabelText("Points")).toBeDisabled();
-  expect(screen.queryByRole("region", { name: "Add questions" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Unpublish" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+  expect(await screen.findByText("Objavljeno")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Otvori Međuispit 2025/26" }));
+  expect(await screen.findByText(/Povucite objavu ispita da biste mijenjali pitanja/)).toBeVisible();
+  expect(screen.getByLabelText("Bodovi")).toBeDisabled();
+  expect(screen.queryByRole("region", { name: "Dodaj pitanja" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Obriši" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Povuci objavu" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Obriši" }));
   // The confirmation names the paper and only the confirm step is the solid danger button.
-  const deleteGroup = screen.getByRole("group", { name: "Delete this past exam" });
-  expect(within(deleteGroup).getByText("Delete Međuispit 2025/26 for good?")).toBeVisible();
-  expect(within(deleteGroup).getByRole("button", { name: "Confirm delete" })).toHaveClass("bg-danger", "text-danger-foreground");
-  expect(within(deleteGroup).queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
-  fireEvent.click(within(deleteGroup).getByRole("button", { name: "Keep paper" }));
-  expect(within(deleteGroup).getByRole("button", { name: "Delete" })).toBeVisible();
-  expect(within(deleteGroup).queryByRole("button", { name: "Confirm delete" })).not.toBeInTheDocument();
+  const deleteGroup = screen.getByRole("group", { name: "Obriši ovaj prošli ispit" });
+  expect(within(deleteGroup).getByText("Trajno obrisati Međuispit 2025/26?")).toBeVisible();
+  expect(within(deleteGroup).getByRole("button", { name: "Potvrdi brisanje" })).toHaveClass("bg-danger", "text-danger-foreground");
+  expect(within(deleteGroup).queryByRole("button", { name: "Obriši" })).not.toBeInTheDocument();
+  fireEvent.click(within(deleteGroup).getByRole("button", { name: "Zadrži ispit" }));
+  expect(within(deleteGroup).getByRole("button", { name: "Obriši" })).toBeVisible();
+  expect(within(deleteGroup).queryByRole("button", { name: "Potvrdi brisanje" })).not.toBeInTheDocument();
   expect(within(deleteGroup).queryByText(/for good\?/)).not.toBeInTheDocument();
   expect(mock.deleteExamPaper).not.toHaveBeenCalled();
-  fireEvent.click(within(deleteGroup).getByRole("button", { name: "Delete" }));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+  fireEvent.click(within(deleteGroup).getByRole("button", { name: "Obriši" }));
+  fireEvent.click(screen.getByRole("button", { name: "Potvrdi brisanje" }));
   await waitFor(() => expect(mock.deleteExamPaper).toHaveBeenCalledWith("p1"));
-  expect(await screen.findByText("Deleted Međuispit 2025/26.")).toBeVisible();
+  expect(await screen.findByText("Obrisano: Međuispit 2025/26.")).toBeVisible();
 });
 
 it("starts a published paper as a session and reports a failed start", async () => {
@@ -131,13 +131,13 @@ it("starts a published paper as a session and reports a failed start", async () 
   practice.startPaper.mockRejectedValueOnce(new Error("Only published papers can be taken")).mockResolvedValue(attempt);
   const onStartAttempt = vi.fn();
   render(<ExamPapers courseId="course" onStartAttempt={onStartAttempt} />);
-  expect(await screen.findByRole("button", { name: "Take Međuispit 2025/26" })).toHaveTextContent("Take this exam · 90 min");
-  fireEvent.click(screen.getByRole("button", { name: "Take Međuispit 2025/26" }));
+  expect(await screen.findByRole("button", { name: "Riješi Međuispit 2025/26" })).toHaveTextContent("Riješi ovaj ispit · 90 min");
+  fireEvent.click(screen.getByRole("button", { name: "Riješi Međuispit 2025/26" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Only published papers can be taken");
-  expect(screen.queryByRole("button", { name: "Take Draft only" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Take Međuispit 2025/26" }));
+  expect(screen.queryByRole("button", { name: "Riješi Draft only" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Riješi Međuispit 2025/26" }));
   await waitFor(() => expect(onStartAttempt).toHaveBeenCalledWith(attempt));
   expect(practice.startPaper).toHaveBeenLastCalledWith("p1", "END", true);
-  fireEvent.click(screen.getByRole("button", { name: "Practice Međuispit 2025/26 without a time limit" }));
+  fireEvent.click(screen.getByRole("button", { name: "Vježbaj Međuispit 2025/26 bez vremenskog ograničenja" }));
   await waitFor(() => expect(practice.startPaper).toHaveBeenLastCalledWith("p1", "END", false));
 });

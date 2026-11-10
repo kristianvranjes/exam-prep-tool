@@ -32,9 +32,9 @@ export function useFavorites(courseId: string) {
       const state = value(question) ? await practiceApi.unfavorite(courseId, id) : await practiceApi.favorite(courseId, id);
       setSaved(current => ({ ...current, [id]: state.favorite }));
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : "Could not update your favorites. Try again.";
+      const message = cause instanceof Error ? cause.message : "Favoriti nisu ažurirani. Pokušajte ponovno.";
       // An archived question is no longer in the bank you can see.
-      setErrors(current => ({ ...current, [id]: message === "Question not found" ? "This question is no longer in the question bank, so it cannot be favorited." : message }));
+      setErrors(current => ({ ...current, [id]: message === "Pitanje nije pronađeno" ? "Ovo pitanje više nije u bazi pitanja, pa ga ne možete dodati u favorite." : message }));
     } finally {
       inFlight.current.delete(id);
     }
@@ -60,7 +60,7 @@ export function FavoriteToggle({ favorites, question, label, keyshortcuts }: {
   const error = favorites.error(id);
   return <div className="flex flex-col items-start gap-1">
     <Button variant="ghost" aria-pressed={favorite} aria-label={label} aria-keyshortcuts={keyshortcuts} className="px-3" onClick={() => void favorites.toggle(question)}>
-      <Star aria-hidden="true" className="size-4 shrink-0" fill={favorite ? "currentColor" : "none"} />Favorite
+      <Star aria-hidden="true" className="size-4 shrink-0" fill={favorite ? "currentColor" : "none"} />Favorit
     </Button>
     {error && <p role="alert" className="max-w-prose text-sm text-danger">{error}</p>}
   </div>;

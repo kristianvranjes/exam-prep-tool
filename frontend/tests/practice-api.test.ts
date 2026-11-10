@@ -67,7 +67,7 @@ it("starts a guided five-question quick quiz, fewer when fewer are available", a
     method: "POST", body: JSON.stringify({ count: 3, question_types: types, selection_mode: "ADAPTIVE", unit_ids: ["u1"], feedback_mode: "IMMEDIATE", quick_quiz: true }),
   });
   mock.mockResolvedValueOnce({ total: 0 });
-  await expect(practiceApi.quickQuiz("course", { exam_scope_id: "mi" })).rejects.toThrow("No questions are available for a quick quiz here yet.");
+  await expect(practiceApi.quickQuiz("course", { exam_scope_id: "mi" })).rejects.toThrow("Ovdje još nema pitanja za brzi kviz.");
   expect(mock).toHaveBeenLastCalledWith(`${counted}&exam_scope_id=mi`);
   expect(mock).toHaveBeenCalledTimes(5);
 });
@@ -93,6 +93,6 @@ it("starts a one-click due review sized by the server's due count", async () => 
     method: "POST", body: JSON.stringify({ count: 3, question_types: types, selection_mode: "DUE", feedback_mode: "IMMEDIATE" }),
   });
   mock.mockResolvedValueOnce({ due_total: 0 });
-  await expect(practiceApi.reviewDue("course")).rejects.toThrow("Nothing is due for review right now.");
+  await expect(practiceApi.reviewDue("course")).rejects.toThrow("Trenutno ništa ne treba ponoviti.");
   expect(mock).toHaveBeenCalledTimes(5);
 });

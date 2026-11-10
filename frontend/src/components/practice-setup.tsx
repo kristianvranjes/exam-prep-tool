@@ -5,6 +5,7 @@ import { QUESTION_TYPES, typeLabels } from "../lib/question-types";
 import { api, type CourseUnit, type ExamScope, type QuestionType } from "../lib/api";
 import { practiceApi, type PracticeAvailability, type PracticeFocus, type SelectionMode } from "../lib/practice-api";
 import { kindLabels } from "./exam-scopes";
+import { QUESTIONS, plural } from "../lib/plural";
 import { ExperiencePicker, type QuizExperience } from "./quiz-navigation";
 import { Alert, Button, Input, Select } from "./ui";
 
@@ -115,120 +116,120 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
   const focusUnits = focus.kind === "SCOPE" ? scope?.unit_ids ?? [] : focus.kind === "UNITS" ? focus.unitIds : null;
   const counted = availability.data;
   const matching = counted?.total ?? 0;
-  const focusHint = focusUnits ? " or the units you practice" : "";
+  const focusHint = focusUnits ? " ili cjeline koje vježbate" : "";
   const mistakes = counted?.mistakes_total;
   const due = counted?.due_total;
   const favorites = counted?.favorites_total;
   const canMock = activeUnits.length > 0 && catalog.scopes.length > 0;
-  const matches = mode === "MISTAKES" ? `${matching} ${matching === 1 ? "mistake matches" : "mistakes match"}`
-    : mode === "DUE" ? `${matching} due ${matching === 1 ? "question matches" : "questions match"}`
-    : mode === "FAVORITES" ? `${matching} ${matching === 1 ? "favorite matches" : "favorites match"}`
-      : `${matching} course ${matching === 1 ? "question matches" : "questions match"}`;
+  const matches = mode === "MISTAKES" ? `pogrešaka: ${matching}`
+    : mode === "DUE" ? `pitanja za ponavljanje: ${matching}`
+    : mode === "FAVORITES" ? `favorita: ${matching}`
+      : `pitanja kolegija: ${matching}`;
   const noQuestions = ready && !busy && !availability.loading && !availability.error && counted?.course_total === 0;
   let help = "";
-  if (availability.loading) help = "Checking practice questions…";
-  else if (busy) help = "Loading practice…";
-  else if (availability.error) help = "Load practice questions before starting.";
-  else if (!ready) help = "Load practice history before starting.";
-  else if (mode === "MOCK" && focus.kind !== "SCOPE") help = "Choose an exam cycle for the mock exam.";
-  else if (focus.kind === "SCOPE" && !scope) help = "Choose an exam cycle.";
-  else if (focus.kind === "UNITS" && !focus.unitIds.length) help = "Choose at least one unit.";
-  else if (!selectedTypes.length) help = "Choose at least one question type in More options.";
-  else if (!Number.isInteger(count) || count < 1 || count > 20) help = "Enter a whole number from 1 to 20.";
-  else if (counted && matching === 0 && mode === "MISTAKES") help = "No mistakes to review with these options. Questions you answer incorrectly appear here after you finish a session.";
-  else if (counted && matching === 0 && mode === "DUE") help = "Nothing is due for review with these options. Choose Recommended practice to keep studying.";
-  else if (counted && matching === 0 && mode === "FAVORITES") help = "No favorites match these options. Star a question while you practice or in its results to add it.";
-  else if (counted && matching === 0) help = focusUnits ? "No questions match these units and types yet. Choose other units or change question types in More options." : "No questions match your selected types. Change question types in More options.";
-  else if (counted && count > matching) help = `Only ${matches} your options. Choose Custom and enter ${matching} or fewer, or change question types in More options${focusHint}.`;
+  if (availability.loading) help = "Provjeravam pitanja za vježbu…";
+  else if (busy) help = "Učitavam vježbu…";
+  else if (availability.error) help = "Prije početka učitajte pitanja za vježbu.";
+  else if (!ready) help = "Prije početka učitajte povijest vježbi.";
+  else if (mode === "MOCK" && focus.kind !== "SCOPE") help = "Odaberite ispitni rok za probni ispit.";
+  else if (focus.kind === "SCOPE" && !scope) help = "Odaberite ispitni rok.";
+  else if (focus.kind === "UNITS" && !focus.unitIds.length) help = "Odaberite barem jednu cjelinu.";
+  else if (!selectedTypes.length) help = "Odaberite barem jednu vrstu pitanja pod Više mogućnosti.";
+  else if (!Number.isInteger(count) || count < 1 || count > 20) help = "Upišite cijeli broj od 1 do 20.";
+  else if (counted && matching === 0 && mode === "MISTAKES") help = "Uz ove postavke nema pogrešaka za ponavljanje. Pitanja na koja odgovorite netočno pojavljuju se ovdje kad završite vježbu.";
+  else if (counted && matching === 0 && mode === "DUE") help = "Uz ove postavke ništa ne treba ponoviti. Odaberite Preporučenu vježbu i nastavite učiti.";
+  else if (counted && matching === 0 && mode === "FAVORITES") help = "Nijedan favorit ne odgovara ovim postavkama. Pitanje dodajete zvjezdicom tijekom vježbe ili u rezultatima.";
+  else if (counted && matching === 0) help = focusUnits ? "Još nema pitanja za ove cjeline i vrste. Odaberite druge cjeline ili promijenite vrste pitanja pod Više mogućnosti." : "Nema pitanja odabranih vrsta. Promijenite vrste pitanja pod Više mogućnosti.";
+  else if (counted && count > matching) help = `Uz vaše postavke ima samo ${matches}. Odaberite Prilagođeno i upišite ${matching} ili manje, ili promijenite vrste pitanja pod Više mogućnosti${focusHint}.`;
 
   if (noQuestions) return <div className="max-w-prose space-y-3">
-    <p className="font-semibold">No practice questions are available for this course yet.</p>
-    <p className="text-sm text-muted">Read the course materials or contribute a question through More.</p>
+    <p className="font-semibold">Ovaj kolegij još nema pitanja za vježbu.</p>
+    <p className="text-sm text-muted">Pročitajte materijale kolegija ili predložite pitanje pod Više.</p>
     <div className="flex flex-wrap gap-2">
-      {onOpenMaterials && <Button variant="secondary" onClick={onOpenMaterials}>View materials</Button>}
-      {onOpenQuestions && <Button variant="ghost" onClick={onOpenQuestions}>Contribute a question</Button>}
+      {onOpenMaterials && <Button variant="secondary" onClick={onOpenMaterials}>Otvori materijale</Button>}
+      {onOpenQuestions && <Button variant="ghost" onClick={onOpenQuestions}>Predloži pitanje</Button>}
     </div>
   </div>;
 
-  return <form aria-label="Practice setup" className="flex max-w-2xl flex-col gap-group" onSubmit={event => {
+  return <form aria-label="Postavke vježbe" className="flex max-w-2xl flex-col gap-group" onSubmit={event => {
     event.preventDefault(); if (!busy && !help) start();
   }}>
     {availability.error && <div>
-      <Alert>Could not load practice questions. Try again.</Alert>
-      <Button variant="secondary" className="mt-3" disabled={busy} onClick={() => setRevision(value => value + 1)}>Retry practice questions</Button>
+      <Alert>Pitanja za vježbu nisu učitana. Pokušajte ponovno.</Alert>
+      <Button variant="secondary" className="mt-3" disabled={busy} onClick={() => setRevision(value => value + 1)}>Ponovno učitaj pitanja za vježbu</Button>
     </div>}
     {activeUnits.length > 0 && <fieldset disabled={busy} className="space-y-3">
-      <legend className="mb-2 font-semibold">What to practice</legend>
+      <legend className="mb-2 font-semibold">Što vježbati</legend>
       <label className="flex min-h-11 cursor-pointer items-start gap-3">
-        <input className="mt-1" type="radio" name="practice-focus" aria-label="Whole course" checked={focus.kind === "COURSE"} onChange={() => chooseFocus({ kind: "COURSE" })} />
-        <span><span className="font-semibold">Whole course</span><span className="mt-1 block text-sm text-muted">Questions from every unit, including questions without a unit.</span></span>
+        <input className="mt-1" type="radio" name="practice-focus" aria-label="Cijeli kolegij" checked={focus.kind === "COURSE"} onChange={() => chooseFocus({ kind: "COURSE" })} />
+        <span><span className="font-semibold">Cijeli kolegij</span><span className="mt-1 block text-sm text-muted">Pitanja iz svih cjelina, uključujući pitanja bez cjeline.</span></span>
       </label>
       {catalog.scopes.length > 0 && <label className="flex min-h-11 cursor-pointer items-start gap-3">
-        <input className="mt-1" type="radio" name="practice-focus" aria-label="Exam cycle" checked={focus.kind === "SCOPE"} onChange={() => chooseFocus({ kind: "SCOPE", scopeId: catalog.scopes[0].id })} />
-        <span><span className="font-semibold">Exam cycle</span><span className="mt-1 block text-sm text-muted">The units one exam covers, such as a midterm or final.</span></span>
+        <input className="mt-1" type="radio" name="practice-focus" aria-label="Ispitni rok" checked={focus.kind === "SCOPE"} onChange={() => chooseFocus({ kind: "SCOPE", scopeId: catalog.scopes[0].id })} />
+        <span><span className="font-semibold">Ispitni rok</span><span className="mt-1 block text-sm text-muted">Cjeline koje pokriva jedan ispit, npr. međuispit ili završni ispit.</span></span>
       </label>}
       <label className="flex min-h-11 cursor-pointer items-start gap-3">
-        <input className="mt-1" type="radio" name="practice-focus" aria-label="Selected units" checked={focus.kind === "UNITS"} onChange={() => chooseFocus({ kind: "UNITS", unitIds: [] })} />
-        <span><span className="font-semibold">Selected units</span><span className="mt-1 block text-sm text-muted">Only the units you choose.</span></span>
+        <input className="mt-1" type="radio" name="practice-focus" aria-label="Odabrane cjeline" checked={focus.kind === "UNITS"} onChange={() => chooseFocus({ kind: "UNITS", unitIds: [] })} />
+        <span><span className="font-semibold">Odabrane cjeline</span><span className="mt-1 block text-sm text-muted">Samo cjeline koje odaberete.</span></span>
       </label>
       {focus.kind === "SCOPE" && catalog.scopes.length > 0 && <div>
-        <label className="block text-sm font-medium">Exam cycle
+        <label className="block text-sm font-medium">Ispitni rok
           <Select className="mt-1" value={scope?.id ?? ""} aria-describedby={scope ? `${id}-scope-units` : undefined} onChange={event => chooseFocus({ kind: "SCOPE", scopeId: event.target.value })}>
-            {!scope && <option value="">Choose an exam cycle</option>}
+            {!scope && <option value="">Odaberite ispitni rok</option>}
             {catalog.scopes.map(item => <option key={item.id} value={item.id}>{item.name} {item.academic_year} · {kindLabels[item.kind]}</option>)}
           </Select>
         </label>
-        {scope && <p id={`${id}-scope-units`} className="mt-2 text-sm text-muted">Covers: {scope.unit_ids.map(unitId => catalog.units.find(unit => unit.id === unitId)?.title ?? "Archived unit").join(", ")}</p>}
+        {scope && <p id={`${id}-scope-units`} className="mt-2 text-sm text-muted">Obuhvaća: {scope.unit_ids.map(unitId => catalog.units.find(unit => unit.id === unitId)?.title ?? "Arhivirana cjelina").join(", ")}</p>}
       </div>}
       {focus.kind === "UNITS" && <fieldset>
-        <legend className="text-sm font-medium">Units</legend>
+        <legend className="text-sm font-medium">Cjeline</legend>
         <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">{activeUnits.map(unit => <label key={unit.id} className="text-sm">
           <input type="checkbox" checked={focus.unitIds.includes(unit.id)} onChange={event => chooseFocus({ kind: "UNITS", unitIds: event.target.checked ? [...focus.unitIds, unit.id] : focus.unitIds.filter(unitId => unitId !== unit.id) })} /> {unit.title}
         </label>)}</div>
       </fieldset>}
     </fieldset>}
     <fieldset disabled={busy} className="space-y-3">
-      <legend className="mb-2 font-semibold">How to practice</legend>
-      <ModeChoice label="Recommended practice" descriptionId={`${id}-recommended`} checked={mode === "ADAPTIVE"} onSelect={() => setMode("ADAPTIVE")}>Prioritizes questions due for review, then other useful course questions.</ModeChoice>
-      {offered(mistakes, mode === "MISTAKES") && <ModeChoice label="Mistakes" descriptionId={`${id}-mistakes`} checked={mode === "MISTAKES"} onSelect={() => setMode("MISTAKES")}>
-        Questions you last answered incorrectly, oldest first. A correct answer removes them.{reviewNote(mistakes, n => `${n} to review with these options.`, "None with these options.")}
+      <legend className="mb-2 font-semibold">Kako vježbati</legend>
+      <ModeChoice label="Preporučena vježba" descriptionId={`${id}-recommended`} checked={mode === "ADAPTIVE"} onSelect={() => setMode("ADAPTIVE")}>Prvo daje pitanja koja treba ponoviti, a zatim druga korisna pitanja kolegija.</ModeChoice>
+      {offered(mistakes, mode === "MISTAKES") && <ModeChoice label="Pogreške" descriptionId={`${id}-mistakes`} checked={mode === "MISTAKES"} onSelect={() => setMode("MISTAKES")}>
+        Pitanja na koja ste zadnji put netočno odgovorili, od najstarijih. Točan odgovor ih uklanja.{reviewNote(mistakes, n => `Uz ove postavke za ponavljanje: ${n}.`, "Nema ih uz ove postavke.")}
       </ModeChoice>}
-      {canMock && (scope ? <ModeChoice label="Mock exam" descriptionId={`${id}-mock`} checked={mode === "MOCK"} onSelect={() => { setMode("MOCK"); setExperience("EXAM"); }}>
-        Spreads the questions evenly across the units of {scope.name}, like a real exam. Starts as exam practice, with results at the end.
-      </ModeChoice> : <p className="text-sm text-muted">For a mock exam, choose Exam cycle under What to practice.</p>)}
+      {canMock && (scope ? <ModeChoice label="Probni ispit" descriptionId={`${id}-mock`} checked={mode === "MOCK"} onSelect={() => { setMode("MOCK"); setExperience("EXAM"); }}>
+        Pitanja ravnomjerno raspoređuje po cjelinama roka {scope.name}, kao na pravom ispitu. Počinje kao ispitna vježba, s rezultatima na kraju.
+      </ModeChoice> : <p className="text-sm text-muted">Za probni ispit odaberite Ispitni rok pod Što vježbati.</p>)}
     </fieldset>
-    {hasUnfinishedSession && mode !== "STANDARD" && <p className="text-sm text-muted">{mode === "ADAPTIVE" ? "Recommended practice" : "This choice"} excludes questions in unfinished sessions, so fewer questions may be available. You can resume above or choose Course questions under More options.</p>}
+    {hasUnfinishedSession && mode !== "STANDARD" && <p className="text-sm text-muted">{mode === "ADAPTIVE" ? "Preporučena vježba" : "Ovaj odabir"} izostavlja pitanja iz nedovršenih vježbi, pa ih može biti manje. Nedovršenu vježbu možete nastaviti iznad ili odabrati Pitanja kolegija pod Više mogućnosti.</p>}
     <fieldset disabled={busy}>
-      <legend className="mb-2 font-semibold">Session length</legend>
+      <legend className="mb-2 font-semibold">Duljina vježbe</legend>
       <div className="flex flex-wrap gap-2">{(["5", "10", "20", "custom"] as const).map(value => <label key={value} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-control border border-line px-3 py-2 text-sm">
-        <input type="radio" name="session-length" aria-label={value === "custom" ? "Custom" : `${value} questions`} checked={length === value} onChange={() => { setLength(value); if (value !== "custom") setCount(Number(value)); }} />
-        {value === "custom" ? "Custom" : value}
+        <input type="radio" name="session-length" aria-label={value === "custom" ? "Prilagođeno" : plural(Number(value), QUESTIONS)} checked={length === value} onChange={() => { setLength(value); if (value !== "custom") setCount(Number(value)); }} />
+        {value === "custom" ? "Prilagođeno" : value}
       </label>)}</div>
-      {length === "custom" && <label className="mt-4 flex flex-wrap items-center gap-3 text-sm">Custom question count<Input className="w-24" name="count" type="number" min={1} max={20} step={1} required value={count} onChange={event => setCount(event.target.value === "" ? 0 : Number(event.target.value))} /></label>}
+      {length === "custom" && <label className="mt-4 flex flex-wrap items-center gap-3 text-sm">Vlastiti broj pitanja<Input className="w-24" name="count" type="number" min={1} max={20} step={1} required value={count} onChange={event => setCount(event.target.value === "" ? 0 : Number(event.target.value))} /></label>}
     </fieldset>
     <div>
       {help && <p id={`${id}-start-help`} role={availability.loading || busy ? "status" : undefined} className="mb-3 max-w-prose text-sm text-muted">{help}</p>}
-      <Button type="submit" variant={hasUnfinishedSession ? "secondary" : "primary"} disabled={busy || Boolean(help)} aria-describedby={help ? `${id}-start-help` : undefined} className="w-full sm:w-auto">{mode === "MOCK" ? "Start mock exam" : "Start practice"}</Button>
+      <Button type="submit" variant={hasUnfinishedSession ? "secondary" : "primary"} disabled={busy || Boolean(help)} aria-describedby={help ? `${id}-start-help` : undefined} className="w-full sm:w-auto">{mode === "MOCK" ? "Započni probni ispit" : "Započni vježbu"}</Button>
     </div>
     <details open={moreOpen} onToggle={event => setMoreOpen(event.currentTarget.open)} className="border-t border-line pt-3">
-      <summary className="min-h-11 cursor-pointer py-2 font-medium">More options</summary>
+      <summary className="min-h-11 cursor-pointer py-2 font-medium">Više mogućnosti</summary>
       <div className="mt-3 flex flex-col gap-5">
         <fieldset disabled={busy} className="space-y-3">
-          <legend className="mb-2 font-semibold">Other ways to practice</legend>
-          <ModeChoice group="selection-mode-more" label="Course questions" descriptionId={`${id}-standard`} checked={mode === "STANDARD"} onSelect={() => setMode("STANDARD")}>Uses shared approved questions and your own drafts or questions awaiting review.</ModeChoice>
-          {offered(due, mode === "DUE") && <ModeChoice group="selection-mode-more" label="Due for review" descriptionId={`${id}-due`} checked={mode === "DUE"} onSelect={() => setMode("DUE")}>
-            Only questions whose review is due now, earliest first.{reviewNote(due, n => `${n} due with these options.`, "Nothing is due with these options.")}
+          <legend className="mb-2 font-semibold">Drugi načini vježbanja</legend>
+          <ModeChoice group="selection-mode-more" label="Pitanja kolegija" descriptionId={`${id}-standard`} checked={mode === "STANDARD"} onSelect={() => setMode("STANDARD")}>Koristi zajednička odobrena pitanja te vaše nacrte i pitanja koja čekaju pregled.</ModeChoice>
+          {offered(due, mode === "DUE") && <ModeChoice group="selection-mode-more" label="Za ponavljanje" descriptionId={`${id}-due`} checked={mode === "DUE"} onSelect={() => setMode("DUE")}>
+            Samo pitanja koja sada treba ponoviti, od najranije dospjelih.{reviewNote(due, n => `Uz ove postavke dospjelo: ${n}.`, "Uz ove postavke ništa ne treba ponoviti.")}
           </ModeChoice>}
-          {offered(favorites, mode === "FAVORITES") && <ModeChoice group="selection-mode-more" label="Favorites" descriptionId={`${id}-favorites`} checked={mode === "FAVORITES"} onSelect={() => setMode("FAVORITES")}>
-            Questions you starred, in the order you saved them.{reviewNote(favorites, n => `${n} saved with these options.`, "None with these options yet. Star a question while you practice or in its results.")}
+          {offered(favorites, mode === "FAVORITES") && <ModeChoice group="selection-mode-more" label="Favoriti" descriptionId={`${id}-favorites`} checked={mode === "FAVORITES"} onSelect={() => setMode("FAVORITES")}>
+            Pitanja označena zvjezdicom, redom kojim ste ih spremili.{reviewNote(favorites, n => `Uz ove postavke spremljeno: ${n}.`, "Uz ove postavke još ih nema. Označite pitanje zvjezdicom tijekom vježbe ili u rezultatima.")}
           </ModeChoice>}
         </fieldset>
-        <fieldset disabled={busy} className="flex flex-wrap gap-x-6 gap-y-2"><legend className="mb-2 font-semibold">Question types</legend>
+        <fieldset disabled={busy} className="flex flex-wrap gap-x-6 gap-y-2"><legend className="mb-2 font-semibold">Vrste pitanja</legend>
           {types.map(item => <label key={item.type}><input type="checkbox" checked={selectedTypes.includes(item.type)} onChange={event => setSelectedTypes(event.target.checked ? [...selectedTypes, item.type] : selectedTypes.filter(type => type !== item.type))} /> {item.label}</label>)}
         </fieldset>
-        <p className="text-sm text-muted">Short answers require self-review after submission. Compare your answer with the reference answer.</p>
+        <p className="text-sm text-muted">Kratki odgovori zahtijevaju samoprocjenu nakon predaje. Usporedite svoj odgovor s referentnim.</p>
         <ExperiencePicker value={experience} onChange={setExperience} disabled={busy} />
-        <p className="max-w-prose text-sm text-muted">{experience === "STUDY" ? "Guided practice shows one question at a time and checks each answer as you go, with the explanation right away." : "Exam practice adds a question navigator for unanswered or flagged questions and shows results only after you finish."}</p>
+        <p className="max-w-prose text-sm text-muted">{experience === "STUDY" ? "Vođena vježba prikazuje jedno po jedno pitanje i odmah provjerava svaki odgovor, uz objašnjenje." : "Ispitna vježba dodaje popis pitanja za neodgovorena i označena pitanja, a rezultate prikazuje tek na kraju."}</p>
       </div>
     </details>
   </form>;

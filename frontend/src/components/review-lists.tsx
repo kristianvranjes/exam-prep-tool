@@ -14,7 +14,7 @@ const MAX_OFFSET = 10000;
 type Page<T> = { rows: T[]; done: boolean };
 
 function date(value: string) {
-  return new Date(value).toLocaleDateString(undefined, { dateStyle: "medium" });
+  return new Date(value).toLocaleDateString("hr-HR", { dateStyle: "medium" });
 }
 
 /** A short accessible name for a question's own controls in a list. */
@@ -85,21 +85,21 @@ function ReviewList<T extends { question_id: string }>({ id, title, intro, empty
   list: ReturnType<typeof usePagedList<T>>; removed?: number; action?: ReactNode; children: (row: T) => ReactNode;
 }) {
   const { page, busy, failed } = list;
-  const failure = list.refreshFailed ? `Could not refresh your ${noun}.`
-    : page ? `Could not load more ${noun}. Try again.` : `Could not load your ${noun}. Try again.`;
+  const failure = list.refreshFailed ? `${title}: popis nije osvježen.`
+    : page ? `${title}: ostatak popisa nije učitan. Pokušajte ponovno.` : `${title}: popis nije učitan. Pokušajte ponovno.`;
   return <section aria-labelledby={`${id}-heading`} className="min-w-0 space-y-4">
     <h3 id={`${id}-heading`} className="text-lg font-semibold">{title}</h3>
     <p className="max-w-prose text-sm text-muted">{intro}</p>
-    {!page && busy && <p role="status" className="text-sm text-muted">Loading {noun}…</p>}
+    {!page && busy && <p role="status" className="text-sm text-muted">Učitavam {noun}…</p>}
     {failed && <div className="space-y-3">
       <Alert className="max-w-prose">{failure}</Alert>
-      <Button variant="secondary" disabled={busy} onClick={list.retry}>Retry {noun}</Button>
+      <Button variant="secondary" disabled={busy} onClick={list.retry}>Ponovno učitaj {noun}</Button>
     </div>}
     {page && page.rows.length === 0 && <p className="max-w-prose border-y border-line py-4">{empty}</p>}
     {page && page.rows.length > 0 && <>
       {action}
       <ul className="divide-y divide-line border-y border-line">{page.rows.map(row => <li key={row.question_id} className="min-w-0 space-y-2 py-4">{children(row)}</li>)}</ul>
-      {!page.done && !failed && <Button variant="secondary" disabled={busy} onClick={() => list.more(removed)}>{list.loadingMore ? `Loading more ${noun}…` : `Load more ${noun}`}</Button>}
+      {!page.done && !failed && <Button variant="secondary" disabled={busy} onClick={() => list.more(removed)}>{list.loadingMore ? `Učitavam još…` : `Učitaj još`}</Button>}
     </>}
   </section>;
 }
@@ -107,7 +107,7 @@ function ReviewList<T extends { question_id: string }>({ id, title, intro, empty
 function Stem({ question }: { question: { stem: string; available: boolean } }) {
   return <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
     <p className="min-w-0 flex-1 font-medium [overflow-wrap:anywhere]"><RichText text={question.stem} /></p>
-    {!question.available && <Badge>Unavailable for practice</Badge>}
+    {!question.available && <Badge>Nije dostupno za vježbu</Badge>}
   </div>;
 }
 
@@ -119,20 +119,20 @@ export const MistakesList = memo(function MistakesList({ courseId, version, onPr
   const load = useCallback((offset: number) => practiceApi.mistakes(courseId, offset, PAGE), [courseId]);
   const list = usePagedList<MistakeQuestion>(load, version);
   const practicable = list.page?.rows.some(row => row.available) ?? false;
-  return <ReviewList id="mistakes" title="Mistakes" noun="mistakes" list={list}
-    intro="Questions whose latest automatically graded answer was incorrect, oldest first. A correct answer later removes them. Short answers awaiting self-review never count. Questions in an unfinished session are left out of practice until you finish or abandon it."
-    empty="No mistakes to review. Questions you answer incorrectly appear here until you answer them correctly."
+  return <ReviewList id="mistakes" title="Pogreške" noun="pogreške" list={list}
+    intro="Pitanja na koja ste zadnji put netočno odgovorili, od najstarijih. Točan odgovor ih kasnije uklanja. Kratki odgovori koji čekaju samoprocjenu se ne broje. Pitanja iz nedovršene vježbe ne ulaze u vježbu dok je ne završite ili od nje ne odustanete."
+    empty="Nema pogrešaka za ponavljanje. Pitanja na koja odgovorite netočno pojavljuju se ovdje dok na njih ne odgovorite točno."
     action={onPractice && practicable && <div>
-      <Button variant="secondary" className="w-full sm:w-auto" onClick={onPractice}>Practice these mistakes</Button>
-      <p className="mt-3 max-w-prose text-sm text-muted">Opens practice setup with Mistakes selected, so you can narrow it by unit or exam first.</p>
+      <Button variant="secondary" className="w-full sm:w-auto" onClick={onPractice}>Vježbaj ove pogreške</Button>
+      <p className="mt-3 max-w-prose text-sm text-muted">Otvara postavke vježbe s odabranim Pogreškama, pa ih prvo možete suziti po cjelini ili ispitu.</p>
     </div>}>
     {row => <>
       <Stem question={row} />
       <p className="text-sm text-muted">
         {typeLabels[row.type]}
         {row.units.length > 0 && <> · {row.units.map(unit => unit.title).join(", ")}</>}
-        {" · "}Last missed <time dateTime={row.last_reviewed_at}>{date(row.last_reviewed_at)}</time>
-        {" · "}Missed {row.incorrect_review_count} {row.incorrect_review_count === 1 ? "time" : "times"}
+        {" · "}Zadnja pogreška <time dateTime={row.last_reviewed_at}>{date(row.last_reviewed_at)}</time>
+        {" · "}Pogrešaka: {row.incorrect_review_count}
       </p>
     </>}
   </ReviewList>;
@@ -147,18 +147,18 @@ export const FavoritesList = memo(function FavoritesList({ courseId, version, on
   const starred = (row: FavoriteQuestion) => ({ source_question_id: row.question_id, favorite: true });
   const practicable = list.page?.rows.some(row => row.available && favorites.value(starred(row))) ?? false;
   const unstarred = list.page?.rows.filter(row => !favorites.value(starred(row))).length ?? 0;
-  return <ReviewList id="favorites" title="Favorites" noun="favorites" list={list} removed={unstarred}
-    intro="Questions you starred while practicing, newest first. Only you can see them. Removing the star keeps the row here until you refresh, so you can undo it."
-    empty="No favorites yet. Star a question while practicing and it appears here."
+  return <ReviewList id="favorites" title="Favoriti" noun="favorite" list={list} removed={unstarred}
+    intro="Pitanja koja ste označili zvjezdicom tijekom vježbe, od najnovijih. Vidite ih samo vi. Kad maknete zvjezdicu, redak ostaje ovdje do osvježavanja, pa to možete poništiti."
+    empty="Još nema favorita. Označite pitanje zvjezdicom tijekom vježbe i pojavit će se ovdje."
     action={onPractice && practicable && <div>
-      <Button variant="secondary" className="w-full sm:w-auto" onClick={onPractice}>Practice favorites</Button>
-      <p className="mt-3 max-w-prose text-sm text-muted">Opens practice setup with Favorites selected.</p>
+      <Button variant="secondary" className="w-full sm:w-auto" onClick={onPractice}>Vježbaj favorite</Button>
+      <p className="mt-3 max-w-prose text-sm text-muted">Otvara postavke vježbe s odabranim Favoritima.</p>
     </div>}>
     {row => <>
       <Stem question={row} />
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <p className="text-sm text-muted">{typeLabels[row.type]} · Saved <time dateTime={row.favorited_at}>{date(row.favorited_at)}</time></p>
-        <FavoriteToggle favorites={favorites} question={starred(row)} label={`Favorite: ${shortStem(row.stem)}`} />
+        <p className="text-sm text-muted">{typeLabels[row.type]} · Spremljeno <time dateTime={row.favorited_at}>{date(row.favorited_at)}</time></p>
+        <FavoriteToggle favorites={favorites} question={starred(row)} label={`Favorit: ${shortStem(row.stem)}`} />
       </div>
     </>}
   </ReviewList>;

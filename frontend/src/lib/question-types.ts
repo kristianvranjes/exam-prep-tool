@@ -8,19 +8,19 @@ export const QUESTION_TYPES: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", 
 export const CLASSIC_TYPES: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
 
 export const typeLabels: Record<QuestionType, string> = {
-  MULTIPLE_CHOICE: "Multiple choice",
-  MULTIPLE_SELECT: "Multiple select",
-  TRUE_FALSE: "True / false",
-  NUMERIC: "Numeric",
-  SHORT_ANSWER: "Short answer",
+  MULTIPLE_CHOICE: "Jedan točan odgovor",
+  MULTIPLE_SELECT: "Više točnih odgovora",
+  TRUE_FALSE: "Točno / netočno",
+  NUMERIC: "Brojčani odgovor",
+  SHORT_ANSWER: "Kratki odgovor",
 };
 
 export const statusLabels: Record<QuestionStatus, string> = {
-  DRAFT: "Draft",
-  PENDING_REVIEW: "Awaiting faculty review",
-  APPROVED: "Approved",
-  REJECTED: "Rejected",
-  ARCHIVED: "Archived",
+  DRAFT: "Nacrt",
+  PENDING_REVIEW: "Čeka pregled fakulteta",
+  APPROVED: "Odobreno",
+  REJECTED: "Odbijeno",
+  ARCHIVED: "Arhivirano",
 };
 
 /** Badge tones from DESIGN.md: draft and archived neutral, awaiting review pending, approved success, rejected danger. */
@@ -35,7 +35,7 @@ export const statusTones: Record<QuestionStatus, "neutral" | "pending" | "succes
 /** Where an owner-visible question came from. Imports from an external AI prompt count as added by a person. */
 export const sourceLabels: Record<QuestionSource, string> = {
   AI: "AI-generated",
-  USER: "Written or imported",
+  USER: "Napisano ili uvezeno",
 };
 
 // Mirrors `app/services/numbers.py`: one decimal comma or point, optional exponent, nothing else.
@@ -44,10 +44,10 @@ const NUMBER = /^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d+)?$/;
 /** The server's own message for an unusable numeric answer, or null when it would be accepted. */
 export function numberProblem(text: string): string | null {
   const value = text.trim();
-  if (!value) return "Enter a number";
-  if (value.length > 40) return "Use at most 40 characters";
-  if (value.includes(",") && value.includes(".")) return "Use either a decimal comma or a decimal point, without thousands separators";
-  if (!NUMBER.test(value)) return "Enter a number such as 9,81 or 1.5e-3, without units or spaces";
+  if (!value) return "Upišite broj";
+  if (value.length > 40) return "Upotrijebite najviše 40 znakova";
+  if (value.includes(",") && value.includes(".")) return "Koristite ili decimalni zarez ili decimalnu točku, bez razdjelnika tisućica";
+  if (!NUMBER.test(value)) return "Upišite broj, npr. 9,81 ili 1.5e-3, bez mjerne jedinice i razmaka";
   return null;
 }
 
@@ -58,7 +58,7 @@ export function numericKey(value: string | number | null | undefined, absolute?:
     absolute != null && Number(absolute) > 0 ? `± ${absolute}` : null,
     relative != null && Number(relative) > 0 ? `± ${Number((Number(relative) * 100).toPrecision(6))} %` : null,
   ].filter(Boolean);
-  return `${value}${unit ? ` ${unit}` : ""}${allowances.length ? ` (${allowances.join(" or ")})` : ""}`;
+  return `${value}${unit ? ` ${unit}` : ""}${allowances.length ? ` (${allowances.join(" ili ")})` : ""}`;
 }
 
 type ChoiceOption = { position: number; text: string; is_correct?: boolean };
@@ -68,7 +68,7 @@ export function answerText(answer: PracticeAnswer | null | undefined, options: C
   if (!answer) return undefined;
   switch (answer.type) {
     case "SHORT_ANSWER": return answer.text;
-    case "TRUE_FALSE": return answer.value ? "True" : "False";
+    case "TRUE_FALSE": return answer.value ? "Točno" : "Netočno";
     case "NUMERIC": return unit ? `${answer.value} ${unit}` : answer.value;
     case "MULTIPLE_CHOICE": return options.find(option => option.position === answer.option_position)?.text;
     case "MULTIPLE_SELECT": return options.filter(option => answer.option_positions.includes(option.position)).map(option => option.text).join("; ");
@@ -84,7 +84,7 @@ type Keyed = {
 export function keyText(question: Keyed) {
   switch (question.type) {
     case "SHORT_ANSWER": return question.reference_answer;
-    case "TRUE_FALSE": return question.correct_boolean === null ? null : question.correct_boolean ? "True" : "False";
+    case "TRUE_FALSE": return question.correct_boolean === null ? null : question.correct_boolean ? "Točno" : "Netočno";
     case "NUMERIC": return numericKey(question.correct_value, question.absolute_tolerance, question.relative_tolerance, question.unit);
     default: return question.options.filter(option => option.is_correct).map(option => option.text).join("; ") || null;
   }

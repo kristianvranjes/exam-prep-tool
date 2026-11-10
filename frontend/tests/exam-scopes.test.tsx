@@ -35,9 +35,9 @@ it("shows members cycles by academic year without management controls", async ()
   const rows = within(current).getAllByRole("listitem");
   expect(rows[0]).toHaveTextContent("Međuispit");
   expect(rows[0]).toHaveTextContent("Units: Logic, Sets");
-  expect(rows[0]).toHaveTextContent("Midterm (MI)");
+  expect(rows[0]).toHaveTextContent("Međuispit (MI)");
   expect(rows[0]).toHaveTextContent("4 approved questions");
-  expect(rows[1]).toHaveTextContent("Final exam (ZI)");
+  expect(rows[1]).toHaveTextContent("Završni ispit (ZI)");
   expect(screen.getByRole("list", { name: "Exam cycles 2024/25" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Edit|Delete|Add exam cycle/ })).not.toBeInTheDocument();
 });
@@ -120,7 +120,7 @@ it("saves optional exam dates, blocks an end before the start, and shows dated c
   mock.updateExamScope.mockResolvedValue(midterm);
   render(<ExamScopes courseId="course" isOwner units={units} />);
   const list = await screen.findByRole("list", { name: "Exam cycles 2025/26" });
-  expect(list).toHaveTextContent("Mon 23 Nov – Tue 1 Dec");
+  expect(list).toHaveTextContent("pon, 23. stu – uto, 1. pro");
   fireEvent.click(screen.getByRole("button", { name: "Edit Međuispit 2025/26" }));
   const form = screen.getByRole("form", { name: "Edit exam cycle Međuispit" });
   expect(within(form).getByLabelText(/Exam date/)).toHaveValue("2026-11-23");

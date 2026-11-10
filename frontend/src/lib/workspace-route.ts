@@ -9,7 +9,7 @@ export const attemptPath = (courseId: string, id: string, submitted = false) =>
   `${coursePath(courseId)}/attempts/${encodeURIComponent(id)}${submitted ? "/results" : ""}`;
 
 const destinationTitles: Record<CourseDestination, string | null> = {
-  overview: null, practice: "Practice", papers: "Past exams", progress: "Progress", materials: "Materials", more: "More",
+  overview: null, practice: "Vježba", papers: "Prošli ispiti", progress: "Napredak", materials: "Materijali", more: "Više",
 };
 
 /**
@@ -17,10 +17,10 @@ const destinationTitles: Record<CourseDestination, string | null> = {
  * The course name is left out until it is known, so a tab never shows a raw course ID.
  */
 export function documentTitle(route: WorkspaceRoute | null, courseName?: string | null) {
-  if (!route) return "Page unavailable · ExamPrep";
-  if (route.view !== "course") return `${route.view === "home" ? "Home" : "Faculty"} · ExamPrep`;
-  const page = route.results ? "Results" : route.attemptId ? "Practice session" : destinationTitles[route.destination];
-  return [page, courseName || (page ? null : "Course"), "ExamPrep"].filter(Boolean).join(" · ");
+  if (!route) return "Stranica nije dostupna · ExamPrep";
+  if (route.view !== "course") return `${route.view === "home" ? "Početna" : "Fakultet"} · ExamPrep`;
+  const page = route.results ? "Rezultati" : route.attemptId ? "Vježba" : destinationTitles[route.destination];
+  return [page, courseName || (page ? null : "Kolegij"), "ExamPrep"].filter(Boolean).join(" · ");
 }
 
 export function parseWorkspaceRoute(pathname: string): WorkspaceRoute | null {

@@ -21,15 +21,15 @@ it("counts down against the server clock, warns at 10, 5 and 1 minutes, and expi
   render(<ExamTimer deadline={deadline} serverTime={serverTime} durationMinutes={90} answeredPoints={2} totalPoints={10} onExpire={onExpire} />);
   await flush();
   expect(screen.getByRole("timer")).toHaveTextContent("11:00");
-  expect(screen.getByLabelText("Exam time")).toHaveTextContent("2 of 10 points answered · 88% of the time used · Behind pace");
+  expect(screen.getByLabelText("Vrijeme ispita")).toHaveTextContent("Odgovoreno 2 od 10 bodova · iskorišteno 88% vremena · Kasnite");
   await act(async () => { vi.advanceTimersByTime(60_000); });
   expect(screen.getByRole("timer")).toHaveTextContent("10:00");
-  expect(screen.getByText("10 minutes left.", { selector: "[aria-live]" })).toBeInTheDocument();
+  expect(screen.getByText("Još 10 minuta.", { selector: "[aria-live]" })).toBeInTheDocument();
   await act(async () => { vi.advanceTimersByTime(5 * 60_000); });
-  expect(screen.getByText("5 minutes left.", { selector: "[aria-live]" })).toBeInTheDocument();
-  expect(screen.getByLabelText("Exam time")).toHaveClass("bg-danger-surface");
+  expect(screen.getByText("Još 5 minuta.", { selector: "[aria-live]" })).toBeInTheDocument();
+  expect(screen.getByLabelText("Vrijeme ispita")).toHaveClass("bg-danger-surface");
   await act(async () => { vi.advanceTimersByTime(4 * 60_000); });
-  expect(screen.getByText(/1 minute left. Save your current answer/, { selector: "[aria-live]" })).toBeInTheDocument();
+  expect(screen.getByText(/Još 1 minuta. Spremite trenutni odgovor/, { selector: "[aria-live]" })).toBeInTheDocument();
   expect(onExpire).not.toHaveBeenCalled();
   await act(async () => { vi.advanceTimersByTime(61_000); });
   expect(screen.getByRole("timer")).toHaveTextContent("0:00");
@@ -42,5 +42,5 @@ it("does not announce marks that had already passed when the page loads", async 
   render(<ExamTimer deadline={deadline} serverTime={new Date(START).toISOString()} durationMinutes={60} answeredPoints={9} totalPoints={10} onExpire={vi.fn()} />);
   await flush();
   expect(screen.getByText("", { selector: "[aria-live]" })).toBeInTheDocument();
-  expect(screen.getByLabelText("Exam time")).toHaveTextContent("On pace");
+  expect(screen.getByLabelText("Vrijeme ispita")).toHaveTextContent("U tempu");
 });

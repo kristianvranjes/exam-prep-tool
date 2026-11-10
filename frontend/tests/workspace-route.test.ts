@@ -13,14 +13,14 @@ it.each(["/courses/%ZZ", "/courses/%2Fother", "/courses/course/attempts/%3Fid", 
 });
 it("names each route in the tab, most specific part first, without raw course IDs", () => {
   const title = (path: string, course?: string) => documentTitle(parseWorkspaceRoute(path), course);
-  expect(title("/")).toBe("Home · ExamPrep");
-  expect(title("/faculty")).toBe("Faculty · ExamPrep");
-  expect(title("/nowhere/at/all")).toBe("Page unavailable · ExamPrep");
+  expect(title("/")).toBe("Početna · ExamPrep");
+  expect(title("/faculty")).toBe("Fakultet · ExamPrep");
+  expect(title("/nowhere/at/all")).toBe("Stranica nije dostupna · ExamPrep");
   expect(title(coursePath("c1"), "PPJ")).toBe("PPJ · ExamPrep");
-  expect(title(coursePath("c1"))).toBe("Course · ExamPrep");
-  expect(title(coursePath("c1", "practice"), "PPJ")).toBe("Practice · PPJ · ExamPrep");
-  expect(title(coursePath("c1", "papers"), "PPJ")).toBe("Past exams · PPJ · ExamPrep");
-  expect(title(coursePath("c1", "papers"))).toBe("Past exams · ExamPrep");
-  expect(title(attemptPath("c1", "a1"), "PPJ")).toBe("Practice session · PPJ · ExamPrep");
-  expect(title(attemptPath("c1", "a1", true), "PPJ")).toBe("Results · PPJ · ExamPrep");
+  expect(title(coursePath("c1"))).toBe("Kolegij · ExamPrep");
+  expect(title(coursePath("c1", "practice"), "PPJ")).toBe("Vježba · PPJ · ExamPrep");
+  expect(title(coursePath("c1", "papers"), "PPJ")).toBe("Prošli ispiti · PPJ · ExamPrep");
+  expect(title(coursePath("c1", "papers"))).toBe("Prošli ispiti · ExamPrep");
+  expect(title(attemptPath("c1", "a1"), "PPJ")).toBe("Vježba · PPJ · ExamPrep");
+  expect(title(attemptPath("c1", "a1", true), "PPJ")).toBe("Rezultati · PPJ · ExamPrep");
 });

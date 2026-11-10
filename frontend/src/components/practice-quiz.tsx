@@ -95,7 +95,7 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
     pending.current = true; setBusy(true); setError("");
     const requestRevision = revision.current;
     try { await action(); }
-    catch (cause) { if (mounted.current && requestRevision === revision.current) setError(cause instanceof Error ? cause.message : "Could not complete request. Try again."); }
+    catch (cause) { if (mounted.current && requestRevision === revision.current) setError(cause instanceof Error ? cause.message : "Zahtjev nije izvršen. Pokušajte ponovno."); }
     finally { pending.current = false; if (mounted.current) setBusy(false); }
   }, []);
   const loadHistory = useCallback(async (nextOffset = 0) => {
@@ -166,21 +166,21 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
     return () => { active = false; };
   }, [setupRequest, attemptStatus, back, busy, loadHistory, open, run]);
 
-  return <section className={`mt-6 flex min-w-0 flex-col gap-5${attempt?.status === "ABANDONED" ? " border-t border-line pt-6" : ""}`} aria-label="Practice quiz">
-    <h2 ref={heading} tabIndex={-1} className={activeSession || attempt?.status === "SUBMITTED" ? "sr-only" : "text-xl font-semibold"}>Practice</h2>
-    {!open && <LoadingState>Preparing practice…</LoadingState>}
+  return <section className={`mt-6 flex min-w-0 flex-col gap-5${attempt?.status === "ABANDONED" ? " border-t border-line pt-6" : ""}`} aria-label="Vježba">
+    <h2 ref={heading} tabIndex={-1} className={activeSession || attempt?.status === "SUBMITTED" ? "sr-only" : "text-xl font-semibold"}>Vježba</h2>
+    {!open && <LoadingState>Pripremam vježbu…</LoadingState>}
     {open && <>
       {error && <Alert>{error}</Alert>}
-      {routeLoading && <LoadingState>Loading practice session…</LoadingState>}
-      {routeError && <div className="space-y-3"><Alert>Could not open this practice session. It may be unavailable or belong to another course.</Alert>
-        <div className="flex gap-3"><Button disabled={routeLoading} onClick={() => setRouteRetry(value => value + 1)}>Retry session</Button><Button variant="secondary" onClick={() => onAttemptRoute?.(null)}>Back to practice</Button></div></div>}
+      {routeLoading && <LoadingState>Učitavam vježbu…</LoadingState>}
+      {routeError && <div className="space-y-3"><Alert>Vježba se ne može otvoriti. Možda više nije dostupna ili pripada drugom kolegiju.</Alert>
+        <div className="flex gap-3"><Button disabled={routeLoading} onClick={() => setRouteRetry(value => value + 1)}>Ponovno učitaj vježbu</Button><Button variant="secondary" onClick={() => onAttemptRoute?.(null)}>Natrag na vježbu</Button></div></div>}
       {!routeAttemptId && !attempt && <>
         {knownResumableId && <Surface className="max-w-2xl">
-          <h3 className="text-lg font-semibold">Continue studying</h3>
-          <p className="mt-2 text-sm text-muted">You have an unfinished practice session.</p>
-          <Button className="mt-4 w-full sm:w-auto" disabled={busy} onClick={() => void run(() => openAttempt(knownResumableId))}>Resume session</Button>
+          <h3 className="text-lg font-semibold">Nastavite učiti</h3>
+          <p className="mt-2 text-sm text-muted">Imate nedovršenu vježbu.</p>
+          <Button className="mt-4 w-full sm:w-auto" disabled={busy} onClick={() => void run(() => openAttempt(knownResumableId))}>Nastavi vježbu</Button>
         </Surface>}
-        {!historyReady && error && <Button variant="secondary" className="self-start" disabled={busy} onClick={() => void run(() => loadHistory())}>Retry practice setup</Button>}
+        {!historyReady && error && <Button variant="secondary" className="self-start" disabled={busy} onClick={() => void run(() => loadHistory())}>Ponovno učitaj postavke vježbe</Button>}
         <PracticeSetup courseId={courseId} active={active} ready={historyReady} busy={busy}
           hasUnfinishedSession={Boolean(knownResumableId)} mode={selectionMode} setMode={setSelectionMode}
           count={count} setCount={setCount} length={length} setLength={setLength}
@@ -188,26 +188,26 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
           focus={focus} setFocus={setFocus}
           start={() => void run(async () => {
             const requestRevision = revision.current;
-            if (!selectedTypes.length) throw new Error("Select at least one question type.");
+            if (!selectedTypes.length) throw new Error("Odaberite barem jednu vrstu pitanja.");
             const focused = focusRequest(focus);
             const feedbackMode = experience === "STUDY" ? "IMMEDIATE" : "END";
             const next = await practiceApi.start(courseId, count, selectedTypes, selectionMode, focused, feedbackMode);
             if (mounted.current && requestRevision === revision.current) { adopt(next); onAttemptRoute?.(next); }
           })} onOpenMaterials={onOpenMaterials} onOpenQuestions={onOpenQuestions} />
         <details open={historyOpen} onToggle={event => setHistoryOpen(event.currentTarget.open)} className="max-w-2xl border-t border-line pt-3">
-          <summary className="min-h-11 cursor-pointer py-2 font-medium">Practice history</summary>
-          {busy ? <LoadingState>Loading session…</LoadingState> : <>
-            {!history.length && <p className="mt-3 text-muted">No practice history yet. Start with shared approved questions or your own drafts from this course.</p>}
-            <ul className="mt-3 flex flex-col gap-2">{history.map(row => <li key={row.id}><Button variant="secondary" onClick={() => void run(() => openAttempt(row.id))}>{row.status === "ACTIVE" ? "Resume practice" : row.status === "SUBMITTED" ? "Review practice" : "View abandoned practice"} · {new Date(row.started_at).toLocaleString()}{row.focus_label ? ` · ${row.focus_label}` : ""}</Button></li>)}</ul>
+          <summary className="min-h-11 cursor-pointer py-2 font-medium">Povijest vježbi</summary>
+          {busy ? <LoadingState>Otvaram vježbu…</LoadingState> : <>
+            {!history.length && <p className="mt-3 text-muted">Još nema povijesti vježbi. Započnite s odobrenim pitanjima ili vlastitim nacrtima iz ovog kolegija.</p>}
+            <ul className="mt-3 flex flex-col gap-2">{history.map(row => <li key={row.id}><Button variant="secondary" onClick={() => void run(() => openAttempt(row.id))}>{row.status === "ACTIVE" ? "Nastavi započetu vježbu" : row.status === "SUBMITTED" ? "Pregled vježbe" : "Pogledaj napuštenu vježbu"} · {new Date(row.started_at).toLocaleString("hr-HR")}{row.focus_label ? ` · ${row.focus_label}` : ""}</Button></li>)}</ul>
           </>}
-          <div className="mt-4 flex flex-wrap gap-2"><Button variant="secondary" disabled={busy || offset === 0} onClick={() => void run(() => loadHistory(offset - 20))}>Newer sessions</Button><Button variant="secondary" disabled={busy || history.length < 20} onClick={() => void run(() => loadHistory(offset + 20))}>Older sessions</Button><Button variant="ghost" disabled={busy} onClick={() => void run(() => loadHistory(offset))}>Refresh practice history</Button></div>
+          <div className="mt-4 flex flex-wrap gap-2"><Button variant="secondary" disabled={busy || offset === 0} onClick={() => void run(() => loadHistory(offset - 20))}>Novije vježbe</Button><Button variant="secondary" disabled={busy || history.length < 20} onClick={() => void run(() => loadHistory(offset + 20))}>Starije vježbe</Button><Button variant="ghost" disabled={busy} onClick={() => void run(() => loadHistory(offset))}>Osvježi povijest vježbi</Button></div>
         </details>
       </>}
       {visibleAttempt?.status === "ACTIVE" && <ActiveQuiz key={visibleAttempt.id} attempt={visibleAttempt} experience={experience} setExperience={setExperience} update={updateAttempt} back={back} onDirtyChange={onAnswerDirtyChange} />}
       {visibleAttempt?.status === "SUBMITTED" && <QuizResults key={visibleAttempt.id} attempt={visibleAttempt} busy={busy} onUpdate={updateAttempt}
         onPracticeAgain={() => void run(async () => { await back(); setHistoryOpen(false); heading.current?.focus(); })}
         onViewProgress={onOpenProgress} onBackToCourse={onBackToCourse} onBackToHistory={() => void run(back)} />}
-      {visibleAttempt?.status === "ABANDONED" && <><Button variant="secondary" className="self-start" disabled={busy} onClick={() => void run(back)}>Back to practice history</Button><AbandonedQuiz attempt={visibleAttempt} /></>}
+      {visibleAttempt?.status === "ABANDONED" && <><Button variant="secondary" className="self-start" disabled={busy} onClick={() => void run(back)}>Natrag na povijest vježbi</Button><AbandonedQuiz attempt={visibleAttempt} /></>}
     </>}
   </section>;
 }

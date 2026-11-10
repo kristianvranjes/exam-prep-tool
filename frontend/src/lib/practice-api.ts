@@ -128,13 +128,13 @@ export const practiceApi = {
   /** One-click review: a guided session with up to 20 questions due now, earliest due first. */
   reviewDue: async (course: string): Promise<Attempt> => {
     const { due_total } = await practiceApi.availability(course, allTypes);
-    if (!due_total) throw new Error("Nothing is due for review right now.");
+    if (!due_total) throw new Error("Trenutno ništa ne treba ponoviti.");
     return practiceApi.start(course, Math.min(due_total, MAX_SESSION_QUESTIONS), allTypes, "DUE", undefined, "IMMEDIATE");
   },
   /** Quick quiz: a guided recommended session of five questions, optionally limited to units or an exam scope. */
   quickQuiz: async (course: string, focus?: PracticeFocus): Promise<Attempt> => {
     const { total } = await practiceApi.availability(course, allTypes, "ADAPTIVE", focus);
-    if (!total) throw new Error("No questions are available for a quick quiz here yet.");
+    if (!total) throw new Error("Ovdje još nema pitanja za brzi kviz.");
     return practiceApi.start(course, Math.min(total, QUICK_QUIZ_QUESTIONS), allTypes, "ADAPTIVE", focus, "IMMEDIATE", true);
   },
   /** Your mistakes in the whole course: practice-eligible first, in the order Mistakes practice takes them. */
