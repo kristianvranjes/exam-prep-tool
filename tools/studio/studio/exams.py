@@ -646,10 +646,41 @@ def truth_of(answer: str | None) -> bool | None:
     return None
 
 
+# A stem that points at a program, block, table or figure it does not contain itself.
+CONTEXT_REFERENCE = re.compile(
+    r"\b(?:sljede\w*|navede\w*|zada\w*|gornj\w*|prikaza\w*|danom|dan[aeiou]?|ovog?a?|tog?a?|ist\w*)\s+"
+    r"(?:\w+\s+)?(?:kod\w*|odsje\w*|odlom\w*|program\w*|blok\w*|tablic\w*|memorij\w*|gramati\w*"
+    r"|automat\w*|graf\w*|stabl\w*)",
+    re.IGNORECASE,
+)
+# These always need something the stem must show.
+FIGURE_REFERENCE = re.compile(
+    r"\bna kojim linijama\b|\bna slici\b|\bodlomka koda\b|\bslika prikazuje\b|\bu donjem dijelu\b",
+    re.IGNORECASE,
+)
+
+
+def missing_context(stem: str) -> bool:
+    """True when the stem refers to shared material but does not carry it itself."""
+    if "```" in stem or len([line for line in stem.splitlines() if line.strip()]) >= 4:
+        return False
+    # Code or productions written inline ("S → Bc; S → cBb; ...", "i = j + 1; ...").
+    if sum(stem.count(mark) for mark in (";", "→", "=")) >= 3:
+        return False
+    if FIGURE_REFERENCE.search(stem):
+        return True
+    # "Zadana je gramatika: S -> aA ..." carries its grammar; a reference with little
+    # text after it ("Za zadani graf tijeka izvođenja, koja ...") does not.
+    return any(len(stem[m.end():].strip()) < 70 for m in CONTEXT_REFERENCE.finditer(stem))
+
+
 def build(f: Found, entry: KeyEntry | None) -> tuple[StoredQuestion | None, str | None]:
     """The stored question, or None and the reason it was left out."""
     item, answer = f.item, entry.answer if entry else None
     flags = list(f.flags)
+    if missing_context(item.stem):
+        detail = "refers to code, data or a figure that is not in the question; add it or reject"
+        flags.append(OriginFlag(code="exam_missing_context", severity="warn", detail=detail))
     key: Literal["marked", "model"] = "model"
     content: dict[str, Any] = {"stem": item.stem.strip()}
     if item.kind == "choice":
