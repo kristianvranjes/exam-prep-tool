@@ -24,11 +24,11 @@ it("picks the dated cycle in progress or coming next and ignores undated or past
 
 it("labels the countdown and the date range", () => {
   const mi = scope("mi", "2026-11-23", "2026-12-01");
-  expect(countdownHeading(nextExam([mi], "2026-10-20")!)).toBe("mi in 34 days");
-  expect(countdownHeading(nextExam([mi], "2026-11-22")!)).toBe("mi tomorrow");
-  expect(countdownHeading(nextExam([mi], "2026-11-24")!)).toBe("mi · in progress until Tue 1 Dec");
-  expect(countdownHeading(nextExam([scope("blic", "2026-10-20")], "2026-10-20")!)).toBe("blic today");
-  expect(formatScopeDates(mi)).toBe("Mon 23 Nov – Tue 1 Dec");
-  expect(formatScopeDates(scope("blic", "2026-10-20"))).toBe("Tue 20 Oct");
+  expect(countdownHeading(nextExam([mi], "2026-10-20")!)).toBe("mi za 34 dana");
+  expect(countdownHeading(nextExam([mi], "2026-11-22")!)).toBe("mi sutra");
+  expect(countdownHeading(nextExam([mi], "2026-11-24")!)).toBe("mi · traje do uto, 1. pro");
+  expect(countdownHeading(nextExam([scope("blic", "2026-10-20")], "2026-10-20")!)).toBe("blic danas");
+  expect(formatScopeDates(mi)).toBe("pon, 23. stu – uto, 1. pro");
+  expect(formatScopeDates(scope("blic", "2026-10-20"))).toBe("uto, 20. lis");
   expect(formatScopeDates(scope("undated", null))).toBeNull();
 });

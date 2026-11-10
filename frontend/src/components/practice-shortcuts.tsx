@@ -9,13 +9,13 @@ export type ShortcutAction = { kind: "help" } | { kind: "primary" } | { kind: "n
 
 /** The rows of the help dialog. A new shortcut adds a row here and a case in `shortcutAction`. */
 export const PRACTICE_SHORTCUTS: { keys: string[][]; label: string }[] = [
-  { keys: [["1", "9"], ["A", "I"]], label: "Choose an answer option, or toggle one on multiple-select" },
-  { keys: [["T"], ["F"], ["1"], ["2"]], label: "Answer true or false" },
-  { keys: [["Enter"]], label: "Save, check, or go to the next question" },
-  { keys: [["N"], ["J"]], label: "Next question" },
-  { keys: [["P"], ["K"]], label: "Previous question" },
-  { keys: [["S"]], label: "Favorite or unfavorite the question" },
-  { keys: [["?"]], label: "Show these shortcuts" },
+  { keys: [["1", "9"], ["A", "I"]], label: "Odaberite odgovor ili ga uključite/isključite kod višestrukog odabira" },
+  { keys: [["T"], ["F"], ["1"], ["2"]], label: "Odgovorite točno ili netočno" },
+  { keys: [["Enter"]], label: "Spremi, provjeri ili idi na sljedeće pitanje" },
+  { keys: [["N"], ["J"]], label: "Sljedeće pitanje" },
+  { keys: [["P"], ["K"]], label: "Prethodno pitanje" },
+  { keys: [["S"]], label: "Dodaj pitanje u favorite ili ga makni" },
+  { keys: [["?"]], label: "Prikaži ove prečace" },
 ];
 
 const LETTERS = "abcdefghi";
@@ -127,14 +127,14 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () 
     className="m-auto w-[min(28rem,calc(100%-2rem))] rounded-card border border-line bg-surface p-card text-foreground backdrop:bg-foreground/30 sm:p-card-lg"
     onCancel={event => { event.preventDefault(); onClose(); }}
     onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); onClose(); } }}>
-    <h2 id="practice-shortcuts-heading" className="text-xl font-semibold">Keyboard shortcuts</h2>
+    <h2 id="practice-shortcuts-heading" className="text-xl font-semibold">Tipkovnički prečaci</h2>
     <dl className="mt-4 divide-y divide-line border-y border-line">
       {PRACTICE_SHORTCUTS.map(row => <div key={row.label} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-2">
         <dt className="text-sm">{row.label}</dt>
         <dd className="text-sm font-medium"><Keys keys={row.keys} /></dd>
       </div>)}
     </dl>
-    <p className="mt-3 max-w-prose text-sm text-muted">Shortcuts pause while you type a short answer, and answer keys do nothing once an answer is checked.</p>
-    <Button ref={close} variant="secondary" className="mt-4" onClick={onClose}>Close</Button>
+    <p className="mt-3 max-w-prose text-sm text-muted">Prečaci ne rade dok upisujete kratki odgovor, a tipke za odgovor ne rade nakon što je odgovor provjeren.</p>
+    <Button ref={close} variant="secondary" className="mt-4" onClick={onClose}>Zatvori</Button>
   </dialog>;
 }

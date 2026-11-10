@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Flag } from "lucide-react";
 import { paperItemMeta, penaltyText, pointsLabel } from "../lib/points";
+import { QUESTIONS, plural } from "../lib/plural";
 import { numberProblem } from "../lib/question-types";
 import { practiceApi, type Attempt, type Confidence, type PracticeAnswer, type SelfReview } from "../lib/practice-api";
 import { Alert, Button } from "./ui";
@@ -60,16 +61,16 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
   const blocked = !paper && unanswered > 0;
   const [timeUp, setTimeUp] = useState(false);
   const answeredPoints = attempt.questions.reduce((sum, item) => sum + (item.answer !== null ? item.points ?? 0 : 0), 0);
-  const blankNote = paper && unanswered > 0 ? `${unanswered} ${unanswered === 1 ? "question is" : "questions are"} blank and will score 0 points.` : null;
+  const blankNote = paper && unanswered > 0 ? `Bez odgovora: ${plural(unanswered, QUESTIONS)}. Prazna pitanja nose 0 bodova.` : null;
   const finalQuestion = index === attempt.questions.length - 1;
-  const saveState = saving ? "Saving…" : saveFailed ? "Save failed" : dirty ? "Unsaved changes" : question.answer ? "Saved" : "No answer saved";
+  const saveState = saving ? "Spremam…" : saveFailed ? "Spremanje nije uspjelo" : dirty ? "Nespremljene promjene" : question.answer ? "Spremljeno" : "Nema spremljenog odgovora";
   const sessionClosed = /already submitted|not active|frozen/i.test(error);
   const flagged = flags.has(question.id);
   // One short line of progress; the full rules live in the Session disclosure.
   const progress = [
-    immediate ? `${checkedCount} of ${attempt.questions.length} checked` : `${answered} of ${attempt.questions.length} answered`,
-    flags.size > 0 ? `${flags.size} marked to revisit` : null,
-    immediate && checkedCount === 0 ? "a checked answer is final" : null,
+    immediate ? `provjereno ${checkedCount} od ${attempt.questions.length}` : `odgovoreno ${answered} od ${attempt.questions.length}`,
+    flags.size > 0 ? `označeno za povratak: ${flags.size}` : null,
+    immediate && checkedCount === 0 ? "provjereni odgovor je konačan" : null,
   ].filter(Boolean).join(" · ");
   // Moving ahead without answering follows the visible controls: the navigator, Skip for now, or the primary button.
   const canMoveAhead = !finalQuestion && (experience === "EXAM" || Boolean(paper) || (valid && (!immediate || Boolean(feedback))));
@@ -87,12 +88,12 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
     if (pending.current) return;
     pending.current = true; setBusy(true); setError("");
     try { await action(); }
-    catch (cause) { setError(`${cause instanceof Error ? cause.message : "Could not complete request."} Your answers are still here. Try again.`); }
+    catch (cause) { setError(`${cause instanceof Error ? cause.message : "Zahtjev nije izvršen."} Vaši odgovori su i dalje ovdje. Pokušajte ponovno.`); }
     finally { pending.current = false; setBusy(false); }
   }
   async function persist(): Promise<Attempt> {
     if (!dirty) return attempt;
-    if (!valid || !answer) throw new Error("Enter an answer before saving or navigating.");
+    if (!valid || !answer) throw new Error("Upišite odgovor prije spremanja ili prelaska na drugo pitanje.");
     setSaving(true); setSaveFailed(false);
     try {
       const saved = await practiceApi.save(attempt.course_id, attempt.id, question.id, answer);
@@ -199,73 +200,73 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
   });
 
   return <div ref={root} className="flex min-w-0 flex-col gap-6">
-    {paper && <header aria-label="Exam paper" className="border-b border-line pb-4">
+    {paper && <header aria-label="Ispitni list" className="border-b border-line pb-4">
       <h2 className="text-2xl font-semibold">{paper.title}</h2>
-      <p className="mt-1 text-sm text-muted">{[`${attempt.questions.length} ${attempt.questions.length === 1 ? "question" : "questions"}`, pointsLabel(paper.total_points), paper.duration_minutes ? `${paper.duration_minutes} min` : null].filter(Boolean).join(" · ")}</p>
-      <p className="mt-1 text-sm">{paper.wrong_answer_penalty > 0 ? `Wrong answers lose ${penaltyText(paper.wrong_answer_penalty).slice(1)}; blank answers score 0.` : "Wrong and blank answers score 0."}</p>
+      <p className="mt-1 text-sm text-muted">{[plural(attempt.questions.length, QUESTIONS), pointsLabel(paper.total_points), paper.duration_minutes ? `${paper.duration_minutes} min` : null].filter(Boolean).join(" · ")}</p>
+      <p className="mt-1 text-sm">{paper.wrong_answer_penalty > 0 ? `Netočan odgovor oduzima ${penaltyText(paper.wrong_answer_penalty).slice(1)}; prazan nosi 0 bodova.` : "Netočni i prazni odgovori nose 0 bodova."}</p>
     </header>}
     {attempt.deadline_at && paper && <ExamTimer deadline={attempt.deadline_at} serverTime={attempt.server_time} durationMinutes={paper.duration_minutes}
       answeredPoints={answeredPoints} totalPoints={paper.total_points} onExpire={handInAtDeadline} />}
-    {timeUp && <section aria-label="Time is up" className="rounded-card border border-line bg-surface p-5">
-      <h2 className="text-lg font-semibold">Time is up</h2>
-      <p className="mt-2">Your saved answers are being handed in. Unsaved changes were not included.</p>
-      {!busy && <Button className="mt-4" onClick={handInAtDeadline}>Hand in now</Button>}
+    {timeUp && <section aria-label="Vrijeme je isteklo" className="rounded-card border border-line bg-surface p-5">
+      <h2 className="text-lg font-semibold">Vrijeme je isteklo</h2>
+      <p className="mt-2">Predajem spremljene odgovore. Nespremljene promjene nisu uključene.</p>
+      {!busy && <Button className="mt-4" onClick={handInAtDeadline}>Predaj sada</Button>}
     </section>}
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <p className="text-sm text-muted">{experience === "EXAM" ? "Exam practice" : "Guided practice"}</p>
-      <Button variant="secondary" disabled={busy} onClick={saveAndLeave}>Save and leave</Button>
+      <p className="text-sm text-muted">{experience === "EXAM" ? "Ispitna vježba" : "Vođena vježba"}</p>
+      <Button variant="secondary" disabled={busy} onClick={saveAndLeave}>Spremi i izađi</Button>
     </div>
     {error && <Alert>{error}</Alert>}
-    {sessionClosed && <p className="text-sm text-muted">This session can no longer be edited. Open Session below to reload the saved session, or return to Practice history. Your local answer remains here until you choose to leave or reload.</p>}
-    {confirmation && <section aria-label={confirmation === "submit" ? "Confirm submission" : confirmation === "abandon" ? "Confirm abandonment" : "Unsaved answer"} className="rounded-card border border-line bg-surface p-5">
-      <h2 ref={confirmationHeading} tabIndex={-1} className="text-lg font-semibold">{confirmation === "submit" ? "Finish practice?" : confirmation === "abandon" ? "Abandon this attempt?" : "Keep your unsaved answer?"}</h2>
+    {sessionClosed && <p className="text-sm text-muted">Ova vježba se više ne može uređivati. Otvorite Vježba ispod da ponovno učitate spremljenu vježbu ili se vratite na povijest vježbi. Vaš lokalni odgovor ostaje ovdje dok ne izađete ili ponovno učitate.</p>}
+    {confirmation && <section aria-label={confirmation === "submit" ? "Potvrda predaje" : confirmation === "abandon" ? "Potvrda odustajanja" : "Nespremljen odgovor"} className="rounded-card border border-line bg-surface p-5">
+      <h2 ref={confirmationHeading} tabIndex={-1} className="text-lg font-semibold">{confirmation === "submit" ? "Završiti vježbu?" : confirmation === "abandon" ? "Odustati od ovog pokušaja?" : "Zadržati nespremljen odgovor?"}</h2>
       {confirmation === "submit" ? <>
-        <p className="mt-3">{answered} of {attempt.questions.length} answered and saved · {flags.size} marked to revisit</p>
+        <p className="mt-3">Odgovoreno i spremljeno {answered} od {attempt.questions.length} · označeno za povratak: {flags.size}</p>
         {blankNote && <p className="mt-3">{blankNote}</p>}
-        <p className="mt-3">Submission is final and freezes your answers. You cannot edit them afterward.</p>
-        <div className="mt-4 flex flex-wrap gap-2"><Button variant="secondary" disabled={busy} onClick={() => { setConfirmation(null); setError(""); }}>Keep reviewing</Button><Button disabled={busy || blocked} onClick={() => void run(async () => { update(await practiceApi.submit(attempt.course_id, attempt.id)); })}>{busy ? "Submitting…" : "Confirm final submission"}</Button></div>
+        <p className="mt-3">Predaja je konačna i zaključava vaše odgovore. Poslije ih ne možete mijenjati.</p>
+        <div className="mt-4 flex flex-wrap gap-2"><Button variant="secondary" disabled={busy} onClick={() => { setConfirmation(null); setError(""); }}>Nastavi pregled</Button><Button disabled={busy || blocked} onClick={() => void run(async () => { update(await practiceApi.submit(attempt.course_id, attempt.id)); })}>{busy ? "Predajem…" : "Potvrdi konačnu predaju"}</Button></div>
       </> : confirmation === "abandon" ? <>
-        <p className="mt-3">This attempt cannot be resumed. Saved answers stay in your history. No grades or review progress will be recorded.</p>
-        {dirty && <p className="mt-3">Your unsaved answer changes will be discarded.</p>}
+        <p className="mt-3">Ovaj pokušaj se neće moći nastaviti. Spremljeni odgovori ostaju u povijesti. Ocjene i napredak ponavljanja neće biti zabilježeni.</p>
+        {dirty && <p className="mt-3">Nespremljene promjene odgovora bit će odbačene.</p>}
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button variant="secondary" disabled={busy} onClick={() => { setConfirmation(null); setError(""); }}>Keep practicing</Button>
-          <Button variant="secondary" disabled={busy} onClick={() => void run(async () => { update(await practiceApi.abandon(attempt.course_id, attempt.id)); })}>{busy ? "Abandoning…" : "Confirm abandon"}</Button>
+          <Button variant="secondary" disabled={busy} onClick={() => { setConfirmation(null); setError(""); }}>Nastavi vježbati</Button>
+          <Button variant="secondary" disabled={busy} onClick={() => void run(async () => { update(await practiceApi.abandon(attempt.course_id, attempt.id)); })}>{busy ? "Odustajem…" : "Potvrdi odustajanje"}</Button>
         </div>
       </> : <>
-        <p className="mt-3">Save this answer before continuing, or explicitly discard your changes.</p>
+        <p className="mt-3">Spremite ovaj odgovor prije nastavka ili izričito odbacite promjene.</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button variant="secondary" disabled={busy} onClick={() => { setConfirmation(null); setError(""); }}>Keep editing</Button>
-          <Button disabled={busy || !valid} onClick={() => void run(async () => { const saved = await persist(); if (saved.status === "ACTIVE") await leave(confirmation); })}>Save and continue</Button>
-          <Button variant="secondary" disabled={busy} onClick={() => void run(() => leave(confirmation))}>Discard changes and continue</Button>
+          <Button variant="secondary" disabled={busy} onClick={() => { setConfirmation(null); setError(""); }}>Nastavi uređivati</Button>
+          <Button disabled={busy || !valid} onClick={() => void run(async () => { const saved = await persist(); if (saved.status === "ACTIVE") await leave(confirmation); })}>Spremi i nastavi</Button>
+          <Button variant="secondary" disabled={busy} onClick={() => void run(() => leave(confirmation))}>Odbaci promjene i nastavi</Button>
         </div>
       </>}
     </section>}
-    {review && !confirmation && <section aria-label="Review practice" className="space-y-4">
-      <h2 ref={reviewHeading} tabIndex={-1} className="text-xl font-semibold">Review practice</h2>
-      <p>{answered} of {attempt.questions.length} answered and saved</p>
-      {blocked && <p>{unanswered} {unanswered === 1 ? "question still needs" : "questions still need"} an answer. Save an answer for every question before finishing.</p>}
+    {review && !confirmation && <section aria-label="Pregled vježbe" className="space-y-4">
+      <h2 ref={reviewHeading} tabIndex={-1} className="text-xl font-semibold">Pregled vježbe</h2>
+      <p>Odgovoreno i spremljeno {answered} od {attempt.questions.length}</p>
+      {blocked && <p>Bez odgovora je još {plural(unanswered, QUESTIONS)}. Prije završetka spremite odgovor na svako pitanje.</p>}
       {blankNote && <p>{blankNote}</p>}
-      {flags.size > 0 && <p className="text-sm text-muted">{flags.size} marked to revisit. You can return to your questions before finishing.</p>}
+      {flags.size > 0 && <p className="text-sm text-muted">Označeno za povratak: {flags.size}. Prije završetka se možete vratiti na ta pitanja.</p>}
       <div className="flex flex-wrap gap-2">
-        {unanswered > 0 && <Button disabled={busy} onClick={reviewUnanswered}>Review unanswered</Button>}
-        {flags.size > 0 && <Button variant="secondary" disabled={busy} onClick={reviewMarked}>Review marked</Button>}
-        <Button variant="secondary" disabled={busy} onClick={() => setReview(false)}>Back to question</Button>
-        <Button variant={blocked ? "secondary" : "primary"} disabled={busy || blocked} aria-describedby={blocked ? "finish-help" : undefined} onClick={() => setConfirmation("submit")}>{paper ? "Hand in exam" : "Finish practice"}</Button>
+        {unanswered > 0 && <Button disabled={busy} onClick={reviewUnanswered}>Pregledaj neodgovorena</Button>}
+        {flags.size > 0 && <Button variant="secondary" disabled={busy} onClick={reviewMarked}>Pregledaj označena</Button>}
+        <Button variant="secondary" disabled={busy} onClick={() => setReview(false)}>Natrag na pitanje</Button>
+        <Button variant={blocked ? "secondary" : "primary"} disabled={busy || blocked} aria-describedby={blocked ? "finish-help" : undefined} onClick={() => setConfirmation("submit")}>{paper ? "Predaj ispit" : "Završi vježbu"}</Button>
       </div>
-      {blocked && <p id="finish-help" className="text-sm text-muted">Finish practice becomes available when every answer is saved.</p>}
-      <p className="text-sm text-muted">{immediate ? "Unchecked answers are graded when you finish." : "Results appear after final submission."} Short answers require self-review.</p>
+      {blocked && <p id="finish-help" className="text-sm text-muted">Završi vježbu postaje dostupno kad su svi odgovori spremljeni.</p>}
+      <p className="text-sm text-muted">{immediate ? "Neprovjereni odgovori ocjenjuju se na kraju." : "Rezultati se prikazuju nakon konačne predaje."} Kratki odgovori zahtijevaju samoprocjenu.</p>
     </section>}
     <div hidden={confirmation !== null || review || timeUp}>
       <form ref={form} className="flex min-w-0 flex-col gap-6" onSubmit={event => { event.preventDefault(); primary(); }}>
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h2 ref={questionHeading} tabIndex={-1} className="text-base font-semibold">Question {index + 1} of {attempt.questions.length}</h2>
+            <h2 ref={questionHeading} tabIndex={-1} className="text-base font-semibold">Pitanje {index + 1} od {attempt.questions.length}</h2>
             <p role="status" className="text-sm text-muted">{saveState}</p>
           </div>
           <div className="flex flex-wrap items-start gap-1">
             <FavoriteToggle favorites={favorites} question={question} keyshortcuts="S" />
             <Button variant="ghost" className="px-3" disabled={busy} aria-pressed={flagged} onClick={toggleFlag}>
-              <Flag aria-hidden="true" className="size-4 shrink-0" fill={flagged ? "currentColor" : "none"} />Revisit
+              <Flag aria-hidden="true" className="size-4 shrink-0" fill={flagged ? "currentColor" : "none"} />Vrati se
             </Button>
           </div>
         </div>
@@ -275,35 +276,35 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
         {immediate && !feedback && <ConfidencePicker name={question.id} value={confidence} onChange={setConfidence} disabled={busy} />}
         <div aria-live="polite">{feedback && <CheckedFeedback question={question} feedback={feedback} headingRef={feedbackHeading} onSelfReview={selfReview} />}</div>
         <div className="flex flex-col gap-3">
-          {!valid && <p id="answer-help" className="text-sm text-muted">{paper ? "Answer, or skip and leave this question blank." : question.type === "SHORT_ANSWER" || question.type === "NUMERIC" ? "Enter your answer to continue." : "Choose an answer to continue."}</p>}
+          {!valid && <p id="answer-help" className="text-sm text-muted">{paper ? "Odgovorite ili preskočite i ostavite pitanje prazno." : question.type === "SHORT_ANSWER" || question.type === "NUMERIC" ? "Upišite odgovor za nastavak." : "Odaberite odgovor za nastavak."}</p>}
           <div className="flex flex-wrap justify-between gap-3">
-            <Button variant="secondary" disabled={busy || index === 0} aria-keyshortcuts="P K" onClick={() => navigate(index - 1)}>Previous</Button>
-            {paper && !feedback && (question.answer !== null || answer !== null) && <Button variant="ghost" disabled={busy} onClick={leaveBlank}>Leave blank</Button>}
-            {paper && !valid && !finalQuestion && <Button variant="secondary" disabled={busy} onClick={() => navigate(index + 1)}>Skip for now</Button>}
-            <Button type="submit" className="ml-auto" disabled={busy || !valid} aria-describedby={!valid ? "answer-help" : undefined} aria-keyshortcuts="Enter">{saving ? "Saving…" : immediate && !feedback ? (busy ? "Checking…" : "Check answer") : immediate ? (finalQuestion ? "Continue to review" : "Next question") : finalQuestion ? "Save and review" : "Save and next"}</Button>
+            <Button variant="secondary" disabled={busy || index === 0} aria-keyshortcuts="P K" onClick={() => navigate(index - 1)}>Prethodno</Button>
+            {paper && !feedback && (question.answer !== null || answer !== null) && <Button variant="ghost" disabled={busy} onClick={leaveBlank}>Ostavi prazno</Button>}
+            {paper && !valid && !finalQuestion && <Button variant="secondary" disabled={busy} onClick={() => navigate(index + 1)}>Preskoči zasad</Button>}
+            <Button type="submit" className="ml-auto" disabled={busy || !valid} aria-describedby={!valid ? "answer-help" : undefined} aria-keyshortcuts="Enter">{saving ? "Spremam…" : immediate && !feedback ? (busy ? "Provjeravam…" : "Provjeri odgovor") : immediate ? (finalQuestion ? "Nastavi na pregled" : "Sljedeće pitanje") : finalQuestion ? "Spremi i pregledaj" : "Spremi i dalje"}</Button>
           </div>
         </div>
       </form>
       <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Button variant="ghost" disabled={busy} onClick={openReview}>Review and finish</Button>
+        <Button variant="ghost" disabled={busy} onClick={openReview}>Pregledaj i završi</Button>
         <p className="text-sm text-muted">{progress}</p>
-        <Button variant="ghost" aria-keyshortcuts="?" aria-haspopup="dialog" className="ml-auto hidden text-muted pointer-fine:inline-flex" onClick={() => setShortcutsOpen(true)}>Press <kbd>?</kbd> for shortcuts</Button>
+        <Button variant="ghost" aria-keyshortcuts="?" aria-haspopup="dialog" className="ml-auto hidden text-muted pointer-fine:inline-flex" onClick={() => setShortcutsOpen(true)}>Pritisnite <kbd>?</kbd> za prečace</Button>
       </div>
     </div>
     {!confirmation && experience === "EXAM" && <details open={Boolean(paper)} className="border-t border-line pt-3">
-      <summary className="min-h-11 cursor-pointer py-2 font-medium">Question navigator</summary>
+      <summary className="min-h-11 cursor-pointer py-2 font-medium">Popis pitanja</summary>
       <div className="mt-3"><QuizNavigator questions={attempt.questions} index={index} flags={flags} busy={busy} jump={next => { setReview(false); navigate(next); }} /></div>
     </details>}
     <details className="border-t border-line pt-3">
-      <summary className="min-h-11 cursor-pointer py-2 font-medium">Session</summary>
-      <p className="mt-2 max-w-prose text-sm text-muted">{immediate ? "Check each answer to see the key and explanation; a checked answer can no longer change. Review progress updates when you finish." : "Edited answers are saved before moving to another question. Results appear after final submission."} Revisit marks last while this session stays open.</p>
+      <summary className="min-h-11 cursor-pointer py-2 font-medium">Vježba</summary>
+      <p className="mt-2 max-w-prose text-sm text-muted">{immediate ? "Provjerite svaki odgovor da vidite rješenje i objašnjenje; provjereni odgovor se više ne može mijenjati. Napredak ponavljanja ažurira se na kraju." : "Promijenjeni odgovori spremaju se prije prelaska na drugo pitanje. Rezultati se prikazuju nakon konačne predaje."} Oznake za povratak vrijede dok je vježba otvorena.</p>
       {!confirmation && <div className="mt-4"><ExperiencePicker value={experience} onChange={setExperience} disabled={busy} /></div>}
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant="ghost" disabled={busy} onClick={() => requestLeave("reload")}>Reload saved answers</Button>
-        {sessionClosed && <Button variant="ghost" disabled={busy} onClick={() => requestLeave("back")}>Return to Practice history</Button>}
-        {!confirmation && <Button variant="ghost" disabled={busy} onClick={() => { setError(""); setConfirmation("abandon"); }}>Abandon attempt</Button>}
+        <Button variant="ghost" disabled={busy} onClick={() => requestLeave("reload")}>Ponovno učitaj spremljene odgovore</Button>
+        {sessionClosed && <Button variant="ghost" disabled={busy} onClick={() => requestLeave("back")}>Natrag na povijest vježbi</Button>}
+        {!confirmation && <Button variant="ghost" disabled={busy} onClick={() => { setError(""); setConfirmation("abandon"); }}>Odustani od pokušaja</Button>}
       </div>
-      <p className="mt-2 max-w-prose text-sm text-muted">Reloading asks whether to save or discard unsaved changes first.</p>
+      <p className="mt-2 max-w-prose text-sm text-muted">Prije ponovnog učitavanja pitat ćemo želite li spremiti ili odbaciti nespremljene promjene.</p>
     </details>
     <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
   </div>;

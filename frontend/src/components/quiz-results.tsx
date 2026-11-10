@@ -8,13 +8,14 @@ import { RichText } from "./rich-text";
 import { SelfAssessment, selfReviewLabels, type SaveSelfReview } from "./quiz-feedback";
 import { Button, Surface } from "./ui";
 import { cn } from "../lib/utils";
+import { ANSWERS, plural } from "../lib/plural";
 
 type ReviewView = "INCORRECT" | "PENDING" | "ALL";
 type SubmittedAttempt = Extract<Attempt, { status: "SUBMITTED" }>;
-const viewLabels: Record<ReviewView, string> = { INCORRECT: "Mistakes", PENDING: "Self-review", ALL: "All answers" };
-const confidenceNotes: Record<Confidence, string> = { SURE: "marked as sure", UNSURE: "marked as unsure", GUESS: "marked as guessed" };
-const statusLabels: Record<ResultQuestion["grading_status"], string> = { CORRECT: "Correct", INCORRECT: "Incorrect", PENDING: "Self-review required", UNANSWERED: "Left blank" };
-const countTones: Record<string, string> = { Correct: "text-success", Incorrect: "text-danger" };
+const viewLabels: Record<ReviewView, string> = { INCORRECT: "Pogreške", PENDING: "Samoprocjena", ALL: "Svi odgovori" };
+const confidenceNotes: Record<Confidence, string> = { SURE: "označeno: siguran sam", UNSURE: "označeno: nisam siguran", GUESS: "označeno: pogađao sam" };
+const statusLabels: Record<ResultQuestion["grading_status"], string> = { CORRECT: "Točno", INCORRECT: "Netočno", PENDING: "Potrebna samoprocjena", UNANSWERED: "Ostavljeno prazno" };
+const countTones: Record<string, string> = { "Točno": "text-success", "Netočno": "text-danger" };
 const statusTones: Record<ResultQuestion["grading_status"], string> = { CORRECT: "text-success", INCORRECT: "text-danger", PENDING: "text-pending", UNANSWERED: "text-muted" };
 
 /** A short answer's self-assessment never replaces its grade; it is labelled as the student's own. */
@@ -30,12 +31,12 @@ function statusTone(question: ResultQuestion) {
 function itemPoints(question: ResultQuestion) {
   if (question.points == null) return null;
   if (question.grading_status === "PENDING") {
-    if (!question.self_review) return `up to ${pointsLabel(question.points)} after self-review`;
-    return `${question.self_review === "CORRECT" ? `+${formatPoints(question.points)}` : "0"} of ${pointsLabel(question.points)}, not in the objective score`;
+    if (!question.self_review) return `do ${pointsLabel(question.points)} nakon samoprocjene`;
+    return `${question.self_review === "CORRECT" ? `+${formatPoints(question.points)}` : "0"} od ${pointsLabel(question.points)}, nije u objektivnom rezultatu`;
   }
   const earned = question.earned_points ?? 0;
   const sign = earned > 0 ? "+" : earned < 0 ? "−" : "";
-  return `${sign}${formatPoints(Math.abs(earned))} of ${pointsLabel(question.points)}`;
+  return `${sign}${formatPoints(Math.abs(earned))} od ${pointsLabel(question.points)}`;
 }
 
 /** Self-assessment of the short answers awaiting review, counted from the results themselves. */
@@ -53,9 +54,9 @@ type Tally = ReturnType<typeof selfReviewTally>;
 
 function selfReviewNote(tally: Tally) {
   return [
-    tally.correct > 0 && `${tally.correct} self-assessed correct`,
-    tally.incorrect > 0 && `${tally.incorrect} self-assessed incorrect`,
-    tally.unreviewed > 0 && `${tally.unreviewed} to self-review`,
+    tally.correct > 0 && `po samoprocjeni točno: ${tally.correct}`,
+    tally.incorrect > 0 && `po samoprocjeni netočno: ${tally.incorrect}`,
+    tally.unreviewed > 0 && `čeka samoprocjenu: ${tally.unreviewed}`,
   ].filter(Boolean).join(" · ");
 }
 
@@ -64,21 +65,21 @@ function signedPoints(value: number) {
 }
 
 function PaperScoreSummary({ score, paper, tally }: { score: PaperScore; paper: PaperSession; tally: Tally }) {
-  const verdict = score.passed === true ? `Passed · the pass mark is ${pointsLabel(paper.pass_threshold ?? 0)}`
-    : score.passed === false ? `Below the pass mark of ${pointsLabel(paper.pass_threshold ?? 0)}`
+  const verdict = score.passed === true ? `Prolaz · prag je ${pointsLabel(paper.pass_threshold ?? 0)}`
+    : score.passed === false ? `Ispod praga prolaza od ${pointsLabel(paper.pass_threshold ?? 0)}`
     : paper.pass_threshold == null ? null
-    : tally.unreviewed > 0 ? `The pass mark of ${pointsLabel(paper.pass_threshold)} depends on your self-review`
-    : `The objective score alone does not decide the pass mark of ${pointsLabel(paper.pass_threshold)}`;
+    : tally.unreviewed > 0 ? `Prag prolaza od ${pointsLabel(paper.pass_threshold)} ovisi o vašoj samoprocjeni`
+    : `Sam objektivni rezultat ne odlučuje o pragu prolaza od ${pointsLabel(paper.pass_threshold)}`;
   return <section aria-labelledby="paper-score-heading" className="space-y-3 border-y border-line py-4">
-    <h3 id="paper-score-heading" className="text-sm font-medium text-muted">Score on {paper.title}</h3>
-    <p className="text-3xl font-semibold tabular-nums">{signedPoints(score.earned)} <span className="text-lg font-normal text-muted">/ {formatPoints(score.max_points)} points</span></p>
-    {score.pending_points > 0 && <p className="text-sm tabular-nums">Objective score {signedPoints(score.earned)} of {formatPoints(score.max_points)} · self-assessed +{formatPoints(tally.correctPoints)} of {pointsLabel(score.pending_points)}</p>}
+    <h3 id="paper-score-heading" className="text-sm font-medium text-muted">Rezultat na {paper.title}</h3>
+    <p className="text-3xl font-semibold tabular-nums">{signedPoints(score.earned)} <span className="text-lg font-normal text-muted">/ {pointsLabel(score.max_points)}</span></p>
+    {score.pending_points > 0 && <p className="text-sm tabular-nums">Objektivni rezultat {signedPoints(score.earned)} od {formatPoints(score.max_points)} · po samoprocjeni +{formatPoints(tally.correctPoints)} od {pointsLabel(score.pending_points)}</p>}
     {verdict && <p className={score.passed === true ? "text-success" : score.passed === false ? "text-danger" : "text-muted"}>{verdict}</p>}
     <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
-      <div><dt className="text-muted">Correct answers</dt><dd className="font-semibold tabular-nums">+{formatPoints(score.correct_points)}</dd></div>
-      {score.penalty_points > 0 && <div><dt className="text-muted">Wrong answers ({penaltyText(paper.wrong_answer_penalty)})</dt><dd className="font-semibold tabular-nums">−{formatPoints(score.penalty_points)}</dd></div>}
-      {tally.unreviewedPoints > 0 && <div><dt className="text-muted">Awaiting your self-review</dt><dd className="font-semibold tabular-nums">up to {formatPoints(tally.unreviewedPoints)}</dd></div>}
-      {score.unanswered_count > 0 && <div><dt className="text-muted">Left blank</dt><dd className="font-semibold tabular-nums">{score.unanswered_count} · 0 points</dd></div>}
+      <div><dt className="text-muted">Točni odgovori</dt><dd className="font-semibold tabular-nums">+{formatPoints(score.correct_points)}</dd></div>
+      {score.penalty_points > 0 && <div><dt className="text-muted">Netočni odgovori ({penaltyText(paper.wrong_answer_penalty)})</dt><dd className="font-semibold tabular-nums">−{formatPoints(score.penalty_points)}</dd></div>}
+      {tally.unreviewedPoints > 0 && <div><dt className="text-muted">Čeka vašu samoprocjenu</dt><dd className="font-semibold tabular-nums">do {formatPoints(tally.unreviewedPoints)}</dd></div>}
+      {score.unanswered_count > 0 && <div><dt className="text-muted">Ostavljeno prazno</dt><dd className="font-semibold tabular-nums">{score.unanswered_count} · 0 bodova</dd></div>}
     </dl>
   </section>;
 }
@@ -89,12 +90,12 @@ export function ResultAnswers({ question, onSelfReview }: { question: ResultQues
   const selfReviewable = question.type === "SHORT_ANSWER" && question.grading_status === "PENDING";
   return <div className="space-y-4">
     <dl className="space-y-4">
-      <div><dt className="text-sm font-medium text-muted">Your answer</dt><dd className="mt-1 whitespace-pre-wrap"><RichText text={studentAnswer ?? (question.grading_status === "UNANSWERED" ? "Left blank" : "No answer saved")} /></dd></div>
-      {correctAnswer != null && <div><dt className="text-sm font-medium text-muted">{question.type === "SHORT_ANSWER" ? "Reference answer" : "Correct answer"}</dt><dd className="mt-1 whitespace-pre-wrap"><RichText text={correctAnswer} /></dd></div>}
+      <div><dt className="text-sm font-medium text-muted">Vaš odgovor</dt><dd className="mt-1 whitespace-pre-wrap"><RichText text={studentAnswer ?? (question.grading_status === "UNANSWERED" ? "Ostavljeno prazno" : "Nema spremljenog odgovora")} /></dd></div>
+      {correctAnswer != null && <div><dt className="text-sm font-medium text-muted">{question.type === "SHORT_ANSWER" ? "Referentni odgovor" : "Točan odgovor"}</dt><dd className="mt-1 whitespace-pre-wrap"><RichText text={correctAnswer} /></dd></div>}
     </dl>
-    {selfReviewable && <p className="text-sm text-muted">Short answers are not graded automatically. Compare your answer with the reference answer.</p>}
+    {selfReviewable && <p className="text-sm text-muted">Kratki odgovori se ne ocjenjuju automatski. Usporedite svoj odgovor s referentnim.</p>}
     {selfReviewable && onSelfReview && <SelfAssessment value={question.self_review ?? null} save={onSelfReview} />}
-    {question.explanation && <div className="border-t border-line pt-4"><p className="text-sm font-medium text-muted">Explanation</p><p className="mt-1 whitespace-pre-wrap"><RichText text={question.explanation} /></p></div>}
+    {question.explanation && <div className="border-t border-line pt-4"><p className="text-sm font-medium text-muted">Objašnjenje</p><p className="mt-1 whitespace-pre-wrap"><RichText text={question.explanation} /></p></div>}
   </div>;
 }
 
@@ -127,49 +128,49 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
   }
   const visibleQuestions = attempt.questions.map((question, index) => ({ question, number: index + 1 }))
     .filter(({ question }) => view === "ALL" || question.grading_status === view);
-  const summary: [string, number, string?][] = [["Correct", counts.CORRECT], ["Incorrect", counts.INCORRECT], ["Short answers", counts.PENDING, selfReviewNote(tally)], ...(counts.UNANSWERED ? [["Left blank", counts.UNANSWERED] as [string, number]] : [])];
+  const summary: [string, number, string?][] = [["Točno", counts.CORRECT], ["Netočno", counts.INCORRECT], ["Kratki odgovori", counts.PENDING, selfReviewNote(tally)], ...(counts.UNANSWERED ? [["Ostavljeno prazno", counts.UNANSWERED] as [string, number]] : [])];
 
-  return <section aria-label="Practice results" className="flex min-w-0 max-w-3xl flex-col gap-7 [overflow-wrap:anywhere]">
+  return <section aria-label="Rezultati vježbe" className="flex min-w-0 max-w-3xl flex-col gap-7 [overflow-wrap:anywhere]">
     <div>
-      <h2 ref={heading} tabIndex={-1} className="text-2xl font-semibold">{hasResults ? "Practice complete" : "Results unavailable"}</h2>
-      <p className="mt-2 max-w-prose text-sm text-muted">{hasResults ? "Your submitted answers are saved and can no longer be edited." : "No question results are available for this session. Return to practice setup or open another session from history."}</p>
+      <h2 ref={heading} tabIndex={-1} className="text-2xl font-semibold">{hasResults ? "Vježba je završena" : "Rezultati nisu dostupni"}</h2>
+      <p className="mt-2 max-w-prose text-sm text-muted">{hasResults ? "Predani odgovori su spremljeni i više se ne mogu mijenjati." : "Za ovu vježbu nema rezultata. Vratite se na postavke vježbe ili otvorite drugu vježbu iz povijesti."}</p>
     </div>
     {attempt.score && attempt.paper && <PaperScoreSummary score={attempt.score} paper={attempt.paper} tally={tally} />}
-    {hasResults && <dl aria-label="Results summary" className={`grid gap-3 border-y border-line py-4 ${counts.UNANSWERED ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
+    {hasResults && <dl aria-label="Sažetak rezultata" className={`grid gap-3 border-y border-line py-4 ${counts.UNANSWERED ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
       {summary.map(([label, count, note]) => <div key={label}><dt className="min-h-10 text-sm text-muted sm:min-h-0">{label}</dt>
-        <dd className={cn("mt-1 text-2xl font-semibold tabular-nums", count > 0 && (label === "Short answers" ? tally.unreviewed > 0 && "text-pending" : countTones[label]))}>{count}</dd>
+        <dd className={cn("mt-1 text-2xl font-semibold tabular-nums", count > 0 && (label === "Kratki odgovori" ? tally.unreviewed > 0 && "text-pending" : countTones[label]))}>{count}</dd>
         {note && <dd className="mt-1 text-sm text-muted">{note}</dd>}</div>)}
     </dl>}
     <div className="space-y-4">
-      {allCorrect && <p>All automatically graded answers were correct.</p>}
-      {luckyGuesses > 0 && <p className="text-sm text-muted">{luckyGuesses === 1 ? "1 correct answer was" : `${luckyGuesses} correct answers were`} marked as a guess. Practice {luckyGuesses === 1 ? "it" : "them"} again before the exam.</p>}
+      {allCorrect && <p>Svi automatski ocijenjeni odgovori su točni.</p>}
+      {luckyGuesses > 0 && <p className="text-sm text-muted">Točni odgovori označeni kao pogađanje: {luckyGuesses}. Vježbajte ih ponovno prije ispita.</p>}
       <div className="flex flex-wrap gap-2">
-        <Button className="w-full sm:w-auto" disabled={busy} onClick={primaryView ? () => review(primaryView) : onPracticeAgain}>{primaryView === "INCORRECT" ? "Review mistakes" : primaryView === "PENDING" ? "Review short answers" : "Practice again"}</Button>
-        {primaryView && <Button variant="secondary" disabled={busy} onClick={onPracticeAgain}>Practice again</Button>}
-        {onViewProgress && <Button variant="ghost" disabled={busy} onClick={onViewProgress}>View progress</Button>}
-        {onBackToCourse && <Button variant="ghost" disabled={busy} onClick={onBackToCourse}>Back to course</Button>}
+        <Button className="w-full sm:w-auto" disabled={busy} onClick={primaryView ? () => review(primaryView) : onPracticeAgain}>{primaryView === "INCORRECT" ? "Pregledaj pogreške" : primaryView === "PENDING" ? "Pregledaj kratke odgovore" : "Vježbaj ponovno"}</Button>
+        {primaryView && <Button variant="secondary" disabled={busy} onClick={onPracticeAgain}>Vježbaj ponovno</Button>}
+        {onViewProgress && <Button variant="ghost" disabled={busy} onClick={onViewProgress}>Otvori napredak</Button>}
+        {onBackToCourse && <Button variant="ghost" disabled={busy} onClick={onBackToCourse}>Natrag na kolegij</Button>}
       </div>
-      {busy && <p role="status" className="text-sm text-muted">Loading practice history…</p>}
+      {busy && <p role="status" className="text-sm text-muted">Učitavam povijest vježbi…</p>}
     </div>
-    {hasResults && <section aria-label="Answer review" className="space-y-5">
-      <div role="group" aria-label="Result filters" className="flex flex-wrap gap-2">
+    {hasResults && <section aria-label="Pregled odgovora" className="space-y-5">
+      <div role="group" aria-label="Filtri rezultata" className="flex flex-wrap gap-2">
         {(["INCORRECT", "PENDING", "ALL"] as const).map(filter => <Button key={filter} variant="secondary" aria-pressed={view === filter}
           disabled={filter !== "ALL" && counts[filter] === 0} onClick={() => setView(filter)}>{viewLabels[filter]}</Button>)}
       </div>
-      <div><h3 ref={reviewHeading} tabIndex={-1} className="text-lg font-semibold">{viewLabels[view]}</h3><p role="status" className="mt-1 text-sm text-muted">{visibleQuestions.length} {visibleQuestions.length === 1 ? "answer" : "answers"}</p></div>
+      <div><h3 ref={reviewHeading} tabIndex={-1} className="text-lg font-semibold">{viewLabels[view]}</h3><p role="status" className="mt-1 text-sm text-muted">{plural(visibleQuestions.length, ANSWERS)}</p></div>
       <div className="space-y-5">{visibleQuestions.map(({ question, number }) => {
         const correct = question.grading_status === "CORRECT";
         const header = <div className="space-y-2"><h4 className="text-lg font-semibold">{number}. <RichText text={question.stem} /></h4><QuestionUnits units={question.units} />
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"><p className={cn("text-sm", statusTone(question))}>{[paperItemLabel(number, question.label), statusLabel(question), itemPoints(question), question.confidence && confidenceNotes[question.confidence]].filter(Boolean).join(" · ")}</p>
-            <FavoriteToggle favorites={favorites} question={question} label={`Favorite question ${number}`} /></div></div>;
-        return <article key={question.id} aria-label={`Question ${number} result`} className="min-w-0">
+            <FavoriteToggle favorites={favorites} question={question} label={`Favorit: pitanje ${number}`} /></div></div>;
+        return <article key={question.id} aria-label={`Rezultat pitanja ${number}`} className="min-w-0">
           {correct ? <div className="space-y-3 border-b border-line py-4">
             {header}
-            <details><summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">View answer{question.explanation ? " and explanation" : ""}</summary><div className="mt-3 max-w-prose"><ResultAnswers question={question} /></div></details>
+            <details><summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">Pogledaj odgovor{question.explanation ? " i objašnjenje" : ""}</summary><div className="mt-3 max-w-prose"><ResultAnswers question={question} /></div></details>
           </div> : <Surface className="space-y-5">{header}<div className="max-w-prose"><ResultAnswers question={question} onSelfReview={selfReview(question)} /></div></Surface>}
         </article>;
       })}</div>
     </section>}
-    <div className="border-t border-line pt-3"><Button variant="ghost" disabled={busy} onClick={onBackToHistory}>Back to practice history</Button></div>
+    <div className="border-t border-line pt-3"><Button variant="ghost" disabled={busy} onClick={onBackToHistory}>Natrag na povijest vježbi</Button></div>
   </section>;
 }

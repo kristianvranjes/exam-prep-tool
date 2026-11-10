@@ -20,12 +20,12 @@ function useClock(active: boolean) {
 
 function timeLeft(milliseconds: number) {
   const minutes = Math.ceil(milliseconds / 60_000);
-  return minutes < 60 ? `${minutes} min left` : `${Math.floor(minutes / 60)} h ${minutes % 60} min left`;
+  return minutes < 60 ? `još ${minutes} min` : `još ${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
 
 function modeLabel(attempt: ResumableAttempt) {
-  if (attempt.paperTitle) return `Past paper · ${attempt.paperTitle}`;
-  const mode = attempt.feedbackMode === "IMMEDIATE" ? "Guided practice" : "Exam practice";
+  if (attempt.paperTitle) return `Prošli ispit · ${attempt.paperTitle}`;
+  const mode = attempt.feedbackMode === "IMMEDIATE" ? "Vođena vježba" : "Ispitna vježba";
   return attempt.focusLabel ? `${mode} · ${attempt.focusLabel}` : mode;
 }
 
@@ -45,13 +45,13 @@ export function ResumeSession({ attempt, name, nameId, primary = true, onResume,
       {name && <p id={nameId} className="font-semibold break-words">{name}</p>}
       {attempt ? <p className={cn("text-sm text-muted", name && "mt-1")}>
         {modeLabel(attempt)}
-        {attempt.total !== null && <> · <span className="tabular-nums">{attempt.answered} of {attempt.total} answered</span></>}
-        {remaining !== null && <> · <span className={cn("tabular-nums", timeUp ? "font-medium text-danger" : remaining <= 5 * 60_000 && "font-medium text-pending")}>{timeUp ? "Time is up" : timeLeft(remaining)}</span></>}
-      </p> : <p className={cn("text-sm text-muted", name && "mt-1")}>You have an unfinished practice session.</p>}
-      {timeUp && <p className="mt-1 max-w-prose text-sm">Answers saved before the deadline count. Hand them in to see your results.</p>}
+        {attempt.total !== null && <> · <span className="tabular-nums">odgovoreno {attempt.answered} od {attempt.total}</span></>}
+        {remaining !== null && <> · <span className={cn("tabular-nums", timeUp ? "font-medium text-danger" : remaining <= 5 * 60_000 && "font-medium text-pending")}>{timeUp ? "Vrijeme je isteklo" : timeLeft(remaining)}</span></>}
+      </p> : <p className={cn("text-sm text-muted", name && "mt-1")}>Imate nedovršenu vježbu.</p>}
+      {timeUp && <p className="mt-1 max-w-prose text-sm">Vrijede odgovori spremljeni prije isteka vremena. Predajte ih da vidite rezultate.</p>}
     </div>
     <Button variant={primary ? "primary" : "secondary"} className="w-full shrink-0 sm:w-auto" aria-describedby={nameId} onClick={onResume}>
-      {timeUp ? "Hand in and see results" : "Resume session"}
+      {timeUp ? "Predaj i vidi rezultate" : "Nastavi vježbu"}
     </Button>
   </div>;
 }

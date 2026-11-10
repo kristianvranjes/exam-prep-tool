@@ -23,19 +23,19 @@ function Guided({ save }: { save: (verdict: SelfReview | null) => Promise<void> 
 it("lets a checked short answer be self-assessed, labelled as the student's own check", async () => {
   const save = vi.fn().mockResolvedValue(undefined);
   render(<Guided save={save} />);
-  const block = screen.getByRole("region", { name: "Answer feedback" });
-  expect(within(block).getByRole("heading", { name: "Compare with the reference answer" })).toBeVisible();
-  const hadIt = within(block).getByRole("button", { name: "I had it" });
+  const block = screen.getByRole("region", { name: "Povratna informacija" });
+  expect(within(block).getByRole("heading", { name: "Usporedite s referentnim odgovorom" })).toBeVisible();
+  const hadIt = within(block).getByRole("button", { name: "Znao sam" });
   expect(hadIt).toHaveAttribute("type", "button");
   fireEvent.click(hadIt);
   await waitFor(() => expect(hadIt).toHaveAttribute("aria-pressed", "true"));
   expect(save).toHaveBeenCalledWith("CORRECT");
-  expect(within(block).getByRole("status")).toHaveTextContent("Saved as self-assessed correct.");
-  expect(within(block).getByText(/Your own check, not a grade/)).toBeVisible();
+  expect(within(block).getByRole("status")).toHaveTextContent("Spremljeno: po samoprocjeni točno.");
+  expect(within(block).getByText(/Ovo je vaša provjera, ne ocjena/)).toBeVisible();
   // The grade itself stays pending: no Correct verdict appears.
-  expect(within(block).queryByRole("heading", { name: "Correct" })).not.toBeInTheDocument();
-  fireEvent.click(within(block).getByRole("button", { name: "I missed it" }));
-  await waitFor(() => expect(within(block).getByRole("button", { name: "I missed it" })).toHaveAttribute("aria-pressed", "true"));
+  expect(within(block).queryByRole("heading", { name: "Točno" })).not.toBeInTheDocument();
+  fireEvent.click(within(block).getByRole("button", { name: "Nisam znao" }));
+  await waitFor(() => expect(within(block).getByRole("button", { name: "Nisam znao" })).toHaveAttribute("aria-pressed", "true"));
   expect(save).toHaveBeenLastCalledWith("INCORRECT");
 });
 
@@ -43,10 +43,10 @@ it("ignores repeat presses while saving", async () => {
   let finish!: () => void;
   const save = vi.fn(() => new Promise<void>(done => { finish = done; }));
   render(<Guided save={save} />);
-  const hadIt = screen.getByRole("button", { name: "I had it" });
+  const hadIt = screen.getByRole("button", { name: "Znao sam" });
   fireEvent.click(hadIt);
   expect(hadIt).toHaveAttribute("aria-disabled", "true");
-  fireEvent.click(screen.getByRole("button", { name: "I missed it" }));
+  fireEvent.click(screen.getByRole("button", { name: "Nisam znao" }));
   expect(save).toHaveBeenCalledOnce();
   finish();
   await waitFor(() => expect(hadIt).toHaveAttribute("aria-pressed", "true"));

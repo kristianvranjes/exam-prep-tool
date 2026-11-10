@@ -10,8 +10,8 @@ import { RichText } from "./rich-text";
  */
 function choiceMark(correct: boolean, chosen: boolean, feedback: QuestionFeedback | null | undefined, multiple: boolean) {
   if (!feedback) return { tone: "hover:border-line-strong hover:bg-subtle has-[:checked]:border-accent has-[:checked]:bg-accent-surface", note: null };
-  if (correct) return { tone: "border-success bg-success-surface [&>span:last-child]:text-success", note: chosen ? "Your answer · Correct" : multiple ? "Missed · Correct answer" : "Correct answer" };
-  if (chosen) return { tone: "border-danger bg-danger-surface [&>span:last-child]:text-danger", note: "Your answer" };
+  if (correct) return { tone: "border-success bg-success-surface [&>span:last-child]:text-success", note: chosen ? "Vaš odgovor · Točno" : multiple ? "Propušteno · Točan odgovor" : "Točan odgovor" };
+  if (chosen) return { tone: "border-danger bg-danger-surface [&>span:last-child]:text-danger", note: "Vaš odgovor" };
   return { tone: "text-muted", note: null };
 }
 
@@ -38,13 +38,13 @@ export function QuizAnswerEditor({ question, answer, change, disabled, feedback,
         answer?.type === "MULTIPLE_CHOICE" && answer.option_position === option.position,
         Boolean(feedback?.options.find(key => key.position === option.position)?.is_correct),
         () => change({ type: "MULTIPLE_CHOICE", option_position: option.position })))}
-      {question.type === "MULTIPLE_SELECT" && <p className="-mt-3 text-sm text-muted">Select every correct option. Only the exact set counts as correct.</p>}
+      {question.type === "MULTIPLE_SELECT" && <p className="-mt-3 text-sm text-muted">Odaberite sve točne odgovore. Točan je samo potpuno točan skup.</p>}
       {question.type === "MULTIPLE_SELECT" && question.options.map((option, index) => choice(index, String(option.position), option.text,
         selected.includes(option.position),
         Boolean(feedback?.options.find(key => key.position === option.position)?.is_correct),
         () => change(toggleOption(selected, option.position)), "checkbox"))}
       {question.type === "NUMERIC" && <div>
-        <label className="block">Your answer
+        <label className="block">Vaš odgovor
           <span className="mt-2 flex items-center gap-2">
             <input name="numeric-answer" inputMode="decimal" autoComplete="off" spellCheck={false} maxLength={40} aria-invalid={problem ? true : undefined} aria-describedby={`${question.id}-numeric-help`}
               className="w-full max-w-60 rounded-control border border-line-strong bg-surface p-3 tabular-nums" value={typed}
@@ -52,11 +52,11 @@ export function QuizAnswerEditor({ question, answer, change, disabled, feedback,
             {question.unit && <span className="text-muted">{question.unit}</span>}
           </span>
         </label>
-        <p id={`${question.id}-numeric-help`} className={cn("mt-2 text-sm", problem ? "text-danger" : "text-muted")}>{problem ?? "Use a decimal comma or point, e.g. 9,81 or 1.5e-3. Leave out the unit."}</p>
+        <p id={`${question.id}-numeric-help`} className={cn("mt-2 text-sm", problem ? "text-danger" : "text-muted")}>{problem ?? "Koristite decimalni zarez ili točku, npr. 9,81 ili 1.5e-3. Mjernu jedinicu izostavite."}</p>
       </div>}
-      {question.type === "TRUE_FALSE" && [true, false].map((value, index) => choice(index, String(value), value ? "True" : "False",
+      {question.type === "TRUE_FALSE" && [true, false].map((value, index) => choice(index, String(value), value ? "Točno" : "Netočno",
         answer?.type === "TRUE_FALSE" && answer.value === value, feedback?.correct_boolean === value,
         () => change({ type: "TRUE_FALSE", value })))}
-      {question.type === "SHORT_ANSWER" && <label>Your short answer<textarea name="short-answer" className="mt-2 w-full rounded-control border border-line-strong bg-surface p-3" rows={5} maxLength={2000} required value={answer?.type === "SHORT_ANSWER" ? answer.text : ""} onChange={event => change({ type: "SHORT_ANSWER", text: event.target.value })} /></label>}
+      {question.type === "SHORT_ANSWER" && <label>Vaš kratki odgovor<textarea name="short-answer" className="mt-2 w-full rounded-control border border-line-strong bg-surface p-3" rows={5} maxLength={2000} required value={answer?.type === "SHORT_ANSWER" ? answer.text : ""} onChange={event => change({ type: "SHORT_ANSWER", text: event.target.value })} /></label>}
     </fieldset>;
 }

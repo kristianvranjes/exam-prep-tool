@@ -8,11 +8,11 @@ import { questionCount } from "../lib/utils";
 import { formatScopeDates } from "../lib/exam-dates";
 
 export const kindLabels: Record<ExamScopeKind, string> = {
-  MIDTERM: "Midterm (MI)",
-  FINAL: "Final exam (ZI)",
-  FULL_EXAM: "Full exam term",
-  LAB: "Lab session",
-  QUIZ: "Short quiz (blic)",
+  MIDTERM: "Međuispit (MI)",
+  FINAL: "Završni ispit (ZI)",
+  FULL_EXAM: "Ispitni rok",
+  LAB: "Laboratorijska vježba",
+  QUIZ: "Blic",
 };
 const defaultNames: Record<ExamScopeKind, string> = { MIDTERM: "Međuispit", FINAL: "Završni ispit", FULL_EXAM: "Ispitni rok", LAB: "Laboratorijska vježba", QUIZ: "Blic" };
 const YEAR = /^\d{4}\/\d{2}$/;

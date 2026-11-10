@@ -32,9 +32,9 @@ it("lists each unfinished session with its course, mode, focus and progress, lea
   const rows = within(screen.getByRole("list", { name: "Nedovršene vježbe" })).getAllByRole("listitem");
   expect(rows).toHaveLength(2);
   expect(within(rows[0]).getByText("Algorithms")).toBeVisible();
-  expect(rows[0]).toHaveTextContent("Guided practice · Grammars · 3 of 10 answered");
-  expect(rows[1]).toHaveTextContent("Exam practice · 0 of 5 answered");
-  const [first, second] = screen.getAllByRole("button", { name: "Resume session" });
+  expect(rows[0]).toHaveTextContent("Vođena vježba · Grammars · odgovoreno 3 od 10");
+  expect(rows[1]).toHaveTextContent("Ispitna vježba · odgovoreno 0 od 5");
+  const [first, second] = screen.getAllByRole("button", { name: "Nastavi vježbu" });
   expect(first).toHaveClass("bg-accent");
   expect(second).not.toHaveClass("bg-accent");
   expect(second).toHaveAccessibleDescription("Formal languages");
@@ -44,24 +44,24 @@ it("lists each unfinished session with its course, mode, focus and progress, lea
 
 it("falls back to a plain notice until the session's details are known", () => {
   home([{ course: course("algorithms", "Algorithms") }]);
-  expect(screen.getByText("You have an unfinished practice session.")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Resume session" })).toHaveClass("bg-accent");
+  expect(screen.getByText("Imate nedovršenu vježbu.")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Nastavi vježbu" })).toHaveClass("bg-accent");
 });
 
 it("shows the time left of a timed paper and warns when it runs low", async () => {
   const paper = { ...guided, paperTitle: "MI 2025", feedbackMode: "END" as const, deadline: Date.now() + 42 * 60_000 - 1_000 };
   home([{ course: course("algorithms", "Algorithms"), attempt: paper }, { course: course("grammars", "Formal languages"), attempt: { ...paper, id: "b", deadline: Date.now() + 4 * 60_000 } }]);
-  expect(await screen.findByText("42 min left")).not.toHaveClass("text-pending");
-  expect(screen.getByText("4 min left")).toHaveClass("text-pending");
-  expect(screen.getAllByRole("listitem")[0]).toHaveTextContent("Past paper · MI 2025 · 3 of 10 answered · 42 min left");
+  expect(await screen.findByText("još 42 min")).not.toHaveClass("text-pending");
+  expect(screen.getByText("još 4 min")).toHaveClass("text-pending");
+  expect(screen.getAllByRole("listitem")[0]).toHaveTextContent("Prošli ispit · MI 2025 · odgovoreno 3 od 10 · još 42 min");
 });
 
 it("offers an expired paper for hand-in instead of as a session to continue", async () => {
   home([{ course: course("algorithms", "Algorithms"), attempt: { ...guided, paperTitle: "MI 2025", deadline: Date.now() - 1_000 } }]);
-  expect(await screen.findByText("Time is up")).toHaveClass("text-danger");
-  expect(screen.getByText(/Answers saved before the deadline count/)).toBeVisible();
-  expect(screen.getByRole("button", { name: "Hand in and see results" })).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Resume session" })).not.toBeInTheDocument();
+  expect(await screen.findByText("Vrijeme je isteklo")).toHaveClass("text-danger");
+  expect(screen.getByText(/Vrijede odgovori spremljeni prije isteka vremena/)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Predaj i vidi rezultate" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Nastavi vježbu" })).not.toBeInTheDocument();
 });
 
 it("summarizes progress and corrects the deadline by the server clock", () => {

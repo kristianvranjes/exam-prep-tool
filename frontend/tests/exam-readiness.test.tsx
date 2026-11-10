@@ -18,7 +18,7 @@ const readiness = (fields: Partial<ExamScopeReadiness> = {}): ExamScopeReadiness
 
 it("sets the range as one figure in Literata tabular figures, says it in words and carries coverage as its subtitle", () => {
   render(<ReadinessFigure readiness={readiness()} subtitle="You have practiced 12 of 30 approved questions" />);
-  expect(screen.getByText("Estimated readiness: 55 to 70 percent")).toBeInTheDocument();
+  expect(screen.getByText("Procijenjena spremnost: 55 do 70 posto")).toBeInTheDocument();
   const figure = screen.getByText("55–70%");
   expect(figure).toHaveAttribute("aria-hidden", "true");
   expect(figure.parentElement).toHaveClass("font-display", "tabular-nums");
@@ -29,47 +29,47 @@ it("sets the range as one figure in Literata tabular figures, says it in words a
 it("lists the weakest units with counts and practice shortcuts, keeping evidence one click away", () => {
   const onPracticeUnit = vi.fn();
   render(<ReadinessUnits readiness={readiness()} onPracticeUnit={onPracticeUnit} />);
-  const weakest = screen.getByRole("list", { name: "Weakest units" });
+  const weakest = screen.getByRole("list", { name: "Najslabije cjeline" });
   const items = within(weakest).getAllByRole("listitem");
   expect(items.map(item => item.querySelector("p")?.textContent)).toEqual(["Relacije", "Skupovi", "Logika"]);
-  expect(within(items[0]).getByText("Not practiced yet · 0 of 10 questions answered")).toBeVisible();
+  expect(within(items[0]).getByText("Još nije vježbano · odgovoreno 0 od 10 pitanja")).toBeVisible();
   // Counts, not percentages: the readiness figure is the overview's only percentage.
-  expect(within(items[1]).getByText("4 of 10 questions answered · 1 retained · 2 of 5 answers correct")).toBeVisible();
-  const practice = within(items[1]).getByRole("button", { name: "Practice this unit: Skupovi" });
+  expect(within(items[1]).getByText("odgovoreno 4 od 10 pitanja · zapamćeno 1 · točno 2 od 5 odgovora")).toBeVisible();
+  const practice = within(items[1]).getByRole("button", { name: "Vježbaj cjelinu: Skupovi" });
   expect(practice).toHaveClass("min-h-11");
   fireEvent.click(practice);
   expect(onPracticeUnit).toHaveBeenCalledExactlyOnceWith("u2");
-  fireEvent.click(screen.getByText("Readiness by unit"));
-  expect(within(screen.getByRole("list", { name: "Readiness by unit" })).getAllByRole("listitem")).toHaveLength(3);
-  expect(screen.getByText(/How it works \(readiness-v1\).*from 17 graded answers to 12 of 30 questions/)).toBeVisible();
+  fireEvent.click(screen.getByText("Spremnost po cjelinama"));
+  expect(within(screen.getByRole("list", { name: "Spremnost po cjelinama" })).getAllByRole("listitem")).toHaveLength(3);
+  expect(screen.getByText(/Kako radi \(readiness-v1\).*iz 17 odgovora na 12 od 30 pitanja/)).toBeVisible();
 });
 
 it("says plainly when there are not enough answers yet, without a range", () => {
   const early = readiness({ answered_count: 3, readiness: null });
   render(<><ReadinessFigure readiness={early} /><ReadinessUnits readiness={early} onPracticeUnit={vi.fn()} /></>);
-  expect(screen.getByText("Not enough answers yet")).toBeVisible();
-  expect(screen.getByText(/Answer 7 more questions from this cycle to see a readiness range\. You have answered 3 of 30/)).toBeVisible();
+  expect(screen.getByText("Još nema dovoljno odgovora")).toBeVisible();
+  expect(screen.getByText(/Odgovorite na još 7 pitanja iz ovog roka da vidite raspon spremnosti\. Odgovorili ste na 3 od 30/)).toBeVisible();
   expect(screen.queryByText(/Estimated readiness/)).not.toBeInTheDocument();
-  expect(screen.getByRole("list", { name: "Start with" })).toBeVisible();
+  expect(screen.getByRole("list", { name: "Počnite s" })).toBeVisible();
 });
 
 it("flags a wide range and shows a single number once the range has closed", () => {
   const view = render(<><ReadinessFigure readiness={readiness({ readiness: { low: 0.2, high: 0.9 } })} /><ReadinessUnits readiness={readiness()} /></>);
-  expect(screen.getByText("Estimated readiness: 20 to 90 percent")).toBeInTheDocument();
-  expect(screen.getByText("The range is wide because some units have few or no answers yet.")).toBeVisible();
+  expect(screen.getByText("Procijenjena spremnost: 20 do 90 posto")).toBeInTheDocument();
+  expect(screen.getByText("Raspon je širok jer neke cjeline imaju malo odgovora ili ih nemaju.")).toBeVisible();
   // Without a handler, for example during an open session, there are no practice actions.
   expect(screen.queryByRole("button", { name: /Practice this/ })).not.toBeInTheDocument();
   view.unmount();
   render(<ReadinessFigure readiness={readiness({ readiness: { low: 0.75, high: 0.75 } })} />);
-  expect(screen.getByText("Estimated readiness: 75 percent")).toBeInTheDocument();
+  expect(screen.getByText("Procijenjena spremnost: 75 posto")).toBeInTheDocument();
   expect(screen.getByText("75%")).toBeInTheDocument();
 });
 
 it("explains a cycle without automatically graded questions instead of showing zeros", () => {
   const empty = readiness({ question_count: 0, answered_count: 0, min_answered: 0, readiness: null, units: [unit("u1", "Logika", { question_count: 0, coverage: null, readiness: null })], weakest_unit_ids: [] });
   render(<><ReadinessFigure readiness={empty} /><ReadinessUnits readiness={empty} /></>);
-  expect(screen.getByText(/No automatically graded questions are linked to this cycle's units yet/)).toBeVisible();
-  expect(screen.queryByText("Not enough answers yet")).not.toBeInTheDocument();
-  expect(screen.queryByText("Readiness by unit")).not.toBeInTheDocument();
+  expect(screen.getByText(/Cjeline ovog roka još nemaju automatski ocijenjenih pitanja/)).toBeVisible();
+  expect(screen.queryByText("Još nema dovoljno odgovora")).not.toBeInTheDocument();
+  expect(screen.queryByText("Spremnost po cjelinama")).not.toBeInTheDocument();
   expect(screen.queryByText("0%")).not.toBeInTheDocument();
 });
