@@ -1,5 +1,4 @@
 import { expect, test, type Page } from "@playwright/test";
-import { english } from "./locale";
 import { makePdf } from "./pdf-fixture";
 
 const facultyName = "E2E Faculty";
@@ -13,11 +12,11 @@ const primaryFill = /(?:^|\s)bg-accent(?:\s|$)/;
 
 async function login(page: Page, email: string) {
   await page.goto("/");
-  const form = page.getByRole("form", { name: "Login" });
-  await form.getByLabel("Email").fill(email);
-  await form.getByLabel("Password").fill(password);
-  await form.getByRole("button", { name: "Log in" }).click();
-  await expect(page.getByRole("heading", { name: "Your courses" })).toBeVisible();
+  const form = page.getByRole("form", { name: "Prijava" });
+  await form.getByLabel("E-pošta").fill(email);
+  await form.getByLabel("Lozinka").fill(password);
+  await form.getByRole("button", { name: "Prijavi se" }).click();
+  await expect(page.getByRole("heading", { name: "Vaši kolegiji" })).toBeVisible();
   await expect(page.getByText(email, { exact: true })).toBeVisible();
 }
 
@@ -32,8 +31,8 @@ async function expectMetricAtLeast(page: Page, label: string, minimum: number) {
 
 test("moderator and student complete the core exam-preparation journey", async ({ browser }) => {
   const baseURL = test.info().project.use.baseURL as string;
-  const moderatorContext = await browser.newContext({ baseURL, storageState: english });
-  const studentContext = await browser.newContext({ baseURL, storageState: english });
+  const moderatorContext = await browser.newContext({ baseURL });
+  const studentContext = await browser.newContext({ baseURL });
   try {
     const moderator = await moderatorContext.newPage();
     const student = await studentContext.newPage();
@@ -41,28 +40,28 @@ test("moderator and student complete the core exam-preparation journey", async (
     student.on("pageerror", error => pageErrors.push(error.message));
 
     await login(moderator, "owner-e2e@example.com");
-    await moderator.getByRole("button", { name: "Faculty tools", exact: true }).click();
+    await moderator.getByRole("button", { name: "Alati fakulteta", exact: true }).click();
     const createCourse = moderator.getByRole("form", { name: "Create a course" });
     await expect(createCourse).toBeVisible();
     await createCourse.getByLabel("Faculty").selectOption({ label: facultyName });
     await createCourse.getByLabel("Course name").fill(courseName);
     await createCourse.getByLabel("Code (optional)").fill("E2E-101");
     await createCourse.getByRole("button", { name: "Create course" }).click();
-    const moderatorCourses = moderator.getByRole("region", { name: "Your courses" });
+    const moderatorCourses = moderator.getByRole("region", { name: "Vaši kolegiji" });
     await expect(moderator.getByRole("heading", { name: courseName, exact: true })).toBeVisible();
     await expect(moderatorCourses).toBeHidden();
     await moderator.getByRole("button", { name: "Back to Home" }).click();
     await expect(moderatorCourses.getByRole("button", { name: new RegExp(courseName) })).toHaveCount(1);
-    await moderator.getByRole("button", { name: "Faculty tools", exact: true }).click();
+    await moderator.getByRole("button", { name: "Alati fakulteta", exact: true }).click();
 
     await login(student, "student-e2e@example.com");
-    const studentCourses = student.getByRole("region", { name: "Your courses" });
-    await expect(studentCourses.getByRole("heading", { name: "No courses yet" })).toBeVisible();
-    await expect(student.getByLabel("Browse by faculty")).toHaveCount(0);
-    await student.getByRole("button", { name: "Join a course", exact: true }).click();
-    await student.getByLabel("Browse by faculty").selectOption({ label: "E2E Faculty — Example Test University" });
-    await expect(student.getByRole("button", { name: `Join course: ${courseName}` })).toBeVisible();
-    await student.getByRole("button", { name: `Join course: ${courseName}` }).click();
+    const studentCourses = student.getByRole("region", { name: "Vaši kolegiji" });
+    await expect(studentCourses.getByRole("heading", { name: "Još nema kolegija" })).toBeVisible();
+    await expect(student.getByLabel("Pretraži po fakultetu")).toHaveCount(0);
+    await student.getByRole("button", { name: "Upiši kolegij", exact: true }).click();
+    await student.getByLabel("Pretraži po fakultetu").selectOption({ label: "E2E Faculty — Example Test University" });
+    await expect(student.getByRole("button", { name: `Upiši kolegij: ${courseName}` })).toBeVisible();
+    await student.getByRole("button", { name: `Upiši kolegij: ${courseName}` }).click();
     await expect(studentCourses.getByRole("button", { name: new RegExp(courseName) })).toHaveCount(1);
     await studentCourses.getByRole("button", { name: new RegExp(courseName) }).click();
     await expect(student.getByRole("heading", { name: courseName, exact: true })).toBeVisible();
@@ -73,7 +72,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(student.getByRole("button", { name: "Resume session" })).toHaveCount(0);
     await test.info().attach("overview-empty", { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
     await expect(studentCourses).toBeHidden();
-    await expect(student.getByLabel("Browse by faculty")).toBeHidden();
+    await expect(student.getByLabel("Pretraži po fakultetu")).toBeHidden();
     for (const name of ["Course materials", "Practice quiz", "Progress", "Question bank"]) await expect(student.getByRole("region", { name, exact: true })).toBeHidden();
     await expect(student.getByRole("button", { name: "Course settings", exact: true })).toHaveCount(0);
     await expect(student.getByRole("heading", { name: "Course settings" })).toHaveCount(0);
@@ -207,7 +206,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(student.getByRole("heading", { name: "Question 1 of 1" })).toBeVisible();
     await student.getByRole("radio", { name: correctOption }).check();
     await expect(studentNavigation).toBeHidden();
-    await expect(student.getByRole("navigation", { name: "Main navigation" })).toBeHidden();
+    await expect(student.getByRole("navigation", { name: "Glavna navigacija" })).toBeHidden();
     await student.getByText("Course navigation", { exact: true }).click();
     await studentNavigation.getByRole("button", { name: "Overview", exact: true }).click();
     await expect(student.getByRole("heading", { name: "Continue studying" })).toBeVisible();
@@ -219,8 +218,8 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(student.getByRole("radio", { name: correctOption })).toBeChecked();
     await student.getByText("Course navigation", { exact: true }).click();
     await student.getByRole("button", { name: "Back to Home" }).click();
-    await expect(student.getByRole("heading", { name: "Home", exact: true })).toBeVisible();
-    await expect(student.getByRole("heading", { name: "Continue studying" })).toBeVisible();
+    await expect(student.getByRole("heading", { name: "Početna", exact: true })).toBeVisible();
+    await expect(student.getByRole("heading", { name: "Nastavite učiti" })).toBeVisible();
     await student.getByRole("button", { name: "Resume session" }).click();
     await expect(student.getByRole("radio", { name: correctOption })).toBeChecked();
     // Guided practice checks the answer immediately and reveals only its key.

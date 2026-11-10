@@ -48,9 +48,9 @@ it("keeps the requested deep link through authentication", async () => {
   window.history.replaceState(null, "", "/courses/course/materials");
   mock.me.mockRejectedValue(new Error("Signed out"));
   render(<AppShell />);
-  fireEvent.change(await screen.findByLabelText("Email"), { target: { value: user.email } });
-  fireEvent.change(screen.getByLabelText("Password"), { target: { value: "test password" } });
-  fireEvent.submit(screen.getByRole("form", { name: "Login" }));
+  fireEvent.change(await screen.findByLabelText("E-pošta"), { target: { value: user.email } });
+  fireEvent.change(screen.getByLabelText("Lozinka"), { target: { value: "test password" } });
+  fireEvent.submit(screen.getByRole("form", { name: "Prijava" }));
   expect(await screen.findByRole("heading", { name: "Algorithms" })).toBeVisible();
   expect(screen.getByRole("region", { name: "Course materials" })).toBeVisible();
   expect(window.location.pathname).toBe("/courses/course/materials");
@@ -63,7 +63,7 @@ it("does not join or expose an unavailable course through a URL", async () => {
   expect(mock.membership).not.toHaveBeenCalledWith("unknown");
   expect(mock.start).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Back to Home" }));
-  expect(screen.getByRole("heading", { name: "Home" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Početna" })).toBeVisible();
 });
 
 it("corrects an active session's results URL and offers retry for a failed deep-link read", async () => {
@@ -123,8 +123,8 @@ it("ignores a late attempt read after switching to another course", async () => 
   window.history.replaceState(null, "", "/courses/course/attempts/attempt");
   render(<AppShell />);
   await waitFor(() => expect(mock.read).toHaveBeenCalled());
-  fireEvent.click(within(screen.getByRole("navigation", { name: "Main navigation" })).getByRole("button", { name: "Home" }));
-  fireEvent.click(screen.getByRole("button", { name: "Open course: Statistics" }));
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Glavna navigacija" })).getByRole("button", { name: "Početna" }));
+  fireEvent.click(screen.getByRole("button", { name: "Otvori kolegij: Statistics" }));
   await act(async () => resolve(activeAttempt));
   expect(screen.getByRole("heading", { name: "Statistics" })).toBeVisible();
   expect(window.location.pathname).toBe("/courses/statistics");
@@ -136,7 +136,7 @@ function navigate(name: string) {
   if (menu && !(menu.parentElement as HTMLDetailsElement).open) fireEvent.click(menu);
   fireEvent.click(within(screen.getByRole("navigation", { name: "Course navigation" })).getByRole("button", { name })); }
 async function enterCourse() {
-  fireEvent.click(await screen.findByRole("button", { name: "Open course: Algorithms" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Otvori kolegij: Algorithms" }));
 }
 async function startPractice() {
   await enterCourse(); navigate("Practice");
@@ -153,9 +153,9 @@ it("preserves an actual unsaved answer through destinations, Home, same-course r
   expect(screen.getByLabelText("Your short answer")).not.toBeVisible();
   navigate("Practice"); expect(screen.getByLabelText("Your short answer")).toHaveValue("My unsaved explanation");
   fireEvent.click(screen.getByRole("button", { name: "Back to Home" }));
-  expect(await screen.findByRole("heading", { name: "Continue studying" })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Nastavite učiti" })).toBeVisible();
   // The open session reports its saved progress; the unsaved draft does not count yet.
-  expect(within(screen.getByRole("heading", { name: "Continue studying" }).parentElement!).getByText("0 of 1 answered")).toBeVisible();
+  expect(within(screen.getByRole("heading", { name: "Nastavite učiti" }).parentElement!).getByText("0 of 1 answered")).toBeVisible();
   await enterCourse();
   expect(screen.getByRole("heading", { name: "Overview" })).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Resume session" }));
@@ -185,17 +185,17 @@ it("guards unsaved answers on course switching and logout, including failed save
   fireEvent.change(await startPractice(), { target: { value: "My unsaved answer" } });
   fireEvent.click(screen.getByRole("button", { name: "Save and review" })); await screen.findByRole("alert");
   fireEvent.click(screen.getByRole("button", { name: "Back to Home" }));
-  fireEvent.click(screen.getByRole("button", { name: "Open course: Statistics" }));
+  fireEvent.click(screen.getByRole("button", { name: "Otvori kolegij: Statistics" }));
   expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Switch courses"));
   expect(mock.membership).not.toHaveBeenCalledWith("statistics");
-  fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+  fireEvent.click(screen.getByRole("button", { name: "Odjava" }));
   expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Log out")); expect(mock.logout).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Resume session" }));
   expect(await screen.findByLabelText("Your short answer")).toHaveValue("My unsaved answer");
   fireEvent.click(screen.getByRole("button", { name: "Back to Home" })); confirm.mockReturnValue(true);
-  fireEvent.click(screen.getByRole("button", { name: "Open course: Statistics" }));
+  fireEvent.click(screen.getByRole("button", { name: "Otvori kolegij: Statistics" }));
   expect(screen.getByRole("heading", { name: "Statistics" })).toBeVisible();
-  expect(screen.queryByRole("heading", { name: "Continue studying" })).not.toBeInTheDocument(); confirm.mockRestore();
+  expect(screen.queryByRole("heading", { name: "Nastavite učiti" })).not.toBeInTheDocument(); confirm.mockRestore();
 });
 
 it("preserves an actual question draft across More, Materials and Home and guards course changes", async () => {
@@ -212,7 +212,7 @@ it("preserves an actual question draft across More, Materials and Home and guard
   expect(screen.getByLabelText("Option 1", { exact: true })).toHaveValue("Draft option");
   expect(mock.questions).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole("button", { name: "Back to Home" }));
-  fireEvent.click(screen.getByRole("button", { name: "Open course: Statistics" }));
+  fireEvent.click(screen.getByRole("button", { name: "Otvori kolegij: Statistics" }));
   expect(confirm).toHaveBeenCalledOnce(); await enterCourse(); navigate("More");
   expect(screen.getByLabelText("Question text")).toHaveValue("Unfinished draft question");
   confirm.mockRestore();
@@ -232,7 +232,7 @@ it("removes the resume entry after submission and retains the existing result", 
   fireEvent.click(await screen.findByRole("button", { name: "Confirm final submission" }));
   await screen.findByRole("region", { name: "Practice results" });
   fireEvent.click(screen.getByRole("button", { name: "Back to Home" }));
-  expect(screen.queryByRole("heading", { name: "Continue studying" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Nastavite učiti" })).not.toBeInTheDocument();
   await enterCourse(); navigate("Practice");
   expect(screen.getByRole("region", { name: "Practice results" })).toBeVisible();
   mock.history.mockResolvedValue([submitted]);
@@ -396,13 +396,13 @@ it("minimizes application navigation during answering and restores it after Save
   render(<AppShell />);
   fireEvent.change(await startPractice(), { target: { value: "My answer" } });
   expect(screen.getByRole("heading", { name: "Algorithms · Practice" })).toBeVisible();
-  expect(screen.queryByRole("navigation", { name: "Main navigation" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "ExamPrep home" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("navigation", { name: "Glavna navigacija" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "ExamPrep, početna" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Progress" })).not.toBeVisible();
   expect(screen.getByRole("button", { name: "Save and leave" })).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Save and leave" }));
   await screen.findByRole("button", { name: "Start practice" });
-  expect(screen.getByRole("button", { name: "ExamPrep home" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "ExamPrep, početna" })).toBeVisible();
   expect(screen.getByRole("button", { name: "Progress" })).toBeVisible();
   expect(mock.save).toHaveBeenCalledWith("course", "attempt", "question", { type: "SHORT_ANSWER", text: "My answer" });
   fireEvent.click(screen.getByRole("button", { name: "Resume session" }));
@@ -416,7 +416,7 @@ it('discovers and resumes saved work from Home and first Overview, including an 
     ? Array.from({ length: 20 }, (_, index) => ({ ...activeAttempt, id: 'submitted-' + index, status: 'SUBMITTED' }))
     : [activeAttempt]);
   render(<AppShell />);
-  await screen.findByRole('heading', { name: 'Continue studying' });
+  await screen.findByRole('heading', { name: 'Nastavite učiti' });
   await enterCourse();
   expect(screen.getByRole('button', { name: 'Resume session' })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Resume session' }));
@@ -447,7 +447,7 @@ it('does not warn for setup choices or successfully saved answers, but still gua
   await waitFor(() => expect(screen.getByRole('button', { name: 'Start practice' })).toBeEnabled());
   fireEvent.click(screen.getByRole('radio', { name: '10 questions' }));
   fireEvent.click(screen.getByRole('button', { name: 'Back to Home' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Open course: Statistics' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Otvori kolegij: Statistics' }));
   expect(confirm).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Back to Home' }));
   await enterCourse(); navigate('Practice');
@@ -458,7 +458,7 @@ it('does not warn for setup choices or successfully saved answers, but still gua
   fireEvent.click(screen.getByRole('button', { name: 'Save and review' }));
   await screen.findByText('1 of 1 answered and saved');
   fireEvent.click(screen.getByRole('button', { name: 'Back to Home' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Open course: Statistics' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Otvori kolegij: Statistics' }));
   expect(confirm).not.toHaveBeenCalled();
   confirm.mockRestore();
 });

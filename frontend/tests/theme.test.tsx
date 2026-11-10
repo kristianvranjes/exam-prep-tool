@@ -16,7 +16,7 @@ beforeEach(() => {
 
 it("defaults to System, follows the OS, and persists Light/Dark/System choices", async () => {
   render(<ThemeProvider><ThemeSelect /></ThemeProvider>);
-  const select = screen.getByLabelText("Theme");
+  const select = screen.getByLabelText("Tema");
   expect(select).toHaveValue("system");
   await waitFor(() => expect(document.documentElement).toHaveAttribute("data-theme", "light"));
   vi.mocked(window.matchMedia).mockReturnValue({ matches: true, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList);
@@ -33,12 +33,12 @@ it("defaults to System, follows the OS, and persists Light/Dark/System choices",
 it("restores a saved preference on a new mount", async () => {
   localStorage.setItem("examprep-theme", "dark");
   const first = render(<ThemeProvider><ThemeSelect /></ThemeProvider>);
-  expect(screen.getByLabelText("Theme")).toHaveValue("dark");
+  expect(screen.getByLabelText("Tema")).toHaveValue("dark");
   expect(document.documentElement).toHaveAttribute("data-theme", "dark");
-  fireEvent.change(screen.getByLabelText("Theme"), { target: { value: "light" } });
+  fireEvent.change(screen.getByLabelText("Tema"), { target: { value: "light" } });
   first.unmount();
   render(<ThemeProvider><ThemeSelect /></ThemeProvider>);
-  await waitFor(() => expect(screen.getByLabelText("Theme")).toHaveValue("light"));
+  await waitFor(() => expect(screen.getByLabelText("Tema")).toHaveValue("light"));
 });
 
 it("renders a stable disabled System selector and theme bootstrap script on the server", () => {
