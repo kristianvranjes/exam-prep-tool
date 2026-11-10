@@ -122,7 +122,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     const selectedQuestion = student.getByRole("article", { name: "Selected question" });
     await expect(selectedQuestion).toContainText(questionStem);
     await expect(selectedQuestion).toContainText("Nacrt");
-    await expect(selectedQuestion).toContainText("Source: Written or imported");
+    await expect(selectedQuestion).toContainText("Source: Napisano ili uvezeno");
     await selectedQuestion.getByRole("button", { name: "Submit for review" }).click();
     await expect(selectedQuestion).toContainText("Čeka pregled fakulteta");
 

@@ -110,7 +110,7 @@ for (const width of [1280, 390]) {
       } finally { await signedOut.close(); }
       const ownerPage = await owner.newPage();
       await ownerPage.goto(`${attemptUrl}/results`);
-      await expect(ownerPage.getByText("Could not open this practice session.", { exact: false })).toBeVisible();
+      await expect(ownerPage.getByText("Vježba se ne može otvoriti.", { exact: false })).toBeVisible();
       await page.goto(`http://localhost:3000/courses/${otherId}/attempts/${attemptUrl.split("/").pop()}/results`);
       await expect(page.getByRole("button", { name: "Natrag na vježbu", exact: true })).toBeVisible();
       await page.getByRole("button", { name: "Natrag na vježbu", exact: true }).click();
