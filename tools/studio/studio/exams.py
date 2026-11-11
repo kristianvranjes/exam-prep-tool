@@ -822,7 +822,8 @@ def run_exams(
         unit_flag(f, index, titles)
 
     # A question already in a unit whose transcription is unchanged stays exactly as it
-    # is: its review decision and push record are tied to its content.
+    # is: its review decision and push record are tied to its content. The stem counts
+    # too: a new transcription can add a shared block the printed item does not repeat.
     previous = previous_questions(studio_dir, units)
     # A question the owner has decided on is frozen: it stays exactly as it is and
     # stands for every transcription of it, so neither its decision nor its push
@@ -837,6 +838,7 @@ def run_exams(
             (old := previous.get(f.qid)) is not None
             and old.origin is not None
             and old.origin.original == original_text(f.item)
+            and old.content.get("stem") == f.item.stem.strip()
         ):
             kept[f.qid] = [old]
     fresh = [f for f in found if f.qid not in kept and f.item.unit in titles]

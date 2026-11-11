@@ -433,6 +433,32 @@ def test_a_decided_question_is_frozen_whatever_the_new_transcription(tmp_path: P
     assert not any("questions" in r for r in again.requests)  # no new key was needed
 
 
+def test_an_undecided_question_takes_a_shared_block_added_by_a_new_transcription(
+    tmp_path: Path,
+) -> None:
+    run(model(), tmp_path)
+
+    # Same printed item, but the new transcription copies the shared block into its stem.
+    again = model()
+    block = "```\nadresa vrijednost\n100 A2\n```\n"
+    again.extract["teorija.pdf"][0]["stem"] = block + LEX_STEM
+    again.keys[block + LEX_STEM] = again.keys[LEX_STEM]
+    run_exams(
+        studio_dir=tmp_path,
+        course_name="PPJ",
+        course=COURSE,
+        docs=lecture(),
+        exam_docs=[exam("teorija.pdf"), exam("zi.pdf")],
+        make_client=lambda: client_for(again, tmp_path),
+        questions_per_call=6,
+        force=True,
+    )
+    lex_unit = load_questions(tmp_path, "01")
+    assert lex_unit is not None
+    stems = {q.content["stem"] for q in lex_unit.questions}
+    assert block + LEX_STEM in stems and LEX_STEM not in stems
+
+
 def test_shared_blocks_are_copied_into_every_item_that_needs_them() -> None:
     # The transcription prompt asks for the block in each item, not only the first.
     assert "copy the whole block verbatim into the item's `stem`" in EXTRACT_SYSTEM
