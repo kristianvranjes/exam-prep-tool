@@ -17,11 +17,13 @@ from studio.exams import (
     group,
     keyed_document,
     mark_bold,
+    missing_context,
     run_exams,
 )
 from studio.generate import generate_unit, load_questions
 from studio.ingest import Page, PdfPages
 from studio.llm import ChatClient
+from studio.prompts import EXTRACT_SYSTEM
 
 LEX = "Program LEX na ulazu prima definiciju leksičkog analizatora i gradi leksički analizator."
 HEAP = "Gomila je dio memorije koji se dinamički dodjeljuje tijekom izvođenja programa."
@@ -429,3 +431,52 @@ def test_a_decided_question_is_frozen_whatever_the_new_transcription(tmp_path: P
     assert after is not None
     assert [q for q in after.questions if q.id == lex.id] == [lex]
     assert not any("questions" in r for r in again.requests)  # no new key was needed
+
+
+def test_an_undecided_question_takes_a_shared_block_added_by_a_new_transcription(
+    tmp_path: Path,
+) -> None:
+    run(model(), tmp_path)
+
+    # Same printed item, but the new transcription copies the shared block into its stem.
+    again = model()
+    block = "```\nadresa vrijednost\n100 A2\n```\n"
+    again.extract["teorija.pdf"][0]["stem"] = block + LEX_STEM
+    again.keys[block + LEX_STEM] = again.keys[LEX_STEM]
+    run_exams(
+        studio_dir=tmp_path,
+        course_name="PPJ",
+        course=COURSE,
+        docs=lecture(),
+        exam_docs=[exam("teorija.pdf"), exam("zi.pdf")],
+        make_client=lambda: client_for(again, tmp_path),
+        questions_per_call=6,
+        force=True,
+    )
+    lex_unit = load_questions(tmp_path, "01")
+    assert lex_unit is not None
+    stems = {q.content["stem"] for q in lex_unit.questions}
+    assert block + LEX_STEM in stems and LEX_STEM not in stems
+
+
+def test_shared_blocks_are_copied_into_every_item_that_needs_them() -> None:
+    # The transcription prompt asks for the block in each item, not only the first.
+    assert "copy the whole block verbatim into the item's `stem`" in EXTRACT_SYSTEM
+    assert "Do this for each item, not only the first." in EXTRACT_SYSTEM
+
+
+def test_a_stem_that_points_at_missing_code_or_a_figure_is_flagged() -> None:
+    assert missing_context("Na kojim linijama se događa upravljački hazard?")
+    assert missing_context("Za zadani graf tijeka izvođenja, koja tvrdnja dominacije je istinita?")
+    assert missing_context("Koji se atributi mogu izračunati u stablu danom na slici?")
+    assert missing_context("Za program prikazan u donjem dijelu stranice dodjeljuju se registri.")
+    # The block or the productions are in the stem itself.
+    assert not missing_context(
+        "Na kojim linijama se događa hazard?\n```\n1 LDR R0, [R1]\n2 ADD R2, R0, R0\n```"
+    )
+    assert not missing_context("Za sljedeću gramatiku odredite vrstu: S → Bc; S → cBb; B → ε;")
+    assert not missing_context(
+        "Zadana je gramatika s produkcijama: S → aASc, S → be, A → ε i A → c. "
+        "Čemu je jednak skup PRIMIJENI(A → ε)?"
+    )
+    assert not missing_context("Koji od navedenih postupaka nije dio generatora ciljnog programa?")

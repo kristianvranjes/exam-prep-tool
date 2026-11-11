@@ -157,7 +157,9 @@ def rewrite_user(questions: list[dict[str, object]]) -> str:
 
 
 # v2: items that need another item's program or data are tasks or incomplete.
-EXTRACT_VERSION = "exam-extract-v2"
+# v3: a block shared by several items (code, memory dump, table, grammar) is copied
+#     into every item that needs it instead of staying with the first one.
+EXTRACT_VERSION = "exam-extract-v3"
 
 EXTRACT_SYSTEM = """\
 You transcribe past exam papers and question lists of a university course into
@@ -182,14 +184,23 @@ For every item return:
     `stem`, `original` and `unit`.
   - "incomplete": a remembered or partial item that cannot be asked as it stands
     ("onaj zadatak s ...", missing options, "3. i 4. su bili ponovljeni"), or an
-    instruction, heading or note rather than a question. Also an item that depends
-    on a program, grammar or data given in another item ("ako je input_value = 12?",
-    "za isti program ...") unless that whole context is repeated in its own stem.
+    instruction, heading or note rather than a question. Also an item that needs a
+    figure, or a program, table or data that is not on the given pages.
+- Shared context: papers often give one block that several items use, such as a
+  program or code fragment, a memory dump ("adresa vrijednost ..."), a table, a
+  grammar or a text, announced by a line like "Sljedeća 4 pitanja (1. – 4.) vezana su
+  uz blok memorije", printed once before the items, inside the first of them, or
+  elsewhere on the page because of the layout. Every item that needs that block must
+  stand on its own: copy the whole block verbatim into the item's `stem` (and
+  `original`), before its own question, as a fenced block (```) when it is code, a
+  dump or a table. Do this for each item, not only the first. Classify such items by
+  their own question; they are not incomplete when the block is on the given pages.
 - `original`: the item's text exactly as the document has it (stem only), without the
   asterisks.
 - `stem`: the same question, corrected only for obvious typos, missing diacritics,
   broken line breaks and stray characters. Keep the wording, notation, symbols, code
-  and grammar productions as they are. Do not add or remove information.
+  and grammar productions as they are. Do not add or remove information, except the
+  shared block described above.
 - `options`: for "choice", every option in the document's order, each with `original`
   (exactly as printed, without the letter and asterisks), `text` (corrected the same
   way as the stem) and `marked` (true only when the option is set in bold). Split
