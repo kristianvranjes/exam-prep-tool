@@ -112,7 +112,7 @@ def test_blanks_negative_marking_and_scheduling(bank):
     assert member.delete(f"{session}/answers/{blank['id']}").status_code == 409
 
 
-def test_ordinary_practice_still_needs_every_answer_and_checked_answers_stay(bank):
+def test_ordinary_practice_still_needs_an_answer_and_checked_answers_stay(bank):
     owner, member, _, course, rows = bank
     _, path = published(owner, course, rows)
     attempt = take(member, path, feedback_mode="IMMEDIATE")

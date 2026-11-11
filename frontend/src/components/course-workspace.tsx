@@ -13,7 +13,7 @@ import { ItemAnalysisView } from "./item-analysis";
 import { PracticeQuiz, type PracticeSetupRequest } from "./practice-quiz";
 import { ProgressPanel } from "./progress-panel";
 import { QuestionBank, type QuestionFocus } from "./question-bank";
-import { Button } from "./ui";
+import { Button, LoadingState } from "./ui";
 import type { ResumableAttempt } from "./use-resumable-sessions";
 
 export type { CourseDestination } from "../lib/workspace-route";
@@ -22,11 +22,13 @@ const destinations: { id: CourseDestination; label: string }[] = [
   { id: "progress", label: "Napredak" }, { id: "materials", label: "Materijali" }, { id: "more", label: "Više" },
 ];
 
-export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = false, visible, destination, navigate, goHome, checkingSession,
+export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = false, roleKnown = true, visible, destination, navigate, goHome, checkingSession,
   adaptiveReviewRequest, onOpenAdaptiveReview, knownAttemptId, knownAttempt, onResume, onResumableAttemptChange, activeSession, routeAttemptId, routeResults, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onUpdated, onDeleted, onOpenAttempt }: {
   course: Course; currentUserId: string; isOwner: boolean; visible: boolean; destination: CourseDestination;
   /** A moderator of the course's faculty; with owners, they manage papers and see item analysis. */
   isModerator?: boolean;
+  /** False until this course's membership role has been read, so a manager is not told materials are closed. */
+  roleKnown?: boolean;
   navigate: (destination: CourseDestination, setup?: boolean) => void; goHome: () => void; checkingSession?: boolean;
   adaptiveReviewRequest: number; onOpenAdaptiveReview: () => void; knownAttemptId: string | null; knownAttempt?: ResumableAttempt;
   onResume: () => void; onResumableAttemptChange: (id: string | null) => void;
@@ -49,12 +51,14 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
     setQuestionFocus(current => ({ id, request: (current?.request ?? 0) + 1 }));
     setMoreDestination("questions");
   }
-  function openPractice(mode: PracticeSetupRequest["mode"], focus: Pick<PracticeSetupRequest, "scopeId" | "unitIds"> = {}) {
-    setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode, ...focus }));
+  function openPractice(mode: PracticeSetupRequest["mode"]) {
+    setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode }));
     navigate("practice", true);
   }
+  // Materials are a tool for the people who run the course; students practise from the question bank.
+  const tabs = manager ? destinations : destinations.filter(item => item.id !== "materials");
   const navigation = <nav aria-label="Navigacija kolegija" className="flex overflow-x-auto [scrollbar-width:none] shadow-[inset_0_-1px_0_var(--line)] sm:gap-x-1">
-      {destinations.map(item => <Button key={item.id} variant="tab" aria-current={destination === item.id ? "page" : undefined} aria-controls={`course-${item.id}`} onClick={() => navigate(item.id)}>{item.label}</Button>)}
+      {tabs.map(item => <Button key={item.id} variant="tab" aria-current={destination === item.id ? "page" : undefined} aria-controls={`course-${item.id}`} onClick={() => navigate(item.id)}>{item.label}</Button>)}
     </nav>;
   // Hide destinations instead of unmounting: answers, drafts and uploads stay in memory.
   return <section aria-labelledby="selected-course-heading">
@@ -66,17 +70,17 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
       <h2 id="overview-heading" className="text-xl font-semibold">Pregled</h2>
       {course.description && <p className="mt-3 max-w-prose text-muted">{course.description}</p>}
       <CourseOverview courseId={course.id} active={visible && destination === "overview"}
-        knownAttemptId={knownAttemptId} knownAttempt={knownAttempt} checkingSession={checkingSession} activeSession={activeSession} materials={materials} onResume={onResume}
+        knownAttemptId={knownAttemptId} knownAttempt={knownAttempt} checkingSession={checkingSession} activeSession={activeSession} materials={manager ? materials : undefined} onResume={onResume}
         onRecommendedPractice={() => openPractice("ADAPTIVE")}
-        onScopePractice={scopeId => openPractice("ADAPTIVE", { scopeId })} onUnitPractice={unitId => openPractice("ADAPTIVE", { unitIds: [unitId] })} onStartAttempt={onOpenAttempt}
-        onPapers={() => navigate("papers")} onProgress={() => navigate("progress")} onMaterials={() => navigate("materials")}
+        onStartAttempt={onOpenAttempt}
+        onPapers={() => navigate("papers")} onProgress={() => navigate("progress")} onMaterials={manager ? () => navigate("materials") : undefined}
         onQuestions={() => { setMoreDestination("questions"); navigate("more"); }} />
     </section>
     <div id="course-practice" hidden={destination !== "practice"}>
       <div id="practice" tabIndex={-1}><PracticeQuiz courseId={course.id} active={visible && destination === "practice"}
         adaptiveReviewRequest={adaptiveReviewRequest} setupRequest={setupRequest} resumeAttemptId={knownAttemptId} onResumableAttemptChange={onResumableAttemptChange}
         routeAttemptId={routeAttemptId} routeResults={routeResults} onAttemptRoute={onAttemptRoute} onAttemptChange={onAttemptChange} onAnswerDirtyChange={onAnswerDirtyChange}
-        onOpenMaterials={() => navigate("materials")} onOpenQuestions={() => { setMoreDestination("questions"); navigate("more"); }}
+        onOpenMaterials={manager ? () => navigate("materials") : undefined} onOpenQuestions={() => { setMoreDestination("questions"); navigate("more"); }}
         onOpenProgress={() => navigate("progress")} onBackToCourse={() => navigate("overview")} /></div>
     </div>
     {focused && <details className="mt-6 border-t border-line pt-3">
@@ -89,7 +93,14 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
     {destination === "papers" && <div id="course-papers"><ExamPapers courseId={course.id} onStartAttempt={onOpenAttempt} /></div>}
     <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} onStartAttempt={onOpenAttempt}
       onPracticeMistakes={() => openPractice("MISTAKES")} onPracticeFavorites={() => openPractice("FAVORITES")} /></div>
-    <div id="course-materials" hidden={destination !== "materials"}><CourseMaterials courseId={course.id} currentUserId={currentUserId} onSummaryChange={setMaterials} /></div>
+    {manager ? <div id="course-materials" hidden={destination !== "materials"}><CourseMaterials courseId={course.id} currentUserId={currentUserId} onSummaryChange={setMaterials} /></div>
+      // A student who follows an old link gets a way back instead of an empty page.
+      : destination === "materials" && <div id="course-materials" className="mt-6 max-w-prose">
+        {roleKnown ? <>
+          <p>Materijale kolegija vide samo vlasnik kolegija i moderatori fakulteta.</p>
+          <Button variant="secondary" className="mt-4" onClick={() => navigate("overview")}>Natrag na pregled</Button>
+        </> : <LoadingState>Provjeravam pristup materijalima…</LoadingState>}
+      </div>}
     <section id="course-more" hidden={destination !== "more"} aria-label="Više alata kolegija" className="mt-6">
       <h2 className="text-xl font-semibold">Više</h2>
       <div className="mt-4 flex flex-wrap gap-3">
@@ -98,7 +109,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         {manager && <Button variant="secondary" aria-pressed={moreDestination === "analysis"} onClick={() => setMoreDestination("analysis")}>Analiza pitanja</Button>}
         {isOwner && <Button variant="secondary" aria-pressed={moreDestination === "settings"} onClick={() => setMoreDestination("settings")}>Postavke kolegija</Button>}
       </div>
-      <div hidden={moreDestination !== "questions"}><QuestionBank courseId={course.id} focus={questionFocus} onOpenMaterials={() => navigate("materials")} /></div>
+      <div hidden={moreDestination !== "questions"}><QuestionBank courseId={course.id} focus={questionFocus} onOpenMaterials={manager ? () => navigate("materials") : undefined} /></div>
       {unitsOpened && <div hidden={moreDestination !== "units"}><CourseUnits courseId={course.id} isOwner={isOwner} /></div>}
       {manager && moreDestination === "analysis" && <ItemAnalysisView courseId={course.id} onOpenQuestion={openQuestion} />}
       {isOwner && <div hidden={moreDestination !== "settings"}><CourseSettings course={course} onUpdated={onUpdated} onDeleted={onDeleted} /></div>}

@@ -1,8 +1,8 @@
 # Browser acceptance test
 
 The Chromium suite proves one real, two-session journey: a seeded faculty moderator
-logs in and creates a course; a separate student joins it, uploads a tiny PDF,
-authors and submits an MCQ; the moderator approves it; the student reports the
+logs in, creates a course and uploads a tiny PDF as its owner; a separate student
+joins it, is offered no materials, authors and submits an MCQ; the moderator approves it; the student reports the
 approved question as UNCLEAR with fixed details and the moderator dismisses it in
 Reports; the student proposes difficulty 3 with a fixed note; the moderator compares
 base version 3 and the proposed value in Suggestions and applies it; the student

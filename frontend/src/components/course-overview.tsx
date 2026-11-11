@@ -43,15 +43,15 @@ function coverageLine(coverage: ExamScopeCoverage | null) {
 const ruled = "[&>*+*]:border-t [&>*+*]:border-line [&>*+*]:pt-group";
 
 export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt, checkingSession, activeSession, materials, onResume,
-  onRecommendedPractice, onScopePractice, onUnitPractice, onStartAttempt, onPapers, onProgress, onMaterials, onQuestions }: {
+  onRecommendedPractice, onStartAttempt, onPapers, onProgress, onMaterials, onQuestions }: {
   /** Opens the course's past exams. */
   onPapers?: () => void;
   courseId: string; active: boolean; knownAttemptId: string | null; knownAttempt?: ResumableAttempt;
-  checkingSession?: boolean; activeSession?: boolean; materials: MaterialsSummary; onResume: () => void; onRecommendedPractice: () => void;
-  onScopePractice?: (scopeId: string) => void; onProgress: () => void; onMaterials: () => void; onQuestions: () => void;
-  /** Opens practice setup focused on one unit, from the readiness shortcuts. */
-  onUnitPractice?: (unitId: string) => void;
-  /** Opens a session started here, such as the one-click due review. */
+  checkingSession?: boolean; activeSession?: boolean; onResume: () => void; onRecommendedPractice: () => void;
+  onProgress: () => void; onQuestions: () => void;
+  /** Course materials and the way to them; both are given only to people who manage the course. */
+  materials?: MaterialsSummary; onMaterials?: () => void;
+  /** Opens a session started here: practice for the coming exam or one unit, the due review or a quick quiz. */
   onStartAttempt?: (attempt: Attempt) => void;
 }) {
   const id = useId();
@@ -65,6 +65,8 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
   const [quickTarget, setQuickTarget] = useState("");
   const [quickStarting, setQuickStarting] = useState(false);
   const [quickError, setQuickError] = useState("");
+  const [focusedStarting, setFocusedStarting] = useState(false);
+  const [focusedError, setFocusedError] = useState("");
   const [papers, setPapers] = useState<ExamPaper[]>([]);
   const [readAttempt, setReadAttempt] = useState<ResumableAttempt | null>(null);
 
@@ -82,6 +84,7 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
       setTargets({ scopes: [], units: [] });
       setQuickTarget("");
       setQuickError("");
+      setFocusedError("");
       setPapers([]);
       // Published past exams are offered next to the countdown; without them the link is left out.
       void Promise.resolve().then(() => api.examPapers(courseId)).then(rows => {
@@ -139,7 +142,7 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
   const showDue = due > 0 && !activeSession && Boolean(onStartAttempt);
   const showQuick = !activeSession && Boolean(onStartAttempt);
   // One primary action: Resume while a session is open, then the coming exam, then due review, then recommended practice.
-  const examLeads = Boolean(countdown && onScopePractice);
+  const examLeads = Boolean(countdown && onStartAttempt);
   const examPrimary = !sessionOpen && !noQuestions && examLeads;
   const duePrimary = !sessionOpen && !examPrimary && showDue;
   const recommendedPrimary = !sessionOpen && !examPrimary && !duePrimary;
@@ -157,8 +160,16 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
     catch (cause) { setQuickError(cause instanceof Error ? cause.message : "Brzi kviz nije pokrenut. Pokušajte ponovno."); }
     finally { setQuickStarting(false); }
   }
+  /** The exam and unit buttons start a session at once; other settings stay in Practice. */
+  async function focusedPractice(focus: PracticeFocus) {
+    if (!onStartAttempt || focusedStarting) return;
+    setFocusedStarting(true); setFocusedError("");
+    try { onStartAttempt(await practiceApi.focusedPractice(courseId, focus)); }
+    catch (cause) { setFocusedError(cause instanceof Error ? cause.message : "Vježba nije pokrenuta. Pokušajte ponovno."); }
+    finally { setFocusedStarting(false); }
+  }
   const summary = progress.summary;
-  const recentMaterials = [...materials.materials].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 2);
+  const recentMaterials = [...(materials?.materials ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 2);
   const exam = countdown?.exam;
   const coverage = coverageLine(countdown?.coverage ?? null);
   const unitCount = exam?.scope.unit_ids.length ?? 0;
@@ -180,20 +191,25 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
         {countdown.readiness ? <ReadinessFigure readiness={countdown.readiness} subtitle={coverage} />
           : coverage && <p className="max-w-prose text-sm text-muted">{coverage}</p>}
       </div>
-      {!activeSession && !noQuestions && (onScopePractice || (onPapers && papers.length > 0)) && <div className="mt-group flex flex-col items-stretch gap-stack sm:flex-row sm:flex-wrap sm:items-center">
-        {onScopePractice && <Button variant={examPrimary ? "primary" : "secondary"} onClick={() => onScopePractice(exam.scope.id)}>Vježbaj za {exam.scope.name}</Button>}
-        {onPapers && papers.length > 0 && <Button variant="ghost" onClick={onPapers}>{pastExamsLabel(papers, exam.scope.id)}</Button>}
+      {!activeSession && !noQuestions && (onStartAttempt || (onPapers && papers.length > 0)) && <div className="mt-group">
+        <div className="flex flex-col items-stretch gap-stack sm:flex-row sm:flex-wrap sm:items-center">
+          {onStartAttempt && <Button variant={examPrimary ? "primary" : "secondary"} disabled={focusedStarting} aria-describedby={`${id}-focused`} onClick={() => void focusedPractice({ exam_scope_id: exam.scope.id })}>{focusedStarting ? "Pokrećem vježbu…" : `Vježbaj za ${exam.scope.name}`}</Button>}
+          {onPapers && papers.length > 0 && <Button variant="ghost" onClick={onPapers}>{pastExamsLabel(papers, exam.scope.id)}</Button>}
+        </div>
+        {onStartAttempt && <p id={`${id}-focused`} className="mt-2 max-w-prose text-sm text-muted">Počinje odmah, a svaki se odgovor provjerava čim ga date. Broj i vrstu pitanja birate pod Vježba.</p>}
+        {focusedError && <Alert className="mt-stack max-w-prose">{focusedError}</Alert>}
       </div>}
-      {countdown.readiness && <ReadinessUnits readiness={countdown.readiness} onPracticeUnit={activeSession ? undefined : onUnitPractice} />}
+      {countdown.readiness && <ReadinessUnits readiness={countdown.readiness} busy={focusedStarting}
+        onPracticeUnit={activeSession || !onStartAttempt ? undefined : unitId => void focusedPractice({ unit_ids: [unitId] })} />}
     </section>}
 
     {noQuestions ? <section aria-labelledby="overview-next-heading">
       <h3 id="overview-next-heading" className="text-lg font-semibold">Što dalje učiti</h3>
       <p className="mt-stack font-semibold">Ovaj kolegij još nema pitanja za vježbu.</p>
-      <p className="mt-1 max-w-prose text-sm text-muted">Pročitajte materijale kolegija ili predložite pitanje kroz bazu pitanja.</p>
+      <p className="mt-1 max-w-prose text-sm text-muted">{onMaterials ? "Pročitajte materijale kolegija ili predložite pitanje kroz bazu pitanja." : "Pitanja se pojavljuju ovdje kad ih fakultet odobri. Možete predložiti pitanje kroz bazu pitanja."}</p>
       <div className="mt-stack flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-        <Button variant={sessionOpen ? "secondary" : "primary"} onClick={onMaterials}>Otvori materijale</Button>
-        <Button variant="ghost" onClick={onQuestions}>Predloži pitanje</Button>
+        {onMaterials && <Button variant={sessionOpen ? "secondary" : "primary"} onClick={onMaterials}>Otvori materijale</Button>}
+        <Button variant={onMaterials ? "ghost" : "secondary"} onClick={onQuestions}>Predloži pitanje</Button>
       </div>
     </section> : !activeSession && <section aria-labelledby="overview-next-heading">
       <h3 id="overview-next-heading" className="text-lg font-semibold">{examLeads ? "Drugi načini učenja" : "Što dalje učiti"}</h3>
@@ -221,7 +237,7 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
       </div>}
     </section>}
 
-    <div className="grid min-w-0 gap-group md:grid-cols-2">
+    <div className={`grid min-w-0 gap-group${materials ? " md:grid-cols-2" : ""}`}>
       <section aria-labelledby="overview-progress-heading" className="min-w-0">
         <h3 id="overview-progress-heading" className="text-lg font-semibold">Sažetak napretka</h3>
         {progress.loading ? <p role="status" className="mt-stack text-sm text-muted">Učitavam napredak…</p> : progress.error ?
@@ -232,15 +248,15 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
           </> : <p className="mt-stack max-w-prose text-sm text-muted">Napredak se pojavljuje nakon vježbe s automatski ocijenjenim pitanjima. Kratki odgovori koriste samoprocjenu.</p>}
         <Button variant="secondary" className="mt-stack" onClick={onProgress}>Otvori napredak</Button>
       </section>
-      <section aria-labelledby="overview-materials-heading" className="min-w-0">
+      {materials && <section aria-labelledby="overview-materials-heading" className="min-w-0">
         <h3 id="overview-materials-heading" className="text-lg font-semibold">Materijali</h3>
         {materials.loading ? <p role="status" className="mt-stack text-sm text-muted">Učitavam materijale…</p> : materials.error ?
           <p className="mt-stack text-sm text-muted">Sažetak materijala nije učitan. Otvorite Materijale i pokušajte ponovno.</p> : materials.materials.length ? <>
             <p className="mt-stack text-sm text-muted">{plural(materials.materials.length, ["materijal", "materijala", "materijala"])}</p>
             <ul aria-label="Nedavni materijali" className="mt-2 space-y-1 text-sm">{recentMaterials.map(material => <li key={material.id} className="break-words [overflow-wrap:anywhere]">{material.original_filename}</li>)}</ul>
           </> : <p className="mt-stack text-sm text-muted">Još nema dodanih materijala.</p>}
-        {!noQuestions && <Button variant="secondary" className="mt-stack" onClick={onMaterials}>Otvori materijale</Button>}
-      </section>
+        {!noQuestions && onMaterials && <Button variant="secondary" className="mt-stack" onClick={onMaterials}>Otvori materijale</Button>}
+      </section>}
     </div>
     <p className="text-sm text-muted">Prijedlozi pitanja i alati kolegija nalaze se pod Više.</p>
   </div>;

@@ -47,10 +47,12 @@ export function ReadinessFigure({ readiness, subtitle }: { readiness: ExamScopeR
 }
 
 /** The weakest units with practice shortcuts, then the evidence for every unit and the rule behind the figure. */
-export function ReadinessUnits({ readiness, onPracticeUnit }: {
+export function ReadinessUnits({ readiness, onPracticeUnit, busy = false }: {
   readiness: ExamScopeReadiness;
-  /** Opens practice focused on one unit; omitted while a session is open. */
+  /** Starts practice on one unit; omitted while a session is open. */
   onPracticeUnit?: (unitId: string) => void;
+  /** A session is being started, so the shortcuts wait. */
+  busy?: boolean;
 }) {
   const id = useId();
   const units = new Map(readiness.units.map(unit => [unit.unit_id, unit]));
@@ -64,7 +66,7 @@ export function ReadinessUnits({ readiness, onPracticeUnit }: {
           <p className="font-medium [overflow-wrap:anywhere]">{unit.title}</p>
           <p className="text-sm text-muted tabular-nums">{unitSummary(unit)}</p>
         </div>
-        {onPracticeUnit && <Button variant="ghost" className="w-full shrink-0 sm:w-auto" onClick={() => onPracticeUnit(unit.unit_id)}>
+        {onPracticeUnit && <Button variant="ghost" className="w-full shrink-0 sm:w-auto" disabled={busy} onClick={() => onPracticeUnit(unit.unit_id)}>
           Vježbaj<span className="sr-only"> cjelinu: {unit.title}</span>
         </Button>}
       </li>)}</ul>

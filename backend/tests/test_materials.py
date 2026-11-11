@@ -80,7 +80,7 @@ def test_course_delete_removes_all_sources_and_leaves_other_course(clients, tmp_
         "id"
     ]
     assert upload(owner, course_id).status_code == 201
-    assert upload(member, course_id).status_code == 201
+    assert upload(owner, course_id).status_code == 201
     assert upload(owner, other).status_code == 201
     sources = source_paths(course_id, tmp_path)
     unrelated = source_paths(other, tmp_path)
@@ -169,13 +169,17 @@ def test_member_pdf_and_non_member_access(clients, tmp_path):
         assert upload(anonymous, course_id).status_code == 401
     assert upload(stranger, course_id).status_code == 404
     assert stranger.get(course_path).status_code == 404
-    response = upload(member, course_id, filename="../../notes.pdf")
+    # Members read materials; only the owner or a faculty moderator adds them.
+    assert upload(member, course_id).status_code == 403
+    assert member.get(course_path).json() == []
+    assert not list(tmp_path.iterdir())
+    response = upload(owner, course_id, filename="../../notes.pdf")
     assert response.status_code == 201
     material = response.json()
     assert material["status"] == "READY"
     assert material["original_filename"] == "notes.pdf"
     assert material["file_size_bytes"] == len(make_pdf())
-    assert material["uploaded_by_user_id"] == member.get("/auth/me").json()["id"]
+    assert material["uploaded_by_user_id"] == owner.get("/auth/me").json()["id"]
     assert "storage_key" not in material
     path = f"/materials/{material['id']}"
     detail = member.get(path).json()
@@ -207,61 +211,61 @@ def test_member_pdf_and_non_member_access(clients, tmp_path):
     ],
 )
 def test_invalid_uploads(clients, tmp_path, data, filename, mime, status):
-    _, member, _, course_id = clients
-    assert upload(member, course_id, data, filename, mime).status_code == status
+    owner, _, _, course_id = clients
+    assert upload(owner, course_id, data, filename, mime).status_code == status
     assert not list(tmp_path.iterdir())
 
 
 def test_upload_limit(clients, monkeypatch, tmp_path):
-    _, member, _, course_id = clients
+    owner, _, _, course_id = clients
     monkeypatch.setenv("MATERIAL_MAX_UPLOAD_BYTES", "10")
-    assert upload(member, course_id).status_code == 413
+    assert upload(owner, course_id).status_code == 413
     assert not list(tmp_path.iterdir())
 
 
 def test_parser_failure_retains_source_and_no_derived_rows(clients, monkeypatch, tmp_path):
-    _, member, _, course_id = clients
+    owner, _, _, course_id = clients
 
     def fail(path):
         raise RuntimeError("secret-password /private/path traceback")
 
     monkeypatch.setattr(extraction, "extract_document", fail)
-    response = upload(member, course_id)
+    response = upload(owner, course_id)
     assert response.status_code == 201
     assert response.json()["status"] == "FAILED"
     assert "secret-password" not in response.text
     assert "traceback" not in response.text
     path = f"/materials/{response.json()['id']}"
-    detail = member.get(path).json()
+    detail = owner.get(path).json()
     assert detail["extracted_markdown"] is None
     assert detail["sections"] == []
     assert detail["chunk_count"] == 0
-    assert member.get(f"{path}/chunks").json() == []
+    assert owner.get(f"{path}/chunks").json() == []
     assert len(list(tmp_path.iterdir())) == 1
 
 
 def test_real_corrupt_pdf_fails_safely(clients):
-    _, member, _, course_id = clients
-    response = upload(member, course_id, b"%PDF-1.4\nbroken")
+    owner, _, _, course_id = clients
+    response = upload(owner, course_id, b"%PDF-1.4\nbroken")
     assert response.status_code == 201
     assert response.json()["status"] == "FAILED"
 
 
 def test_initial_db_failure_cleans_source(clients, monkeypatch, tmp_path):
-    _, member, _, course_id = clients
+    owner, _, _, course_id = clients
 
     def fail(self):
         raise RuntimeError("private database details")
 
     monkeypatch.setattr("sqlalchemy.orm.Session.commit", fail)
-    response = upload(member, course_id)
+    response = upload(owner, course_id)
     assert response.status_code == 503
     assert "private" not in response.text
     assert not list(tmp_path.iterdir())
 
 
 def test_derived_write_failure_rolls_back(clients, monkeypatch):
-    _, member, _, course_id = clients
+    owner, _, _, course_id = clients
     from sqlalchemy.orm import Session
 
     original = Session.add
@@ -272,7 +276,7 @@ def test_derived_write_failure_rolls_back(clients, monkeypatch):
         return original(self, row, *args, **kwargs)
 
     monkeypatch.setattr(Session, "add", fail_chunk)
-    response = upload(member, course_id)
+    response = upload(owner, course_id)
     assert response.json()["status"] == "FAILED"
     with SessionLocal() as db:
         assert db.scalar(select(func.count()).select_from(MaterialSection)) == 0
@@ -280,19 +284,19 @@ def test_derived_write_failure_rolls_back(clients, monkeypatch):
 
 
 def test_failed_material_delete_by_uploader(clients, monkeypatch, tmp_path):
-    _, member, _, course_id = clients
+    owner, _, _, course_id = clients
 
     def fail(path):
         raise RuntimeError("secret-password /private/path traceback")
 
     monkeypatch.setattr(extraction, "extract_document", fail)
-    response = upload(member, course_id)
+    response = upload(owner, course_id)
     material = response.json()
     material_id = UUID(material["id"])
     assert response.status_code == 201
     assert material["status"] == "FAILED"
 
-    delete_response = member.delete(f"/materials/{material_id}")
+    delete_response = owner.delete(f"/materials/{material_id}")
     assert delete_response.status_code == 204
     assert delete_response.content == b""
 
@@ -309,13 +313,13 @@ def test_failed_material_delete_permissions(clients, monkeypatch, tmp_path):
         raise RuntimeError("secret-password /private/path traceback")
 
     monkeypatch.setattr(extraction, "extract_document", fail)
-    response = upload(member, course_id)
+    response = upload(owner, course_id)
     material = response.json()
     material_id = UUID(material["id"])
     assert response.status_code == 201
 
     assert stranger.delete(f"/materials/{material_id}").status_code == 404
-    assert owner.delete(f"/materials/{material_id}").status_code == 403
+    assert member.delete(f"/materials/{material_id}").status_code == 403
 
     with SessionLocal() as db:
         assert db.get(Material, material_id) is not None
@@ -323,13 +327,13 @@ def test_failed_material_delete_permissions(clients, monkeypatch, tmp_path):
 
 
 def test_failed_material_delete_rejects_ready_material(clients, tmp_path):
-    _, member, _, course_id = clients
-    response = upload(member, course_id)
+    owner, _, _, course_id = clients
+    response = upload(owner, course_id)
     material = response.json()
     assert response.status_code == 201
     assert material["status"] == "READY"
 
-    delete_response = member.delete(f"/materials/{material['id']}")
+    delete_response = owner.delete(f"/materials/{material['id']}")
     assert delete_response.status_code == 409
     assert len(list(tmp_path.iterdir())) == 1
 
@@ -338,13 +342,13 @@ def test_failed_material_delete_rejects_ready_material(clients, tmp_path):
 
 
 def test_failed_material_delete_storage_failure_commits_and_retries(clients, monkeypatch, tmp_path):
-    _, member, _, course_id = clients
+    owner, _, _, course_id = clients
 
     def fail(path):
         raise RuntimeError("secret-password /private/path traceback")
 
     monkeypatch.setattr(extraction, "extract_document", fail)
-    response = upload(member, course_id)
+    response = upload(owner, course_id)
     material = response.json()
     material_id = UUID(material["id"])
     assert response.status_code == 201
@@ -354,7 +358,7 @@ def test_failed_material_delete_storage_failure_commits_and_retries(clients, mon
 
     original_delete = LocalMaterialStorage.delete
     monkeypatch.setattr(LocalMaterialStorage, "delete", fail_delete)
-    delete_response = member.delete(f"/materials/{material_id}")
+    delete_response = owner.delete(f"/materials/{material_id}")
     assert delete_response.status_code == 204 and delete_response.content == b""
     assert "disk full" not in delete_response.text
     assert "private" not in delete_response.text
@@ -373,13 +377,13 @@ def test_failed_material_delete_storage_failure_commits_and_retries(clients, mon
 
 
 def test_failed_material_delete_anonymous_requires_auth(clients, monkeypatch):
-    _, member, _, course_id = clients
+    owner, _, _, course_id = clients
 
     def fail(path):
         raise RuntimeError("secret-password /private/path traceback")
 
     monkeypatch.setattr(extraction, "extract_document", fail)
-    response = upload(member, course_id)
+    response = upload(owner, course_id)
     material_id = UUID(response.json()["id"])
 
     with TestClient(app) as anonymous:
@@ -391,9 +395,9 @@ def test_failed_material_delete_anonymous_requires_auth(clients, monkeypatch):
 
 @pytest.mark.parametrize("status", ["UPLOADED", "PROCESSING"])
 def test_failed_material_delete_rejects_non_failed_statuses(clients, monkeypatch, status):
-    _, member, _, course_id = clients
+    owner, _, _, course_id = clients
 
-    response = upload(member, course_id)
+    response = upload(owner, course_id)
     material_id = UUID(response.json()["id"])
     with SessionLocal() as db:
         row = db.get(Material, material_id)
@@ -401,7 +405,7 @@ def test_failed_material_delete_rejects_non_failed_statuses(clients, monkeypatch
         row.status = status
         db.commit()
 
-    delete_response = member.delete(f"/materials/{material_id}")
+    delete_response = owner.delete(f"/materials/{material_id}")
     assert delete_response.status_code == 409
 
     with SessionLocal() as db:
@@ -411,14 +415,14 @@ def test_failed_material_delete_rejects_non_failed_statuses(clients, monkeypatch
 def test_failed_material_delete_db_failure_rolls_back_and_retry_is_safe(
     clients, monkeypatch, tmp_path
 ):
-    _, member, _, course_id = clients
+    owner, _, _, course_id = clients
     from sqlalchemy.orm import Session
 
     def fail(path):
         raise RuntimeError("secret-password /private/path traceback")
 
     monkeypatch.setattr(extraction, "extract_document", fail)
-    response = upload(member, course_id)
+    response = upload(owner, course_id)
     material = response.json()
     material_id = UUID(material["id"])
     assert response.status_code == 201
@@ -430,7 +434,7 @@ def test_failed_material_delete_db_failure_rolls_back_and_retry_is_safe(
         raise RuntimeError("db commit blew up")
 
     monkeypatch.setattr(Session, "commit", fail_commit)
-    delete_response = member.delete(f"/materials/{material_id}")
+    delete_response = owner.delete(f"/materials/{material_id}")
     assert delete_response.status_code == 503
     assert "db commit blew up" not in delete_response.text
 
@@ -442,7 +446,7 @@ def test_failed_material_delete_db_failure_rolls_back_and_retry_is_safe(
         assert db.scalar(select(func.count()).select_from(MaterialStorageCleanup)) == 0
 
     monkeypatch.setattr(Session, "commit", original_commit)
-    retry_response = member.delete(f"/materials/{material_id}")
+    retry_response = owner.delete(f"/materials/{material_id}")
     assert retry_response.status_code == 204
 
     with SessionLocal() as db:
@@ -450,19 +454,19 @@ def test_failed_material_delete_db_failure_rolls_back_and_retry_is_safe(
 
 
 def test_failed_material_delete_duplicate_safe(clients, monkeypatch):
-    _, member, _, course_id = clients
+    owner, _, _, course_id = clients
 
     def fail(path):
         raise RuntimeError("secret-password /private/path traceback")
 
     monkeypatch.setattr(extraction, "extract_document", fail)
-    response = upload(member, course_id)
+    response = upload(owner, course_id)
     material = response.json()
     material_id = UUID(material["id"])
     assert response.status_code == 201
 
-    first = member.delete(f"/materials/{material_id}")
-    second = member.delete(f"/materials/{material_id}")
+    first = owner.delete(f"/materials/{material_id}")
+    second = owner.delete(f"/materials/{material_id}")
     assert first.status_code == 204
     assert second.status_code == 404
 

@@ -217,6 +217,26 @@ def test_save_submit_and_immutable_history(bank):
     assert member.get(path).json() == result
 
 
+def test_blank_questions_are_left_ungraded_and_unscheduled(bank):
+    _, member, _, course, _ = bank
+    attempt = start(member, course)
+    path = f"/courses/{course}/attempts/{attempt['id']}"
+    answered = next(q for q in attempt["questions"] if q["type"] == "MULTIPLE_CHOICE")
+    saved = member.patch(f"{path}/answers/{answered['id']}", json=payload(answered))
+    assert saved.status_code == 200, saved.text
+    response = member.post(path + "/submit")
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["status"] == "SUBMITTED"
+    statuses = {q["id"]: q["grading_status"] for q in result["questions"]}
+    assert statuses.pop(answered["id"]) in {"CORRECT", "INCORRECT"}
+    assert set(statuses.values()) == {"UNANSWERED"}
+    assert all(q["answer"] is None for q in result["questions"] if q["id"] != answered["id"])
+    # Only the answered question enters the review schedule.
+    assert len(member.get(f"/courses/{course}/review-progress").json()) == 1
+    assert member.get(path).json() == result
+
+
 def test_submission_rolls_back_and_serializes(bank, monkeypatch):
     _, member, _, course, _ = bank
     attempt = start(member, course)

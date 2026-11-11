@@ -199,8 +199,8 @@ it("replaces Home with the selected course overview and switches one destination
   expect(screen.getByRole("region", { name: "Napredak" })).toHaveTextContent("course-1");
   expect(screen.queryByRole("region", { name: "Vježba" })).not.toBeInTheDocument();
   expect(document.title).toBe("Napredak · Algorithms · ExamPrep");
-  navigate("Materijali");
-  expect(screen.getByRole("region", { name: "Course materials" })).toHaveTextContent("course-1");
+  // Materials are for course managers; a member's course has no such tab.
+  expect(within(nav).queryByRole("button", { name: "Materijali" })).not.toBeInTheDocument();
   navigate("Više");
   fireEvent.click(screen.getByRole("button", { name: "Baza pitanja" }));
   expect(screen.getByRole("region", { name: "Baza pitanja" })).toHaveTextContent("course-1");
