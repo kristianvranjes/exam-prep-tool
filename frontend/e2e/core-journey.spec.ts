@@ -53,21 +53,21 @@ test("moderator and student complete the core exam-preparation journey", async (
     // Materials belong to the people who run the course: the owner uploads, students never see the tab.
     const moderatorNavigation = moderator.getByRole("navigation", { name: "Navigacija kolegija" });
     await moderatorNavigation.getByRole("button", { name: "Materijali", exact: true }).click();
-    const uploadForm = moderator.getByRole("form", { name: "Upload study material" });
-    await uploadForm.getByLabel("PDF file").setInputFiles({
+    const uploadForm = moderator.getByRole("form", { name: "Učitavanje materijala za učenje" });
+    await uploadForm.getByLabel("PDF datoteka").setInputFiles({
       name: "e2e-notes.pdf", mimeType: "application/pdf", buffer: makePdf(),
     });
-    await uploadForm.getByRole("button", { name: "Upload PDF" }).click();
-    const materials = moderator.getByRole("list", { name: "Materials list" });
+    await uploadForm.getByRole("button", { name: "Učitaj PDF" }).click();
+    const materials = moderator.getByRole("list", { name: "Popis materijala" });
     await expect(materials.getByText("e2e-notes.pdf")).toBeVisible();
-    await expect(materials.getByText("Ready", { exact: true })).toBeVisible({ timeout: 30_000 });
-    await materials.getByRole("button", { name: "View details: e2e-notes.pdf" }).click();
-    const materialDetail = moderator.getByRole("article", { name: "Material details: e2e-notes.pdf" });
+    await expect(materials.getByText("Spremno", { exact: true })).toBeVisible({ timeout: 30_000 });
+    await materials.getByRole("button", { name: "Prikaži detalje: e2e-notes.pdf" }).click();
+    const materialDetail = moderator.getByRole("article", { name: "Detalji materijala: e2e-notes.pdf" });
     await expect(materialDetail).toBeVisible();
-    await materialDetail.getByText("Extracted text", { exact: true }).click();
-    await expect(materialDetail.getByRole("region", { name: "Extracted material text" }))
+    await materialDetail.getByText("Izdvojeni tekst", { exact: true }).click();
+    await expect(materialDetail.getByRole("region", { name: "Izdvojeni tekst materijala" }))
       .toContainText("ExamPrep E2E material");
-    await expect(materialDetail.getByRole("region", { name: "Extracted material text" }))
+    await expect(materialDetail.getByRole("region", { name: "Izdvojeni tekst materijala" }))
       .toContainText("Deterministic study notes.");
     await moderatorNavigation.getByRole("button", { name: "Pregled", exact: true }).click();
     await expect(moderator.getByRole("region", { name: "Materijali", exact: true })).toContainText("1 materijal");
@@ -95,9 +95,9 @@ test("moderator and student complete the core exam-preparation journey", async (
     await test.info().attach("overview-empty", { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
     await expect(studentCourses).toBeHidden();
     await expect(student.getByLabel("Pretraži po fakultetu")).toBeHidden();
-    for (const name of ["Course materials", "Vježba", "Napredak", "Question bank"]) await expect(student.getByRole("region", { name, exact: true })).toBeHidden();
+    for (const name of ["Materijali kolegija", "Vježba", "Napredak", "Baza pitanja"]) await expect(student.getByRole("region", { name, exact: true })).toBeHidden();
     await expect(student.getByRole("button", { name: "Postavke kolegija", exact: true })).toHaveCount(0);
-    await expect(student.getByRole("heading", { name: "Course settings" })).toHaveCount(0);
+    await expect(student.getByRole("heading", { name: "Postavke kolegija" })).toHaveCount(0);
     const studentNavigation = student.getByRole("navigation", { name: "Navigacija kolegija" });
     await studentNavigation.getByRole("button", { name: "Napredak", exact: true }).click();
     const emptyProgress = student.getByRole("region", { name: "Napredak", exact: true });
@@ -114,22 +114,22 @@ test("moderator and student complete the core exam-preparation journey", async (
 
     await studentNavigation.getByRole("button", { name: "Više", exact: true }).click();
     await student.getByRole("button", { name: "Baza pitanja", exact: true }).click();
-    await student.getByRole("button", { name: "Open question bank" }).click();
-    await student.getByRole("button", { name: "Create question", exact: true }).click();
-    const questionForm = student.getByRole("form", { name: "Create question form" });
-    await questionForm.getByLabel("Question type").selectOption("MULTIPLE_CHOICE");
-    await questionForm.getByLabel("Question text").fill(questionStem);
-    await questionForm.getByLabel("Explanation").fill("Paris is the French capital.");
-    await expect(questionForm.getByLabel("Correct option 1")).toBeChecked();
-    await questionForm.getByLabel("Option 1", { exact: true }).fill(correctOption);
-    await questionForm.getByLabel("Option 2", { exact: true }).fill("Lyon");
-    await expect(questionForm.getByLabel(/^Option \d$/)).toHaveCount(2);
-    await questionForm.getByRole("button", { name: "Save draft" }).click();
-    const selectedQuestion = student.getByRole("article", { name: "Selected question" });
+    await student.getByRole("button", { name: "Otvori bazu pitanja" }).click();
+    await student.getByRole("button", { name: "Stvori pitanje", exact: true }).click();
+    const questionForm = student.getByRole("form", { name: "Obrazac za stvaranje pitanja" });
+    await questionForm.getByLabel("Vrsta pitanja").selectOption("MULTIPLE_CHOICE");
+    await questionForm.getByLabel("Tekst pitanja").fill(questionStem);
+    await questionForm.getByLabel("Objašnjenje").fill("Paris is the French capital.");
+    await expect(questionForm.getByLabel("Točna opcija 1")).toBeChecked();
+    await questionForm.getByLabel("Opcija 1", { exact: true }).fill(correctOption);
+    await questionForm.getByLabel("Opcija 2", { exact: true }).fill("Lyon");
+    await expect(questionForm.getByLabel(/^Opcija \d$/)).toHaveCount(2);
+    await questionForm.getByRole("button", { name: "Spremi nacrt" }).click();
+    const selectedQuestion = student.getByRole("article", { name: "Odabrano pitanje" });
     await expect(selectedQuestion).toContainText(questionStem);
     await expect(selectedQuestion).toContainText("Nacrt");
-    await expect(selectedQuestion).toContainText("Source: Napisano ili uvezeno");
-    await selectedQuestion.getByRole("button", { name: "Submit for review" }).click();
+    await expect(selectedQuestion).toContainText("Izvor: Napisano ili uvezeno");
+    await selectedQuestion.getByRole("button", { name: "Pošalji na pregled" }).click();
     await expect(selectedQuestion).toContainText("Čeka pregled fakulteta");
 
     await moderator.getByRole("button", { name: "Refresh queue" }).click();
@@ -141,18 +141,18 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(reviewCard).toHaveCount(0);
     await expect(moderator.getByText("Question approved.")).toBeVisible();
 
-    await student.getByRole("button", { name: "Close question bank" }).click();
-    await student.getByRole("button", { name: "Open question bank" }).click();
-    await student.getByRole("list", { name: "Questions list" })
+    await student.getByRole("button", { name: "Zatvori bazu pitanja" }).click();
+    await student.getByRole("button", { name: "Otvori bazu pitanja" }).click();
+    await student.getByRole("list", { name: "Popis pitanja" })
       .getByRole("button", { name: new RegExp(questionStem.replace("?", "\\?")) }).click();
-    await expect(student.getByRole("article", { name: "Selected question" })).toContainText("Odobreno");
+    await expect(student.getByRole("article", { name: "Odabrano pitanje" })).toContainText("Odobreno");
 
-    await student.getByRole("button", { name: "Report issue" }).click();
-    const reportForm = student.getByRole("form", { name: "Report question issue" });
-    await reportForm.getByLabel("Reason").selectOption("UNCLEAR");
-    await reportForm.getByLabel("Details").fill("E2E report: wording should be reviewed.");
-    await reportForm.getByRole("button", { name: "Submit report" }).click();
-    await expect(student.getByText("Report submitted for faculty review.")).toBeVisible();
+    await student.getByRole("button", { name: "Prijavi problem" }).click();
+    const reportForm = student.getByRole("form", { name: "Prijava problema s pitanjem" });
+    await reportForm.getByLabel("Razlog").selectOption("UNCLEAR");
+    await reportForm.getByLabel("Detalji").fill("E2E report: wording should be reviewed.");
+    await reportForm.getByRole("button", { name: "Pošalji prijavu" }).click();
+    await expect(student.getByText("Prijava je poslana na pregled fakulteta.")).toBeVisible();
 
     await moderator.getByRole("button", { name: "Reports", exact: true }).click();
     const reportCard = moderator.getByRole("article", { name: `Report: ${questionStem}` });
@@ -163,30 +163,30 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(reportCard).toHaveCount(0);
     await expect(moderator.getByText("Report dismissed.")).toBeVisible();
 
-    await selectedQuestion.getByRole("button", { name: "Suggest edit" }).click();
-    const suggestionForm = student.getByRole("form", { name: "Suggest question edit" });
-    await suggestionForm.getByLabel("Proposed difficulty").fill("3");
-    await suggestionForm.getByLabel("Suggestion note (optional)").fill("E2E suggestion: set difficulty to 3.");
-    await suggestionForm.getByRole("button", { name: "Submit suggestion" }).click();
-    await expect(student.getByText("Suggestion submitted for faculty review.")).toBeVisible();
-    await expect(selectedQuestion).not.toContainText("Difficulty 3/5");
+    await selectedQuestion.getByRole("button", { name: "Predloži izmjenu" }).click();
+    const suggestionForm = student.getByRole("form", { name: "Prijedlog izmjene pitanja" });
+    await suggestionForm.getByLabel("Predložena težina").fill("3");
+    await suggestionForm.getByLabel("Napomena uz prijedlog (neobavezno)").fill("E2E suggestion: set difficulty to 3.");
+    await suggestionForm.getByRole("button", { name: "Pošalji prijedlog" }).click();
+    await expect(student.getByText("Prijedlog je poslan na pregled fakulteta.")).toBeVisible();
+    await expect(selectedQuestion).not.toContainText("Težina 3/5");
 
     await moderator.getByRole("button", { name: "Suggestions", exact: true }).click();
-    const suggestionCard = moderator.getByRole("article", { name: `Suggestion: ${questionStem}` });
-    await expect(suggestionCard).toContainText("Base version 3");
+    const suggestionCard = moderator.getByRole("article", { name: `Prijedlog: ${questionStem}` });
+    await expect(suggestionCard).toContainText("Osnovna verzija 3");
     await expect(suggestionCard).toContainText("E2E suggestion: set difficulty to 3.");
-    const difficultyComparison = suggestionCard.getByRole("group", { name: "Difficulty comparison" });
-    await expect(difficultyComparison).toContainText("Not set");
-    await expect(difficultyComparison).toContainText("Proposed3");
-    await suggestionCard.getByRole("button", { name: "Approve & apply" }).click();
+    const difficultyComparison = suggestionCard.getByRole("group", { name: "Usporedba: Težina" });
+    await expect(difficultyComparison).toContainText("Nije postavljeno");
+    await expect(difficultyComparison).toContainText("Predloženo3");
+    await suggestionCard.getByRole("button", { name: "Odobri i primijeni" }).click();
     await expect(suggestionCard).toHaveCount(0);
-    await expect(moderator.getByText("Suggestion applied. Other open suggestions for this question were superseded.")).toBeVisible();
+    await expect(moderator.getByText("Prijedlog je primijenjen. Ostali otvoreni prijedlozi za ovo pitanje zamijenjeni su.")).toBeVisible();
 
-    await student.getByRole("button", { name: "Close question bank" }).click();
-    await student.getByRole("button", { name: "Open question bank" }).click();
-    await student.getByRole("list", { name: "Questions list" })
+    await student.getByRole("button", { name: "Zatvori bazu pitanja" }).click();
+    await student.getByRole("button", { name: "Otvori bazu pitanja" }).click();
+    await student.getByRole("list", { name: "Popis pitanja" })
       .getByRole("button", { name: new RegExp(questionStem.replace("?", "\\?")) }).click();
-    await expect(selectedQuestion).toContainText("Difficulty 3/5");
+    await expect(selectedQuestion).toContainText("Težina 3/5");
     await expect(selectedQuestion).toContainText("Odobreno");
 
     await studentNavigation.getByRole("button", { name: "Pregled", exact: true }).click();
@@ -302,13 +302,13 @@ test("moderator and student complete the core exam-preparation journey", async (
     // A second real session combines an objective mistake with an ungraded short answer.
     await studentNavigation.getByRole("button", { name: "Više", exact: true }).click();
     await student.getByRole("button", { name: "Baza pitanja", exact: true }).click();
-    const openBank = student.getByRole("button", { name: "Open question bank" });
+    const openBank = student.getByRole("button", { name: "Otvori bazu pitanja" });
     if (await openBank.isVisible()) await openBank.click();
-    await student.getByRole("button", { name: "Create question", exact: true }).click();
-    await questionForm.getByLabel("Question type").selectOption("SHORT_ANSWER");
-    await questionForm.getByLabel("Question text").fill("Explain why regular practice helps learning.");
-    await questionForm.getByLabel("Reference answer").fill("Regular practice helps recall and identifies gaps in understanding.");
-    await questionForm.getByRole("button", { name: "Save draft" }).click();
+    await student.getByRole("button", { name: "Stvori pitanje", exact: true }).click();
+    await questionForm.getByLabel("Vrsta pitanja").selectOption("SHORT_ANSWER");
+    await questionForm.getByLabel("Tekst pitanja").fill("Explain why regular practice helps learning.");
+    await questionForm.getByLabel("Referentni odgovor").fill("Regular practice helps recall and identifies gaps in understanding.");
+    await questionForm.getByRole("button", { name: "Spremi nacrt" }).click();
     await expect(selectedQuestion).toContainText("Explain why regular practice helps learning.");
     await studentNavigation.getByRole("button", { name: "Vježba", exact: true }).click();
     await moreOptions.click();

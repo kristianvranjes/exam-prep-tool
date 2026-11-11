@@ -10,7 +10,7 @@ vi.mock("../src/lib/api", () => ({ api: mock }));
 const material: Material = { id: "m1", course_id: "course-1", uploaded_by_user_id: "user", original_filename: "notes.pdf", media_type: "application/pdf", file_size_bytes: 1400, status: "READY", processing_error: null, created_at: "2026-01-01", updated_at: "2026-01-01" };
 const detail: MaterialDetail = { ...material, sections: [], chunk_count: 2, extracted_markdown: "<script>untrusted</script>\n  keep spacing" };
 const pdf = () => new File(["%PDF-test"], "notes.pdf", { type: "application/pdf" });
-const list = () => screen.getByRole("list", { name: "Materials list" });
+const list = () => screen.getByRole("list", { name: "Popis materijala" });
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>(done => { resolve = done; });
@@ -18,10 +18,10 @@ function deferred<T>() {
 }
 async function ready(currentUserId = "user") {
   render(<CourseMaterials courseId="course-1" currentUserId={currentUserId} />);
-  await waitFor(() => expect(screen.getByLabelText("PDF file")).toBeEnabled());
+  await waitFor(() => expect(screen.getByLabelText("PDF datoteka")).toBeEnabled());
 }
 function choose(file = pdf()) {
-  fireEvent.change(screen.getByLabelText("PDF file"), { target: { files: [file] } });
+  fireEvent.change(screen.getByLabelText("PDF datoteka"), { target: { files: [file] } });
   return file;
 }
 beforeEach(() => {
@@ -39,10 +39,10 @@ it("shares the existing list and local upload/removal changes with Overview with
   mock.uploadMaterial.mockResolvedValue(failed); mock.deleteMaterial.mockResolvedValue(undefined);
   render(<CourseMaterials courseId="course-1" currentUserId="user" onSummaryChange={onSummaryChange} />);
   await waitFor(() => expect(onSummaryChange).toHaveBeenLastCalledWith({ materials: [], loading: false, error: false }));
-  choose(); fireEvent.click(screen.getByRole("button", { name: "Upload PDF" }));
+  choose(); fireEvent.click(screen.getByRole("button", { name: "Učitaj PDF" }));
   await waitFor(() => expect(onSummaryChange).toHaveBeenLastCalledWith({ materials: [failed], loading: false, error: false }));
-  fireEvent.click(screen.getByRole("button", { name: "Remove failed upload" }));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ukloni neuspjelo učitavanje" }));
+  fireEvent.click(screen.getByRole("button", { name: "Potvrdi uklanjanje" }));
   await waitFor(() => expect(onSummaryChange).toHaveBeenLastCalledWith({ materials: [], loading: false, error: false }));
   expect(mock.materials).toHaveBeenCalledOnce();
 });
@@ -57,45 +57,45 @@ it("reports a failed materials load as an error rather than an empty summary", a
 
 it("uploads a chosen PDF, resets selection and opens safe extracted text with concepts", async () => {
   await ready();
-  expect(screen.getByText("No materials yet.")).toBeInTheDocument();
+  expect(screen.getByText("Još nema materijala.")).toBeInTheDocument();
   const file = choose();
-  expect(screen.getByText(/Selected:/)).toHaveTextContent("notes.pdf");
+  expect(screen.getByText(/Odabrano:/)).toHaveTextContent("notes.pdf");
   expect(mock.uploadMaterial).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Upload PDF" }));
-  expect(await within(list()).findByText("Ready")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Učitaj PDF" }));
+  expect(await within(list()).findByText("Spremno")).toBeInTheDocument();
   expect(mock.uploadMaterial).toHaveBeenCalledWith("course-1", file);
-  expect(screen.queryByText(/Selected:/)).not.toBeInTheDocument();
-  expect(screen.getByLabelText("PDF file")).toHaveValue("");
-  expect(screen.getByRole("button", { name: "Upload PDF" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "View details: notes.pdf" }));
-  expect(await screen.findByText(/2 chunks/)).toHaveTextContent("1.4 KB · 0 sections · 2 chunks");
-  expect(screen.getByText(/2 chunks/)).not.toBeVisible();
-  fireEvent.click(screen.getByText("Processing details"));
-  expect(screen.getByText(/2 chunks/)).toBeVisible();
+  expect(screen.queryByText(/Odabrano:/)).not.toBeInTheDocument();
+  expect(screen.getByLabelText("PDF datoteka")).toHaveValue("");
+  expect(screen.getByRole("button", { name: "Učitaj PDF" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Prikaži detalje: notes.pdf" }));
+  expect(await screen.findByText(/2 isječka/)).toHaveTextContent("1.4 KB · 0 odjeljaka · 2 isječka");
+  expect(screen.getByText(/2 isječka/)).not.toBeVisible();
+  fireEvent.click(screen.getByText("Detalji obrade"));
+  expect(screen.getByText(/2 isječka/)).toBeVisible();
   expect(mock.material).toHaveBeenCalledWith("m1");
-  fireEvent.click(screen.getByText("Extracted text"));
-  const text = screen.getByRole("region", { name: "Extracted material text" });
+  fireEvent.click(screen.getByText("Izdvojeni tekst"));
+  const text = screen.getByRole("region", { name: "Izdvojeni tekst materijala" });
   expect(text.textContent).toBe(detail.extracted_markdown);
   expect(text).toHaveClass("whitespace-pre-wrap", "max-h-80", "overflow-auto");
   expect(text).toHaveAttribute("tabindex", "0");
   expect(document.querySelector("script")).toBeNull();
   expect(screen.getByRole("region", { name: "Concept review" })).toHaveTextContent("m1");
-  expect(await screen.findByText("0 current · 2 stale · 2 total chunks")).toBeInTheDocument();
-  expect(screen.getByText("0 current · 2 stale · 2 total chunks")).not.toBeVisible();
+  expect(await screen.findByText("0 aktualnih · 2 zastarjelih · 2 isječaka ukupno")).toBeInTheDocument();
+  expect(screen.getByText("0 aktualnih · 2 zastarjelih · 2 isječaka ukupno")).not.toBeVisible();
   expect(mock.embedMaterial).not.toHaveBeenCalled();
 });
 
 it("accepts a dropped PDF while keeping explicit upload and keyboard file input", async () => {
   await ready();
   const file = pdf();
-  const zone = screen.getByText("Drop a PDF here or choose a file").parentElement!;
+  const zone = screen.getByText("Ispustite PDF ovdje ili odaberite datoteku").parentElement!;
   fireEvent.dragOver(zone, { dataTransfer: { files: [file] } });
   fireEvent.drop(zone, { dataTransfer: { files: [file] } });
-  expect(screen.getByText(/Selected:/)).toHaveTextContent("notes.pdf");
-  expect(screen.getByLabelText("PDF file")).toHaveAttribute("type", "file");
-  expect(screen.getByLabelText("PDF file")).not.toHaveAttribute("tabindex", "-1");
+  expect(screen.getByText(/Odabrano:/)).toHaveTextContent("notes.pdf");
+  expect(screen.getByLabelText("PDF datoteka")).toHaveAttribute("type", "file");
+  expect(screen.getByLabelText("PDF datoteka")).not.toHaveAttribute("tabindex", "-1");
   expect(mock.uploadMaterial).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Upload PDF" }));
+  fireEvent.click(screen.getByRole("button", { name: "Učitaj PDF" }));
   await within(list()).findByText("notes.pdf");
   expect(mock.uploadMaterial).toHaveBeenCalledWith("course-1", file);
 });
@@ -105,43 +105,43 @@ it("prepares a READY material without remounting concept review or reloading det
   mock.materialEmbeddingStatus.mockResolvedValueOnce({ material_id: "m1", total_chunks: 2, current_chunks: 0, stale_chunks: 2, is_current: false })
     .mockResolvedValueOnce({ material_id: "m1", total_chunks: 2, current_chunks: 2, stale_chunks: 0, is_current: true });
   await ready();
-  fireEvent.click(screen.getByRole("button", { name: "View details: notes.pdf" }));
+  fireEvent.click(screen.getByRole("button", { name: "Prikaži detalje: notes.pdf" }));
   const concepts = await screen.findByRole("region", { name: "Concept review" });
-  fireEvent.click(screen.getByText("Advanced: AI source preparation"));
-  fireEvent.click(await screen.findByRole("button", { name: "Prepare semantic sources" }));
-  expect(await screen.findByText("Current")).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Napredno: priprema izvora za AI"));
+  fireEvent.click(await screen.findByRole("button", { name: "Pripremi semantičke izvore" }));
+  expect(await screen.findByText("Aktualno")).toBeInTheDocument();
   expect(screen.getByRole("region", { name: "Concept review" })).toBe(concepts);
   expect(mock.material).toHaveBeenCalledTimes(1);
   expect(mock.embedMaterial).toHaveBeenCalledWith("m1");
 });
 
 it.each([
-  ["notes.txt", "text/plain", "text", "Other file types"],
-  ["fake.pdf", "image/png", "image", "Other file types"],
-  ["notes.pdf", "application/pdf", "", "empty"],
+  ["notes.txt", "text/plain", "text", "Druge vrste datoteka"],
+  ["fake.pdf", "image/png", "image", "Druge vrste datoteka"],
+  ["notes.pdf", "application/pdf", "", "prazan"],
 ])("rejects invalid %s before calling the API", async (name, type, content, error) => {
   await ready();
   choose(new File([content], name, { type }));
   expect(screen.getByRole("alert")).toHaveTextContent(error);
-  fireEvent.submit(screen.getByRole("form", { name: "Upload study material" }));
+  fireEvent.submit(screen.getByRole("form", { name: "Učitavanje materijala za učenje" }));
   expect(mock.uploadMaterial).not.toHaveBeenCalled();
-  expect(screen.getByRole("button", { name: "Upload PDF" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Učitaj PDF" })).toBeDisabled();
 });
 
 it("rejects unsupported drops and multiple files", async () => {
   await ready();
-  const zone = screen.getByText("Drop a PDF here or choose a file").parentElement!;
+  const zone = screen.getByText("Ispustite PDF ovdje ili odaberite datoteku").parentElement!;
   fireEvent.drop(zone, { dataTransfer: { files: [new File(["text"], "notes.txt", { type: "text/plain" })] } });
-  expect(screen.getByRole("alert")).toHaveTextContent("Other file types");
+  expect(screen.getByRole("alert")).toHaveTextContent("Druge vrste datoteka");
   fireEvent.drop(zone, { dataTransfer: { files: [pdf(), pdf()] } });
-  expect(screen.getByRole("alert")).toHaveTextContent("one PDF at a time");
+  expect(screen.getByRole("alert")).toHaveTextContent("jedan PDF odjednom");
   expect(mock.uploadMaterial).not.toHaveBeenCalled();
 });
 
 it("accepts a PDF extension when the browser supplies no MIME type", async () => {
   await ready();
   const file = choose(new File(["%PDF"], "NOTES.PDF"));
-  fireEvent.click(screen.getByRole("button", { name: "Upload PDF" }));
+  fireEvent.click(screen.getByRole("button", { name: "Učitaj PDF" }));
   await within(list()).findByText("notes.pdf");
   expect(mock.uploadMaterial).toHaveBeenCalledWith("course-1", file);
 });
@@ -151,14 +151,14 @@ it("prevents duplicate requests, selection changes and list refresh while upload
   mock.uploadMaterial.mockReturnValue(pending.promise);
   await ready();
   choose();
-  const form = screen.getByRole("form", { name: "Upload study material" });
+  const form = screen.getByRole("form", { name: "Učitavanje materijala za učenje" });
   fireEvent.submit(form);
   fireEvent.submit(form);
   expect(mock.uploadMaterial).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole("button", { name: "Uploading and processing…" })).toBeDisabled();
-  expect(screen.getByLabelText("PDF file")).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Refresh materials" })).toBeDisabled();
-  expect(screen.getByText("Uploading and processing your PDF. Please wait…")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Učitavanje i obrada…" })).toBeDisabled();
+  expect(screen.getByLabelText("PDF datoteka")).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Osvježi materijale" })).toBeDisabled();
+  expect(screen.getByText("Učitavanje i obrada PDF-a. Molimo pričekajte…")).toBeInTheDocument();
   await act(async () => pending.resolve(material));
   expect(within(list()).getAllByRole("listitem")).toHaveLength(1);
 });
@@ -168,11 +168,11 @@ it("preserves the list and chosen file after upload failure and allows retry", a
   mock.uploadMaterial.mockRejectedValueOnce(new Error("Network failed")).mockResolvedValueOnce({ ...material, id: "m2", original_filename: "second.pdf" });
   await ready();
   choose(new File(["%PDF"], "second.pdf", { type: "application/pdf" }));
-  fireEvent.click(screen.getByRole("button", { name: "Upload PDF" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Try uploading again");
+  fireEvent.click(screen.getByRole("button", { name: "Učitaj PDF" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Pokušajte ponovno učitati");
   expect(within(list()).getByText("notes.pdf")).toBeInTheDocument();
-  expect(screen.getByText(/Selected:/)).toHaveTextContent("second.pdf");
-  fireEvent.click(screen.getByRole("button", { name: "Upload PDF" }));
+  expect(screen.getByText(/Odabrano:/)).toHaveTextContent("second.pdf");
+  fireEvent.click(screen.getByRole("button", { name: "Učitaj PDF" }));
   await within(list()).findByText("second.pdf");
   expect(within(list()).getAllByRole("listitem")).toHaveLength(2);
 });
@@ -181,24 +181,24 @@ it("keeps an upload whose processing failed and explains the available action", 
   mock.uploadMaterial.mockResolvedValue({ ...material, status: "FAILED", processing_error: "Could not extract text." });
   await ready();
   choose();
-  fireEvent.click(screen.getByRole("button", { name: "Upload PDF" }));
-  expect(await within(list()).findByText("Failed")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Učitaj PDF" }));
+  expect(await within(list()).findByText("Neuspjelo")).toBeInTheDocument();
   expect(within(list()).getByText("Could not extract text.")).toBeInTheDocument();
-  expect(screen.getByText(/You can upload another PDF/)).toBeInTheDocument();
+  expect(screen.getByText(/Možete učitati drugi PDF/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /retry.*processing/i })).not.toBeInTheDocument();
-  expect(screen.queryByText(/Selected:/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Odabrano:/)).not.toBeInTheDocument();
 });
 
 it("shows loading, retries list failures, and retains rows on refresh failure", async () => {
   const pending = deferred<Material[]>();
   mock.materials.mockReturnValueOnce(pending.promise).mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce([material]);
   render(<CourseMaterials courseId="course-1" />);
-  expect(screen.getByText("Loading materials…")).toBeInTheDocument();
+  expect(screen.getByText("Učitavanje materijala…")).toBeInTheDocument();
   await act(async () => pending.resolve([material]));
-  fireEvent.click(screen.getByRole("button", { name: "Refresh materials" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load materials");
+  fireEvent.click(screen.getByRole("button", { name: "Osvježi materijale" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Materijale nije moguće učitati");
   expect(within(list()).getByText("notes.pdf")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Retry materials" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj materijale" }));
   await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   expect(mock.materials).toHaveBeenCalledTimes(3);
 });
@@ -207,18 +207,18 @@ it.each(["UPLOADED", "PROCESSING", "READY", "FAILED"] as const)("renders readabl
   mock.materials.mockResolvedValue([{ ...material, status }]);
   mock.material.mockResolvedValue({ ...detail, status });
   await ready();
-  expect(within(list()).getByText(status[0] + status.slice(1).toLowerCase())).toBeInTheDocument();
+  expect(within(list()).getByText(({ UPLOADED: "Učitano", PROCESSING: "U obradi", READY: "Spremno", FAILED: "Neuspjelo" } as const)[status])).toBeInTheDocument();
   expect(within(list()).getByText("1.4 KB")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "View details: notes.pdf" }));
-  await screen.findByRole("article", { name: "Material details: notes.pdf" });
+  fireEvent.click(screen.getByRole("button", { name: "Prikaži detalje: notes.pdf" }));
+  await screen.findByRole("article", { name: "Detalji materijala: notes.pdf" });
   expect(!!screen.queryByRole("region", { name: "Concept review" })).toBe(status === "READY");
   if (status === "READY") {
-    expect(screen.getByRole("region", { name: "Semantic sources" })).not.toBeVisible();
-    fireEvent.click(screen.getByText("Advanced: AI source preparation"));
-    expect(screen.getByRole("region", { name: "Semantic sources" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "Semantički izvori" })).not.toBeVisible();
+    fireEvent.click(screen.getByText("Napredno: priprema izvora za AI"));
+    expect(screen.getByRole("region", { name: "Semantički izvori" })).toBeVisible();
   } else {
-    expect(screen.queryByRole("region", { name: "Semantic sources" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Advanced: AI source preparation")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Semantički izvori" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Napredno: priprema izvora za AI")).not.toBeInTheDocument();
   }
 });
 
@@ -226,19 +226,19 @@ it("keeps the previous detail and list while a new detail loads or fails, then r
   const second = { ...material, id: "m2", original_filename: "other.pdf" };
   mock.materials.mockResolvedValue([material, second]);
   await ready();
-  fireEvent.click(screen.getByRole("button", { name: "View details: notes.pdf" }));
-  await screen.findByRole("article", { name: "Material details: notes.pdf" });
+  fireEvent.click(screen.getByRole("button", { name: "Prikaži detalje: notes.pdf" }));
+  await screen.findByRole("article", { name: "Detalji materijala: notes.pdf" });
   let fail!: (reason: Error) => void;
   mock.material.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
-  fireEvent.click(screen.getByRole("button", { name: "View details: other.pdf" }));
-  expect(screen.getByText("Loading details for other.pdf…")).toBeInTheDocument();
-  expect(screen.getByRole("article", { name: "Material details: notes.pdf" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Prikaži detalje: other.pdf" }));
+  expect(screen.getByText("Učitavanje detalja: other.pdf…")).toBeInTheDocument();
+  expect(screen.getByRole("article", { name: "Detalji materijala: notes.pdf" })).toBeInTheDocument();
   await act(async () => fail(new Error("offline")));
   expect(screen.getByRole("alert")).toHaveTextContent("other.pdf");
   expect(within(list()).getAllByRole("listitem")).toHaveLength(2);
   mock.material.mockResolvedValueOnce({ ...detail, ...second });
-  fireEvent.click(screen.getByRole("button", { name: "Retry details" }));
-  await screen.findByRole("article", { name: "Material details: other.pdf" });
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj detalje" }));
+  await screen.findByRole("article", { name: "Detalji materijala: other.pdf" });
   expect(mock.material).toHaveBeenLastCalledWith("m2");
 });
 
@@ -248,11 +248,11 @@ it("ignores a stale detail response when another material is opened", async () =
   mock.materials.mockResolvedValue([material, second]);
   mock.material.mockReturnValueOnce(pending.promise).mockResolvedValueOnce({ ...detail, ...second });
   await ready();
-  fireEvent.click(screen.getByRole("button", { name: "View details: notes.pdf" }));
-  fireEvent.click(screen.getByRole("button", { name: "View details: other.pdf" }));
-  await screen.findByRole("article", { name: "Material details: other.pdf" });
+  fireEvent.click(screen.getByRole("button", { name: "Prikaži detalje: notes.pdf" }));
+  fireEvent.click(screen.getByRole("button", { name: "Prikaži detalje: other.pdf" }));
+  await screen.findByRole("article", { name: "Detalji materijala: other.pdf" });
   await act(async () => pending.resolve(detail));
-  expect(screen.queryByRole("article", { name: "Material details: notes.pdf" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("article", { name: "Detalji materijala: notes.pdf" })).not.toBeInTheDocument();
 });
 
 it("shows remove failed upload for the current uploader and hides it for others", async () => {
@@ -262,19 +262,19 @@ it("shows remove failed upload for the current uploader and hides it for others"
     { ...material, id: "ready", uploaded_by_user_id: "user", status: "READY", original_filename: "ready.pdf" },
   ]);
   await ready("user");
-  expect(screen.getAllByRole("button", { name: "Remove failed upload" })).toHaveLength(1);
+  expect(screen.getAllByRole("button", { name: "Ukloni neuspjelo učitavanje" })).toHaveLength(1);
   expect(screen.getByText("Could not extract text.")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Remove failed upload" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Ukloni neuspjelo učitavanje" })).toBeInTheDocument();
 });
 
 it("cancelling confirmation makes no delete API call", async () => {
   mock.deleteMaterial.mockResolvedValue(undefined);
   mock.materials.mockResolvedValue([{ ...material, id: "failed-own", uploaded_by_user_id: "user", status: "FAILED", original_filename: "failed.pdf" }]);
   await ready("user");
-  fireEvent.click(screen.getByRole("button", { name: "Remove failed upload" }));
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ukloni neuspjelo učitavanje" }));
+  fireEvent.click(screen.getByRole("button", { name: "Odustani" }));
   expect(mock.deleteMaterial).not.toHaveBeenCalled();
-  expect(screen.queryByRole("button", { name: "Confirm remove" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Potvrdi uklanjanje" })).not.toBeInTheDocument();
   expect(screen.getByText("failed.pdf")).toBeInTheDocument();
 });
 
@@ -284,15 +284,15 @@ it("confirms deletion and clears an already-open detail while a delete is pendin
   mock.materials.mockResolvedValue([{ ...material, id: "failed-own", uploaded_by_user_id: "user", status: "FAILED", original_filename: "failed.pdf" }]);
   mock.material.mockResolvedValue({ ...detail, id: "failed-own", status: "FAILED", processing_error: "Could not extract text.", original_filename: "failed.pdf" });
   await ready("user");
-  fireEvent.click(screen.getByRole("button", { name: "View details: failed.pdf" }));
-  await screen.findByRole("article", { name: "Material details: failed.pdf" });
-  fireEvent.click(screen.getByRole("button", { name: "Remove failed upload" }));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
+  fireEvent.click(screen.getByRole("button", { name: "Prikaži detalje: failed.pdf" }));
+  await screen.findByRole("article", { name: "Detalji materijala: failed.pdf" });
+  fireEvent.click(screen.getByRole("button", { name: "Ukloni neuspjelo učitavanje" }));
+  fireEvent.click(screen.getByRole("button", { name: "Potvrdi uklanjanje" }));
   expect(mock.deleteMaterial).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole("button", { name: "Removing…" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Uklanjanje…" })).toBeDisabled();
   await act(async () => pending.resolve());
   await waitFor(() => expect(screen.queryByText("failed.pdf")).not.toBeInTheDocument());
-  expect(screen.queryByRole("article", { name: "Material details: failed.pdf" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("article", { name: "Detalji materijala: failed.pdf" })).not.toBeInTheDocument();
 });
 
 it("preserves state after a failed delete and allows retry through the normal UI", async () => {
@@ -300,15 +300,15 @@ it("preserves state after a failed delete and allows retry through the normal UI
   mock.materials.mockResolvedValue([{ ...material, id: "failed-own", uploaded_by_user_id: "user", status: "FAILED", original_filename: "failed.pdf" }]);
   mock.material.mockResolvedValue({ ...detail, id: "failed-own", status: "FAILED", processing_error: "Could not extract text.", original_filename: "failed.pdf" });
   await ready("user");
-  fireEvent.click(screen.getByRole("button", { name: "View details: failed.pdf" }));
-  await screen.findByRole("article", { name: "Material details: failed.pdf" });
-  fireEvent.click(screen.getByRole("button", { name: "Remove failed upload" }));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
+  fireEvent.click(screen.getByRole("button", { name: "Prikaži detalje: failed.pdf" }));
+  await screen.findByRole("article", { name: "Detalji materijala: failed.pdf" });
+  fireEvent.click(screen.getByRole("button", { name: "Ukloni neuspjelo učitavanje" }));
+  fireEvent.click(screen.getByRole("button", { name: "Potvrdi uklanjanje" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Delete failed");
   expect(screen.getAllByText("failed.pdf")).toHaveLength(2);
-  expect(screen.getByRole("article", { name: "Material details: failed.pdf" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Remove failed upload" }));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
+  expect(screen.getByRole("article", { name: "Detalji materijala: failed.pdf" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Ukloni neuspjelo učitavanje" }));
+  fireEvent.click(screen.getByRole("button", { name: "Potvrdi uklanjanje" }));
   await waitFor(() => expect(screen.queryAllByText("failed.pdf")).toHaveLength(0));
 });
 
