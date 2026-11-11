@@ -671,7 +671,7 @@ def missing_context(stem: str) -> bool:
         return True
     # "Zadana je gramatika: S -> aA ..." carries its grammar; a reference with little
     # text after it ("Za zadani graf tijeka izvođenja, koja ...") does not.
-    return any(len(stem[m.end():].strip()) < 70 for m in CONTEXT_REFERENCE.finditer(stem))
+    return any(len(stem[m.end() :].strip()) < 70 for m in CONTEXT_REFERENCE.finditer(stem))
 
 
 def build(f: Found, entry: KeyEntry | None) -> tuple[StoredQuestion | None, str | None]:
