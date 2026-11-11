@@ -33,8 +33,8 @@ function EmbeddingPanel({ materialId }: { materialId: string }) {
     } catch {
       if (statusRequest.current === request) {
         setStatusError(afterPrepare
-          ? "Preparation finished, but its status could not be refreshed. Retry status without preparing again."
-          : "Could not load semantic source status. Try again.");
+          ? "Priprema je završena, ali njezin status nije moguće osvježiti. Ponovno učitajte status bez ponovne pripreme."
+          : "Status semantičkih izvora nije moguće učitati. Pokušajte ponovno.");
         if (afterPrepare) setStatusUncertain(true);
       }
     } finally {
@@ -47,7 +47,7 @@ function EmbeddingPanel({ materialId }: { materialId: string }) {
     const request = ++statusRequest.current;
     api.materialEmbeddingStatus(materialId)
       .then(next => { if (statusRequest.current === request) setStatus(next); })
-      .catch(() => { if (statusRequest.current === request) setStatusError("Could not load semantic source status. Try again."); })
+      .catch(() => { if (statusRequest.current === request) setStatusError("Status semantičkih izvora nije moguće učitati. Pokušajte ponovno."); })
       .finally(() => { if (statusRequest.current === request) setLoading(false); });
     return () => { mounted.current = false; statusRequest.current += 1; };
   }, [materialId]);
@@ -65,32 +65,32 @@ function EmbeddingPanel({ materialId }: { materialId: string }) {
         await loadStatus(true);
       }
     } catch (cause) {
-      if (mounted.current) setPrepareError(cause instanceof Error ? cause.message : "Could not prepare semantic sources. Try again.");
+      if (mounted.current) setPrepareError(cause instanceof Error ? cause.message : "Semantičke izvore nije moguće pripremiti. Pokušajte ponovno.");
     } finally {
       postInFlight.current = false;
       if (mounted.current) setPreparing(false);
     }
   }
 
-  const label = !status || status.total_chunks === 0 ? "Not prepared"
-    : status.is_current ? "Current" : "Needs refresh or partially stale";
+  const label = !status || status.total_chunks === 0 ? "Nije pripremljeno"
+    : status.is_current ? "Aktualno" : "Treba osvježiti ili je djelomično zastarjelo";
 
   return <details className="mt-5 min-w-0 rounded-control border border-line p-3">
-    <summary className="text-sm font-medium">Advanced: AI source preparation</summary>
-    <Surface className="mt-3 min-w-0 space-y-3 bg-subtle/30" role="region" aria-label="Semantic sources">
+    <summary className="text-sm font-medium">Napredno: priprema izvora za AI</summary>
+    <Surface className="mt-3 min-w-0 space-y-3 bg-subtle/30" role="region" aria-label="Semantički izvori">
     <div>
-      <h5 className="font-semibold">Semantic sources</h5>
-      <p className="mt-1 text-sm text-muted">Optional preparation for internal AI question generation. Manual question creation and JSON import still work without it.</p>
+      <h5 className="font-semibold">Semantički izvori</h5>
+      <p className="mt-1 text-sm text-muted">Neobavezna priprema za interno generiranje pitanja pomoću AI-ja. Ručno stvaranje pitanja i JSON uvoz rade i bez nje.</p>
     </div>
-    {loading && <p role="status" className="text-sm text-muted">Loading semantic source status…</p>}
+    {loading && <p role="status" className="text-sm text-muted">Učitavanje statusa semantičkih izvora…</p>}
     {status && <div className="space-y-1 text-sm">
       <p className="font-medium">{label}</p>
-      <p className="text-muted">{status.current_chunks} current · {status.stale_chunks} stale · {status.total_chunks} total chunks</p>
+      <p className="text-muted">{status.current_chunks} aktualnih · {status.stale_chunks} zastarjelih · {status.total_chunks} isječaka ukupno</p>
     </div>}
-    {result && <p role="status" className="text-sm text-muted">Prepared {result.embedded} chunks; skipped {result.skipped} already current chunks.</p>}
-    {statusError && <><Alert>{statusError}</Alert><Button variant="secondary" disabled={loading || preparing} onClick={() => void loadStatus(false)}>Retry status</Button></>}
-    {prepareError && <Alert>{prepareError} Semantic preparation needs the optional local embedding model; manual question creation and JSON import remain available.</Alert>}
-    {status && !status.is_current && !statusUncertain && <Button variant="secondary" disabled={loading || preparing} onClick={() => void prepare()}>{preparing ? "Preparing…" : status.current_chunks > 0 ? "Refresh semantic sources" : "Prepare semantic sources"}</Button>}
+    {result && <p role="status" className="text-sm text-muted">Pripremljeno isječaka: {result.embedded}; preskočeno već aktualnih isječaka: {result.skipped}.</p>}
+    {statusError && <><Alert>{statusError}</Alert><Button variant="secondary" disabled={loading || preparing} onClick={() => void loadStatus(false)}>Ponovno učitaj status</Button></>}
+    {prepareError && <Alert>{prepareError} Semantička priprema zahtijeva neobavezni lokalni embedding model; ručno stvaranje pitanja i JSON uvoz i dalje su dostupni.</Alert>}
+    {status && !status.is_current && !statusUncertain && <Button variant="secondary" disabled={loading || preparing} onClick={() => void prepare()}>{preparing ? "Priprema…" : status.current_chunks > 0 ? "Osvježi semantičke izvore" : "Pripremi semantičke izvore"}</Button>}
     </Surface>
   </details>;
 }

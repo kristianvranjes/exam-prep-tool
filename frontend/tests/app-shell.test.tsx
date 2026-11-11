@@ -72,7 +72,7 @@ function navigate(name: string) { fireEvent.click(within(screen.getByRole("navig
 async function openSettings() {
   navigate("Više");
   fireEvent.click(await screen.findByRole("button", { name: "Postavke kolegija" }));
-  return screen.getByRole("region", { name: "Course settings" });
+  return screen.getByRole("region", { name: "Postavke kolegija" });
 }
 async function openDiscovery() { fireEvent.click(await screen.findByRole("button", { name: "Upiši kolegij" })); return screen.findByLabelText("Pretraži po fakultetu"); }
 async function openManagement() { fireEvent.click(await screen.findByRole("button", { name: "Alati fakulteta" })); }
@@ -288,10 +288,10 @@ it("updates joined and selected metadata and refreshes the previously opened cat
   await within(screen.getByRole("region", { name: "Pretraži kolegije" })).findByRole("button", { name: "Otvori kolegij: Algorithms" });
   await openCourse();
   const settings = await openSettings();
-  fireEvent.change(within(settings).getByLabelText("Course name"), { target: { value: updated.name } });
-  fireEvent.change(within(settings).getByLabelText("Course code"), { target: { value: "" } });
-  fireEvent.change(within(settings).getByLabelText("Description"), { target: { value: updated.description } });
-  fireEvent.click(within(settings).getByRole("button", { name: "Save course" }));
+  fireEvent.change(within(settings).getByLabelText("Naziv kolegija"), { target: { value: updated.name } });
+  fireEvent.change(within(settings).getByLabelText("Šifra kolegija"), { target: { value: "" } });
+  fireEvent.change(within(settings).getByLabelText("Opis"), { target: { value: updated.description } });
+  fireEvent.click(within(settings).getByRole("button", { name: "Spremi kolegij" }));
   await waitFor(() => expect(apiMock.updateCourse).toHaveBeenCalledWith("course-1", { name: updated.name, code: null, description: updated.description }));
   expect(await screen.findByRole("heading", { name: "Algorithms II" })).toBeVisible();
   expect(screen.getByRole("navigation", { name: "Glavna navigacija" })).toHaveTextContent("Algorithms II");
@@ -309,9 +309,9 @@ it("keeps a saved course update when catalog refresh fails", async () => {
   fireEvent.change(await openDiscovery(), { target: { value: "faculty-1" } });
   await within(screen.getByRole("region", { name: "Pretraži kolegije" })).findByRole("button", { name: "Otvori kolegij: Algorithms" });
   await openCourse(); const settings = await openSettings();
-  fireEvent.change(within(settings).getByLabelText("Course name"), { target: { value: "Algorithms II" } });
-  fireEvent.click(within(settings).getByRole("button", { name: "Save course" }));
-  await screen.findByText("Course details saved."); goHome();
+  fireEvent.change(within(settings).getByLabelText("Naziv kolegija"), { target: { value: "Algorithms II" } });
+  fireEvent.click(within(settings).getByRole("button", { name: "Spremi kolegij" }));
+  await screen.findByText("Podaci o kolegiju spremljeni."); goHome();
   expect(await screen.findByText(/Kolegiji ovog fakulteta nisu učitani/)).toBeVisible();
   expect(within(screen.getByRole("region", { name: "Vaši kolegiji" })).getByRole("button", { name: "Otvori kolegij: Algorithms II" })).toBeVisible();
 });
@@ -325,8 +325,8 @@ it("deletes the selected course, returns Home and clears its tools and practice 
   navigate("Napredak"); fireEvent.click(screen.getByRole("button", { name: "Započni preporučenu vježbu" }));
   expect(screen.getByRole("region", { name: "Vježba" })).toHaveTextContent("handoff 1");
   const settings = await openSettings();
-  fireEvent.change(within(settings).getByLabelText("Type the exact course name to confirm"), { target: { value: "Algorithms" } });
-  fireEvent.click(within(settings).getByRole("button", { name: "Delete course permanently" }));
+  fireEvent.change(within(settings).getByLabelText("Za potvrdu upišite točan naziv kolegija"), { target: { value: "Algorithms" } });
+  fireEvent.click(within(settings).getByRole("button", { name: "Trajno obriši kolegij" }));
   await waitFor(() => expect(apiMock.deleteCourse).toHaveBeenCalledWith("course-1"));
   expect(await screen.findByText("Algorithms was permanently deleted.")).toBeVisible();
   expect(screen.getByRole("heading", { name: "Početna" })).toBeVisible();
@@ -344,14 +344,14 @@ it("preserves owner edits on Home and requires consent before switching courses"
   render(<AppShell />);
   await screen.findByRole("region", { name: "Vaši kolegiji" }); await openCourse();
   const settings = await openSettings();
-  fireEvent.change(within(settings).getByLabelText("Course name"), { target: { value: "Unsaved course name" } });
+  fireEvent.change(within(settings).getByLabelText("Naziv kolegija"), { target: { value: "Unsaved course name" } });
   goHome(); expect(confirm).not.toHaveBeenCalled();
   await openCourse("Statistics");
   expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Any unsaved answers or edits will be lost"));
   expect(screen.getByRole("heading", { name: "Početna" })).toBeVisible();
   expect(apiMock.membership).not.toHaveBeenCalledWith("course-2");
   await openCourse();
-  expect(within(await openSettings()).getByLabelText("Course name")).toHaveValue("Unsaved course name");
+  expect(within(await openSettings()).getByLabelText("Naziv kolegija")).toHaveValue("Unsaved course name");
   goHome(); confirm.mockReturnValue(true); await openCourse("Statistics");
   expect(screen.getByRole("heading", { name: "Statistics" })).toBeVisible();
   confirm.mockRestore();
@@ -364,9 +364,9 @@ it("clears typed deletion confirmation only after a confirmed course switch", as
   apiMock.membership.mockResolvedValue({ ...membership, role: "OWNER" });
   render(<AppShell />);
   await screen.findByRole("region", { name: "Vaši kolegiji" }); await openCourse();
-  fireEvent.change(within(await openSettings()).getByLabelText("Type the exact course name to confirm"), { target: { value: "Algorithms" } });
+  fireEvent.change(within(await openSettings()).getByLabelText("Za potvrdu upišite točan naziv kolegija"), { target: { value: "Algorithms" } });
   goHome(); await openCourse("Statistics"); goHome(); await openCourse();
-  expect(within(await openSettings()).getByLabelText("Type the exact course name to confirm")).toHaveValue("");
+  expect(within(await openSettings()).getByLabelText("Za potvrdu upišite točan naziv kolegija")).toHaveValue("");
   expect(confirm).toHaveBeenCalledOnce(); confirm.mockRestore();
 });
 

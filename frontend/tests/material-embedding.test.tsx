@@ -17,7 +17,7 @@ function deferred<T>() {
 
 function renderEmbedding() {
   const view = render(<MaterialEmbedding materialId="m1" />);
-  fireEvent.click(screen.getByText("Advanced: AI source preparation"));
+  fireEvent.click(screen.getByText("Napredno: priprema izvora za AI"));
   return view;
 }
 
@@ -30,18 +30,18 @@ beforeEach(() => {
 it("reads status once and prepares only after an explicit click", async () => {
   mock.materialEmbeddingStatus.mockResolvedValueOnce(stale).mockResolvedValueOnce(current);
   renderEmbedding();
-  expect(await screen.findByText("Needs refresh or partially stale")).toBeInTheDocument();
-  expect(screen.getByText("1 current · 2 stale · 3 total chunks")).toBeInTheDocument();
+  expect(await screen.findByText("Treba osvježiti ili je djelomično zastarjelo")).toBeInTheDocument();
+  expect(screen.getByText("1 aktualnih · 2 zastarjelih · 3 isječaka ukupno")).toBeInTheDocument();
   expect(mock.materialEmbeddingStatus).toHaveBeenCalledTimes(1);
   expect(mock.embedMaterial).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByText("Advanced: AI source preparation"));
-  expect(screen.getByText("1 current · 2 stale · 3 total chunks")).not.toBeVisible();
-  fireEvent.click(screen.getByText("Advanced: AI source preparation"));
-  expect(screen.getByText("1 current · 2 stale · 3 total chunks")).toBeVisible();
+  fireEvent.click(screen.getByText("Napredno: priprema izvora za AI"));
+  expect(screen.getByText("1 aktualnih · 2 zastarjelih · 3 isječaka ukupno")).not.toBeVisible();
+  fireEvent.click(screen.getByText("Napredno: priprema izvora za AI"));
+  expect(screen.getByText("1 aktualnih · 2 zastarjelih · 3 isječaka ukupno")).toBeVisible();
   expect(mock.materialEmbeddingStatus).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole("button", { name: "Refresh semantic sources" }));
-  expect(await screen.findByText("Current")).toBeInTheDocument();
-  expect(screen.getByText("Prepared 2 chunks; skipped 1 already current chunks.")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Osvježi semantičke izvore" }));
+  expect(await screen.findByText("Aktualno")).toBeInTheDocument();
+  expect(screen.getByText("Pripremljeno isječaka: 2; preskočeno već aktualnih isječaka: 1.")).toBeInTheDocument();
   expect(mock.embedMaterial).toHaveBeenCalledOnce();
   expect(mock.materialEmbeddingStatus).toHaveBeenCalledTimes(2);
   expect(screen.queryByText("private")).not.toBeInTheDocument();
@@ -51,30 +51,30 @@ it("guards duplicate preparation and preserves status after POST failure for exp
   const pending = deferred<never>();
   mock.embedMaterial.mockReturnValueOnce(pending.promise);
   renderEmbedding();
-  await screen.findByText("Needs refresh or partially stale");
-  const button = screen.getByRole("button", { name: "Refresh semantic sources" });
+  await screen.findByText("Treba osvježiti ili je djelomično zastarjelo");
+  const button = screen.getByRole("button", { name: "Osvježi semantičke izvore" });
   fireEvent.click(button);
   fireEvent.click(button);
   expect(mock.embedMaterial).toHaveBeenCalledTimes(1);
   expect(button).toBeDisabled();
   pending.reject(new Error("Embedding service unavailable"));
   expect(await screen.findByRole("alert")).toHaveTextContent("Embedding service unavailable");
-  expect(screen.getByText("1 current · 2 stale · 3 total chunks")).toBeInTheDocument();
-  expect(screen.getByRole("alert")).toHaveTextContent("manual question creation and JSON import remain available");
-  fireEvent.click(screen.getByRole("button", { name: "Refresh semantic sources" }));
+  expect(screen.getByText("1 aktualnih · 2 zastarjelih · 3 isječaka ukupno")).toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent("ručno stvaranje pitanja i JSON uvoz i dalje su dostupni");
+  fireEvent.click(screen.getByRole("button", { name: "Osvježi semantičke izvore" }));
   await waitFor(() => expect(mock.embedMaterial).toHaveBeenCalledTimes(2));
 });
 
 it("retries only the status read after a successful POST and failed follow-up GET", async () => {
   mock.materialEmbeddingStatus.mockResolvedValueOnce(stale).mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(current);
   renderEmbedding();
-  await screen.findByText("Needs refresh or partially stale");
-  fireEvent.click(screen.getByRole("button", { name: "Refresh semantic sources" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Preparation finished");
-  expect(screen.getByText("1 current · 2 stale · 3 total chunks")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Refresh semantic sources" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Retry status" }));
-  expect(await screen.findByText("Current")).toBeInTheDocument();
+  await screen.findByText("Treba osvježiti ili je djelomično zastarjelo");
+  fireEvent.click(screen.getByRole("button", { name: "Osvježi semantičke izvore" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Priprema je završena");
+  expect(screen.getByText("1 aktualnih · 2 zastarjelih · 3 isječaka ukupno")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Osvježi semantičke izvore" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj status" }));
+  expect(await screen.findByText("Aktualno")).toBeInTheDocument();
   expect(mock.embedMaterial).toHaveBeenCalledTimes(1);
   expect(mock.materialEmbeddingStatus).toHaveBeenCalledTimes(3);
 });
@@ -84,26 +84,26 @@ it("ignores a late status from a previously selected material", async () => {
   mock.materialEmbeddingStatus.mockReturnValueOnce(old.promise).mockResolvedValueOnce({ ...current, material_id: "m2" });
   const view = renderEmbedding();
   view.rerender(<MaterialEmbedding materialId="m2" />);
-  expect(await screen.findByText("Current")).toBeInTheDocument();
+  expect(await screen.findByText("Aktualno")).toBeInTheDocument();
   old.resolve(stale);
-  await waitFor(() => expect(screen.getByText("3 current · 0 stale · 3 total chunks")).toBeInTheDocument());
-  expect(screen.queryByText("Needs refresh or partially stale")).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText("3 aktualnih · 0 zastarjelih · 3 isječaka ukupno")).toBeInTheDocument());
+  expect(screen.queryByText("Treba osvježiti ili je djelomično zastarjelo")).not.toBeInTheDocument();
   expect(mock.embedMaterial).not.toHaveBeenCalled();
 });
 
 it("reports an empty READY material as not prepared", async () => {
   mock.materialEmbeddingStatus.mockResolvedValue({ material_id: "m1", total_chunks: 0, current_chunks: 0, stale_chunks: 0, is_current: false });
   renderEmbedding();
-  expect(await screen.findByText("Not prepared")).toBeInTheDocument();
-  expect(screen.getByText("0 current · 0 stale · 0 total chunks")).toBeInTheDocument();
+  expect(await screen.findByText("Nije pripremljeno")).toBeInTheDocument();
+  expect(screen.getByText("0 aktualnih · 0 zastarjelih · 0 isječaka ukupno")).toBeInTheDocument();
 });
 
 it("retries an initial status failure without starting preparation", async () => {
   mock.materialEmbeddingStatus.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(stale);
   renderEmbedding();
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load semantic source status");
-  fireEvent.click(screen.getByRole("button", { name: "Retry status" }));
-  expect(await screen.findByText("Needs refresh or partially stale")).toBeInTheDocument();
+  expect(await screen.findByRole("alert")).toHaveTextContent("Status semantičkih izvora nije moguće učitati");
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj status" }));
+  expect(await screen.findByText("Treba osvježiti ili je djelomično zastarjelo")).toBeInTheDocument();
   expect(mock.materialEmbeddingStatus).toHaveBeenCalledTimes(2);
   expect(mock.embedMaterial).not.toHaveBeenCalled();
 });
@@ -113,9 +113,9 @@ it("does not show an old preparation result after switching materials", async ()
   mock.embedMaterial.mockReturnValueOnce(pending.promise);
   mock.materialEmbeddingStatus.mockResolvedValueOnce(stale).mockResolvedValueOnce({ ...current, material_id: "m2" });
   const view = renderEmbedding();
-  fireEvent.click(await screen.findByRole("button", { name: "Refresh semantic sources" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Osvježi semantičke izvore" }));
   view.rerender(<MaterialEmbedding materialId="m2" />);
-  expect(await screen.findByText("Current")).toBeInTheDocument();
+  expect(await screen.findByText("Aktualno")).toBeInTheDocument();
   await act(async () => pending.resolve({ material_id: "m1", embedded: 2, skipped: 1, signature: "private" }));
   expect(screen.queryByText(/Prepared 2 chunks/)).not.toBeInTheDocument();
   expect(mock.materialEmbeddingStatus).toHaveBeenCalledTimes(2);

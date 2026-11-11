@@ -218,19 +218,19 @@ it("preserves an actual question draft across More, Progress and Home and guards
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
   render(<AppShell />); await enterCourse(); navigate("Više");
   fireEvent.click(screen.getByRole("button", { name: "Baza pitanja" }));
-  fireEvent.click(screen.getByRole("button", { name: "Open question bank" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Create question" }));
-  fireEvent.change(screen.getByLabelText("Question text"), { target: { value: "Unfinished draft question" } });
-  fireEvent.change(screen.getByLabelText("Option 1", { exact: true }), { target: { value: "Draft option" } });
+  fireEvent.click(screen.getByRole("button", { name: "Otvori bazu pitanja" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Stvori pitanje" }));
+  fireEvent.change(screen.getByLabelText("Tekst pitanja"), { target: { value: "Unfinished draft question" } });
+  fireEvent.change(screen.getByLabelText("Opcija 1", { exact: true }), { target: { value: "Draft option" } });
   navigate("Napredak"); navigate("Više");
-  expect(screen.getByLabelText("Question text")).toHaveValue("Unfinished draft question");
+  expect(screen.getByLabelText("Tekst pitanja")).toHaveValue("Unfinished draft question");
   fireEvent.click(screen.getByRole("button", { name: "Natrag na početnu" })); await enterCourse(); navigate("Više");
-  expect(screen.getByLabelText("Option 1", { exact: true })).toHaveValue("Draft option");
+  expect(screen.getByLabelText("Opcija 1", { exact: true })).toHaveValue("Draft option");
   expect(mock.questions).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole("button", { name: "Natrag na početnu" }));
   fireEvent.click(screen.getByRole("button", { name: "Otvori kolegij: Statistics" }));
   expect(confirm).toHaveBeenCalledOnce(); await enterCourse(); navigate("Više");
-  expect(screen.getByLabelText("Question text")).toHaveValue("Unfinished draft question");
+  expect(screen.getByLabelText("Tekst pitanja")).toHaveValue("Unfinished draft question");
   confirm.mockRestore();
 });
 
@@ -368,7 +368,7 @@ it("opens progress from its summary, offers students no materials and keeps cont
   expect(screen.queryByRole("region", { name: "Materijali" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Predloži pitanje" }));
   expect(within(screen.getByRole("navigation", { name: "Navigacija kolegija" })).getByRole("button", { name: "Više" })).toHaveAttribute("aria-current", "page");
-  expect(screen.getByRole("button", { name: "Open question bank" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Otvori bazu pitanja" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "Postavke kolegija" })).not.toBeInTheDocument();
 });
 
@@ -393,14 +393,14 @@ it("offers item analysis to a faculty moderator only and opens a flagged questio
   mock.question.mockResolvedValue({ id: "flagged", course_id: "course", type: "TRUE_FALSE", stem, difficulty: null, visibility: "MEMBER", status: "APPROVED", options: [] });
   render(<AppShell />); await enterCourse(); navigate("Više");
   fireEvent.click(await screen.findByRole("button", { name: "Analiza pitanja" }));
-  expect(await screen.findByText(/The key may be wrong/)).toBeVisible();
+  expect(await screen.findByText(/Ključ je možda pogrešan/)).toBeVisible();
   expect(mock.itemAnalysis).toHaveBeenCalledWith("course", 0);
-  fireEvent.click(screen.getByRole("button", { name: `Open in question bank: ${stem}` }));
-  const opened = await screen.findByRole("article", { name: "Selected question" });
+  fireEvent.click(screen.getByRole("button", { name: `Otvori u bazi pitanja: ${stem}` }));
+  const opened = await screen.findByRole("article", { name: "Odabrano pitanje" });
   await waitFor(() => expect(within(opened).getByRole("heading", { name: stem })).toHaveFocus());
   expect(mock.question).toHaveBeenCalledWith("flagged");
   expect(screen.getByRole("button", { name: "Baza pitanja" })).toHaveAttribute("aria-pressed", "true");
-  expect(within(opened).getByRole("button", { name: "Report issue" })).toBeVisible();
+  expect(within(opened).getByRole("button", { name: "Prijavi problem" })).toBeVisible();
 });
 
 it("minimizes application navigation during answering and restores it after Save and leave", async () => {

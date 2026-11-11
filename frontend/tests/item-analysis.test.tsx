@@ -36,27 +36,27 @@ it("lists flagged questions first with plain-language explanations and the answe
   mock.itemAnalysis.mockResolvedValue(list([item(), pending]));
   const onOpenQuestion = vi.fn();
   render(<ItemAnalysisView courseId="course" onOpenQuestion={onOpenQuestion} />);
-  const rows = within(await screen.findByRole("list", { name: "Questions, those to check first" })).getAllByRole("listitem", { name: /./ });
+  const rows = within(await screen.findByRole("list", { name: "Pitanja, prvo ona za provjeru" })).getAllByRole("listitem", { name: /./ });
   expect(rows.map(row => within(row).getByRole("heading").textContent)).toEqual(["Koja gramatika je dvoznačna?", "Every regular language is context-free."]);
-  expect(screen.getByText(/2 questions answered · 1 with at least 30 students/)).toHaveTextContent("1 to check");
+  expect(screen.getByText(/2 pitanja s odgovorima · 1 s barem 30 studenata/)).toHaveTextContent("1 za provjeru");
 
   const flagged = rows[0];
-  const notes = within(flagged).getByRole("list", { name: "What to check" });
+  const notes = within(flagged).getByRole("list", { name: "Što provjeriti" });
   expect(within(notes).getAllByRole("listitem").map(note => note.textContent)).toEqual([
-    "Students who do well on other questions get this one wrong more often than weaker students (30% of the top group answer correctly, 50% of the bottom group). The key may be wrong.",
-    "Strong students often choose option C (“S → SS | a”) — check the key.",
-    "Almost nobody chooses option D (“S → a”). A more plausible wrong answer would make the question more informative.",
+    "Studenti koji dobro rješavaju ostala pitanja ovo pitanje griješe češće od slabijih studenata (u najboljoj skupini točno odgovara 30%, u najslabijoj 50%). Ključ je možda pogrešan.",
+    "Jaki studenti često biraju opciju C („S → SS | a“) — provjerite ključ.",
+    "Gotovo nitko ne bira opciju D („S → a“). Uvjerljiviji netočan odgovor učinio bi pitanje informativnijim.",
   ]);
-  expect(within(flagged).getByText("Check the key")).toBeVisible();
+  expect(within(flagged).getByText("Provjerite ključ")).toBeVisible();
   expect(within(flagged).getByText("−0.20")).toBeVisible();
-  expect(within(flagged).getByText("30% vs 50%")).toBeVisible();
+  expect(within(flagged).getByText("30% naspram 50%")).toBeVisible();
   const table = within(flagged).getByRole("table");
   const key = within(table).getByRole("row", { name: /S → aSb \| ε/ });
-  expect(key).toHaveTextContent("Key");
+  expect(key).toHaveTextContent("Ključ");
   expect(within(key).getAllByRole("cell").map(cell => cell.textContent)).toEqual(["45% (18)", "30%", "50%"]);
-  expect(within(table).getByRole("row", { name: /S → SS \| a/ })).toHaveTextContent("Strong distractor");
+  expect(within(table).getByRole("row", { name: /S → SS \| a/ })).toHaveTextContent("Jak distraktor");
 
-  fireEvent.click(within(flagged).getByRole("button", { name: "Open in question bank: Koja gramatika je dvoznačna?" }));
+  fireEvent.click(within(flagged).getByRole("button", { name: "Otvori u bazi pitanja: Koja gramatika je dvoznačna?" }));
   expect(onOpenQuestion).toHaveBeenCalledWith("q1");
 });
 
@@ -64,8 +64,8 @@ it("shows only the count below the threshold and says when earlier versions are 
   mock.itemAnalysis.mockResolvedValue(list([pending]));
   render(<ItemAnalysisView courseId="course" />);
   const row = await screen.findByRole("listitem", { name: "Every regular language is context-free." });
-  expect(row).toHaveTextContent("Not enough answers yet: 12 of 30 students.");
-  expect(row).toHaveTextContent("5 students answered an earlier version; those answers are not counted.");
+  expect(row).toHaveTextContent("Još nema dovoljno odgovora: 12 od 30 studenata.");
+  expect(row).toHaveTextContent("Raniju verziju rješavalo je: 5 studenata; ti odgovori se ne broje.");
   expect(within(row).queryByRole("table")).not.toBeInTheDocument();
   expect(within(row).queryByRole("button")).not.toBeInTheDocument();
 });
@@ -75,17 +75,17 @@ it("explains true/false distractors by name and reports small groups honestly", 
     type: "TRUE_FALSE", flags: ["STRONG_DISTRACTOR"], discrimination: 0.1, upper_correct: 0.4, lower_correct: 0.3,
     options: [option(0, "True", { is_key: true, upper_share: 0.4 }), option(1, "False", { upper_share: 0.6, flag: "STRONG_DISTRACTOR" })],
   });
-  expect(explanations(trueFalse)).toEqual(["Strong students often choose False — check the key."]);
+  expect(explanations(trueFalse)).toEqual(["Jaki studenti često biraju False — provjerite ključ."]);
   const small = item({ flags: ["TOO_HARD"], difficulty: 0.15, discrimination: null, upper_correct: null, lower_correct: null, group_size: null, ranked_size: 12,
     options: [option(0, "A", { is_key: true, upper_share: null, lower_share: null }), option(1, "B", { upper_share: null, lower_share: null })] });
-  expect(explanations(small)).toEqual(["Only 15% of students answer correctly. Check the key and the wording, and whether the course covers it."]);
-  expect(explanations(item({ flags: ["TOO_EASY"], difficulty: 0.97 }))).toEqual(["97% of students answer correctly. The question may give its answer away."]);
+  expect(explanations(small)).toEqual(["Samo 15% studenata odgovara točno. Provjerite ključ i formulaciju te pokriva li kolegij to gradivo."]);
+  expect(explanations(item({ flags: ["TOO_EASY"], difficulty: 0.97 }))).toEqual(["97% studenata odgovara točno. Pitanje možda otkriva svoj odgovor."]);
   mock.itemAnalysis.mockResolvedValue(list([small]));
   render(<ItemAnalysisView courseId="course" />);
   const row = await screen.findByRole("listitem", { name: small.stem });
-  expect(row).toHaveTextContent("Too few ranked");
-  expect(row).toHaveTextContent("Groups need more students who also answered other questions (12 so far).");
-  expect(within(within(row).getByRole("table")).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Option", "All"]);
+  expect(row).toHaveTextContent("Premalo rangiranih");
+  expect(row).toHaveTextContent("Za skupine treba više studenata koji su odgovorili i na druga pitanja (zasad 12).");
+  expect(within(within(row).getByRole("table")).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Opcija", "Svi"]);
 });
 
 it("pages through the list and retries a failed load", async () => {
@@ -93,20 +93,20 @@ it("pages through the list and retries a failed load", async () => {
   mock.itemAnalysis.mockResolvedValueOnce(list(rows, { total: 25 })).mockRejectedValueOnce(new Error("Course owner or faculty moderator access required"))
     .mockResolvedValue(list([item({ question_id: "last", stem: "The last question", flags: [] })], { total: 25 }));
   render(<ItemAnalysisView courseId="course" />);
-  expect(await screen.findByText("Page 1 of 2")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  expect(await screen.findByText("Stranica 1 od 2")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Sljedeća" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Course owner or faculty moderator access required");
   expect(mock.itemAnalysis).toHaveBeenLastCalledWith("course", 20);
-  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  fireEvent.click(screen.getByRole("button", { name: "Pokušaj ponovno" }));
   expect(await screen.findByRole("heading", { name: "The last question" })).toBeVisible();
   expect(mock.itemAnalysis).toHaveBeenLastCalledWith("course", 20);
-  expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
-  await waitFor(() => expect(screen.getByText("Page 2 of 2")).toBeVisible());
+  expect(screen.getByRole("button", { name: "Sljedeća" })).toBeDisabled();
+  await waitFor(() => expect(screen.getByText("Stranica 2 od 2")).toBeVisible());
 });
 
 it("explains the empty state", async () => {
   mock.itemAnalysis.mockResolvedValue(list([]));
   render(<ItemAnalysisView courseId="course" />);
-  expect(await screen.findByRole("heading", { name: "No graded answers yet." })).toBeVisible();
-  expect(screen.getByText(/Each question needs 30 students/)).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Još nema ocijenjenih odgovora." })).toBeVisible();
+  expect(screen.getByText(/Svako pitanje treba najmanje 30 studenata/)).toBeVisible();
 });

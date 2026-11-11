@@ -47,15 +47,15 @@ export function SuggestQuestionEdit({ question }: { question: SuggestableQuestio
       if (options.length) changes.options = options;
       if (data.get("changeKey") === "on") {
         const positions = data.getAll("correctOptions").map(Number);
-        if (!positions.length) { setError("Choose at least one correct option, or untick the answer change."); return; }
+        if (!positions.length) { setError("Odaberite barem jednu točnu opciju ili isključite promjenu odgovora."); return; }
         changes.correct_option_positions = positions;
       }
     } else if (question.type === "NUMERIC") {
       const text = (name: string) => String(data.get(name) ?? "").trim();
       const numbers: [keyof SuggestionChanges, string, string][] = [
-        ["correct_value", "Proposed correct value", text("correctValue")],
-        ["absolute_tolerance", "Proposed absolute tolerance", text("absoluteTolerance")],
-        ["relative_tolerance", "Proposed relative tolerance", text("relativeTolerance")],
+        ["correct_value", "Predložena točna vrijednost", text("correctValue")],
+        ["absolute_tolerance", "Predložena apsolutna tolerancija", text("absoluteTolerance")],
+        ["relative_tolerance", "Predložena relativna tolerancija", text("relativeTolerance")],
       ];
       for (const [, name, value] of numbers) {
         const problem = value && numberProblem(value);
@@ -67,7 +67,7 @@ export function SuggestQuestionEdit({ question }: { question: SuggestableQuestio
       if (percent) {
         // Students type a percentage, like the bank form; the API stores the share of the key (1 % = 0.01).
         const share = Number(percent.replace(",", ".")) / 100;
-        if (share < 0 || share > 1) { setError("Proposed relative tolerance: Use a percentage from 0 to 100."); return; }
+        if (share < 0 || share > 1) { setError("Predložena relativna tolerancija: Upotrijebite postotak od 0 do 100."); return; }
         changes.relative_tolerance = String(Number(share.toPrecision(12)));
       }
       const unit = text("unit");
@@ -79,83 +79,83 @@ export function SuggestQuestionEdit({ question }: { question: SuggestableQuestio
       const reference = String(data.get("reference") ?? "").trim();
       if (reference) changes.reference_answer = reference;
     }
-    if (!Object.keys(changes).length) { setError("Enter at least one proposed change."); return; }
+    if (!Object.keys(changes).length) { setError("Unesite barem jednu predloženu promjenu."); return; }
     pending.current = true; setBusy(true); setError(""); setNotice("");
     try {
       await api.suggestQuestionEdit(question.id, { changes, note: String(data.get("note") ?? "").trim() || null });
       if (!mounted.current) return;
-      setOpen(false); setNotice("Suggestion submitted for faculty review.");
+      setOpen(false); setNotice("Prijedlog je poslan na pregled fakulteta.");
     } catch (failure) {
-      if (mounted.current) setError(failure instanceof Error ? failure.message : "Could not submit suggestion. Try again.");
+      if (mounted.current) setError(failure instanceof Error ? failure.message : "Prijedlog nije moguće poslati. Pokušajte ponovno.");
     } finally {
       pending.current = false;
       if (mounted.current) setBusy(false);
     }
   }
 
-  return <section className="space-y-3 border-t border-line pt-4" aria-label="Suggest edit">
+  return <section className="space-y-3 border-t border-line pt-4" aria-label="Prijedlog izmjene">
     {notice && <p role="status">{notice}</p>}
     {error && <Alert>{error}</Alert>}
-    {!open && <Button type="button" variant="secondary" onClick={() => { setOpen(true); setError(""); setNotice(""); }}>Suggest edit</Button>}
-    {open && <DraftForm aria-label="Suggest question edit" onSubmit={event => void submit(event)}>
+    {!open && <Button type="button" variant="secondary" onClick={() => { setOpen(true); setError(""); setNotice(""); }}>Predloži izmjenu</Button>}
+    {open && <DraftForm aria-label="Prijedlog izmjene pitanja" onSubmit={event => void submit(event)}>
       <fieldset disabled={busy} className="space-y-4">
-        <legend className="font-semibold">Propose a correction</legend>
-        <p className="text-sm text-muted">Leave fields blank to keep them unchanged. Your proposal is reviewed by faculty moderators before it changes the question.</p>
-        <label className="block text-sm font-medium">Proposed question text
+        <legend className="font-semibold">Predložite ispravak</legend>
+        <p className="text-sm text-muted">Ostavite polja praznima ako ih ne želite mijenjati. Moderatori fakulteta pregledavaju Vaš prijedlog prije nego što izmijeni pitanje.</p>
+        <label className="block text-sm font-medium">Predloženi tekst pitanja
           <textarea name="stem" maxLength={400} className={textareaClass} placeholder={question.stem} />
         </label>
-        <label className="block text-sm font-medium">Proposed explanation
+        <label className="block text-sm font-medium">Predloženo objašnjenje
           <textarea name="explanation" maxLength={2000} className={textareaClass} />
         </label>
-        <label className="block text-sm font-medium">Proposed difficulty
+        <label className="block text-sm font-medium">Predložena težina
           <Input name="difficulty" type="number" min={1} max={5} className="mt-1 sm:w-24" />
         </label>
         {question.type === "MULTIPLE_CHOICE" && <>
-          {question.options.map(option => <label key={option.position} className="block text-sm font-medium">Proposed option {option.position + 1} text
+          {question.options.map(option => <label key={option.position} className="block text-sm font-medium">Predloženi tekst opcije {option.position + 1}
             <Input name={`option-${option.position}`} maxLength={400} placeholder={option.text} className="mt-1" />
           </label>)}
-          <label className="block text-sm font-medium">Proposed correct option
+          <label className="block text-sm font-medium">Predložena točna opcija
             <Select name="correctOption" defaultValue="" className="mt-1">
-              <option value="">No answer change</option>
-              {question.options.map(option => <option key={option.position} value={option.position}>Option {option.position + 1}: {option.text}</option>)}
+              <option value="">Bez promjene odgovora</option>
+              {question.options.map(option => <option key={option.position} value={option.position}>Opcija {option.position + 1}: {option.text}</option>)}
             </Select>
           </label>
         </>}
         {question.type === "MULTIPLE_SELECT" && <>
-          {question.options.map(option => <label key={option.position} className="block text-sm font-medium">Proposed option {option.position + 1} text
+          {question.options.map(option => <label key={option.position} className="block text-sm font-medium">Predloženi tekst opcije {option.position + 1}
             <Input name={`option-${option.position}`} maxLength={400} placeholder={option.text} className="mt-1" />
           </label>)}
           <fieldset className="space-y-1">
-            <legend className="text-sm font-medium"><label><input type="checkbox" name="changeKey" /> Propose a different set of correct options</label></legend>
-            {question.options.map(option => <label key={option.position} className="block text-sm"><input type="checkbox" name="correctOptions" value={option.position} /> Option {option.position + 1}: {option.text}</label>)}
+            <legend className="text-sm font-medium"><label><input type="checkbox" name="changeKey" /> Predložite drugi skup točnih opcija</label></legend>
+            {question.options.map(option => <label key={option.position} className="block text-sm"><input type="checkbox" name="correctOptions" value={option.position} /> Opcija {option.position + 1}: {option.text}</label>)}
           </fieldset>
         </>}
         {question.type === "NUMERIC" && <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm font-medium">Proposed correct value
-            <Input name="correctValue" inputMode="decimal" maxLength={40} className="mt-1" placeholder="e.g. 9,81" />
+          <label className="block text-sm font-medium">Predložena točna vrijednost
+            <Input name="correctValue" inputMode="decimal" maxLength={40} className="mt-1" placeholder="npr. 9,81" />
           </label>
-          <label className="block text-sm font-medium">Proposed unit
-            <Input name="unit" maxLength={20} className="mt-1" placeholder="e.g. m/s²" />
+          <label className="block text-sm font-medium">Predložena jedinica
+            <Input name="unit" maxLength={20} className="mt-1" placeholder="npr. m/s²" />
           </label>
-          <label className="block text-sm font-medium">Proposed absolute tolerance
-            <Input name="absoluteTolerance" inputMode="decimal" maxLength={40} className="mt-1" placeholder="e.g. 0,05" />
+          <label className="block text-sm font-medium">Predložena apsolutna tolerancija
+            <Input name="absoluteTolerance" inputMode="decimal" maxLength={40} className="mt-1" placeholder="npr. 0,05" />
           </label>
-          <label className="block text-sm font-medium">Proposed relative tolerance in %
-            <Input name="relativeTolerance" inputMode="decimal" maxLength={40} className="mt-1" placeholder="e.g. 1" />
+          <label className="block text-sm font-medium">Predložena relativna tolerancija u %
+            <Input name="relativeTolerance" inputMode="decimal" maxLength={40} className="mt-1" placeholder="npr. 1" />
           </label>
         </div>}
-        {question.type === "TRUE_FALSE" && <label className="block text-sm font-medium">Proposed correct answer
-          <Select name="answer" defaultValue="" className="mt-1"><option value="">No answer change</option><option value="true">True</option><option value="false">False</option></Select>
+        {question.type === "TRUE_FALSE" && <label className="block text-sm font-medium">Predloženi točan odgovor
+          <Select name="answer" defaultValue="" className="mt-1"><option value="">Bez promjene odgovora</option><option value="true">Točno</option><option value="false">Netočno</option></Select>
         </label>}
-        {question.type === "SHORT_ANSWER" && <label className="block text-sm font-medium">Proposed reference answer
+        {question.type === "SHORT_ANSWER" && <label className="block text-sm font-medium">Predloženi referentni odgovor
           <textarea name="reference" maxLength={2000} className={textareaClass} />
         </label>}
-        <label className="block text-sm font-medium">Suggestion note (optional)
+        <label className="block text-sm font-medium">Napomena uz prijedlog (neobavezno)
           <textarea name="note" maxLength={1000} className={textareaClass} />
         </label>
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={busy}>{busy ? "Submitting suggestion…" : "Submit suggestion"}</Button>
-          <Button type="button" variant="secondary" disabled={busy} onClick={() => { setOpen(false); setError(""); }}>Cancel suggestion</Button>
+          <Button type="submit" disabled={busy}>{busy ? "Slanje prijedloga…" : "Pošalji prijedlog"}</Button>
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => { setOpen(false); setError(""); }}>Odustani od prijedloga</Button>
         </div>
       </fieldset>
     </DraftForm>}
