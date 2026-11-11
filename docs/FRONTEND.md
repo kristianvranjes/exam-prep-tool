@@ -204,9 +204,15 @@ Flags are local to the mounted active attempt, never sent to the server. They su
 question navigation and presentation switches, but may reset after returning to
 history, changing course or refreshing/resuming. Saved answers remain server-owned.
 
-Final submission uses an inline named confirmation region with predictable heading
-focus, answered/unanswered/flagged counts and an explicit irreversible warning.
-Confirmation is disabled until every answer is saved. Submission failure preserves
+Finishing takes one deliberate step. A guided (IMMEDIATE) session whose questions are
+all answered and none marked to revisit ends from its last checked answer: the primary
+button reads **Završi vježbu** and hands the session in, because checked answers are
+already final. Otherwise the **Pregled vježbe** step is the confirmation: it shows the
+answered count, names blank questions ("neodgovorena pitanja se ne ocjenjuju i ne ulaze
+u napredak") and marked ones, and **Završi vježbu** submits from there. Practice can be
+finished with blanks once one answer is saved; with none, the step points to
+**Odustani od pokušaja**. Only a past paper keeps the separate **Potvrda predaje**
+region, since handing it in ends a timed exam. Submission failure preserves
 the attempt and permits retry or return to editing. No correctness appears before
 submission. Active history entries resume; submitted entries open the same Results
 experience as a newly finished session; abandoned entries open read-only saved-answer history.
@@ -317,6 +323,13 @@ The backend remains authoritative for membership, grading, scheduling and eligib
 Graded accuracy is shown here, not on the course overview.
 
 ## Materials upload and browsing
+
+Materials are a tool for the people who run a course. Only a course OWNER or a
+moderator of its faculty sees the **Materijali** tab, the overview's materials summary
+and the links to it; for everyone else the tab is absent and `CourseMaterials` is not
+mounted, so students never see uploads, extracted text or the AI source and concept
+controls. An old `/materials` link shows a student a short notice with a way back to
+the overview. The upload endpoint enforces the same rule (see [materials](MATERIALS.md)).
 
 `CourseMaterials` owns list/detail reads and upload integration. `MaterialUpload`
 provides a labeled native file picker and drop area, with an explicit Upload PDF

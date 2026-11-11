@@ -56,13 +56,17 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
     && (answer.type !== "NUMERIC" || numberProblem(answer.value) === null);
   const answered = attempt.questions.filter(item => item.answer !== null).length;
   const unanswered = attempt.questions.length - answered;
-  // A past paper can be handed in with blanks, which score 0 instead of a penalty.
+  // Blanks are allowed: a past paper scores them 0, and practice leaves them ungraded and unscheduled.
   const paper = attempt.paper ?? null;
-  const blocked = !paper && unanswered > 0;
+  // Practice needs one saved answer to record; a paper may be handed in empty when its time runs out.
+  const blocked = !paper && answered === 0;
   const [timeUp, setTimeUp] = useState(false);
   const answeredPoints = attempt.questions.reduce((sum, item) => sum + (item.answer !== null ? item.points ?? 0 : 0), 0);
-  const blankNote = paper && unanswered > 0 ? `Bez odgovora: ${plural(unanswered, QUESTIONS)}. Prazna pitanja nose 0 bodova.` : null;
+  const blankNote = unanswered === 0 || blocked ? null
+    : `Bez odgovora: ${plural(unanswered, QUESTIONS)}. ${paper ? "Prazna pitanja nose 0 bodova." : "Neodgovorena pitanja se ne ocjenjuju i ne ulaze u napredak."}`;
   const finalQuestion = index === attempt.questions.length - 1;
+  // Checked answers are final, so a guided session with nothing left to answer or revisit ends without a review step.
+  const finishesFromQuestion = immediate && !paper && finalQuestion && Boolean(feedback) && unanswered === 0 && flags.size === 0;
   const saveState = saving ? "Spremam…" : saveFailed ? "Spremanje nije uspjelo" : dirty ? "Nespremljene promjene" : question.answer ? "Spremljeno" : "Nema spremljenog odgovora";
   const sessionClosed = /already submitted|not active|frozen/i.test(error);
   const flagged = flags.has(question.id);
@@ -141,10 +145,17 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
       setAnswer(null); setSaveFailed(false);
     });
   }
+  function finish() {
+    void run(async () => {
+      const saved = await persist();
+      if (saved.status === "ACTIVE") update(await practiceApi.submit(attempt.course_id, attempt.id));
+    });
+  }
   function forward() {
     if (!valid) return;
-    if (finalQuestion) openReview();
-    else navigate(index + 1);
+    if (!finalQuestion) navigate(index + 1);
+    else if (finishesFromQuestion) finish();
+    else openReview();
   }
   /** The submit button's action: check in guided practice, otherwise save and move on. */
   function primary() {
@@ -244,16 +255,16 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
     {review && !confirmation && <section aria-label="Pregled vježbe" className="space-y-4">
       <h2 ref={reviewHeading} tabIndex={-1} className="text-xl font-semibold">Pregled vježbe</h2>
       <p>Odgovoreno i spremljeno {answered} od {attempt.questions.length}</p>
-      {blocked && <p>Bez odgovora je još {plural(unanswered, QUESTIONS)}. Prije završetka spremite odgovor na svako pitanje.</p>}
       {blankNote && <p>{blankNote}</p>}
       {flags.size > 0 && <p className="text-sm text-muted">Označeno za povratak: {flags.size}. Prije završetka se možete vratiti na ta pitanja.</p>}
       <div className="flex flex-wrap gap-2">
         {unanswered > 0 && <Button disabled={busy} onClick={reviewUnanswered}>Pregledaj neodgovorena</Button>}
         {flags.size > 0 && <Button variant="secondary" disabled={busy} onClick={reviewMarked}>Pregledaj označena</Button>}
         <Button variant="secondary" disabled={busy} onClick={() => setReview(false)}>Natrag na pitanje</Button>
-        <Button variant={blocked ? "secondary" : "primary"} disabled={busy || blocked} aria-describedby={blocked ? "finish-help" : undefined} onClick={() => setConfirmation("submit")}>{paper ? "Predaj ispit" : "Završi vježbu"}</Button>
+        {/* Only a past paper asks again: handing it in ends a timed exam, while this screen already confirms practice. */}
+        <Button variant={!paper && unanswered > 0 ? "secondary" : "primary"} disabled={busy || blocked} aria-describedby={blocked ? "finish-help" : undefined} onClick={() => { if (paper) setConfirmation("submit"); else finish(); }}>{paper ? "Predaj ispit" : busy ? "Završavam…" : "Završi vježbu"}</Button>
       </div>
-      {blocked && <p id="finish-help" className="text-sm text-muted">Završi vježbu postaje dostupno kad su svi odgovori spremljeni.</p>}
+      {blocked && <p id="finish-help" className="text-sm text-muted">Za završetak odgovorite na barem jedno pitanje. Vježbu bez odgovora možete napustiti pod Vježba, Odustani od pokušaja.</p>}
       <p className="text-sm text-muted">{immediate ? "Neprovjereni odgovori ocjenjuju se na kraju." : "Rezultati se prikazuju nakon konačne predaje."} Kratki odgovori zahtijevaju samoprocjenu.</p>
     </section>}
     <div hidden={confirmation !== null || review || timeUp}>
@@ -281,7 +292,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
             <Button variant="secondary" disabled={busy || index === 0} aria-keyshortcuts="P K" onClick={() => navigate(index - 1)}>Prethodno</Button>
             {paper && !feedback && (question.answer !== null || answer !== null) && <Button variant="ghost" disabled={busy} onClick={leaveBlank}>Ostavi prazno</Button>}
             {paper && !valid && !finalQuestion && <Button variant="secondary" disabled={busy} onClick={() => navigate(index + 1)}>Preskoči zasad</Button>}
-            <Button type="submit" className="ml-auto" disabled={busy || !valid} aria-describedby={!valid ? "answer-help" : undefined} aria-keyshortcuts="Enter">{saving ? "Spremam…" : immediate && !feedback ? (busy ? "Provjeravam…" : "Provjeri odgovor") : immediate ? (finalQuestion ? "Nastavi na pregled" : "Sljedeće pitanje") : finalQuestion ? "Spremi i pregledaj" : "Spremi i dalje"}</Button>
+            <Button type="submit" className="ml-auto" disabled={busy || !valid} aria-describedby={!valid ? "answer-help" : undefined} aria-keyshortcuts="Enter">{saving ? "Spremam…" : immediate && !feedback ? (busy ? "Provjeravam…" : "Provjeri odgovor") : immediate ? (finishesFromQuestion ? (busy ? "Završavam…" : "Završi vježbu") : finalQuestion ? "Nastavi na pregled" : "Sljedeće pitanje") : finalQuestion ? "Spremi i pregledaj" : "Spremi i dalje"}</Button>
           </div>
         </div>
       </form>

@@ -33,7 +33,7 @@ export function StudentHome({ courses, loading, onOpen, onJoined, catalogRevisio
         <h2 id="courses-heading" className="text-2xl font-semibold tracking-tight">Vaši kolegiji</h2>
         <Button variant="secondary" aria-expanded={discoveryOpen} aria-controls="course-discovery" onClick={() => discoveryOpen ? setDiscoveryOpen(false) : openDiscovery()}>Upiši kolegij</Button>
       </div>
-      <p className="mt-2 text-muted">Otvorite kolegij za vježbu, pregled napretka ili čitanje materijala.</p>
+      <p className="mt-2 text-muted">Otvorite kolegij za vježbu, prošle ispite ili pregled napretka.</p>
       <div className="mt-5">
         {loading ? <LoadingState>Učitavam kolegije…</LoadingState> : courses.length === 0 ?
           <EmptyState title="Još nema kolegija">Odaberite Upiši kolegij, pronađite svoj fakultet i počnite učiti.</EmptyState> :

@@ -34,13 +34,16 @@ for (const width of [1280, 390]) {
       await page.reload();
       await expect(page.getByRole("region", { name: "Napredak", exact: true })).toBeVisible();
       const navigation = page.getByRole("navigation", { name: "Navigacija kolegija", exact: true });
-      await navigation.getByRole("button", { name: "Materijali", exact: true }).click();
-      await expect(page).toHaveURL(new RegExp(`${base}/materials$`));
+      // Materials are for course managers, so a student's course has no such tab.
+      await expect(navigation.getByRole("button", { name: "Materijali", exact: true })).toHaveCount(0);
+      await navigation.getByRole("button", { name: "Prošli ispiti", exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`${base}/papers$`));
       await page.goBack();
       await expect(page).toHaveURL(new RegExp(`${base}/progress$`));
       await expect(page.getByRole("region", { name: "Napredak", exact: true })).toBeVisible();
       await page.goForward();
-      await expect(page.getByRole("region", { name: "Course materials", exact: true })).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`${base}/papers$`));
+      await expect(navigation.getByRole("button", { name: "Prošli ispiti", exact: true })).toHaveAttribute("aria-current", "page");
       await navigation.getByRole("button", { name: "Vježba", exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`${base}/practice$`));
       await page.getByRole("radio", { name: "Prilagođeno", exact: true }).check();
@@ -90,7 +93,6 @@ for (const width of [1280, 390]) {
       await expect(answer).toHaveValue("Unsaved before forward");
       await page.getByRole("button", { name: "Spremi i pregledaj" }).click();
       await page.getByRole("button", { name: "Završi vježbu", exact: true }).click();
-      await page.getByRole("button", { name: "Potvrdi konačnu predaju" }).click();
       await expect(page).toHaveURL(`${attemptUrl}/results`);
       await page.reload();
       await expect(page.getByRole("region", { name: "Rezultati vježbe" })).toBeVisible();
@@ -115,6 +117,11 @@ for (const width of [1280, 390]) {
       await expect(page.getByRole("button", { name: "Natrag na vježbu", exact: true })).toBeVisible();
       await page.getByRole("button", { name: "Natrag na vježbu", exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`/courses/${otherId}/practice$`));
+      // An old link to materials gives a student a way back instead of an empty page.
+      await page.goto(`http://localhost:3000${base}/materials`);
+      await expect(page.getByText("Materijale kolegija vide samo vlasnik kolegija i moderatori fakulteta.")).toBeVisible();
+      await page.getByRole("button", { name: "Natrag na pregled", exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`${base}$`));
       await page.goto("http://localhost:3000/courses/00000000-0000-0000-0000-000000000000");
       await expect(page.getByRole("heading", { name: "Course unavailable" })).toBeVisible();
       await page.getByRole("button", { name: "Back to Home", exact: true }).click();

@@ -10,11 +10,25 @@ from app.models.material import Material, MaterialStatus
 from app.models.material_chunk import MaterialChunk
 from app.models.material_section import MaterialSection
 from app.schemas.material import MaterialDetail, MaterialResponse, SectionResponse
+from app.services.course_units import is_course_owner
 from app.services.courses import get_member_course
 from app.services.materials import extraction
 from app.services.materials.chunking import chunk_sections, detect_sections
 from app.services.materials.cleanup import cleanup_sources, queue_sources
 from app.services.materials.storage import MaterialStorage, validate_filename
+from app.services.moderation import course_moderator
+
+
+def require_material_manager(db: Session, user: User, course_id: UUID) -> None:
+    """Let only the course owner or a moderator of its faculty add materials.
+
+    Other members keep read access; a non-member still gets 404.
+    """
+    if course_moderator(db, user, course_id):
+        return
+    get_member_course(db, user, course_id)
+    if not is_course_owner(db, user, course_id):
+        raise HTTPException(403, "Only the course owner or a faculty moderator can add materials")
 
 
 def get_material(db: Session, user: User, material_id: UUID) -> Material:
@@ -158,7 +172,7 @@ def upload_material(
     storage: MaterialStorage,
     settings: Settings,
 ) -> Material:
-    get_member_course(db, user, course_id)
+    require_material_manager(db, user, course_id)
     filename = validate_filename(upload.filename, upload.content_type)
     try:
         stored = storage.save(upload.file, settings.material_max_upload_bytes)

@@ -107,6 +107,8 @@ const allTypes: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER
 const MAX_SESSION_QUESTIONS = 20;
 /** A quick quiz is this many questions, or fewer when fewer are available. */
 export const QUICK_QUIZ_QUESTIONS = 5;
+/** One-click practice for an exam scope or a unit is this many questions, or fewer when fewer are available. */
+export const FOCUSED_PRACTICE_QUESTIONS = 10;
 function availabilityQuery(question_types: QuestionType[], selection_mode: SelectionMode, focus?: PracticeFocus) {
   const params = new URLSearchParams({ selection_mode });
   for (const type of question_types) params.append("question_types", type);
@@ -136,6 +138,12 @@ export const practiceApi = {
     const { total } = await practiceApi.availability(course, allTypes, "ADAPTIVE", focus);
     if (!total) throw new Error("Ovdje još nema pitanja za brzi kviz.");
     return practiceApi.start(course, Math.min(total, QUICK_QUIZ_QUESTIONS), allTypes, "ADAPTIVE", focus, "IMMEDIATE", true);
+  },
+  /** One-click practice: a guided recommended session of ten questions from one exam scope or chosen units. */
+  focusedPractice: async (course: string, focus: PracticeFocus): Promise<Attempt> => {
+    const { total } = await practiceApi.availability(course, allTypes, "ADAPTIVE", focus);
+    if (!total) throw new Error("Ovdje još nema pitanja za vježbu.");
+    return practiceApi.start(course, Math.min(total, FOCUSED_PRACTICE_QUESTIONS), allTypes, "ADAPTIVE", focus, "IMMEDIATE");
   },
   /** Your mistakes in the whole course: practice-eligible first, in the order Mistakes practice takes them. */
   mistakes: (course: string, offset = 0, limit = 20) => request<MistakeQuestion[]>(`/courses/${course}/mistakes?limit=${limit}&offset=${offset}`),

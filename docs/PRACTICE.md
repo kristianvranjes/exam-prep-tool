@@ -60,8 +60,10 @@ changing it replaces the previous payload. Unsaved input is not persisted.
 ## Lifecycle, integrity and grading
 
 `ACTIVE -> SUBMITTED` and `ACTIVE -> ABANDONED` are the final transitions. Submission
-requires a saved answer for every question (otherwise 409, with no state or grade
-changes). Submission
+needs at least one saved answer (otherwise 409, with no state or grade changes; an
+attempt with nothing to record is abandoned instead). Questions left blank are
+reported as `UNANSWERED`: they are not graded, do not count as mistakes and never
+enter the review schedule, exactly like blank items of a past paper. Submission
 marks MCQ/TRUE_FALSE answers CORRECT or INCORRECT using exact option/boolean comparison,
 NUMERIC answers by tolerance and MULTIPLE_SELECT answers by exact set (see
 [numeric and multiple-select grading](#numeric-and-multiple-select-grading-r4)).
@@ -617,6 +619,14 @@ availability reports `favorites_total` whatever the requested mode; the setup li
 badge where it applies, and the same **Favorite** star to remove one. A removed row stays
 until the next refresh so the star can undo it. **Practice favorites** opens practice
 setup with Favorites selected while a listed favorite can still be practiced.
+
+**Practice for the exam or a unit.** On the course overview, **Vježbaj za <rok>** and the
+**Vježbaj** shortcut next to a weak unit start a session at once instead of opening
+setup: a guided (IMMEDIATE) recommended (ADAPTIVE) session of `min(total, 10)` questions
+of every type, focused on that exam cycle or unit. It is a client preset
+(`practiceApi.focusedPractice`), not a new engine, and it is recorded as an ordinary
+recommended session. With no eligible question it shows the reason and starts nothing.
+Count, types and the other modes stay in Practice setup.
 
 **Quick quiz.** **Start quick quiz**, a compact secondary row on the course overview, starts a guided
 (IMMEDIATE) recommended (ADAPTIVE) session of five questions of every type in one

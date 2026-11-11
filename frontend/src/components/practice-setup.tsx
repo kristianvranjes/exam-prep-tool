@@ -144,7 +144,7 @@ export function PracticeSetup({ courseId, active, ready, busy, hasUnfinishedSess
 
   if (noQuestions) return <div className="max-w-prose space-y-3">
     <p className="font-semibold">Ovaj kolegij još nema pitanja za vježbu.</p>
-    <p className="text-sm text-muted">Pročitajte materijale kolegija ili predložite pitanje pod Više.</p>
+    <p className="text-sm text-muted">{onOpenMaterials ? "Pročitajte materijale kolegija ili predložite pitanje pod Više." : "Pitanja se pojavljuju ovdje kad ih fakultet odobri. Možete predložiti pitanje pod Više."}</p>
     <div className="flex flex-wrap gap-2">
       {onOpenMaterials && <Button variant="secondary" onClick={onOpenMaterials}>Otvori materijale</Button>}
       {onOpenQuestions && <Button variant="ghost" onClick={onOpenQuestions}>Predloži pitanje</Button>}

@@ -231,7 +231,7 @@ export function AppShell() {
       {selected && <>
         {membershipError && <div className="mb-4"><Alert>{membershipError}</Alert><Button variant="secondary" className="mt-3" onClick={() => { setMembershipError(""); setMembershipRetry(value => value + 1); }}>Retry course permissions</Button></div>}
         <UnsavedChangesProvider key={selected.id} onDirtyChange={setWorkspaceEdited}>
-        <CourseWorkspace course={selected} currentUserId={user.id} isOwner={isOwner} isModerator={faculties.some(faculty => faculty.id === selected.faculty_id)} visible={view === "course" && selectedId === routeCourseId}
+        <CourseWorkspace course={selected} currentUserId={user.id} isOwner={isOwner} isModerator={faculties.some(faculty => faculty.id === selected.faculty_id)} roleKnown={selectedRole?.courseId === selected.id} visible={view === "course" && selectedId === routeCourseId}
           destination={destination} navigate={navigateCourse} goHome={() => navigate("/")}
           adaptiveReviewRequest={adaptiveReviewRequest} onOpenAdaptiveReview={openAdaptiveReview}
           knownAttemptId={knownAttemptId} knownAttempt={selectedId ? sessions[selectedId]?.attempt : undefined} checkingSession={sessions[selected.id]?.status === "loading"} onResume={() => resumeSession()} onResumableAttemptChange={onResumableAttemptChange} activeSession={activePractice}

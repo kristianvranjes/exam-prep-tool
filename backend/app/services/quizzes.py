@@ -205,8 +205,9 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
                 items.append(item)
                 earned = item_points(item, penalty)
                 result.earned_points = None if earned is None else float(earned)
-                if answer is None:
-                    result.grading_status = "UNANSWERED"
+            if answer is None:
+                # Left blank in a paper or in practice: never graded, never pending review.
+                result.grading_status = "UNANSWERED"
             if answer is not None and result.grading_status == "PENDING":
                 reviews.add(answer.self_review, row.points)
             results.append(result)
@@ -658,9 +659,12 @@ def submit(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> Attemp
         questions = question_rows(db, attempt)
         quiz = db.get(Quiz, attempt.quiz_id)
         assert quiz is not None
-        # A paper may be handed in with blanks; ordinary practice needs every answer.
-        if len(answers) != len(questions) and quiz.scoring is None:
-            raise HTTPException(409, "Save an answer to every question before submitting")
+        # Blanks are allowed everywhere. A paper may even be handed in empty when its time
+        # runs out; ordinary practice needs one answer, otherwise there is nothing to record.
+        if not answers and quiz.scoring is None:
+            raise HTTPException(
+                409, "Answer at least one question before finishing, or abandon the attempt"
+            )
         # Serialize overlapping attempts, including first inserts for the same question.
         # NO KEY UPDATE is compatible with FK key-share locks held by other attempts.
         db.execute(select(User.id).where(User.id == user.id).with_for_update(key_share=True))
@@ -669,7 +673,7 @@ def submit(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> Attemp
         for question in questions:
             answer = answers.get(question.id)
             if answer is None:
-                # Blank paper items are neither graded nor scheduled.
+                # Blank questions are neither graded nor scheduled.
                 continue
             # A checked answer keeps the grade the student already saw.
             if answer.checked_at is None:

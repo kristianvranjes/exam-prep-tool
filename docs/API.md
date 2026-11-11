@@ -179,6 +179,7 @@ MEMBER may upload/list/view; inaccessible courses return 404, including material
 detail/chunk access by non-members. Missing material IDs return 404.
 
 - `POST /courses/{course_id}/materials`: multipart form with one `file` field.
+  Course OWNER or a moderator of its faculty only; other members get 403.
   Accepts PDF only. Returns 201 and material metadata after synchronous processing,
   with READY or FAILED status. FAILED is a retained material, not a rejected upload.
 - `GET /courses/{course_id}/materials`: ordered metadata list with status/errors.

@@ -10,7 +10,8 @@ configuration in app/config.py and SQLAlchemy engine/session factory in
 app/database.py. Alembic owns schema changes. Keep route handlers thin and future
 business logic in services.
 
-Material routes reuse course membership authorization for both OWNER and MEMBER.
+Material reads reuse course membership authorization for both OWNER and MEMBER;
+uploads are limited to the course OWNER and moderators of its faculty.
 The material service orchestrates local storage, MarkItDown PDF extraction and pure
 deterministic section/chunk functions. Processing is synchronous; original sources
 live in private storage and derived content lives in PostgreSQL. No queue or AI

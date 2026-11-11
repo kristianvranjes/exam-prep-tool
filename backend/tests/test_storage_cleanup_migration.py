@@ -35,21 +35,22 @@ def application_rows():
 def test_0014_roundtrip_preserves_domain_history_and_never_restores_sources(
     community, tmp_path, monkeypatch
 ):
-    _, creator, moderator, course, _, _ = community
+    owner, creator, moderator, course, _, _ = community
     question = approved(creator, moderator, course)
     assert creator.post(question + "/reports", json=BODY).status_code == 201
     submit(creator, question)
     attempt = start(creator, course, count=1)
     assert creator.post(save_all(creator, course, attempt) + "/submit").status_code == 200
-    assert upload(creator, course).status_code == 201
+    # Only the course owner or a faculty moderator adds materials.
+    assert upload(owner, course).status_code == 201
     live_id, live_path = source_paths(course, tmp_path)[0]
-    response = upload(creator, course, data=b"%PDF-broken")
+    response = upload(owner, course, data=b"%PDF-broken")
     deleted_id = UUID(response.json()["id"])
     deleted_path = next(
         path for row_id, path in source_paths(course, tmp_path) if row_id == deleted_id
     )
     monkeypatch.setattr("app.services.materials.service.cleanup_sources", lambda *a, **kw: None)
-    assert creator.delete(f"/materials/{deleted_id}").status_code == 204
+    assert owner.delete(f"/materials/{deleted_id}").status_code == 204
     before = application_rows()
     for table in (
         "materials",

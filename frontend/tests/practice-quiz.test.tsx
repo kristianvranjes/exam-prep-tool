@@ -60,8 +60,9 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
   fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
   await screen.findByText("The sky is green");
   fireEvent.click(screen.getByRole("button", { name: "Pregledaj i završi" }));
-  expect(await screen.findByRole("button", { name: "Završi vježbu" })).toBeDisabled();
+  expect(await screen.findByRole("button", { name: "Završi vježbu" })).toBeEnabled();
   expect(screen.getByText("Odgovoreno i spremljeno 1 od 3")).toBeVisible();
+  expect(screen.getByText("Bez odgovora: 2 pitanja. Neodgovorena pitanja se ne ocjenjuju i ne ulaze u napredak.")).toBeVisible();
   view.unmount();
   mock.history.mockResolvedValue([current]);
   render(<PracticeQuiz courseId="course" />);
@@ -78,8 +79,8 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
   expect(await screen.findByText("Odgovoreno i spremljeno 3 od 3")).toBeVisible();
   expect(mock.submit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Završi vježbu" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Potvrdi konačnu predaju" }));
   await screen.findByText("Vježba je završena");
+  expect(screen.queryByRole("button", { name: "Potvrdi konačnu predaju" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
   expect(screen.getAllByRole("article").filter(article => within(article).queryByText("Točno"))).toHaveLength(2);
   expect(within(screen.getByRole("article", { name: "Rezultat pitanja 3" })).getByText("Potrebna samoprocjena")).toBeInTheDocument();
@@ -390,14 +391,14 @@ it("requires an explicit decision before leaving or reloading an edited answer",
   expect(current.questions[0].answer).toEqual({ type: "MULTIPLE_CHOICE", option_position: 0 });
 });
 
-it("shows incomplete readiness and reviews unanswered without calling submit", async () => {
+it("needs one answer before finishing and reviews unanswered without calling submit", async () => {
   await start();
   fireEvent.click(screen.getByRole("button", { name: "Vrati se" }));
   fireEvent.click(screen.getByRole("button", { name: "Pregledaj i završi" }));
   const review = await screen.findByRole("region", { name: "Pregled vježbe" });
   await waitFor(() => expect(within(review).getByText("Pregled vježbe")).toHaveFocus());
   expect(review).toHaveTextContent("Odgovoreno i spremljeno 0 od 3");
-  expect(review).toHaveTextContent("Bez odgovora je još 3 pitanja");
+  expect(review).toHaveTextContent("Za završetak odgovorite na barem jedno pitanje");
   expect(within(review).getByRole("button", { name: "Završi vježbu" })).toBeDisabled();
   expect(screen.queryByRole("button", { name: "Potvrdi konačnu predaju" })).not.toBeInTheDocument();
   fireEvent.click(within(review).getByRole("button", { name: "Pregledaj neodgovorena" }));
@@ -410,15 +411,15 @@ it("preserves answers on submit failure, retries, and derives result counts from
   await start("Ispitna vježba");
   fireEvent.click(screen.getByRole("button", { name: "Vrati se" }));
   fireEvent.click(screen.getByRole("button", { name: "Pregledaj i završi" }));
-  await screen.findByRole("region", { name: "Pregled vježbe" });
-  fireEvent.click(screen.getByRole("button", { name: "Završi vježbu" }));
-  await screen.findByRole("region", { name: "Potvrda predaje" });
+  const review = await screen.findByRole("region", { name: "Pregled vježbe" });
   expect(mock.submit).not.toHaveBeenCalled();
-  expect(screen.getByText("Odgovoreno i spremljeno 3 od 3 · označeno za povratak: 1")).toBeInTheDocument();
+  expect(review).toHaveTextContent("Odgovoreno i spremljeno 3 od 3");
+  expect(review).toHaveTextContent("Označeno za povratak: 1");
   mock.submit.mockRejectedValueOnce(new Error("Submission unavailable"));
-  fireEvent.click(screen.getByRole("button", { name: "Potvrdi konačnu predaju" }));
+  // The review step is the confirmation: finishing from it hands the session in.
+  fireEvent.click(screen.getByRole("button", { name: "Završi vježbu" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Submission unavailable");
-  fireEvent.click(screen.getByRole("button", { name: "Nastavi pregled" }));
+  expect(screen.queryByRole("region", { name: "Potvrda predaje" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Natrag na pitanje" }));
   expect(screen.getByLabelText("Two")).toBeChecked();
   const submit = mock.submit.getMockImplementation()!;
@@ -429,7 +430,6 @@ it("preserves answers on submit failure, retries, and derives result counts from
   });
   fireEvent.click(screen.getByRole("button", { name: "Pregledaj i završi" }));
   fireEvent.click(await screen.findByRole("button", { name: "Završi vježbu" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Potvrdi konačnu predaju" }));
   await screen.findByText("Vježba je završena");
   const summary = screen.getByLabelText("Sažetak rezultata");
   expect(summary).toHaveTextContent("Točno1Netočno1Kratki odgovori1čeka samoprocjenu: 1");
@@ -448,17 +448,14 @@ it("preserves answers on submit failure, retries, and derives result counts from
   expect(screen.getAllByText("Reviewed explanation")).toHaveLength(3);
 });
 
-it("saves the current draft before opening final confirmation", async () => {
+it("saves the current draft before opening the review step", async () => {
   allAnswered();
   await start();
   fireEvent.click(screen.getByLabelText("One"));
   fireEvent.click(screen.getByRole("button", { name: "Pregledaj i završi" }));
   await screen.findByRole("region", { name: "Pregled vježbe" });
-  fireEvent.click(screen.getByRole("button", { name: "Završi vježbu" }));
-  await screen.findByRole("region", { name: "Potvrda predaje" });
   expect(mock.save).toHaveBeenCalledWith("course", "attempt", "mcq", { type: "MULTIPLE_CHOICE", option_position: 0 });
   expect(mock.submit).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Nastavi pregled" }));
   fireEvent.click(screen.getByRole("button", { name: "Natrag na pitanje" }));
   expect(screen.getByLabelText("One")).toBeChecked();
   expect(screen.getByText("Spremljeno")).toBeInTheDocument();
@@ -731,8 +728,10 @@ it("saves the final answer, reviews missing answers, and never submits implicitl
   fireEvent.submit(screen.getByLabelText("Vaš kratki odgovor").closest("form")!);
   const review = await screen.findByRole("region", { name: "Pregled vježbe" });
   expect(review).toHaveTextContent("Odgovoreno i spremljeno 1 od 3");
-  expect(review).toHaveTextContent("Bez odgovora je još 2 pitanja");
-  expect(screen.getByRole("button", { name: "Završi vježbu" })).toBeDisabled();
+  expect(review).toHaveTextContent("Bez odgovora: 2 pitanja. Neodgovorena pitanja se ne ocjenjuju i ne ulaze u napredak.");
+  // Finishing with blanks is allowed but steps back behind reviewing them.
+  expect(screen.getByRole("button", { name: "Završi vježbu" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Završi vježbu" })).not.toHaveClass("bg-accent");
   expect(mock.save).toHaveBeenLastCalledWith("course", "attempt", "sa", { type: "SHORT_ANSWER", text: "My explanation" });
   expect(mock.submit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Pregledaj neodgovorena" }));
@@ -920,6 +919,45 @@ it("checks a guided answer with confidence, reveals only its key, and moves on w
   expect(mock.save).toHaveBeenCalledTimes(1);
   expect(screen.getByRole("button", { name: "Provjeri odgovor" })).toBeDisabled();
   expect(screen.queryByRole("heading", { name: /Correct|Incorrect/ })).not.toBeInTheDocument();
+});
+
+it("ends a guided session from its last checked answer without a review or confirmation step", async () => {
+  current.feedback_mode = "IMMEDIATE";
+  current.questions = [current.questions[0]];
+  mock.history.mockResolvedValue([current]);
+  mock.check.mockImplementation(async (_course, _id, question: string) => {
+    current = { ...current, questions: current.questions.map(q => q.id === question ? { ...q, feedback: { options: q.options.map(o => ({ ...o, is_correct: o.position === 0 })), explanation: null, correct_boolean: null, reference_answer: null, grading_status: "CORRECT" } } : q) } as Attempt;
+    return structuredClone(current);
+  });
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Nastavi vježbu" }));
+  await screen.findByText("Choose a number");
+  fireEvent.click(screen.getByLabelText("One"));
+  fireEvent.click(screen.getByRole("button", { name: "Provjeri odgovor" }));
+  // Every answer is checked and final, so the last question ends the session itself.
+  fireEvent.click(await screen.findByRole("button", { name: "Završi vježbu" }));
+  await screen.findByText("Vježba je završena");
+  expect(mock.submit).toHaveBeenCalledExactlyOnceWith("course", "attempt");
+  expect(screen.queryByRole("region", { name: "Pregled vježbe" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Potvrdi konačnu predaju" })).not.toBeInTheDocument();
+});
+
+it("finishes practice with blanks from the review step and reports them as left blank", async () => {
+  await start("Ispitna vježba");
+  fireEvent.click(screen.getByLabelText("One"));
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj i završi" }));
+  const review = await screen.findByRole("region", { name: "Pregled vježbe" });
+  expect(review).toHaveTextContent("Odgovoreno i spremljeno 1 od 3");
+  const submit = mock.submit.getMockImplementation()!;
+  mock.submit.mockImplementationOnce(async () => {
+    const result = await submit();
+    for (const question of result.questions) if (question.answer === null) question.grading_status = "UNANSWERED";
+    return result;
+  });
+  fireEvent.click(within(review).getByRole("button", { name: "Završi vježbu" }));
+  await screen.findByText("Vježba je završena");
+  expect(mock.submit).toHaveBeenCalledExactlyOnceWith("course", "attempt");
+  expect(screen.getByLabelText("Sažetak rezultata")).toHaveTextContent("Točno1Netočno0Kratki odgovori0Ostavljeno prazno2");
 });
 
 it("marks a missed multiple-select option on the slips and spells out only a typed key", async () => {
@@ -1117,7 +1155,6 @@ it("answers numeric and multiple-select questions and shows their keys in result
   fireEvent.click(screen.getByRole("button", { name: "Spremi i pregledaj" }));
   await waitFor(() => expect(mock.save).toHaveBeenLastCalledWith("course", "attempt", "multi", { type: "MULTIPLE_SELECT", option_positions: [0, 1] }));
   fireEvent.click(await screen.findByRole("button", { name: "Završi vježbu" }));
-  fireEvent.click(screen.getByRole("button", { name: "Potvrdi konačnu predaju" }));
   await screen.findByRole("heading", { name: "Vježba je završena" });
   fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
   expect(screen.getByText("9.81 m/s² (± 0.05)")).toBeInTheDocument();
