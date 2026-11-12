@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
-import type { Course, CourseMembership, Faculty } from "../src/lib/api";
+import type { Course, CourseMembership, Faculty, MemberCourse } from "../src/lib/api";
 
 const mock = vi.hoisted(() => ({ faculties: vi.fn(), facultyCourses: vi.fn(), joinCourse: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
@@ -15,7 +15,7 @@ const onJoined = vi.fn();
 const membership: CourseMembership = { course_id: course.id, user_id: "user-1", role: "MEMBER" };
 const onOpen = vi.fn();
 const onBack = vi.fn();
-function view(joinedCourses: Course[] = [], loadingMembership = false, refreshRevision = 0) {
+function view(joinedCourses: MemberCourse[] = [], loadingMembership = false, refreshRevision = 0) {
   return <CourseBrowser joinedCourses={joinedCourses} loadingMembership={loadingMembership} onJoined={onJoined} onOpen={onOpen} onBack={onBack} refreshRevision={refreshRevision} />;
 }
 function deferred<T>() {
@@ -186,4 +186,62 @@ it("goes back to Your courses", async () => {
   await screen.findByLabelText("Pretraži po fakultetu");
   fireEvent.click(screen.getByRole("button", { name: /Vaši kolegiji/ }));
   expect(onBack).toHaveBeenCalledTimes(1);
+});
+
+const yearOne = { ...course, id: "y1", name: "Digital Logic", code: "DL", year_of_study: 1, approved_question_count: 412, has_moderators: true };
+const yearTwo = { ...course, id: "y2", name: "Signals", code: "SiS", year_of_study: 2, approved_question_count: 1, has_moderators: false };
+const noYear = { ...course, id: "y3", name: "Databases", code: "BP", approved_question_count: 0, has_moderators: true };
+
+it("shows the year, moderators and question count in each row", async () => {
+  mock.facultyCourses.mockResolvedValue([yearOne, yearTwo, noYear]);
+  render(view());
+  await selectFaculty();
+  const rows = (await screen.findAllByRole("listitem")).map(row => row.textContent ?? "");
+  expect(rows[0]).toContain("1. godina · moderatori aktivni");
+  expect(rows[0]).toContain("412 pitanja");
+  expect(rows[1]).toContain("2. godina · još nema moderatora");
+  expect(rows[1]).toContain("1 pitanje");
+  expect(rows[2]).toContain("moderatori aktivni");
+  expect(rows[2]).not.toContain("godina");
+  expect(rows[2]).toContain("nema pitanja");
+});
+
+it("filters by year and starts again from all years when the page is opened", async () => {
+  mock.facultyCourses.mockResolvedValue([yearOne, yearTwo, noYear]);
+  const first = render(view());
+  await selectFaculty();
+  await screen.findByRole("button", { name: "Upiši kolegij: Signals" });
+  const years = screen.getByRole("group", { name: "Godina studija" });
+  expect(Array.from(years.querySelectorAll("button")).map(button => button.textContent)).toEqual(["Sve", "1. godina", "2. godina"]);
+  expect(screen.getByRole("button", { name: "Sve" })).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(screen.getByRole("button", { name: "2. godina" }));
+  expect(screen.getByRole("button", { name: "2. godina" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "Upiši kolegij: Signals" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Upiši kolegij: Digital Logic" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Upiši kolegij: Databases" })).not.toBeInTheDocument();
+  first.unmount();
+  render(view());
+  await selectFaculty();
+  expect(await screen.findByRole("button", { name: "Upiši kolegij: Digital Logic" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Sve" })).toHaveAttribute("aria-pressed", "true");
+});
+
+it("has no year filter when no course in the faculty has a year", async () => {
+  mock.facultyCourses.mockResolvedValue([noYear]);
+  render(view());
+  await selectFaculty();
+  await screen.findByRole("button", { name: "Upiši kolegij: Databases" });
+  expect(screen.queryByRole("group", { name: "Godina studija" })).not.toBeInTheDocument();
+});
+
+it("treats a course hidden from the list as not enrolled, and enrolling again brings it back", async () => {
+  mock.facultyCourses.mockResolvedValue([yearOne, yearTwo]);
+  render(view([{ ...yearOne, membership_status: "HIDDEN" }, { ...yearTwo, membership_status: "DONE" }]));
+  await selectFaculty();
+  expect(screen.getByText("Upisano: 1")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Upiši kolegij: Digital Logic" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Upisano, otvori kolegij: Signals" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Upiši kolegij: Digital Logic" }));
+  await waitFor(() => expect(onJoined).toHaveBeenCalledWith(yearOne));
+  expect(mock.joinCourse).toHaveBeenCalledWith("y1");
 });

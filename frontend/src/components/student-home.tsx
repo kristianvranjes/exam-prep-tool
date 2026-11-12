@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
-import type { Course } from "../lib/api";
-import { courseColor, useCoursePrefs } from "../lib/course-prefs";
+import { api, type Course, type MemberCourse, type MembershipStatus, type ReadinessRange } from "../lib/api";
+import { courseColor } from "../lib/course-prefs";
+import { formatScopeDates } from "../lib/exam-dates";
 import { plural, type Forms } from "../lib/plural";
 import { cn } from "../lib/utils";
 import { ResumeSession } from "./resume-session";
@@ -63,17 +64,52 @@ function CourseMenu({ course, onFinish, onRemove }: { course: Course; onFinish: 
   </div>;
 }
 
-export function StudentHome({ userId, courses, loading, onOpen, onEnrol, resumable, onResume, checkingSessions }: {
-  userId: string; courses: Course[]; loading: boolean; onOpen: (course: Course) => void; onEnrol: () => void;
+/** The share of questions the student would answer correctly today, for the course's next exam. */
+function useReadiness(scopeId: string | undefined) {
+  const [state, setState] = useState<{ scopeId: string; range: ReadinessRange | null } | null>(null);
+  useEffect(() => {
+    if (!scopeId) return;
+    let live = true;
+    api.examScopeReadiness(scopeId).then(result => { if (live) setState({ scopeId, range: result.readiness }); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [scopeId]);
+  return state?.scopeId === scopeId ? state : null;
+}
+
+/** The next exam of a course and how ready the student is for it; shown only for a course with a dated exam. */
+function CourseExam({ course }: { course: MemberCourse }) {
+  const exam = course.next_exam;
+  const readiness = useReadiness(exam?.scope_id);
+  if (!exam) return null;
+  const label = `${exam.name} · ${formatScopeDates(exam)}`;
+  const share = readiness?.range ? Math.round(((readiness.range.low + readiness.range.high) / 2) * 100) : null;
+  return <div className="mt-5">
+    <div className="flex items-baseline justify-between gap-3 text-sm">
+      <span className="min-w-0 font-semibold">{label}</span>
+      {readiness && <span className="shrink-0 font-extrabold tabular-nums">{share === null ? "—" : `oko ${share} %`}</span>}
+    </div>
+    <div role="progressbar" aria-label={`Spremnost za ispit, ${label}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={share ?? 0}
+      aria-valuetext={share === null ? "Za procjenu je potrebno više odgovora" : `oko ${share} %`} className="mt-2 h-1.5 bg-subtle">
+      <div className="h-full bg-(--course)" style={{ width: `${share ?? 0}%` }} />
+    </div>
+    {readiness && share === null && <p className="mt-1 text-xs text-muted">Za procjenu spremnosti riješite još pitanja.</p>}
+  </div>;
+}
+
+const statusOf = (course: MemberCourse): MembershipStatus => course.membership_status ?? "ACTIVE";
+
+export function StudentHome({ courses, loading, onOpen, onEnrol, onStatusChange, resumable, onResume, checkingSessions }: {
+  courses: MemberCourse[]; loading: boolean; onOpen: (course: Course) => void; onEnrol: () => void;
+  /** Changes the course's place in the list; the parent saves it and updates `courses`. */
+  onStatusChange: (course: MemberCourse, status: MembershipStatus) => void;
   resumable: ResumableCourse[]; onResume: (course: Course) => void; checkingSessions?: boolean;
 }) {
-  const { prefs, setPref, restoreHidden } = useCoursePrefs(userId);
   const [announcement, setAnnouncement] = useState("");
-  const active = courses.filter(course => !prefs[course.id]);
-  const finished = courses.filter(course => prefs[course.id] === "done");
-  const hiddenCount = courses.filter(course => prefs[course.id] === "hidden").length;
+  const active = courses.filter(course => statusOf(course) === "ACTIVE");
+  const finished = courses.filter(course => statusOf(course) === "DONE");
+  const hidden = courses.filter(course => statusOf(course) === "HIDDEN");
   // Finished and removed courses leave the resume list too, so the page never shows a course it says is hidden.
-  const resumableActive = resumable.filter(({ course }) => !prefs[course.id]);
+  const resumableActive = resumable.filter(({ course }) => ![...finished, ...hidden].some(item => item.id === course.id));
   const focusTarget = useRef<string | null>(null);
 
   // The control that held focus is gone after a change; move focus to its neighbour so keyboard users keep their place.
@@ -82,17 +118,17 @@ export function StudentHome({ userId, courses, loading, onOpen, onEnrol, resumab
     if (!id) return;
     focusTarget.current = null;
     (document.getElementById(id) ?? document.getElementById("home-heading"))?.focus();
-  }, [prefs]);
+  }, [courses]);
 
-  function change(course: Course, pref: "active" | "done" | "hidden", message: string) {
-    const fromFinished = prefs[course.id] === "done";
+  function change(course: MemberCourse, status: MembershipStatus, message: string) {
+    const fromFinished = statusOf(course) === "DONE";
     const list = fromFinished ? finished : active;
     const index = list.findIndex(item => item.id === course.id);
     const neighbour = list[index + 1] ?? list[index - 1];
-    if (pref === "active") focusTarget.current = `open-${course.id}`;
+    if (status === "ACTIVE") focusTarget.current = `open-${course.id}`;
     else if (neighbour) focusTarget.current = `${fromFinished ? "finished-back" : "open"}-${neighbour.id}`;
     else focusTarget.current = fromFinished ? "home-heading" : "empty-enrol";
-    setPref(course.id, pref);
+    onStatusChange(course, status);
     setAnnouncement(message);
   }
 
@@ -124,11 +160,12 @@ export function StudentHome({ userId, courses, loading, onOpen, onEnrol, resumab
               <h2 className={cn("text-lg font-extrabold break-words", course.code && "mt-3")}>{course.name}</h2>
             </div>
             <CourseMenu course={course}
-              onFinish={() => change(course, "done", `${course.name} premješten među završene.`)}
-              onRemove={() => change(course, "hidden", `${course.name} uklonjen s vašeg popisa.`)} />
+              onFinish={() => change(course, "DONE", `${course.name} premješten među završene.`)}
+              onRemove={() => change(course, "HIDDEN", `${course.name} uklonjen s vašeg popisa.`)} />
           </div>
           {course.description && <p className="mt-3 line-clamp-3 text-sm text-muted">{course.description}</p>}
           <Button id={`open-${course.id}`} variant="secondary" className="mt-auto self-start" aria-label={`Otvori kolegij: ${course.name}`} onClick={() => onOpen(course)}>Otvori kolegij</Button>
+          <CourseExam course={course} />
         </li>)}</ul>}
     </section>
     {!loading && finished.length > 0 && <section aria-labelledby="finished-heading" className="mt-12">
@@ -137,12 +174,12 @@ export function StudentHome({ userId, courses, loading, onOpen, onEnrol, resumab
         <span aria-hidden="true" className="size-3 shrink-0 rounded-full bg-(--course)" />
         {course.code && <span className="w-16 shrink-0 font-extrabold">{course.code}</span>}
         <span className="min-w-0 flex-1 basis-40 font-semibold">{course.name}</span>
-        <Button id={`finished-back-${course.id}`} variant="secondary" aria-label={`Vrati među aktivne: ${course.name}`} onClick={() => change(course, "active", `${course.name} vraćen među aktivne kolegije.`)}>Vrati među aktivne</Button>
-        <Button variant="ghost" className="text-danger" aria-label={`Ukloni s popisa: ${course.name}`} onClick={() => change(course, "hidden", `${course.name} uklonjen s vašeg popisa.`)}>Ukloni</Button>
+        <Button id={`finished-back-${course.id}`} variant="secondary" aria-label={`Vrati među aktivne: ${course.name}`} onClick={() => change(course, "ACTIVE", `${course.name} vraćen među aktivne kolegije.`)}>Vrati među aktivne</Button>
+        <Button variant="ghost" className="text-danger" aria-label={`Ukloni s popisa: ${course.name}`} onClick={() => change(course, "HIDDEN", `${course.name} uklonjen s vašeg popisa.`)}>Ukloni</Button>
       </li>)}</ul>
     </section>}
-    {!loading && hiddenCount > 0 && <p className="mt-8 text-sm text-muted">
-      Na ovom uređaju s popisa je skriveno: {plural(hiddenCount, COURSES)}. I dalje ste upisani. <button type="button" className="min-h-0 font-semibold text-accent underline" onClick={() => { restoreHidden(); setAnnouncement("Skriveni kolegiji su vraćeni."); }}>Prikaži skrivene kolegije</button>
+    {!loading && hidden.length > 0 && <p className="mt-8 text-sm text-muted">
+      S popisa je skriveno: {plural(hidden.length, COURSES)}. I dalje ste upisani. <button type="button" className="min-h-0 font-semibold text-accent underline" onClick={() => { hidden.forEach(course => onStatusChange(course, "ACTIVE")); setAnnouncement("Skriveni kolegiji su vraćeni."); }}>Prikaži skrivene kolegije</button>
     </p>}
   </>;
 }

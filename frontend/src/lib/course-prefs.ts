@@ -1,18 +1,4 @@
-"use client";
-
-import { useCallback, useSyncExternalStore } from "react";
-
-/**
- * Per-user course list preferences, kept in this browser only: the backend has no leave/complete
- * endpoint. "done" moves a course to the Finished section; "hidden" is "Remove from list" and only
- * hides the course locally (the user is still a member server-side). "active" is the default and is
- * stored as the absence of a key.
- */
-export type CoursePref = "active" | "done" | "hidden";
-export type CoursePrefs = Record<string, CoursePref>;
-
-const KEY_PREFIX = "examprep-course-prefs:";
-const EMPTY: CoursePrefs = Object.freeze({}) as CoursePrefs;
+import type { MembershipStatus } from "./api";
 
 /** Course colours from the Kviz handoff; known codes keep their colour, other courses hash into the palette. */
 export const COURSE_COLORS = ["#afc96e", "#7fb6d6", "#c3a3e0", "#e0b48a", "#e39a86", "#8fc9b0", "#d6c27a", "#9aa7e6"] as const;
@@ -26,77 +12,57 @@ export function courseColor(course: { id: string; code: string | null }): string
   return COURSE_COLORS[hash % COURSE_COLORS.length];
 }
 
+/**
+ * Finished and removed courses used to be kept in this browser only. The backend now stores them as the
+ * membership status, so what is left here is read once, sent over and forgotten.
+ */
+export type LocalCoursePref = "done" | "hidden";
+export type LocalCoursePrefs = Record<string, LocalCoursePref>;
+
+const KEY_PREFIX = "examprep-course-prefs:";
+
 function storage(): Storage | null {
   try { return typeof window === "undefined" ? null : window.localStorage; } catch { return null; }
 }
 
-export function parseCoursePrefs(raw: string | null): CoursePrefs {
-  if (!raw) return EMPTY;
+export function parseLocalCoursePrefs(raw: string | null): LocalCoursePrefs {
+  if (!raw) return {};
   try {
     const value: unknown = JSON.parse(raw);
-    if (!value || typeof value !== "object" || Array.isArray(value)) return EMPTY;
-    const prefs: CoursePrefs = {};
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const prefs: LocalCoursePrefs = {};
     for (const [id, pref] of Object.entries(value)) if (pref === "done" || pref === "hidden") prefs[id] = pref;
-    return Object.keys(prefs).length ? prefs : EMPTY;
-  } catch { return EMPTY; }
+    return prefs;
+  } catch { return {}; }
 }
 
-function readRaw(userId: string): string | null {
-  try { return storage()?.getItem(KEY_PREFIX + userId) ?? null; } catch { return null; }
+export function readLocalCoursePrefs(userId: string): LocalCoursePrefs {
+  try { return parseLocalCoursePrefs(storage()?.getItem(KEY_PREFIX + userId) ?? null); } catch { return {}; }
 }
 
-export function readCoursePrefs(userId: string): CoursePrefs { return parseCoursePrefs(readRaw(userId)); }
-
-const listeners = new Set<() => void>();
-const cache = new Map<string, { raw: string | null; prefs: CoursePrefs }>();
-// Users whose last write could not reach storage (private mode, quota): the in-memory copy applies for this page's lifetime.
-const memory = new Map<string, CoursePrefs>();
-
-function snapshot(userId: string): CoursePrefs {
-  const unsaved = memory.get(userId);
-  if (unsaved) return unsaved;
-  const raw = readRaw(userId);
-  const hit = cache.get(userId);
-  if (hit && hit.raw === raw) return hit.prefs;
-  const prefs = parseCoursePrefs(raw);
-  cache.set(userId, { raw, prefs });
-  return prefs;
+function clearLocalCoursePrefs(userId: string) {
+  try { storage()?.removeItem(KEY_PREFIX + userId); } catch { /* storage unavailable: nothing to forget */ }
 }
 
-function save(userId: string, next: CoursePrefs) {
-  try {
-    const store = storage();
-    if (!store) throw new Error("no storage");
-    store.setItem(KEY_PREFIX + userId, JSON.stringify(next));
-    memory.delete(userId);
-  } catch { memory.set(userId, next); }
-  listeners.forEach(listener => listener());
-}
-
-export function setCoursePref(userId: string, courseId: string, pref: CoursePref) {
-  const next: CoursePrefs = { ...snapshot(userId) };
-  if (pref === "active") delete next[courseId]; else next[courseId] = pref;
-  save(userId, next);
-}
-
-/** Brings back every course removed from the list. */
-export function clearHiddenCourses(userId: string) {
-  const next: CoursePrefs = {};
-  for (const [id, pref] of Object.entries(snapshot(userId))) if (pref !== "hidden") next[id] = pref;
-  save(userId, next);
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  const onStorage = (event: StorageEvent) => { if (!event.key || event.key.startsWith(KEY_PREFIX)) listener(); };
-  window.addEventListener("storage", onStorage);
-  return () => { listeners.delete(listener); window.removeEventListener("storage", onStorage); };
-}
-
-/** The signed-in user's course prefs; empty on the server and before hydration. */
-export function useCoursePrefs(userId: string) {
-  const prefs = useSyncExternalStore(subscribe, () => snapshot(userId), () => EMPTY);
-  const setPref = useCallback((courseId: string, pref: CoursePref) => setCoursePref(userId, courseId, pref), [userId]);
-  const restoreHidden = useCallback(() => clearHiddenCourses(userId), [userId]);
-  return { prefs, setPref, restoreHidden };
+/**
+ * Sends each stored choice to the backend for courses that are still active there, then forgets them and
+ * returns the statuses that were set. Courses that are gone, or that already have a status on the server,
+ * are skipped. If any request fails the stored choices stay, so the next load tries again.
+ */
+export async function migrateLocalCoursePrefs(
+  userId: string,
+  courses: readonly { id: string; membership_status?: MembershipStatus }[],
+  setStatus: (courseId: string, status: MembershipStatus) => Promise<unknown>,
+): Promise<Record<string, MembershipStatus>> {
+  const stored = readLocalCoursePrefs(userId);
+  const applied: Record<string, MembershipStatus> = {};
+  let failed = false;
+  for (const [courseId, pref] of Object.entries(stored)) {
+    const course = courses.find(item => item.id === courseId);
+    if (!course || (course.membership_status ?? "ACTIVE") !== "ACTIVE") continue;
+    const status: MembershipStatus = pref === "done" ? "DONE" : "HIDDEN";
+    try { await setStatus(courseId, status); applied[courseId] = status; } catch { failed = true; }
+  }
+  if (!failed) clearLocalCoursePrefs(userId);
+  return applied;
 }

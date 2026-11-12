@@ -229,8 +229,10 @@ Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
   to do next; pair it with the primary action (for example "Enrol in a course").
 - **Course card** (8a): custom `li` (not `Surface`) with a 6px top edge in the course colour,
   abbreviation (36 px / 800) in the course colour, name, description, an "Open course"
-  button and a ⋯ overflow menu (Mark as finished, Remove from list). Exam date, percentage
-  and the 6px progress bar are pending (no such data in the API yet).
+  button and a ⋯ overflow menu (Mark as finished, Remove from list). With a dated next exam
+  the card ends in the exam name and date, the readiness estimate ("oko 70 %", a range's
+  midpoint) and a 6px progress bar in the course colour; the bar is a `progressbar` with a
+  text value, and a hint replaces the number while there are too few answers.
 - **Segmented control**: two or more `secondary` buttons with `aria-pressed`,
   or the font-size grid in `AppearanceSettings` (equal columns, 2px outer border).
 - **RichText** (`rich-text.tsx`): question content with formulas and code. Code is
@@ -358,16 +360,14 @@ Implemented:
   the font-size multiplier, theme and appearance controls (`theme.tsx`).
 - Archivo type, radius 0, 2px borders, `ui.tsx` primitives restyled.
 - Navigation bar (top bar and practice focus mode as described above).
-- 8a "Vaši kolegiji": course cards, enrolled list.
-- 8b "Upis kolegija": separate page (`CourseBrowser`, route `/enrol`) with faculty select and
-  search. Enrolled rows read "Upisano ✓" with the accessible name "Upisano, otvori kolegij:
-  <name>".
+- 8a "Vaši kolegiji": course cards with next exam, readiness and progress bar, enrolled
+  list, finished and removed courses saved on the backend.
+- 8b "Upis kolegija": separate page (`CourseBrowser`, route `/enrol`) with faculty select,
+  search, year filter, question count and moderator note per row. Enrolled rows read
+  "Upisano ✓" with the accessible name "Upisano, otvori kolegij: <name>".
 
 Pending:
 
-- 8b year filter and question count per row: blocked on a year / question-count field in
-  the course API (`Course` has neither).
-- 8a exam date, percentage and progress bar on course cards (same reason).
 - Mobile 4-tab bar with count badges (Kolegiji, Ponavljanje, Napredak, Postavke).
 - 8c settings page with live preview (palette tiles, marker choice; no language option).
 - Answer markers (shapes or letters), "Vaš odgovor ✓" wording.

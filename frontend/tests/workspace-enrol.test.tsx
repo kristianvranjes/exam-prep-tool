@@ -6,8 +6,8 @@ const apiMock = vi.hoisted(() => ({
 }));
 vi.mock("../src/lib/api", () => ({ api: apiMock }));
 vi.mock("../src/components/student-home", () => ({
-  StudentHome: ({ userId, onEnrol }: { userId: string; onEnrol: () => void }) =>
-    <section><h1 id="home-heading" tabIndex={-1}>Home for {userId}</h1><button onClick={onEnrol}>Upiši kolegij</button></section>,
+  StudentHome: ({ onEnrol }: { onEnrol: () => void }) =>
+    <section><h1 id="home-heading" tabIndex={-1}>Home</h1><button onClick={onEnrol}>Upiši kolegij</button></section>,
 }));
 vi.mock("../src/components/course-browser", () => ({
   CourseBrowser: ({ onBack }: { onBack: () => void }) =>
@@ -36,7 +36,7 @@ it("opens the enrolment page from Home, focuses its heading and returns with Bac
   fireEvent.click(screen.getByRole("button", { name: "Back to courses" }));
   await waitFor(() => expect(screen.queryByRole("heading", { name: "Enrol" })).not.toBeInTheDocument());
   expect(window.location.pathname).toBe("/");
-  expect(screen.getByRole("heading", { name: "Home for user-1" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Home" })).toBeVisible();
 });
 
 it("deep-links to the enrolment page", async () => {
