@@ -23,6 +23,7 @@ def create_course(db: Session, user: User, data: CourseCreate) -> Course:
         name=data.name.strip(),
         code=data.code.strip() if data.code else None,
         description=data.description.strip() if data.description else None,
+        year_of_study=data.year_of_study,
         created_by_user_id=user.id,
     )
     db.add(course)
@@ -43,14 +44,6 @@ def get_member_course(db: Session, user: User, course_id: UUID) -> Course:
     if course is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     return course
-
-
-def list_member_courses(db: Session, user: User) -> list[Course]:
-    return list(
-        db.scalars(
-            select(Course).join(CourseMembership).where(CourseMembership.user_id == user.id)
-        ).all()
-    )
 
 
 def get_owner_course(db: Session, user: User, course_id: UUID) -> Course:
@@ -104,6 +97,41 @@ def delete_course(db: Session, user: User, course_id: UUID, storage: MaterialSto
         raise HTTPException(503, "Could not delete course") from None
 
     cleanup_sources(sessionmaker(bind=db.get_bind()), storage, cleanup_ids=cleanup_ids)
+
+
+def own_membership(db: Session, user: User, course_id: UUID) -> CourseMembership:
+    membership = db.scalar(
+        select(CourseMembership).where(
+            CourseMembership.course_id == course_id, CourseMembership.user_id == user.id
+        )
+    )
+    if membership is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Membership not found")
+    return membership
+
+
+def set_membership_status(
+    db: Session, user: User, course_id: UUID, new_status: str
+) -> CourseMembership:
+    """Mark the course finished or active again; this moves it between lists, nothing else."""
+    membership = own_membership(db, user, course_id)
+    membership.status = new_status
+    db.commit()
+    db.refresh(membership)
+    return membership
+
+
+def leave_course(db: Session, user: User, course_id: UUID) -> None:
+    """Remove the user's membership. Their attempts, progress and favorites are kept, so
+    joining again brings them back; private drafts stay with their author.
+    """
+    membership = own_membership(db, user, course_id)
+    if membership.role == MembershipRole.OWNER.value:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Course owners cannot leave; delete the course instead"
+        )
+    db.delete(membership)
+    db.commit()
 
 
 def join_course(db: Session, user: User, course_id: UUID) -> CourseMembership:

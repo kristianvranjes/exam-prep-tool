@@ -378,3 +378,16 @@ ON DELETE SET NULL) and `created_at`. A row exists for each faculty a moderator 
 through `POST /faculties`; seeded or operator-provisioned faculties have none. The
 creator lives in its own table rather than a column on `faculties` so that removing an
 account never touches the faculty. Downgrade drops the table and keeps every faculty.
+
+## Course metadata and preferences migration 0028
+
+Revision 0028 follows 0027 and adds three things. `courses.year_of_study` is a nullable
+SMALLINT checked to 1–5, used to filter the catalog. `course_memberships.status` is a
+`NOT NULL` VARCHAR(10) defaulting to `ACTIVE` and checked to `ACTIVE` or `FINISHED`; every
+existing membership becomes `ACTIVE`. `user_preferences` holds one row per user
+(`user_id` primary key, ON DELETE CASCADE): `palette` (`dark`, `light`, `night`,
+`contrast`, `custom`, `system`), `font_scale_percent` (90, 100, 115 or 130),
+`answer_markers` (`letters` or `shapes`), three nullable `#rrggbb` custom colours that are
+either all set or all null, a check that the `custom` palette has its colours, and
+`updated_at`. No row means the defaults. Downgrade drops the table and both columns, so
+finished marks, years of study and preferences are lost; courses and memberships stay.

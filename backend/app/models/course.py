@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func, true
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, SmallInteger, String, Text, func, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -14,6 +14,11 @@ if TYPE_CHECKING:
 
 class Course(Base):
     __tablename__ = "courses"
+    __table_args__ = (
+        CheckConstraint(
+            "year_of_study IS NULL OR year_of_study BETWEEN 1 AND 5", name="ck_course_year_of_study"
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     faculty_id: Mapped[UUID] = mapped_column(
@@ -23,6 +28,8 @@ class Course(Base):
     name: Mapped[str] = mapped_column(String(150))
     code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The study year the course is taught in (1-5), used to filter the catalog.
+    year_of_study: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     created_by_user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), index=True
     )

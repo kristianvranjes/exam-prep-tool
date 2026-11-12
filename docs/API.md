@@ -38,19 +38,57 @@ kept." (answers already saved stay on the server).
 Emails are trimmed and case-folded before storage. Passwords are hashed with Argon2id
 and are never returned.
 
+### Display preferences
+
+How the interface looks follows the user across devices:
+
+- `GET /auth/me/preferences` returns `{palette, font_scale_percent, answer_markers,
+  custom_colors, updated_at}`. Without a saved document it returns the defaults
+  (`dark`, `100`, `letters`, `null`) with `updated_at: null`.
+- `PUT /auth/me/preferences` replaces the whole document and returns it. The body is
+  strict: `palette` is `dark`, `light`, `night`, `contrast`, `custom` or `system`;
+  `font_scale_percent` is `90`, `100`, `115` or `130`; `answer_markers` is `letters` or
+  `shapes`; `custom_colors` is `{background, text, accent}` as `#rrggbb` (stored
+  lower-case) or `null`, and is required when `palette` is `custom`. It is kept while
+  another palette is active so switching back restores it. Anything else is `422`.
+  Saving the same body twice gives the same result.
+
+There is no language setting: the interface is Croatian only. Both endpoints require the
+session cookie (`401` otherwise) and only ever read or write the caller's own row.
+
 ## Courses
 
 - `POST /courses` requires a moderator of the selected faculty (otherwise 403) and creates an OWNER
   membership in the same transaction. The request requires `faculty_id` of an active
   faculty plus `name` (and optional `code`, `description`). Missing faculty_id is 422;
-  unknown/inactive faculty is 404. Responses include faculty_id and is_active.
-- `GET /courses` lists courses where the authenticated user is a member.
+  unknown/inactive faculty is 404. Responses include faculty_id and is_active. The
+  optional `year_of_study` (1–5, otherwise 422) records the study year the course is
+  taught in and filters the catalog.
+- `GET /courses` lists courses where the authenticated user is a member, active and
+  finished, ordered by name. Each item is the course plus `role` (`OWNER`/`MEMBER`),
+  `status` (`ACTIVE`/`FINISHED`), `approved_question_count`, `mastery_percent` and
+  `next_exam`. `mastery_percent` is the share (0–100, rounded half up) of the course's
+  approved, automatically gradable questions (short answers excluded) whose last answer
+  was correct and is not overdue by more than its own interval, the retention proxy of
+  [readiness-v1](PRACTICE.md#exam-readiness-readiness-v1); it is `0` before the first
+  answer and `null` when the course has no such question. `next_exam` is
+  `{scope_id, name, kind, starts_on, ends_on}` of the dated exam cycle that is in progress
+  or starts next (Europe/Zagreb date; undated cycles are ignored), else `null`.
 - `GET /courses/{course_id}` returns a member's course; inaccessible courses return
   `404`.
-- `GET /courses/{course_id}/membership` returns the caller's membership role.
+- `GET /courses/{course_id}/membership` returns the caller's membership
+  `{course_id, user_id, role, status}`.
+- `PATCH /courses/{course_id}/membership` takes strict `{status}` (`ACTIVE` or
+  `FINISHED`) and returns the membership. Finishing moves the course to the student's
+  "Završeni" list and changes no access, practice or progress; it is idempotent.
+- `DELETE /courses/{course_id}/membership` removes the caller's membership ("Ukloni s
+  popisa"): `204`, then the course is `404` for them until they join again. Attempts,
+  review progress and favorites are kept and return on re-joining; private drafts stay
+  with their author. An OWNER cannot leave (`409`, delete the course instead); a
+  non-member receives `404`. Joining again creates a fresh `ACTIVE` membership.
 - `PATCH /courses/{course_id}` updates `name` (1–150 characters), `code` (nullable,
-  at most 50) or `description` (nullable, at most 2000) for an OWNER; joined
-  non-owners receive `403`.
+  at most 50), `description` (nullable, at most 2000) or `year_of_study` (1–5; an
+  explicit `null` clears it) for an OWNER; joined non-owners receive `403`.
 - `DELETE /courses/{course_id}` returns `204` for an OWNER after committing the
   course deletion together with durable cleanup intents for every source PDF.
   Existing database cascades remove memberships, materials, questions,
@@ -539,8 +577,9 @@ All endpoints require authentication (401 otherwise):
 - `GET /faculties`: active faculty metadata (`id`, `name`, `slug`, `university_name`),
   ordered by name then id. No membership required.
 - `GET /faculties/{faculty_id}/courses`: active courses belonging to that faculty,
-  ordered by name then id. Returns normal course metadata, including faculty_id and
-  is_active, but no materials/questions/answers. Unknown/inactive faculty is 404.
+  ordered by name then id. Returns normal course metadata, including faculty_id,
+  is_active, `year_of_study` and `approved_question_count` (the size of the shared bank),
+  but no materials/questions/answers. Unknown/inactive faculty is 404.
 - Both catalogs accept `limit` (1-100, default 100) and `offset` (0-10000, default 0).
 - `POST /faculties`: body `name` (1-150 characters, trimmed), optional
   `university_name` (1-200) and optional `slug` (lower-case words joined by single

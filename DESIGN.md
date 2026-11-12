@@ -363,11 +363,18 @@ Implemented:
 
 Pending:
 
-- 8b year filter and question count per row: blocked on a year / question-count field in
-  the course API (`Course` has neither).
-- 8a exam date, percentage and progress bar on course cards (same reason).
+- 8b year filter and question count per row: the API now returns `year_of_study` and
+  `approved_question_count` in the faculty catalog (`GET /faculties/{id}/courses`); the
+  page still has to use them.
+- 8a exam date, percentage and progress bar on course cards: `GET /courses` now returns
+  `next_exam`, `mastery_percent`, `approved_question_count`, `status` and `role`; the cards
+  still have to use them.
+- 8a finished and removed courses: `PATCH`/`DELETE /courses/{id}/membership` exist; the
+  browser-only `lib/course-prefs.ts` is to be replaced by them.
 - Mobile 4-tab bar with count badges (Kolegiji, Ponavljanje, Napredak, Postavke).
-- 8c settings page with live preview (palette tiles, marker choice; no language option).
+- 8c settings page with live preview (palette tiles, marker choice; no language option):
+  `GET`/`PUT /auth/me/preferences` store palette, custom colours, font size and answer
+  markers per user; the page and the sync from `theme.tsx` are still to be built.
 - Answer markers (shapes or letters), "Vaš odgovor ✓" wording.
 - Practice 1a and mock exam 1e (progress strips, side panel, focus button, timer).
 - Results 2d and answer review 2e.

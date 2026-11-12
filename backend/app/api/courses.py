@@ -7,13 +7,22 @@ from sqlalchemy.orm import Session
 from app.config import Settings
 from app.dependencies import get_current_user, get_db
 from app.models import Course, CourseMembership, User
-from app.schemas.course import CourseCreate, CourseResponse, CourseUpdate, MembershipResponse
+from app.schemas.course import (
+    CourseCreate,
+    CourseListItem,
+    CourseResponse,
+    CourseUpdate,
+    MembershipResponse,
+    MembershipUpdate,
+)
+from app.services.course_summaries import list_course_items
 from app.services.courses import (
     create_course,
     delete_course,
     get_member_course,
     join_course,
-    list_member_courses,
+    leave_course,
+    set_membership_status,
     update_course,
 )
 from app.services.materials.storage import LocalMaterialStorage
@@ -28,11 +37,11 @@ def create(
     return create_course(db, user, data)
 
 
-@router.get("", response_model=list[CourseResponse])
+@router.get("", response_model=list[CourseListItem])
 def list_courses(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
-) -> list[Course]:
-    return list_member_courses(db, user)
+) -> list[CourseListItem]:
+    return list_course_items(db, user)
 
 
 @router.get("/{course_id}", response_model=CourseResponse)
@@ -55,6 +64,24 @@ def membership(
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Membership not found")
     return result
+
+
+@router.patch("/{course_id}/membership", response_model=MembershipResponse)
+def update_membership(
+    course_id: UUID,
+    data: MembershipUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CourseMembership:
+    return set_membership_status(db, user, course_id, data.status)
+
+
+@router.delete("/{course_id}/membership", status_code=status.HTTP_204_NO_CONTENT)
+def leave(
+    course_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> Response:
+    leave_course(db, user, course_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch("/{course_id}", response_model=CourseResponse)

@@ -17,6 +17,7 @@ from app.api.item_analysis import router as item_analysis_router
 from app.api.materials import router as materials_router
 from app.api.mistakes import router as mistakes_router
 from app.api.moderation import router as moderation_router
+from app.api.preferences import router as preferences_router
 from app.api.progress import router as progress_router
 from app.api.questions import router as questions_router
 from app.api.quizzes import availability_router
@@ -54,6 +55,7 @@ app.add_middleware(
 )
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(preferences_router)
 app.include_router(courses_router)
 app.include_router(course_units_router)
 app.include_router(exam_scopes_router)
