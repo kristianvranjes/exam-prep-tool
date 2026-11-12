@@ -4,6 +4,8 @@ import { AppShell } from "../src/components/app-shell";
 import type { Attempt } from "../src/lib/practice-api";
 
 const mock = vi.hoisted(() => ({
+  // The shell syncs appearance preferences once signed in; a failed read leaves the local ones in place.
+  preferences: vi.fn().mockRejectedValue(new Error("no saved preferences")), savePreferences: vi.fn(),
   me: vi.fn(), login: vi.fn(), courses: vi.fn(), faculties: vi.fn(), membership: vi.fn(), course: vi.fn(),
   reviewProgressSummary: vi.fn(), moderatorStatus: vi.fn(), concepts: vi.fn(), questions: vi.fn(), logout: vi.fn(),
   history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), availability: vi.fn(),
@@ -31,6 +33,7 @@ beforeEach(() => {
   mock.course.mockResolvedValue(course);
   mock.moderatorStatus.mockResolvedValue({ is_moderator: false });
   mock.reviewProgressSummary.mockResolvedValue({ reviewed_questions: 0, resolved_review_count: 0 });
+  mock.preferences.mockRejectedValue(new Error("no saved preferences"));
   mock.concepts.mockResolvedValue([]); mock.questions.mockResolvedValue(Array.from({ length: 50 }, (_, id) => ({ id: String(id), status: "APPROVED", type: "TRUE_FALSE" })));
   mock.availability.mockResolvedValue({ course_total: 50, total: 50, by_type: [{ type: "TRUE_FALSE", count: 50 }], by_unit: [] });
   mock.history.mockResolvedValue([]); mock.start.mockResolvedValue(activeAttempt); mock.read.mockResolvedValue(activeAttempt);
@@ -75,10 +78,10 @@ it("keeps materials to course managers: a student gets a way back, an owner gets
 it("does not join or expose an unavailable course through a URL", async () => {
   window.history.replaceState(null, "", "/courses/unknown/practice");
   render(<AppShell />);
-  expect(await screen.findByRole("heading", { name: "Course unavailable" })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Kolegij nije dostupan" })).toBeVisible();
   expect(mock.membership).not.toHaveBeenCalledWith("unknown");
   expect(mock.start).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Back to Home" }));
+  fireEvent.click(screen.getByRole("button", { name: "Natrag na početnu" }));
   expect(screen.getByRole("heading", { name: "Vaši kolegiji" })).toBeVisible();
 });
 
@@ -139,7 +142,7 @@ it("ignores a late attempt read after switching to another course", async () => 
   window.history.replaceState(null, "", "/courses/course/attempts/attempt");
   render(<AppShell />);
   await waitFor(() => expect(mock.read).toHaveBeenCalled());
-  fireEvent.click(within(screen.getByRole("navigation", { name: "Glavna navigacija" })).getByRole("button", { name: "Kolegiji" }));
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Glavna navigacija" })).getByRole("link", { name: "Kolegiji" }));
   fireEvent.click(screen.getByRole("button", { name: "Otvori kolegij: Statistics" }));
   await act(async () => resolve(activeAttempt));
   expect(screen.getByRole("heading", { name: "Statistics" })).toBeVisible();
@@ -202,11 +205,11 @@ it("guards unsaved answers on course switching and logout, including failed save
   fireEvent.click(screen.getByRole("button", { name: "Spremi i pregledaj" })); await screen.findByRole("alert");
   fireEvent.click(screen.getByRole("button", { name: "Natrag na početnu" }));
   fireEvent.click(screen.getByRole("button", { name: "Otvori kolegij: Statistics" }));
-  expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Switch courses"));
+  expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Promijeniti kolegij"));
   expect(mock.membership).not.toHaveBeenCalledWith("statistics");
   fireEvent.click(screen.getByRole("button", { name: /^Račun:/ }));
   fireEvent.click(screen.getByRole("button", { name: "Odjava" }));
-  expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Log out")); expect(mock.logout).not.toHaveBeenCalled();
+  expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Odjaviti se")); expect(mock.logout).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Nastavi vježbu" }));
   expect(await screen.findByLabelText("Vaš kratki odgovor")).toHaveValue("My unsaved answer");
   fireEvent.click(screen.getByRole("button", { name: "Natrag na početnu" })); confirm.mockReturnValue(true);
@@ -412,12 +415,12 @@ it("minimizes application navigation during answering and restores it after Save
   fireEvent.change(await startPractice(), { target: { value: "My answer" } });
   expect(screen.getByRole("heading", { name: "Algorithms · Vježba" })).toBeVisible();
   expect(screen.queryByRole("navigation", { name: "Glavna navigacija" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "ExamPrep, početna" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "ExamPrep, početna" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Napredak" })).not.toBeVisible();
   expect(screen.getByRole("button", { name: "Spremi i izađi" })).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Spremi i izađi" }));
   await screen.findByRole("button", { name: "Započni vježbu" });
-  expect(screen.getByRole("button", { name: "ExamPrep, početna" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "ExamPrep, početna" })).toBeVisible();
   expect(screen.getByRole("button", { name: "Napredak" })).toBeVisible();
   expect(mock.save).toHaveBeenCalledWith("course", "attempt", "question", { type: "SHORT_ANSWER", text: "My answer" });
   fireEvent.click(screen.getByRole("button", { name: "Nastavi vježbu" }));

@@ -34,6 +34,11 @@
   --placeholder: color-mix(in srgb, var(--foreground) 52%, var(--surface));
   --line-strong: color-mix(in srgb, var(--foreground) 36%, var(--background));
   --subtle: color-mix(in srgb, var(--foreground) 7%, var(--surface));
+  /* The handoff's neutral steps, named by role. In the dark palette they land on its neutral-300/400/500/800. */
+  --track: color-mix(in srgb, var(--foreground) 8%, var(--background));
+  --quiet: color-mix(in srgb, var(--foreground) 17%, var(--background));
+  --faint: color-mix(in srgb, var(--foreground) 31%, var(--background));
+  --soft: color-mix(in srgb, var(--foreground) 83%, var(--background));
   --accent-hover: color-mix(in srgb, var(--accent) 82%, var(--foreground));
   --accent-foreground: var(--background);
   --accent-surface: color-mix(in srgb, var(--accent) 16%, var(--background));
@@ -55,6 +60,10 @@ html[data-font-scale="1.3"] { font-size: 130%; }
   --color-surface: var(--surface);
   --color-subtle: var(--subtle);
   --color-muted: var(--muted);
+  --color-track: var(--track);
+  --color-quiet: var(--quiet);
+  --color-faint: var(--faint);
+  --color-soft: var(--soft);
   --color-placeholder: var(--placeholder);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
@@ -109,8 +118,8 @@ html[data-font-scale="1.3"] { font-size: 130%; }
   * { border-color: var(--line); }
   html { scrollbar-color: var(--line-strong) transparent; }
   body { background-color: var(--background); color: var(--foreground); font-family: var(--font-text), ui-sans-serif, system-ui, sans-serif; font-size: 1rem; line-height: 1.625; font-optical-sizing: auto; overflow-wrap: anywhere; -webkit-font-smoothing: antialiased; }
-  /* Headings are set like a printed exam sheet: a book serif over a sans body. */
-  h1, h2, h3, h4 { font-family: var(--font-text), ui-sans-serif, system-ui, sans-serif; font-weight: 800; text-wrap: balance; line-height: 1.2; letter-spacing: -0.02em; }
+  /* Heavy Archivo headings, set tight as in the handoff. */
+  h1, h2, h3, h4 { font-family: var(--font-text), ui-sans-serif, system-ui, sans-serif; font-weight: 800; text-wrap: balance; line-height: 1.12; letter-spacing: -0.015em; }
   p, li, dd { text-wrap: pretty; }
   code, kbd, samp, pre { font-family: ui-monospace, Menlo, "Cascadia Mono", Consolas, monospace; font-size: 0.9375em; }
   a { text-underline-offset: 0.2em; }

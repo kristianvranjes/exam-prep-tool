@@ -40,7 +40,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     student.on("pageerror", error => pageErrors.push(error.message));
 
     await login(moderator, "owner-e2e@example.com");
-    await moderator.getByRole("button", { name: "Alati fakulteta", exact: true }).click();
+    await moderator.getByRole("link", { name: "Alati fakulteta", exact: true }).click();
     const createCourse = moderator.getByRole("form", { name: "Create a course" });
     await expect(createCourse).toBeVisible();
     await createCourse.getByLabel("Faculty").selectOption({ label: facultyName });
@@ -74,7 +74,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(moderator.getByRole("list", { name: "Nedavni materijali" })).toContainText("e2e-notes.pdf");
     await moderator.getByRole("button", { name: "Natrag na početnu" }).click();
     await expect(moderatorCourses.getByRole("button", { name: `Otvori kolegij: ${courseName}`, exact: true })).toHaveCount(1);
-    await moderator.getByRole("button", { name: "Alati fakulteta", exact: true }).click();
+    await moderator.getByRole("link", { name: "Alati fakulteta", exact: true }).click();
 
     await login(student, "student-e2e@example.com");
     const studentCourses = student.getByRole("region", { name: "Vaši kolegiji" });

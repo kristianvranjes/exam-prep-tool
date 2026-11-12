@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 const apiMock = vi.hoisted(() => ({
+  // The shell syncs appearance preferences once signed in; a failed read leaves the local ones in place.
+  preferences: vi.fn().mockRejectedValue(new Error("no saved preferences")), savePreferences: vi.fn(),
   me: vi.fn(), courses: vi.fn(), faculties: vi.fn(), moderatorStatus: vi.fn(), membership: vi.fn(),
 }));
 vi.mock("../src/lib/api", () => ({ api: apiMock }));
@@ -32,7 +34,7 @@ it("opens the enrolment page from Home, focuses its heading and returns with Bac
   const heading = await screen.findByRole("heading", { name: "Enrol" });
   expect(window.location.pathname).toBe("/enrol");
   await waitFor(() => expect(heading).toHaveFocus());
-  expect(screen.getByRole("button", { name: "Kolegiji" })).toHaveAttribute("aria-current", "page");
+  expect(screen.getByRole("link", { name: "Kolegiji" })).toHaveAttribute("aria-current", "page");
   fireEvent.click(screen.getByRole("button", { name: "Back to courses" }));
   await waitFor(() => expect(screen.queryByRole("heading", { name: "Enrol" })).not.toBeInTheDocument());
   expect(window.location.pathname).toBe("/");

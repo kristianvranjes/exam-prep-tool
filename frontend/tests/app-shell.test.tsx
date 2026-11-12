@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CourseMembership } from "../src/lib/api";
 
 const apiMock = vi.hoisted(() => ({
+  // The shell syncs appearance preferences once signed in; a failed read leaves the local ones in place.
+  preferences: vi.fn().mockRejectedValue(new Error("no saved preferences")), savePreferences: vi.fn(),
   faculties: vi.fn(),
   moderatorStatus: vi.fn().mockResolvedValue({ is_moderator: true }),
   materials: vi.fn().mockResolvedValue([]),
@@ -66,7 +68,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function goHome() { fireEvent.click(within(screen.getByRole("navigation", { name: "Glavna navigacija" })).getByRole("button", { name: "Kolegiji" })); }
+function goHome() { fireEvent.click(within(screen.getByRole("navigation", { name: "Glavna navigacija" })).getByRole("link", { name: "Kolegiji" })); }
 function openAccount() { fireEvent.click(screen.getByRole("button", { name: /^Račun:/ })); }
 function logOut() { openAccount(); fireEvent.click(screen.getByRole("button", { name: "Odjava" })); }
 async function openCourse(name = "Algorithms") {
@@ -81,7 +83,7 @@ async function openSettings() {
 async function openDiscovery() { fireEvent.click((await screen.findAllByRole("button", { name: "Upiši kolegij" }))[0]); return screen.findByLabelText("Pretraži po fakultetu"); }
 const enrolPage = () => screen.getByRole("region", { name: "Upis kolegija" });
 function backToCourses() { fireEvent.click(within(enrolPage()).getByRole("button", { name: /Vaši kolegiji/ })); }
-async function openManagement() { fireEvent.click(await screen.findByRole("button", { name: "Alati fakulteta" })); }
+async function openManagement() { fireEvent.click(await screen.findByRole("link", { name: "Alati fakulteta" })); }
 
 describe("authentication and course flow", () => {
   it("registers and creates a course through secondary faculty tools", async () => {
@@ -158,7 +160,7 @@ it("waits for the session check before showing signed-in Home", async () => {
   const session = deferred<typeof user>();
   apiMock.me.mockReturnValue(session.promise);
   render(<AppShell />);
-  expect(screen.getByRole("status")).toHaveTextContent("Loading your study space");
+  expect(screen.getByRole("status")).toHaveTextContent("Učitavam vaš prostor za učenje");
   expect(screen.queryByLabelText("Lozinka")).not.toBeInTheDocument();
   await act(async () => session.resolve(user));
   const home = await screen.findByRole("heading", { name: "Vaši kolegiji" });
@@ -221,33 +223,56 @@ it("replaces Home with the selected course overview and switches one destination
   expect(screen.getByRole("link", { name: "Preskoči na sadržaj" })).toHaveAttribute("href", "#main-content");
 });
 
-it("marks Courses as the current page and opens settings and account popovers that close with Escape", async () => {
+it("opens the review, progress and settings pages from the navigation and counts what is due", async () => {
+  apiMock.me.mockResolvedValue(user);
+  apiMock.courses.mockResolvedValue([course]);
+  apiMock.reviewProgressSummary.mockResolvedValue({ reviewed_questions: 4, resolved_review_count: 4, due_now: 3 });
+  render(<AppShell />);
+  await screen.findByRole("region", { name: "Vaši kolegiji" });
+  const nav = screen.getByRole("navigation", { name: "Glavna navigacija" });
+  const review = await within(nav).findByRole("link", { name: "Ponavljanje, 3 za ponoviti" });
+  expect(review).toHaveAttribute("href", "/review");
+  fireEvent.click(review);
+  expect(await screen.findByRole("heading", { level: 1, name: "Ponavljanje" })).toHaveFocus();
+  expect(review).toHaveAttribute("aria-current", "page");
+  expect(screen.getByText("3 pitanja za ponoviti")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Otvori ponavljanje: Algorithms" })).toBeVisible();
+  fireEvent.click(within(nav).getByRole("link", { name: "Napredak" }));
+  expect(await screen.findByRole("heading", { level: 1, name: "Napredak" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Otvori napredak: Algorithms" }));
+  expect(await screen.findByRole("heading", { name: "Algorithms" })).toBeVisible();
+  const settings = screen.getAllByRole("link", { name: "Postavke" });
+  expect(settings).toHaveLength(2); // the header icon and the phone tab
+  fireEvent.click(settings[0]);
+  const page = await screen.findByRole("region", { name: "Postavke" });
+  expect(within(page).getByLabelText("Tema")).toBeInTheDocument();
+  expect(settings[0]).toHaveAttribute("aria-current", "page");
+  apiMock.reviewProgressSummary.mockResolvedValue({ reviewed_questions: 0, resolved_review_count: 0 });
+});
+
+it("marks Courses as the current page and opens an account popover that closes with Escape", async () => {
   apiMock.me.mockResolvedValue(user);
   apiMock.courses.mockResolvedValue([course]);
   render(<AppShell />);
   await screen.findByRole("region", { name: "Vaši kolegiji" });
   const nav = screen.getByRole("navigation", { name: "Glavna navigacija" });
-  expect(within(nav).getByRole("button", { name: "Kolegiji" })).toHaveAttribute("aria-current", "page");
-  expect(await within(nav).findByRole("button", { name: "Alati fakulteta" })).not.toHaveAttribute("aria-current");
-  const settings = screen.getByRole("button", { name: "Postavke izgleda" });
-  expect(settings).toHaveAttribute("aria-expanded", "false");
-  fireEvent.click(settings);
-  const panel = screen.getByRole("region", { name: "Postavke" });
-  expect(within(panel).getByLabelText("Tema")).toBeInTheDocument();
-  fireEvent.keyDown(panel, { key: "Escape" });
-  expect(screen.queryByRole("region", { name: "Postavke" })).not.toBeInTheDocument();
-  expect(settings).toHaveFocus();
+  expect(within(nav).getByRole("link", { name: "Kolegiji" })).toHaveAttribute("aria-current", "page");
+  expect(await within(nav).findByRole("link", { name: "Alati fakulteta" })).not.toHaveAttribute("aria-current");
   openAccount();
   expect(screen.getByText(user.email)).toBeVisible();
-  expect(screen.queryByRole("region", { name: "Postavke" })).not.toBeInTheDocument();
+  fireEvent.keyDown(screen.getByText(user.email), { key: "Escape" });
+  expect(screen.queryByText(user.email)).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /^Račun:/ })).toHaveFocus();
+  openAccount();
+  expect(screen.getByText(user.email)).toBeVisible();
   fireEvent.pointerDown(document.body);
   expect(screen.queryByText(user.email)).not.toBeInTheDocument();
   await openCourse();
-  expect(within(nav).getByRole("button", { name: "Kolegiji" })).not.toHaveAttribute("aria-current");
+  expect(within(nav).getByRole("link", { name: "Kolegiji" })).not.toHaveAttribute("aria-current");
   openAccount();
   goHome();
   expect(screen.queryByText(user.email)).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "ExamPrep, početna" }));
+  fireEvent.click(screen.getByRole("link", { name: "ExamPrep, početna" }));
   expect(screen.getByRole("heading", { name: "Vaši kolegiji" })).toBeVisible();
 });
 
@@ -286,10 +311,10 @@ it("keeps normal tools after membership failure and reveals owner settings on re
   apiMock.membership.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({ ...membership, role: "OWNER" });
   render(<AppShell />);
   await screen.findByRole("region", { name: "Vaši kolegiji" }); await openCourse();
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not check course permissions");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Ovlasti na kolegiju nisu provjerene");
   navigate("Vježba");
   expect(screen.getByRole("region", { name: "Vježba" })).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Retry course permissions" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno provjeri ovlasti" }));
   expect(await openSettings()).toBeVisible();
 });
 
@@ -311,7 +336,6 @@ it("updates joined and selected metadata and refreshes the previously opened cat
   fireEvent.click(within(settings).getByRole("button", { name: "Spremi kolegij" }));
   await waitFor(() => expect(apiMock.updateCourse).toHaveBeenCalledWith("course-1", { name: updated.name, code: null, description: updated.description }));
   expect(await screen.findByRole("heading", { name: "Algorithms II" })).toBeVisible();
-  expect(screen.getByRole("navigation", { name: "Glavna navigacija" })).toHaveTextContent("Algorithms II");
   goHome();
   expect(within(screen.getByRole("region", { name: "Vaši kolegiji" })).getByRole("button", { name: "Otvori kolegij: Algorithms II" })).toBeVisible();
   fireEvent.change(await openDiscovery(), { target: { value: "faculty-1" } });
@@ -349,7 +373,7 @@ it("deletes the selected course, returns Home and clears its tools and practice 
   fireEvent.change(within(settings).getByLabelText("Za potvrdu upišite točan naziv kolegija"), { target: { value: "Algorithms" } });
   fireEvent.click(within(settings).getByRole("button", { name: "Trajno obriši kolegij" }));
   await waitFor(() => expect(apiMock.deleteCourse).toHaveBeenCalledWith("course-1"));
-  expect(await screen.findByText("Algorithms was permanently deleted.")).toBeVisible();
+  expect(await screen.findByText("Algorithms je trajno obrisan.")).toBeVisible();
   expect(screen.getByRole("heading", { name: "Vaši kolegiji" })).toBeVisible();
   for (const name of ["Postavke kolegija", "Vježba", "Napredak", "Baza pitanja"]) expect(screen.queryByRole("region", { name })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Otvori kolegij: Algorithms" })).not.toBeInTheDocument();
@@ -368,7 +392,7 @@ it("preserves owner edits on Home and requires consent before switching courses"
   fireEvent.change(within(settings).getByLabelText("Naziv kolegija"), { target: { value: "Unsaved course name" } });
   goHome(); expect(confirm).not.toHaveBeenCalled();
   await openCourse("Statistics");
-  expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Any unsaved answers or edits will be lost"));
+  expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Nespremljeni odgovori i izmjene bit će izgubljeni"));
   expect(screen.getByRole("heading", { name: "Vaši kolegiji" })).toBeVisible();
   expect(apiMock.membership).not.toHaveBeenCalledWith("course-2");
   await openCourse();
@@ -416,11 +440,11 @@ it("ignores a late owner membership response after logout", async () => {
 });
 
 it("keeps the signed-in course when logout fails and shows a retryable error", async () => {
-  apiMock.me.mockResolvedValue(user); apiMock.courses.mockResolvedValue([course]); apiMock.logout.mockRejectedValue(new Error("Could not log out. Try again."));
+  apiMock.me.mockResolvedValue(user); apiMock.courses.mockResolvedValue([course]); apiMock.logout.mockRejectedValue(new Error("Odjava nije uspjela. Pokušajte ponovno."));
   render(<AppShell />);
   await screen.findByRole("region", { name: "Vaši kolegiji" }); await openCourse();
   logOut();
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not log out");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Odjava nije uspjela");
   expect(screen.getByRole("heading", { name: "Algorithms" })).toBeVisible();
   expect(screen.getByRole("button", { name: "Odjava" })).toBeEnabled();
 });
@@ -438,14 +462,14 @@ it("reports faculty loading and joined-course loading errors on Home", async () 
   apiMock.me.mockResolvedValue(user); apiMock.faculties.mockRejectedValue(new Error("Unavailable")); apiMock.courses.mockRejectedValue(new Error("Unavailable"));
   render(<AppShell />);
   await screen.findByRole("heading", { name: "Vaši kolegiji" });
-  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Could not load faculties|Could not load courses/));
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Fakulteti se nisu učitali|Kolegiji se nisu učitali/));
 });
 
 it("does not expose faculty tools or course creation to ordinary members", async () => {
   apiMock.me.mockResolvedValue(user); apiMock.moderatorStatus.mockResolvedValue({ is_moderator: false }); render(<AppShell />);
   await screen.findByRole("heading", { name: "Vaši kolegiji" });
   await waitFor(() => expect(apiMock.moderatorStatus).toHaveBeenCalledWith("faculty-1"));
-  expect(screen.queryByRole("button", { name: "Alati fakulteta" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Alati fakulteta" })).not.toBeInTheDocument();
   expect(screen.queryByRole("form", { name: "Create a course" })).not.toBeInTheDocument();
 });
 
