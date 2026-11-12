@@ -1,36 +1,44 @@
 # ExamPrep
 
-ExamPrep is a local-first university exam preparation platform. Through Phase 12C,
-students can [discover and join faculty courses](docs/FRONTEND.md#my-courses-and-browse-courses),
-upload and browse PDF materials, write and submit private Question Bank drafts,
-and practice in Study or Exam mode with deterministic grading, learning progress
-and adaptive review. Students report approved questions and suggest reviewed corrections.
-Faculty moderators review contributions, reports and edit suggestions across courses; course
-owners can update or delete their courses. See [frontend journeys](docs/FRONTEND.md),
-[community moderation](docs/COMMUNITY.md) and [practice rules](docs/PRACTICE.md).
+ExamPrep is a local-first university exam preparation platform for FER students. Students
+can [discover and join faculty courses](docs/FRONTEND.md#your-courses-and-course-enrolment),
+upload and browse PDF materials, write and submit private Question Bank drafts, and
+practice by course unit, by exam scope (midterm, final, exam term) or on past exam papers.
+Questions are multiple-choice, true/false, short-answer, numeric and multiple-select, with
+deterministic grading, immediate or end-of-session feedback, mistakes, favorites, due-only
+review, an exam readiness estimate and learning progress. Students report approved
+questions and suggest reviewed corrections. Faculty moderators review contributions,
+reports and edit suggestions across courses; course owners manage units, exam scopes,
+past papers and item analysis. The interface is Croatian only. See
+[frontend journeys](docs/FRONTEND.md), [community moderation](docs/COMMUNITY.md) and
+[practice rules](docs/PRACTICE.md); [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md)
+describe the product and its visual system.
 
-See the [future roadmap](docs/ROADMAP.md) for hosted pilot readiness, course units and
-exam scopes (MI/ZI/full exam), past exams as practice sources, numeric and multiple-select
-questions, mistakes and favorites, pilot evaluation, and later optional AI grading.
-Milestones are planned work with dependencies and completion criteria.
+See the [roadmap](docs/ROADMAP.md) for what is implemented and what is planned: hosted
+pilot verification, material-based practice, pilot evaluation, and later optional AI
+grading. Milestones have dependencies and completion criteria. Course content is prepared
+offline with the [Content Studio](docs/CONTENT_STUDIO.md) (`tools/studio`).
 
 Optional [external AI quiz import](docs/QUIZ_IMPORT.md) accepts versioned JSON as drafts
 for human review. Manual in-app authoring also needs no AI provider or embeddings.
 Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
 configuration below applies when explicitly enabling that pipeline.
 
-Phase 6.5 prepares **Vercel + Railway + managed PostgreSQL/pgvector staging** without
-deploying resources. Follow [the exact staging guide](docs/STAGING.md) for required
+The frontend is hosted on Vercel and the backend on managed infrastructure with
+PostgreSQL/pgvector. Follow [the staging guide](docs/STAGING.md) for required
 environment variables, HTTPS AI configuration, Secure/SameSite cookies, explicit
-origin/CSRF protection, storage, migrations, smoke tests and recovery. To host the
-backend on Azure Container Apps (paid from the Azure for Students credit) instead of
-Railway, see [DEPLOY_CONTAINER_APPS.md](docs/DEPLOY_CONTAINER_APPS.md); for any always-on Ubuntu VM, see
-[DEPLOY_VM.md](docs/DEPLOY_VM.md). Local defaults remain unchanged. A complete generation demo needs the optional backend embedding
-runtime; no models run on Vercel.
+origin/CSRF protection, storage, migrations, smoke tests and recovery (written for
+Railway). To host the backend on Azure Container Apps (paid from the Azure for Students
+credit), see [DEPLOY_CONTAINER_APPS.md](docs/DEPLOY_CONTAINER_APPS.md); for any always-on
+Ubuntu VM, see [DEPLOY_VM.md](docs/DEPLOY_VM.md). Local defaults remain unchanged. A
+complete generation demo needs the optional backend embedding runtime; no models run on
+Vercel.
 
 Stack: Next.js / TypeScript / Tailwind CSS (shadcn/ui-ready), FastAPI / Pydantic /
 SQLAlchemy 2 / Alembic, PostgreSQL 17 with pgvector, Docker Compose and GitHub Actions.
-The default Ollama setup requires no API key. Optional FreeLLMAPI uses a unified gateway key.
+`AI_PROVIDER` selects `ollama` (the default, no API key), `freellmapi` (a unified gateway
+key), `openai_compatible` (a trusted external HTTPS `/v1` endpoint, see
+[docs/AI.md](docs/AI.md)) or `disabled`.
 
 ## Start with Docker
 
@@ -47,8 +55,8 @@ Open http://localhost:3000 — register or log in, then create a course.
 Select a course, choose a PDF under Study materials, and click Upload PDF. Open
 the material row to inspect its status, extracted text and section/chunk counts.
 For optional concept extraction, install Ollama and run `ollama pull qwen3:4b`.
-Set `OLLAMA_MODEL=qwen3:4b` in `.env` (replace an older empty value), keep Ollama
-running, then rebuild Compose. Open a READY material and click Extract concepts.
+`OLLAMA_MODEL` already defaults to `qwen3:4b` (check that an older `.env` does not set it
+to an empty value), so keep Ollama running and rebuild Compose. Open a READY material and click Extract concepts.
 Only an OWNER can approve/reject DRAFT proposals. The base app works without Ollama.
 For a laptop without local inference, explicitly select `AI_PROVIDER=freellmapi`
 and configure its separately installed gateway and key; see the instructions below.
@@ -164,7 +172,8 @@ commands and Chromium installation.
 From the root: `docker compose config --quiet`. If GNU Make is installed,
 `make up`, `make down`, `make backend-check`, `make frontend-check`, and
 `make migrate` wrap the commands above (activate the Python environment first).
-CI runs backend, frontend, Compose smoke and browser acceptance checks on pushes and pull requests.
+CI runs backend, Content Studio (`tools/studio`), frontend, Compose smoke and browser
+acceptance checks on pushes and pull requests.
 
 ## Repository
 
@@ -174,13 +183,20 @@ are 20 MiB, 2500 characters per chunk and 250 characters overlap. See
 [material processing](docs/MATERIALS.md) for storage paths, failure behavior,
 security limits and exact test instructions.
 
-- `frontend/`: Next.js authentication and course-management UI.
+- `frontend/`: the Next.js student, owner and moderator UI.
 - `backend/`: API routes, services, database configuration, migrations and tests.
+- `tools/studio/`: the Content Studio CLI that turns course PDFs into reviewed questions
+  ([docs/CONTENT_STUDIO.md](docs/CONTENT_STUDIO.md), [tools/studio/README.md](tools/studio/README.md)).
 - `infra/`: PostgreSQL initialization.
+- `deploy/`: Azure Container Apps (`aca/`) and VM (`vm/`) deployment templates.
+- [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md): product facts and the "Kviz" visual system.
+- `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`: rules for coding agents.
 - `docs/ARCHITECTURE.md`: service boundaries and configuration.
 - `docs/DATABASE.md`: infrastructure and migrations.
-- `docs/API.md`: health, authentication and course endpoint contracts.
-- `docs/AI.md`: local provider architecture, concept review and optional smoke test.
+- `docs/API.md`: authentication, course, question, unit, scope and paper endpoint contracts
+  (practice endpoints are in `docs/PRACTICE.md`).
+- `docs/AI.md`: provider architecture, concept review and optional smoke test.
+- [docs/PILOT_METRICS.md](docs/PILOT_METRICS.md): aggregate SQL for the pilot evaluation.
 - [docs/COURSE_UNITS.md](docs/COURSE_UNITS.md): ordered course units (cjeline) and question-unit links.
 - [docs/PAST_EXAMS.md](docs/PAST_EXAMS.md): past exam papers, their items and publishing.
 - [docs/ROADMAP.md](docs/ROADMAP.md): canonical future roadmap, milestone dependencies,
@@ -251,7 +267,7 @@ reopened. Suggest edit sends sparse replacements without revealing hidden curren
 answers/explanations. Another faculty moderator compares base/proposed content and
 rejects or applies atomically, preserving APPROVED and adding one EDITED version.
 Reports remain unchanged by apply; archive closes open reports and suggestions.
-Current Alembic head is **0015**. AI never approves.
+The current Alembic head is the newest file in `backend/alembic/versions/`. AI never approves.
 Members see their own private questions and answer-free approved questions from others. Quiz-taking
 and deterministic grading are available separately through Phase 7 practice quizzes.
 

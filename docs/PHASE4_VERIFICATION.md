@@ -1,5 +1,8 @@
 # Phase 4 delivery verification
 
+> Historical record of the Phase 4 delivery. It is not kept up to date; the current
+> checks are in the [README](../README.md#checks) and CI.
+
 Implementation branch: codex/phase-4, based on main at 1838a57.
 Implementation checkpoint: a351b23. The delivery commit adds this record and removes
 two trailing blank lines; application behavior is unchanged from the tested checkpoint.

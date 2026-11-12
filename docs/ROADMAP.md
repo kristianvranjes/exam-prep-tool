@@ -17,8 +17,15 @@ review (see [section 2](#2-semester-plan-202627)). It provides six detailed near
 milestones, followed by longer-term priorities. Target windows follow exam periods; they
 are not delivery commitments.
 
-**Roadmap status:** R2 is implemented; R1 and R3–R14 are planned. Saving this document
-does not complete their implementation or hosted verification. Record completion only with evidence.
+**Roadmap status (12 November 2026):** R2, R3 core (past exam papers, paper sessions and
+generated mock exams), R4 (numeric and multiple-select questions, formulas), R5, R12
+(tutor practice) and the exam dates of R10 are implemented. R13 is in progress (design
+brief, tokens, palettes, navigation and the course screens are done; practice, results
+and progress screens are pending, see `DESIGN.md`). R14 has item analysis, R6 has the
+pilot metrics queries, and R1 has a deployed backend on Azure Container Apps but no
+completed verification. R7–R11 and the rest of R3, R6 and R14 are planned. Saving this
+document does not complete any implementation or hosted verification. Record completion
+only with evidence.
 
 **Already implemented in the repository:**
 
@@ -49,12 +56,14 @@ does not complete their implementation or hosted verification. Record completion
   a Leitner-based retention proxy with sample counts, a Wilson-based readiness range for
   the next exam cycle, and its three weakest units with a practice shortcut.
 
-**Important boundaries:** short answers remain ungraded for self-review. Study and Exam
-experiences currently reveal results after final submission; the choice is not stored
-with the attempt. Practice sessions are selected from the whole bank or from chosen
-units or an exam scope (at most 20 questions). Exam scopes have no dates, and there are
-no past exam papers, material kinds, timers, or answer confidence. Scheduling is
-`leitner-v1`.
+**Important boundaries:** short answers are not graded automatically; the student
+self-reviews them (migration 0025). The feedback mode (`END` or immediate) is stored with
+the attempt (0018), and answer confidence is stored with each answer. Practice sessions
+are selected from the whole bank or from chosen units, an exam scope, mistakes, due
+reviews or favorites (at most 20 questions). Exam scopes have optional dates (0019).
+Past exam papers have published, timed sessions with a server-enforced deadline (0020–0022).
+Material kinds, material-based practice, time per question and images in questions do
+not exist yet. Scheduling is `leitner-v1`.
 Repository tests and documentation establish implementation scope; they do not
 establish the deployed version or hosted reliability.
 
@@ -114,18 +123,23 @@ each item as its own pull request, in this order:
 
 1. **R12 — Tutor practice.** Guided practice checks each answer immediately and shows the
    key and explanation; exam practice keeps results until submission. Optional
-   confidence (sure / unsure / guessed) is stored with the answer.
+   confidence (sure / unsure / guessed) is stored with the answer. *Implemented*
+   (migration 0018).
 2. **Exam dates and countdown (from R10).** Optional start and end dates on exam scopes,
    `LAB` and `QUIZ` (blic) scope kinds, and a course-page countdown with unit coverage
-   and a one-click start for the scope.
+   and a one-click start for the scope. *Implemented* (migration 0019).
 3. **R3 core.** Past exam papers and items, paper sessions with original order, points
    and negative scoring, and a server-enforced deadline with 10/5/1-minute warnings and a
    pace indicator. Generated mock exams follow if time allows; material kinds and
-   material-based practice move to Phase B.
+   material-based practice move to Phase B. *Implemented* except material kinds and
+   material-based practice (migrations 0020–0022; see [past exams](PAST_EXAMS.md)).
 4. **R13 — UI foundations** (frontend only, may run alongside item 3). A positive design
    brief in `DESIGN.md`, a text and a monospace font with Latin Extended coverage, a
    palette with a non-indigo accent and semantic correct/incorrect/pending colors as
-   tokens with dark variants, and redesigned practice and result screens.
+   tokens with dark variants, and redesigned practice and result screens. *In progress:*
+   the brief, tokens, palettes, navigation and course screens shipped as the "Kviz" design;
+   the practice and result screens are still pending (see "Status against the handoff" in
+   [DESIGN.md](../DESIGN.md)).
 
 ### Phase B — between midterms and finals (2 December 2026 – 31 January 2027)
 
@@ -618,8 +632,10 @@ that require it. Keep optional AI disabled until its separate release gate passe
 
 ## 6. Planning assumptions and maintenance
 
-- Hosted access continues through the existing Vercel/Railway setup; the actual database
-  provider and deployed revision must be recorded in R1.
+- The frontend stays on Vercel. The backend was first hosted on Railway (see
+  [R1 checkpoint](R1_HOSTED_CHECKPOINT.md)) and can now also run on Azure Container Apps
+  ([guide](DEPLOY_CONTAINER_APPS.md)) or a VM ([guide](DEPLOY_VM.md)); the actual
+  database provider and deployed revision must be recorded in R1.
 - Local development and the core product continue to work without cloud AI credentials.
 - Course structure (units, exam scopes) and past exams take priority over mistakes and
   favorites, further question types, and AI grading, because they define what FER

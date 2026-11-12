@@ -1,8 +1,10 @@
 # ExamPrep design ("Kviz")
 
-The visual system for the ExamPrep frontend, implemented from the design handoff in
-`dizajn/Digitalna logika quiz mockups/design_handoff_kviz/README.md` (Croatian; the HTML
-references sit next to it). Product facts live in `PRODUCT.md`. Source of truth in code:
+The visual system for the ExamPrep frontend, implemented from a design handoff
+(`design_handoff_kviz/README.md`, Croatian, with HTML references). The handoff is not in
+this repository: the project owner keeps it next to the repository as
+`dizajn/Digitalna logika quiz mockups/`, and the screen ids below (8a, 2b, 1a, ...) refer to
+it. Product facts live in `PRODUCT.md`. Source of truth in code:
 
 - tokens, palettes, type scale: `frontend/src/app/globals.css`
 - font loading: `frontend/src/app/layout.tsx`

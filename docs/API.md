@@ -550,6 +550,12 @@ All endpoints require authentication (401 otherwise):
   `faculty_creators`, in one transaction. 201 with the faculty; 409 when the slug is
   taken; 422 for invalid fields or a name without letters or digits.
 - `GET /faculties/can-create`: `{"can_create": bool}` for the current user.
+- `GET /faculties/{faculty_id}/moderator-status`: `{"is_moderator": bool}` for the current
+  user; missing faculty 404. See [community](COMMUNITY.md#api-additions-and-governance).
+- `GET /faculties/{faculty_id}/question-review`: faculty moderators only (403 otherwise);
+  the review queue of questions across the faculty's courses, `status` default
+  `PENDING_REVIEW`, optional `course_id`, `limit`/`offset`. Full contract in
+  [community](COMMUNITY.md#api-additions-and-governance).
 - `POST /courses/{course_id}/join`: no request body required. Authenticated identity
   determines the user; role is always MEMBER for a new membership. Returns 200 with
   `{course_id, user_id, role}`. Repeated/concurrent requests return the same existing
