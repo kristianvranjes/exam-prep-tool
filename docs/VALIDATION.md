@@ -1,5 +1,8 @@
 # Phase 1 validation
 
+> Historical record of the Phase 1 validation run. It is not kept up to date; the
+> current checks are in the [README](../README.md#checks) and CI.
+
 Validated locally on Windows with Python 3.14.7 and Node.js 24.19.0.
 Docker and CI target Python 3.12 and Node.js 24.
 

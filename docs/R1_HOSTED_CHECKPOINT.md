@@ -1,5 +1,9 @@
 # R1 hosted pilot checkpoint
 
+> Snapshot of 7 October 2026 (revision `e51bf59`, migration head 0015, Railway backend).
+> It is not updated as the deployment changes; the backend can now also run on Azure
+> Container Apps ([guide](DEPLOY_CONTAINER_APPS.md)) or a VM ([guide](DEPLOY_VM.md)).
+
 Inspection started 7 October 2026 (Europe/Warsaw; deployment timestamps below are UTC).
 This is evidence from the hosted application, not a claim that R1 is complete.
 Scope: inspect the current deployment and verify existing workflows. No new release,

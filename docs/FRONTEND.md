@@ -1,20 +1,35 @@
 # Frontend foundation
 
-ExamPrep uses a compact header, desktop sidebar and a single main study area.
-On mobile, the labeled navigation button expands an inline menu; Escape closes it
-and restores button focus. A skip link reaches the main content. Course selection
-keeps the existing materials, practice, learning progress and question-bank components
-mounted together. Navigation uses section anchors, so moving between tools does not
-discard an in-progress answer or form. Selecting another course retains the existing
-remount behavior. Faculty moderators also have a separate Moderation anchor that
-works without selecting or joining a course.
+The interface is Croatian only and its text is written directly in the components
+(`DESIGN.md` records the decision). This document names controls in English for
+readability, so match them to the Croatian labels in the code ("Your courses" is
+"Vaši kolegiji", "Course enrolment" is "Upis kolegija", "Faculty tools" is "Alati
+fakulteta"). The visual system is described in [DESIGN.md](../DESIGN.md).
 
-## My courses and Browse courses
+ExamPrep uses a top navigation bar with a single main study area; below the `md`
+breakpoint the same `nav` becomes a fixed bottom tab bar (`ApplicationFrame`). It holds
+Kolegiji (home), Alati fakulteta (faculty moderators only) and, on mobile,
+Postavke; an appearance settings popover and an account menu sit at the right of the bar.
+Escape closes a popover and restores focus to its button. A skip link reaches the main
+content. During an active practice session the bar is replaced by a focus mode with only
+the brand and the settings button.
 
-My courses shows joined courses and opens the existing study tools. Its empty state
-links to Browse courses, available in both desktop and mobile navigation.
-`CourseBrowser` owns faculty/catalog interaction and reuses the existing API client
-and Faculty/Course types. Faculties appear in backend order with optional university
+Navigation uses real routes, so reload and Back/Forward work: `/` (Vaši kolegiji),
+`/enrol`, `/faculty`, `/courses/[id]` (overview) with `/practice`, `/papers`, `/progress`,
+`/materials` and `/more`, and `/courses/[id]/attempts/[attemptId]` with `/results`
+(`lib/workspace-route.ts` parses them and sets the tab title). Browser tests in
+`e2e/url-routing.spec.ts` cover deep links and history.
+
+## Your courses and course enrolment
+
+Your courses (`/`, "Vaši kolegiji") shows joined courses as cards in the course's own
+colour; the ⋯ menu can mark a course finished or remove it, and finished courses move to
+a "Završeni" section. Because the backend has no leave-course or finished status, these
+choices live in the browser only (`lib/course-prefs.ts`, `localStorage` key
+`examprep-course-prefs:<userId>`). Its empty state links to Course enrolment (`/enrol`,
+"Upis kolegija"), where `CourseBrowser` owns faculty/catalog interaction and reuses the
+existing API client and Faculty/Course types. The year filter and a question count per row
+wait for those fields in the course API. Faculties appear in backend order with optional university
 names; Legacy / Unassigned receives the same neutral treatment as every faculty.
 
 Faculty courses load only after selection, never across the whole catalog in advance.
@@ -27,8 +42,8 @@ Membership comes from the shell's joined-course list. Join course is disabled wh
 that list loads or the specific join is pending. The join endpoint returns membership
 metadata, not a course. After success, the selected catalog course updates My courses
 with ID-based deduplication, without an extra fetch; joins announce success without
-changing selection, theme or navigation. Open course selects the joined course and
-links to its study tools. Failed joins keep existing courses/selection and offer retry.
+changing selection, theme or navigation. Enrolled rows read "Upisano ✓" and open the
+course. Failed joins keep existing courses/selection and offer retry.
 Responses arriving after logout/unmount do not update the next session.
 
 ## Course settings
@@ -385,23 +400,28 @@ The backend remains authoritative for permissions, extraction and review.
 
 ## Theme and tokens
 
-`ThemeProvider` wraps the application through `next-themes`. System is the default;
-Light/Dark/System is available on both auth and signed-in screens. Preferences live
-in localStorage under `examprep-theme`, with no account or backend change. System
-follows OS changes. The bootstrap script sets `data-theme` before hydration, and the
-selector renders a stable disabled System option until mounted. Only the root HTML
-element suppresses the expected theme-attribute hydration difference.
+`ThemeProvider` (`components/theme.tsx`) wraps the application through `next-themes`.
+The default is the dark palette; the selector offers the five palettes (dark, Papir,
+Noćno plava, Visoki kontrast, Vlastita/custom colours) and "Sustav", which follows the OS
+light/dark preference. Preferences live in localStorage under `examprep-theme`, with no
+account or backend change; the font-size multiplier (90–130 %) is stored as
+`examprep-font-scale`. The bootstrap script sets `data-theme` before hydration, and the
+selector renders a stable disabled option until mounted. Only the root HTML element
+suppresses the expected theme-attribute hydration difference. The theme selector and the
+appearance settings are available on both the auth and signed-in screens.
 
-`frontend/src/app/globals.css` owns semantic light/dark tokens: background,
-foreground, surface, subtle, muted, line, accent (plus hover/foreground/surface), and
-danger (plus surface). Use token classes instead of fixed white/black/gray colors.
-Native controls and existing study components also use these tokens. Error states
-include text and an alert role; status must not rely on color alone.
+`frontend/src/app/globals.css` owns the semantic tokens per palette: background,
+foreground, surface, subtle, muted, line, accent (plus hover/foreground/surface), the
+correct, incorrect and pending colours (plus surfaces) and the focus ring. Use token
+classes instead of fixed white/black/gray colors. Native controls and study components
+also use these tokens. Error states include text and an alert role; status must not rely
+on color alone. [DESIGN.md](../DESIGN.md) lists every token and its use.
 
 ## Shared components
 
 `components/ui.tsx` provides small native-element primitives: Button (CVA primary,
-secondary, ghost variants), Input, Select, Surface, Badge, Alert, LoadingState and
+secondary, ghost and danger variants; `aria-pressed` turns a row of secondary buttons
+into a segmented filter), Input, Select, Surface, Badge, Alert, LoadingState and
 EmptyState. They use the existing `cn` helper (clsx/tailwind-merge), accept native
 props and leave behavior with feature components. No Radix/Base UI runtime or
 large shadcn collection is needed for these controls. Lucide supplies decorative
@@ -450,9 +470,11 @@ permission-derived faculty list. API contracts and backend authority are unchang
 
 ## Visual and accessibility conventions
 
-- Neutral surfaces and a restrained indigo accent; no gradients or decorative motion.
-- Local system sans-serif stack, clear heading hierarchy, left-aligned study content.
-- 4px spacing scale; 8px control and 12px surface corners; borders instead of shadows.
+- A calm, muted palette with one accent; no gradients, glass or decorative motion.
+- Archivo for headings and text, a monospace face for expressions and code, tabular
+  numbers, left-aligned study content.
+- Sharp corners (radius 0) and 2px borders instead of shadows; sizes are set in `rem` so
+  the font-size multiplier scales everything.
 - At least 44px control height, visible keyboard outlines, explicit labels and native
   validation. Password fields expose the appropriate autocomplete hints.
 - Break long course/account text; grid children use `min-width: 0`. Mobile navigation

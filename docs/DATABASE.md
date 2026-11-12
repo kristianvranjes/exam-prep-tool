@@ -1,6 +1,11 @@
 # Database infrastructure
 
-Current Alembic head is **0015** (`down_revision = 0014`). It adds nullable
+The current Alembic head is **0027** (see [Faculty creators migration
+0027](#faculty-creators-migration-0027)); `backend/alembic/versions/` is authoritative.
+Older revisions are described first, newest first; revisions 0016 to 0027 have a section
+each at the end. CI checks `alembic upgrade head` and the base-to-head roundtrip.
+
+Revision **0015** (`down_revision = 0014`) adds nullable
 TIMESTAMPTZ `quiz_attempts.abandoned_at` and expands the status/timestamp constraints:
 ACTIVE has neither terminal timestamp, SUBMITTED has only submitted_at, and
 ABANDONED has only abandoned_at. Existing rows and saved answers/snapshots/progress
@@ -191,6 +196,14 @@ New submissions persist `deterministic-v1`. Downgrade drops only the two columns
 constraint, preserving answers/results but losing provenance. Re-upgrade marks
 submitted results legacy again. See [PRACTICE.md](PRACTICE.md) for grading and backfill.
 
+
+Revision **0009** (`down_revision = 0008`) creates `question_review_progress`, the
+question-first review state: one row per user and question with `review_stage` (0–5),
+resolved/correct/incorrect review counts that must add up, `last_result`
+(`CORRECT`/`INCORRECT`), `last_reviewed_at`, `due_at` and a nonempty `scheduling_version`
+(`leitner-v1`). `(user_id, question_id)` is unique and `(user_id, due_at, question_id)`
+is indexed for due selection. Both FKs cascade. There is no backfill of historical
+attempts; downgrade drops only this table. See [PRACTICE.md](PRACTICE.md) for scheduling.
 
 ## Faculty catalog migration 0010
 

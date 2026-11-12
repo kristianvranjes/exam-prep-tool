@@ -1,5 +1,9 @@
 # Phase 6.5 staging deployment
 
+This guide targets Vercel (frontend) with a Railway backend and managed PostgreSQL. Its
+environment variable table applies to any host; for Azure Container Apps or a VM use
+[DEPLOY_CONTAINER_APPS.md](DEPLOY_CONTAINER_APPS.md) or [DEPLOY_VM.md](DEPLOY_VM.md).
+
 Phase 6.6 adds [external AI quiz import](QUIZ_IMPORT.md): import versioned JSON as drafts,
 then use human review. This temporary staging bypass needs no AI provider or embeddings.
 Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
