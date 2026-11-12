@@ -391,3 +391,14 @@ ON DELETE SET NULL) and `created_at`. A row exists for each faculty a moderator 
 through `POST /faculties`; seeded or operator-provisioned faculties have none. The
 creator lives in its own table rather than a column on `faculties` so that removing an
 account never touches the faculty. Downgrade drops the table and keeps every faculty.
+
+## Course summary migration 0028
+
+Revision 0028 follows 0027 and adds three things. `courses.year_of_study` is a nullable
+`SMALLINT` between 1 and 6, set by a faculty moderator; existing courses have none.
+`course_memberships.status` is `ACTIVE` (default), `DONE` or `HIDDEN`: the student's own
+view of the course list. The row stays whatever the status, so access to the student's
+attempts and progress does not change. `user_preferences` holds one JSONB document per
+user (`user_id` primary key, references users ON DELETE CASCADE, plus `updated_at`); the
+API validates the document, so a new setting needs no migration. Downgrade drops all
+three; courses and memberships stay, and years, statuses and preferences are not restored.
