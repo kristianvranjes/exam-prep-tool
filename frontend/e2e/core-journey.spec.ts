@@ -43,9 +43,9 @@ test("moderator and student complete the core exam-preparation journey", async (
     await moderator.getByRole("link", { name: "Alati fakulteta", exact: true }).click();
     const createCourse = moderator.getByRole("form", { name: "Izradi kolegij" });
     await expect(createCourse).toBeVisible();
-    await createCourse.getByLabel("Faculty").selectOption({ label: facultyName });
-    await createCourse.getByLabel("Course name").fill(courseName);
-    await createCourse.getByLabel("Code (optional)").fill("E2E-101");
+    await createCourse.getByLabel("Fakultet").selectOption({ label: facultyName });
+    await createCourse.getByLabel("Naziv kolegija").fill(courseName);
+    await createCourse.getByLabel("Šifra (neobavezno)").fill("E2E-101");
     await createCourse.getByRole("button", { name: "Izradi kolegij" }).click();
     const moderatorCourses = moderator.getByRole("region", { name: "Vaši kolegiji" });
     await expect(moderator.getByRole("heading", { name: courseName, exact: true })).toBeVisible();

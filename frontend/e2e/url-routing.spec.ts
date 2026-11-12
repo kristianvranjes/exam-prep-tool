@@ -59,7 +59,7 @@ for (const width of [1280, 390]) {
       const backWarning = page.waitForEvent("dialog");
       await page.evaluate(() => history.back());
       const backDialog = await backWarning;
-      expect(backDialog.message()).toContain("unsaved answer");
+      expect(backDialog.message()).toContain("Nespremljeni odgovor");
       await backDialog.dismiss();
       await expect(page).toHaveURL(attemptUrl);
       await expect(answer).toHaveValue("My unsaved explanation");
@@ -87,7 +87,7 @@ for (const width of [1280, 390]) {
       const forwardWarning = page.waitForEvent("dialog");
       await page.evaluate(() => history.forward());
       const forwardDialog = await forwardWarning;
-      expect(forwardDialog.message()).toContain("unsaved answer");
+      expect(forwardDialog.message()).toContain("Nespremljeni odgovor");
       await forwardDialog.dismiss();
       await expect(page).toHaveURL(attemptUrl);
       await expect(answer).toHaveValue("Unsaved before forward");
