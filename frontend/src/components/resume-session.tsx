@@ -42,7 +42,7 @@ export function ResumeSession({ attempt, name, nameId, primary = true, onResume,
   const timeUp = remaining !== null && remaining <= 0;
   return <div className={cn("flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6", className)}>
     <div className="min-w-0">
-      {name && <p id={nameId} className="font-semibold break-words">{name}</p>}
+      {name && <p id={nameId} className="text-lg font-extrabold break-words">{name}</p>}
       {attempt ? <p className={cn("text-sm text-muted", name && "mt-1")}>
         {modeLabel(attempt)}
         {attempt.total !== null && <> · <span className="tabular-nums">odgovoreno {attempt.answered} od {attempt.total}</span></>}

@@ -17,7 +17,7 @@ async function login(page: Page, email: string) {
   await form.getByLabel("Lozinka").fill(password);
   await form.getByRole("button", { name: "Prijavi se" }).click();
   await expect(page.getByRole("heading", { name: "Vaši kolegiji" })).toBeVisible();
-  await expect(page.getByText(email, { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Račun:/ })).toBeVisible();
 }
 
 async function expectMetricAtLeast(page: Page, label: string, minimum: number) {
@@ -73,19 +73,22 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(moderator.getByRole("region", { name: "Materijali", exact: true })).toContainText("1 materijal");
     await expect(moderator.getByRole("list", { name: "Nedavni materijali" })).toContainText("e2e-notes.pdf");
     await moderator.getByRole("button", { name: "Natrag na početnu" }).click();
-    await expect(moderatorCourses.getByRole("button", { name: new RegExp(courseName) })).toHaveCount(1);
+    await expect(moderatorCourses.getByRole("button", { name: `Otvori kolegij: ${courseName}`, exact: true })).toHaveCount(1);
     await moderator.getByRole("button", { name: "Alati fakulteta", exact: true }).click();
 
     await login(student, "student-e2e@example.com");
     const studentCourses = student.getByRole("region", { name: "Vaši kolegiji" });
     await expect(studentCourses.getByRole("heading", { name: "Još nema kolegija" })).toBeVisible();
     await expect(student.getByLabel("Pretraži po fakultetu")).toHaveCount(0);
-    await student.getByRole("button", { name: "Upiši kolegij", exact: true }).click();
+    await student.getByRole("button", { name: "Upiši kolegij" }).first().click();
+    await expect(student).toHaveURL(/\/enrol$/);
     await student.getByLabel("Pretraži po fakultetu").selectOption({ label: "E2E Faculty — Example Test University" });
     await expect(student.getByRole("button", { name: `Upiši kolegij: ${courseName}` })).toBeVisible();
     await student.getByRole("button", { name: `Upiši kolegij: ${courseName}` }).click();
-    await expect(studentCourses.getByRole("button", { name: new RegExp(courseName) })).toHaveCount(1);
-    await studentCourses.getByRole("button", { name: new RegExp(courseName) }).click();
+    await expect(student.getByRole("button", { name: `Upisano, otvori kolegij: ${courseName}` })).toBeVisible();
+    await student.getByRole("button", { name: /Vaši kolegiji/ }).click();
+    await expect(studentCourses.getByRole("button", { name: `Otvori kolegij: ${courseName}`, exact: true })).toHaveCount(1);
+    await studentCourses.getByRole("button", { name: `Otvori kolegij: ${courseName}`, exact: true }).click();
     await expect(student.getByRole("heading", { name: courseName, exact: true })).toBeVisible();
     await expect(student.getByRole("heading", { name: "Pregled", exact: true })).toBeVisible();
     await expect(student.getByText("Ovaj kolegij još nema pitanja za vježbu.")).toBeVisible();
@@ -223,7 +226,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(student.getByRole("radio", { name: correctOption })).toBeChecked();
     await student.getByText("Navigacija kolegija", { exact: true }).click();
     await student.getByRole("button", { name: "Natrag na početnu" }).click();
-    await expect(student.getByRole("heading", { name: "Početna", exact: true })).toBeVisible();
+    await expect(student.getByRole("heading", { name: "Vaši kolegiji", exact: true })).toBeVisible();
     await expect(student.getByRole("heading", { name: "Nastavite učiti" })).toBeVisible();
     await student.getByRole("button", { name: "Nastavi vježbu" }).click();
     await expect(student.getByRole("radio", { name: correctOption })).toBeChecked();

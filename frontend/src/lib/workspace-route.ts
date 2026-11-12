@@ -1,6 +1,6 @@
 export type CourseDestination = "overview" | "practice" | "papers" | "progress" | "materials" | "more";
 export type WorkspaceRoute =
-  | { view: "home" | "management" }
+  | { view: "home" | "management" | "enrol" }
   | { view: "course"; courseId: string; destination: CourseDestination; attemptId: string | null; results: boolean };
 
 export const coursePath = (id: string, destination: CourseDestination = "overview") =>
@@ -18,7 +18,7 @@ const destinationTitles: Record<CourseDestination, string | null> = {
  */
 export function documentTitle(route: WorkspaceRoute | null, courseName?: string | null) {
   if (!route) return "Stranica nije dostupna · ExamPrep";
-  if (route.view !== "course") return `${route.view === "home" ? "Početna" : "Fakultet"} · ExamPrep`;
+  if (route.view !== "course") return `${route.view === "home" ? "Vaši kolegiji" : route.view === "enrol" ? "Upis kolegija" : "Fakultet"} · ExamPrep`;
   const page = route.results ? "Rezultati" : route.attemptId ? "Vježba" : destinationTitles[route.destination];
   return [page, courseName || (page ? null : "Kolegij"), "ExamPrep"].filter(Boolean).join(" · ");
 }
@@ -27,6 +27,7 @@ export function parseWorkspaceRoute(pathname: string): WorkspaceRoute | null {
   const path = pathname.replace(/\/$/, "") || "/";
   if (path === "/") return { view: "home" };
   if (path === "/faculty") return { view: "management" };
+  if (path === "/enrol") return { view: "enrol" };
   const match = /^\/courses\/([^/]+)(?:\/(practice|papers|progress|materials|more)|\/attempts\/([^/]+)(\/results)?)?$/.exec(path);
   if (!match) return null;
   try {

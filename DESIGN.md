@@ -1,378 +1,378 @@
-# ExamPrep design
+# ExamPrep design ("Kviz")
 
-The visual system for the ExamPrep frontend. Product facts live in `PRODUCT.md`; tokens
-live in `frontend/src/app/globals.css` and the shared primitives in
-`frontend/src/components/ui.tsx`. Change this file together with them.
+The visual system for the ExamPrep frontend, implemented from the design handoff in
+`dizajn/Digitalna logika quiz mockups/design_handoff_kviz/README.md` (Croatian; the HTML
+references sit next to it). Product facts live in `PRODUCT.md`. Source of truth in code:
+
+- tokens, palettes, type scale: `frontend/src/app/globals.css`
+- font loading: `frontend/src/app/layout.tsx`
+- primitives: `frontend/src/components/ui.tsx`
+- theme and appearance controls: `frontend/src/components/theme.tsx`
+- app shell and navigation: `frontend/src/components/application-frame.tsx`
+
+Change this file together with them. The interface is Croatian only and its text is written
+directly in the components (owner decision, 10 Nov 2026); the handoff's HR/EN switch and
+question translations are not built.
 
 ## Brief
 
-**Who it is for.** A FER student a week before a midterm, on a laptop in the library or at
-home in the evening, working through one course's questions unit by unit. Short reviews
-happen on a phone between lectures. Content is Croatian and full of notation:
-`S → aSb | ε`, `PRIMI(A)`, `printf("%d", 7 / 2 * 2)`.
+**Who it is for.** A student a week before an exam, on a laptop or a phone, working through
+a course's questions in long sessions. Quizzes are written and imported by student
+moderators; it is not an official faculty tool. Content is Croatian and full of notation
+(`S -> aSb | e`, Boolean expressions, code).
 
-**Tone.** Organic and paper-like: a calm student workbook and a printed exam sheet, not a
-SaaS dashboard. The page is warm paper, text is ink, questions are set like a printed
-exam, a mistake is marked plainly in red pen, a correct answer gets a green tick and
-something to check again gets a highlighter. Nothing competes with the question.
+**Tone.** A calm, muted dark interface that is easy on the eyes for long sessions. Sharp
+corners, thick 2px rules, heavy Archivo headings and big tabular numbers give it a clear,
+confident structure without decoration. Nothing competes with the question.
 
 **Three adjectives.** Calm, exact, honest.
 
-- *Calm*: warm paper surfaces, hairline rules, one accent, no decoration, no motion
-  beyond state changes.
-- *Exact*: a text face that tells `l`, `I` and `1` apart, tabular numbers, symbols that
-  survive, points and dates stated precisely.
+- *Calm*: muted palette, one accent, no gradients or glass, motion only for state changes.
+- *Exact*: tabular numbers, a monospace face for expressions and code, scores and dates
+  stated precisely.
 - *Honest*: correct, incorrect and pending always look different and always say so in
   words, never colour alone.
 
-**References.**
-
-1. **iA Writer**: type does the work. Generous measure, quiet chrome, one accent.
-2. **Khan Academy exercises**: the check-answer moment. The verdict is unmistakable, then
-   the explanation teaches.
-
-Material references: a Croatian school notebook (bilježnica) and a printed FER exam
-sheet. That means off-white paper, blue ink, a red correction pen and a yellow
-highlighter.
-
 **Anti-references.** Generic indigo SaaS dashboards (gradients, glass, metric tiles),
 gamified quiz apps (streak flames, confetti, mascots), and anything that looks like an
-official FER page. ExamPrep is a student project and does not borrow FER's identity.
-
-## Typography
-
-| Role | Face | Why |
-|---|---|---|
-| Headings, question stems, brand | **Literata** (variable, `opsz` 7–72, weight 200–900) | A book serif made for screens. It sets headings and questions like a printed exam sheet. Its `greek` subset carries the ε in grammar questions. |
-| Text and UI | **Atkinson Hyperlegible Next** (variable, 200–800) | Designed for character distinction: `l I 1`, `O 0` and `rn m` stay distinct in option text, labels and answers. |
-| Code, data, measurements | **Atkinson Hyperlegible Mono** (variable, 200–800) | The text face's mono sibling, so code in a question does not change voice. Use it only for code, never as a "technical" costume. |
-
-All three load through `next/font/google` in `frontend/src/app/layout.tsx` with
-`display: "swap"`, the `latin` and `latin-ext` subsets (č ć đ š ž), and `greek` for
-Literata. They are exposed as `--font-heading` / `--font-text` / `--font-code` and mapped
-to Tailwind's `font-display` / `font-sans` / `font-mono`.
-
-- `h1`–`h4` use Literata through base styles.
-- The question stem (`legend` in `quiz-answer-editor.tsx`) and the brand mark use
-  `font-display`.
-- Body text, controls and labels stay in Atkinson.
-- Formulas inside `$…$` are set by KaTeX in its own Computer Modern faces (loaded only
-  when a page shows a formula). Operators typed as plain text (∪, ⁿ) outside these
-  subsets still fall back to the system font.
-
-### Scale
-
-A ~1.2 ratio on a 16 px base. These values override Tailwind's `text-*` tokens in
-`globals.css`, so existing classes pick them up.
-
-| Token | Size | Line height | Use |
-|---|---|---|---|
-| `text-xs` | 13 px | 20 px | Badges, unit tags |
-| `text-sm` | 14 px | 22 px | Labels, helper text, metadata, buttons |
-| `text-base` | 16 px | 26 px | Body, answers, explanations |
-| `text-lg` | 18 px | 26 px | Section headings, result questions |
-| `text-xl` | 21 px | 30 px | Card headings, question stem on phones |
-| `text-2xl` | 26 px | 34 px | Page headings, question stem on wider screens, counts |
-| `text-3xl` | 32 px | 40 px | Course title, paper score |
-| `text-4xl` / `text-5xl` | 40 / 48 px | 46 / 54 px | Sign-in screen only |
-
-Rules:
-
-- Weights: 400 body, 500 labels and stems, 600 headings and buttons, 700 only for the
-  brand mark.
-- Headings: `text-wrap: balance`, line height 1.25, tracking −0.005em; Literata's
-  optical size follows the font size. Paragraphs: `text-wrap: pretty`.
-- Keep running text at `max-w-prose` (65ch).
-- Numbers that line up (counts, points, dates in tables) use tabular figures; every `dd`
-  does by default.
-- Code, `kbd` and `pre` use the mono face at 0.9375em.
+official faculty page.
 
 ## Colour
 
-Restrained strategy: warm paper neutrals, one muted ink-blue accent, and four semantic
-states. The accent sits at hue ~250 in OKLCH, clearly blue rather than indigo (the old
-`#414eae` was hue 273 and turned lavender in dark mode). It is also far from the green
-(150), red (28) and ochre (70–85) semantic hues. Ink blue was chosen over forest green or
-terracotta because those would collide with "correct" and "incorrect".
+### Palettes
 
-### Palette
+Each palette defines seven base values; everything else is derived (next section). Dark is
+the default (`:root` and `[data-theme="dark"]`); the others are `[data-theme="..."]` blocks
+in `globals.css`, switched by `next-themes` (`attribute="data-theme"`, storage key
+`examprep-theme`, `enableSystem`).
 
-| Token | Light | Dark | Role |
-|---|---|---|---|
-| `--background` | `#f5eee3` | `#1b1611` | Desk paper (light), dark kraft paper (dark), with grain |
-| `--surface` | `#fcf9f1` | `#24201a` | Sheets: cards, inputs, header |
-| `--subtle` | `#ebe3d5` | `#312c25` | Hover fills, neutral badges, skeletons |
-| `--foreground` | `#201b16` | `#eee7d9` | Ink: body text and headings |
-| `--muted` | `#63594e` | `#bab1a3` | Secondary text, unselected tabs |
-| `--placeholder` | `#756a5e` | `#958c80` | Placeholder text in inputs; lighter than `muted` so an example never reads as an entered value |
-| `--line` | `#dcd2c2` | `#423c34` | Hairline rules, sheet edges |
-| `--line-strong` | `#877969` | `#887f72` | Borders that identify a control (inputs, textareas) |
-| `--accent` | `#225a93` | `#89bdef` | Ink blue: primary action, links, current tab, selection, focus |
-| `--accent-hover` | `#144678` | `#aad3fa` | Primary hover |
-| `--accent-foreground` | `#fcf9f1` | `#0b1c2c` | Text on accent |
-| `--accent-surface` | `#dbeaf8` | `#1d3246` | Selected option, pressed filter, notices |
-| `--highlight` | `#f6e193` | `#68561b` | Text selection (`::selection`), highlighter |
+| Palette (value) | background | surface | foreground | accent | line | success | danger | pending |
+|---|---|---|---|---|---|---|---|---|
+| Dark, default (`dark`) | `#171b1e` | `#1e2327` | `#d5dad6` | `#afc96e` | `#2e353a` | `#86c09a` | `#dc9f8c` | `#d9bf7a` |
+| Papir / "Paper" (`light`) | `#f4efe6` | `#ebe4d7` | `#2a2622` | `#3f6b4a` | `#d4cbbb` | `#2f7a4c` | `#b04a35` | `#8a6a1c` |
+| Noćno plava / "Night blue" (`night`) | `#141b26` | `#1b2432` | `#d3dbe6` | `#7fb6d6` | `#2a3546` | `#7cc2a0` | `#e3a08f` | `#dec27f` |
+| Visoki kontrast / "High contrast" (`contrast`) | `#000000` | `#111111` | `#ffffff` | `#ffe14d` | `#5a5a5a` | `#5ef08a` | `#ff7a66` | `#ffd23f` |
+| Vlastita / "Custom" (`custom`) | picked | 6 % foreground over background | picked | picked | 22 % foreground over background | from dark | from dark | from dark |
 
-### Semantic states
+- The theme menu also offers "System" (follows `prefers-color-scheme` through
+  `next-themes`).
+- Custom: the user picks background, text and accent with three colour inputs
+  (`AppearanceSettings`). `theme.tsx` writes them inline on `<html>` as `--background`,
+  `--foreground`, `--accent` and stores them in `localStorage` under
+  `examprep-custom-colors`; `surface` and `line` are `color-mix`ed in CSS. Success, danger
+  and pending keep the dark values, so custom colours never change the meaning of
+  green/coral/yellow.
+- The browser `color-scheme` is set per palette (`light` for Papir, `dark` otherwise).
 
-| State | Meaning in the product | Text token | Surface token | Light | Dark |
-|---|---|---|---|---|---|
-| Correct | Auto-graded right answer, published paper | `--success` | `--success-surface` | `#256637` / `#dcf0dc` | `#85cf95` / `#1c3422` |
-| Incorrect | Wrong answer, destructive action, error | `--danger` | `--danger-surface` | `#ac2d26` / `#fde3dc` | `#f2998a` / `#48251f` |
-| Pending | Needs self-review (short answers), awaiting a decision | `--pending` | `--pending-surface` | `#805216` / `#f7e6c3` | `#e6bd77` / `#3c2e14` |
-| Info | Neutral confirmations and notices | `--info` (= accent) | `--info-surface` (= accent-surface) | `#225a93` / `#dbeaf8` | `#89bdef` / `#1d3246` |
+### Derived tokens
 
-`--danger-foreground` (`#fcf9f1` light, `#1b1611` dark) is the text colour on a filled
-danger button. Tailwind exposes every token as a colour (`text-pending`,
-`bg-success-surface`, `border-line-strong`, …).
+Defined once on `:root` with `color-mix`, so they follow every palette, including custom.
 
-### Contrast (WCAG 2.2)
-
-Computed from the hex values above (relative luminance, sRGB). Text needs 4.5:1, control
-boundaries and focus indicators need 3:1.
-
-| Pair | Light | Dark |
+| Token | Definition | Use |
 |---|---|---|
-| `foreground` on `background` | 14.82 | 14.59 |
-| `foreground` on `surface` | 16.23 | 13.16 |
-| `foreground` on `subtle` | 13.40 | 11.25 |
-| `muted` on `background` | 5.94 | 8.47 |
-| `muted` on `surface` | 6.50 | 7.64 |
-| `muted` on `subtle` | 5.37 | 6.53 |
-| `placeholder` on `surface` (input fill) | 5.02 | 4.89 |
-| `placeholder` on `background` | 4.58 | 5.42 |
-| `accent` on `background` (links, focus ring) | 6.17 | 9.05 |
-| `accent` on `surface` (links, focus ring) | 6.76 | 8.17 |
-| `accent` on `subtle` (focus ring on hover fill) | 5.58 | 6.98 |
-| `accent` on `accent-surface` (selected option, pressed filter) | 5.81 | 6.63 |
-| `accent-foreground` on `accent` (primary button) | 6.76 | 8.70 |
-| `accent-foreground` on `accent-hover` | 9.17 | 11.02 |
-| `success` on `surface` | 6.58 | 8.76 |
-| `success` on `success-surface` | 5.78 | 7.26 |
-| `danger` on `surface` | 6.32 | 7.48 |
-| `danger` on `danger-surface` | 5.45 | 6.22 |
-| `danger-foreground` on `danger` (delete button) | 6.32 | 8.29 |
-| `pending` on `surface` | 6.36 | 9.19 |
-| `pending` on `pending-surface` | 5.44 | 7.48 |
-| `foreground` on `highlight` (selected text) | 13.10 | 5.81 |
-| `line-strong` on `surface` (input border) | 4.02 | 4.11 |
-| `line-strong` on `background` (input border) | 3.67 | 4.55 |
+| `--muted` | 62 % foreground over background | Secondary text, labels, unselected tabs |
+| `--line-strong` | 36 % foreground over background | Borders that identify a control |
+| `--subtle` | 7 % foreground over surface | Hover fills, neutral tags, skeleton bars |
+| `--accent-hover` | 82 % accent, 18 % foreground | Primary button hover |
+| `--accent-foreground` | = background | Text on accent (always the page background) |
+| `--accent-surface` | 16 % accent over background | Selected option, info notices |
+| `--success-surface`, `--danger-surface`, `--pending-surface` | 16 % of the state colour over background | Tag, alert and answer fills |
+| `--danger-foreground` | = background | Text on a filled danger button |
+| `--info`, `--info-surface` | = accent, = accent-surface | Neutral notices |
+| `--highlight` | 35 % pending over background | `::selection` |
+| `--focus` | = accent | Focus ring |
 
-Every text pair passes AA (most pass AAA). The focus ring (`--focus` = accent, 2 px) is at
-least 5.5:1 against every surface it can sit on. `--line` is decorative only and never
-the sole boundary of a control.
+Tailwind exposes each as a colour through `@theme inline` (`bg-surface`, `text-muted`,
+`border-line-strong`, `bg-danger-surface`, ...).
 
-The page grain (below) never drops a pair below AA. Measured on the darkest grain speck:
+### Semantics (strict)
 
-| Pair | Light | Dark |
+- **Green (`success`)** = correct. Nothing else is green.
+- **Coral (`danger`)** = incorrect, weak topic, error, destructive action.
+- **Yellow (`pending`)** = warning, "in learning", needs review.
+- **Lime accent (`accent`)** = action and location only: primary button, links, current
+  nav item, current question, focus, countdown. It never means "correct".
+- Always pair a state colour with words and, for verdicts, an icon (`CircleCheck`,
+  `CircleX`, `CircleDashed`). A state surface carries its own text colour; never grey text
+  on a coloured fill.
+- A filled `danger` button is only for the final, irreversible step.
+
+### Course colours
+
+Handoff values, used for the 6px top edge of a course card, the course abbreviation and the
+progress bar. They are data, not theme tokens, and are the same in every palette.
+
+| DL | ASP | SiS | MAT1 | PPJ | SRS | OOP | BP |
+|---|---|---|---|---|---|---|---|
+| `#afc96e` | `#7fb6d6` | `#c3a3e0` | `#e0b48a` | `#e39a86` | `#8fc9b0` | `#d6c27a` | `#9aa7e6` |
+
+A course colour is identity, not state: it must never be the only carrier of meaning, and
+the abbreviation is always shown next to it.
+
+## Typography
+
+**Archivo** (Google Fonts, weights 400 / 600 / 800, `latin` + `latin-ext` for č ć đ š ž,
+`display: "swap"`) for everything, loaded in `layout.tsx` as `--font-text` and mapped to
+Tailwind's `font-sans` and `font-display`. Code, `kbd`, `samp` and `pre` use the system
+monospace (`ui-monospace, Menlo, "Cascadia Mono", Consolas`) at 0.9375em; use it for
+Boolean expressions, code and JSON, never as a "technical" costume. Formulas inside `$...$`
+are set by KaTeX in its own faces.
+
+Weights: 400 body, 600 labels, buttons and nav, 800 headings, brand and big numbers.
+
+### Scale
+
+`globals.css` overrides Tailwind's `text-*` tokens (~1.2 ratio, 16 px base).
+
+| Token | Size / line height | Use |
 |---|---|---|
-| `muted` | 5.13 | 7.17 |
-| `accent` | 5.33 | 7.66 |
-| `line-strong` | 3.17 | 3.85 |
+| `text-xs` | 13 / 20 px | Tags, small print |
+| `text-sm` | 14 / 22 px | Buttons, labels, metadata |
+| `text-base` | 16 / 26 px | Body, answers, explanations |
+| `text-lg` | 18 / 26 px | Section headings |
+| `text-xl` | 21 / 30 px | Card headings |
+| `text-2xl` | 26 / 34 px | Page headings, question stem |
+| `text-3xl` | 32 / 40 px | Course title |
+| `text-4xl`, `text-5xl` | 40 / 46, 48 / 54 px | Sign-in screen, hero headings |
 
-### Usage rules
+Base styles and helpers:
 
-- One accent. It marks where you can act and where you are: primary button, ghost and
-  link actions, the current tab, a selected option, a pressed filter, focus. Never use it
-  for decoration or for a result.
-- Results use semantic tokens only: correct is green, incorrect is red, pending is ochre.
-  Always pair the colour with words and, for verdicts, an icon (`CircleCheck`, `CircleX`,
-  `CircleDashed` from lucide).
-- A semantic surface carries its own text colour (`text-success` on `bg-success-surface`),
-  or ink. Never grey text on a coloured surface.
-- Red is also the destructive colour. A filled red button (`variant="danger"`) is only for
-  the final, irreversible step.
-- The dark theme is dark paper with cream ink, never pure black or blue-grey. The app
-  follows the system setting and the Theme control.
+- `h1`-`h4`: weight 800, line height 1.2, tracking -0.02em, `text-wrap: balance`.
+  Paragraphs, list items and `dd`: `text-wrap: pretty`.
+- `.label-caps`: 11 px, weight 600, uppercase, tracking 0.1em, `muted`. Labels and section
+  eyebrows.
+- `.hero-number`: weight 800, tracking -0.035em, line height 0.85, tabular. Scores,
+  countdowns and counts at 72-160 px (the handoff's "hero numbers"); set the size at the
+  call site.
+- Numbers that line up (counts, points, dates, `dd`) use tabular figures (`tabular-nums`).
+- Keep running text at `max-w-prose`.
 
-## Paper
+### Font-size multiplier
 
-- **Grain.** `body` carries `--paper-grain`: an inline SVG noise tile (180 px, under 400
-  bytes, no request) that adds brown specks at 2–7 % alpha in light and cream specks in
-  dark.
-  - It sits only on the page background; sheets and controls stay clean.
-  - It is removed under `prefers-contrast: more` and `forced-colors: active`.
-  - It never animates.
-- **Sheets, not card stacks.** A `Surface` is a lighter sheet of paper (`--surface`) with
-  a hairline `--line` edge and `rounded-card`.
-  - Do not nest sheets.
-  - Inside a sheet, and between page sections, separate content with hairline rules
-    (`border-t border-line`, `border-y`) and whitespace rather than more boxes.
-  - New screens should prefer ruled sections, like an exam sheet; existing card stacks
-    are left as they are until their screens are redesigned. The course overview is
-    ruled this way.
-- **Margins.** Generous outer margins and the 65ch measure do the work of a notebook
-  margin. No decorative margin lines or ruled-paper backgrounds behind text.
+A user setting of 90 %, 100 %, 115 % or 130 % (`FONT_SCALES` in `theme.tsx`), stored in
+`localStorage` as `examprep-font-scale` and applied as `data-font-scale` on `<html>`.
+`globals.css` maps it to `font-size: 90% | 115% | 130%` on `html`, so everything set in
+`rem` scales (type, controls, spacing). Avoid fixed `px` sizes for text.
 
-## Spacing, radius, elevation
+## Shape, spacing, elevation
 
-A 4 px grid (Tailwind's `--spacing: 0.25rem`). Named roles, defined in `@theme`:
+- **Radius 0 everywhere.** `--radius-tag/control/card` and every Tailwind radius step are
+  `0`. `rounded-full` is kept only for dots and avatars.
+- **Borders**: 2px (`border-2`) for the main dividers and for controls and cards; 1px
+  between rows inside a list or table. Colour `line` for structure, `line-strong` for the
+  border of a control.
+- **Spacing** on a 4 px grid (4, 8, 12, 16, 24, 32, 40, 48, 56). Named roles in `@theme`:
+  `stack` 12 px (inside a group), `card` 20 px and `card-lg` 24 px (card padding on phones
+  and from `sm`), `group` 24 px, `section` 40 px. Use them as utilities (`p-card`,
+  `gap-group`, `mt-section`). Desktop content width is 1280 px (`max-w-7xl`) with 32 px side
+  padding (`sm:px-8`, 16 px on phones).
+- **Elevation**: none, except popovers (settings and account menus): the single shadow
+  `0 12px 28px -14px #000a`.
+- **Touch targets**: buttons, selects, summaries, inputs and labels wrapping a checkbox or
+  radio are at least 44 px tall (`min-h-11`); primary mobile actions 48-52 px.
 
-| Token | Value | Use |
-|---|---|---|
-| `stack` | 12 px | Between a label and its control, items inside a group |
-| `card` / `card-lg` | 20 / 24 px | Sheet padding on phones / from `sm` |
-| `group` | 24 px | Between groups inside a sheet or section |
-| `section` | 40 px | Between page sections |
+## Icons
 
-Use them as utilities (`p-card`, `gap-group`, `mt-section`). Leave more space above a
-heading than below it. Controls are at least 44 px tall (`min-h-11`).
+Lucide (`lucide-react`), 2px stroke, `stroke: currentColor`, 16-22 px, `aria-hidden` when
+next to text. Icon-only buttons need an `aria-label`.
 
-| Radius token | Value | Use |
-|---|---|---|
-| `rounded-tag` | 6 px | Badges, skeleton bars |
-| `rounded-control` | 10 px | Buttons, inputs, answer options, alerts |
-| `rounded-card` | 14 px | Sheets, empty states |
+## Navigation
 
-Elevation is a 1 px hairline, never a shadow. Tabs are square with a 2 px underline.
+Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
+`frontend/src/lib/workspace-route.ts`.
 
-## Components
+- **Top bar** (all screens except practice): brand `ExamPrep.` (the dot in `accent`),
+  then the destinations (Kolegiji, and Alati fakulteta for moderators) with the current one in
+  `accent`, marked by a 2px accent underline as a non-colour cue, and `aria-current="page"`
+  (the local `tab()` helper in `application-frame.tsx`). On the right an appearance
+  settings button (40 px) that opens the settings popover (theme, font size), then an
+  avatar (32 px square via `min-h-8`, initials, `bg-foreground` / `text-background`) that
+  opens the account menu with Odjava. 2px bottom border, 16 px vertical padding.
+- **Mobile bottom tab bar**: below `md` the same `nav` is fixed to the bottom edge with
+  Kolegiji, Alati fakulteta (moderators only) and Postavke tabs (56 px minimum height plus
+  the safe-area inset; the current tab gets a 2px accent bar on top). The Postavke tab opens
+  the settings sheet, positioned above the bar's real height. The handoff's 4-tab bar
+  (Kolegiji, Ponavljanje, Napredak, Postavke; moderator: Kvizovi, Banka, Prijave, Prijedlozi)
+  with count badges is pending.
+- **Practice focus mode**: while answering there is no main navigation or account menu. The
+  frame is called with `focusedPractice`, the nav is hidden, the brand is plain text and the
+  content is narrowed (`max-w-3xl`). The appearance settings button stays in the header so
+  palette and font size can still be changed mid-session. The handoff bar (Save and exit,
+  answered N / M, remaining time) belongs to the practice redesign.
+- Skip link "Preskoči na sadržaj" (`.skip-link`) targets `#main-content`; headings that
+  receive focus after navigation (`tabindex="-1"`) show an underline instead of a box.
+- Flow: Courses (8a) -> Enrol (8b) is a separate page with a "Vaši kolegiji" back button;
+  its faculty selection and search reset every time it opens.
 
-`frontend/src/components/ui.tsx`:
+## Components (`frontend/src/components/ui.tsx`)
 
-- **Button**:
-  - `primary`: one per view, the next step.
-  - `secondary`: bordered. With `aria-pressed` it becomes a segmented filter: accent fill,
-    accent text and a 2 px edge (border plus inset ring in the text colour), so the pressed
-    one differs in weight as well as hue. This is the only filter and mode-switch recipe
-    (result filters, moderation modes, More destinations); use it without underline,
-    `text-muted` or primary-fill overrides. A semantic pressed state (the self-review "I had
-    it" / "I missed it") may swap the tone; the ring follows the text colour.
+- **Button** (`min-h-11`, `text-sm font-semibold`, 150 ms colour transition):
+  - `primary`: accent fill with `accent-foreground` text; one per view, the next step.
+  - `secondary`: 2px `line-strong` border on `surface`. With `aria-pressed` it becomes a
+    segmented control: inverted fill (`foreground` background, `background` text).
   - `ghost`: accent text, for link-like actions.
-  - `danger`: filled red, the final destructive step.
-  - `tab`: course destinations, underlined on `aria-current="page"`.
-- **Input / Select**: `line-strong` border (3:1 or better), sheet fill, 44 px tall.
-  Placeholders use `--placeholder`. They show an example, prefixed with "e.g." ("e.g.
-  Zadatak 3a"), never a repeat of the label.
-- **Surface**: a sheet with a `line` hairline, `rounded-card`, `p-card sm:p-card-lg`.
-- **Badge**: `tone` = `neutral` (default) | `info` | `success` | `danger` | `pending`.
-  - Review status (`question-badges.tsx`, `statusTones` in `lib/question-types.ts`): draft
-    and archived are neutral, awaiting faculty review is pending, approved is success,
-    rejected is danger. A past exam's Published is success and Draft neutral.
-  - Question type and origin always go through `typeLabels` / `sourceLabels` ("True /
-    false", "AI-generated"); raw enum values (`TRUE_FALSE`, `USER`) and IDs never reach the
-    screen. Where only concept or chunk IDs are available, say how many there are instead.
-- **Alert**: `tone` = `danger` (default, `role="alert"`) | `success` | `pending` | `info`
-  (`role="status"`). Confirmations such as "Course updated." use `tone="info"` (or
+  - `danger`: filled `danger`, the final destructive step.
+  - `tab`: course destinations, underlined (2px, accent) on `aria-current="page"`.
+- **Input / Select**: 2px `line-strong` border, `surface` fill, 44 px tall; border goes to
+  `muted` on hover. `textarea`, checkboxes and radios are themed in base styles
+  (18 px, `accent-color: accent`).
+- **Surface**: card with 2px `line` border, `surface` fill, `p-card sm:p-card-lg`. Do not
+  nest cards; inside one, separate content with 1px or 2px rules and whitespace.
+- **Badge / tags**: `px-2 py-0.5`, `text-xs`, `tone` = `neutral` | `info` | `success` |
+  `danger` | `pending` (state surface fill, state text colour).
+- **Alert**: 2px current-colour border at 40 %, `tone` = `danger` (`role="alert"`) |
+  `success` | `pending` | `info` (`role="status"`).
+- **LoadingState**: muted text with `subtle` skeleton bars (`role="status"`).
+- **EmptyState**: 2px dashed `line-strong` border, a title and one sentence that says what
+  to do next; pair it with the primary action (for example "Enrol in a course").
+- **Course card** (8a): custom `li` (not `Surface`) with a 6px top edge in the course colour,
+  abbreviation (36 px / 800) in the course colour, name, description, an "Open course"
+  button and a ⋯ overflow menu (Mark as finished, Remove from list). Exam date, percentage
+  and the 6px progress bar are pending (no such data in the API yet).
+- **Segmented control**: two or more `secondary` buttons with `aria-pressed`,
+  or the font-size grid in `AppearanceSettings` (equal columns, 2px outer border).
+- **RichText** (`rich-text.tsx`): question content with formulas and code. Code is
+  monospace on a faint foreground tint and scrolls sideways instead of wrapping; syntax
+  highlighting uses weight and `muted`, not colour, so the semantic palette keeps its
+  meaning. Displayed formulas are centred and scroll inside their own box; invalid TeX
+  shows its source in `danger`.
+- **Answer options** (`quiz-answer-editor.tsx`): full-width rows with a 2px border. The
+  chosen one is `accent-surface` with an accent border. After checking, the right answer is
+  `success` with "Correct answer" and a wrong choice is `danger` with "Your answer". The
+  handoff's markers (shapes or letters), "Your answer ✓" wording and larger rows are
+  pending.
+
+## Accessibility
+
+- **Contrast.** Text roles need 4.5:1, control boundaries and focus rings 3:1. Computed
+  (WCAG, sRGB) from the hex values above:
+
+  | Pair | Dark | Papir | Night blue | High contrast |
+  |---|---|---|---|---|
+  | foreground on background | 12.2 | 13.1 | 12.4 | 21.0 |
+  | muted on surface | 5.0 | 3.8 | 5.0 | 7.1 |
+  | accent on background (links, focus) | 9.4 | 5.4 | 7.9 | 16.1 |
+  | accent-foreground on accent (primary button) | 9.4 | 5.4 | 7.9 | 16.1 |
+  | success on its surface fill | 6.1 | 3.7 | 6.1 | 10.9 |
+  | danger on its surface fill | 5.8 | 3.8 | 6.0 | 6.9 |
+  | pending on its surface fill | 6.9 | 3.6 | 7.0 | 11.0 |
+  | line-strong on surface (input border) | 2.5 | 1.9 | 2.5 | 2.8 |
+
+  Known shortfalls to fix in the settings pass: in Papir, `muted` text and the three state
+  colours on their fills are below 4.5:1; and in every palette the `line-strong` input
+  border (36 % mix) is below the 3:1 non-text target, so fields lean on the 2px width and
+  the fill. Raise the mix or darken the Papir states when touching tokens. Never put
+  critical text in `line` (decorative only).
+- **Focus**: `:focus-visible` draws a 2px `--focus` outline, offset 2px (inset on tabs,
+  which scroll horizontally on phones).
+- **Motion**: only 150 ms colour transitions. Under `prefers-reduced-motion: reduce` all
+  transitions and animations are off.
+- **Colour is never the only signal**: states always have words, and verdicts an icon.
+- **Language**: `<html lang="hr">`; the whole interface and the course content are Croatian.
+- Keep existing `aria-label`s and accessible names stable; behaviour tests rely on them.
+
+## Patterns carried over from the practice screens
+
+These rules were written for the earlier paper look (#107-#113) and still hold in the
+components. Only their colours changed: they now come from the palette tokens above.
+
+- **Input / Select placeholders** use `--placeholder` (a mix of `foreground` over
+  `surface`, lighter than `muted`). They show an example prefixed with "npr." (npr. Zadatak
+  3a), never a repeat of the label.
+- **Badge status** (`question-badges.tsx`, `statusTones` in `lib/question-types.ts`): draft
+  and archived are neutral, awaiting faculty review is pending, approved is success,
+  rejected is danger. A past exam's published state is success and draft neutral.
+  Question type and origin always go through `typeLabels` / `sourceLabels`; raw enum values
+  (`TRUE_FALSE`, `USER`) and IDs never reach the screen. Where only concept or chunk IDs are
+  available, say how many there are instead.
+- **Alert** confirmations such as "Podaci o kolegiju spremljeni." use `tone="info"` (or
   `success` for a moderation decision), not a hand-made tinted paragraph.
-- **Destructive actions** sit apart from the forward action, on the other edge of the
-  row, in the danger tone: a bordered red "Delete" first, then a filled `danger`
-  "Confirm delete" next to "Keep …" (past-exam editor).
-- **LoadingState / EmptyState**: muted text, `subtle` skeleton bars, dashed
-  `line-strong` border.
-
-- **RichText** (`rich-text.tsx`): question content with formulas and code.
-  - Inline code: mono face on a 7 % ink tint, `rounded-tag`, wraps with the line.
-  - Code block: mono at 14–16 px (`clamp(0.875rem, 0.75em, 1rem)`) on a 5 % ink tint,
-    `rounded-control`, no border; it scrolls sideways instead of wrapping. Highlighting is
-    listings-style: semibold keywords, `muted` comments, no colour, so the semantic
-    palette keeps its meaning.
-  - Displayed formula: centred, scrolls sideways inside its own box. Invalid TeX shows its
-    source in `danger`, with the parse error as a tooltip.
-
-Answer options (`quiz-answer-editor.tsx`) are full-width paper slips.
-
-- While answering, the chosen slip turns `accent-surface` with an accent border, and
-  keyboard focus rings the whole slip.
-- After checking, the key is green with "Correct answer", a wrong choice is red with
-  "Your answer", and other slips drop to muted text. In a multiple-select question a
-  correct option left unticked reads "Missed · Correct answer".
-- The slip note sits at the right edge from `sm`; on phones it drops onto its own line
-  under the option text.
-
-Checked feedback (`quiz-feedback.tsx`) is one tinted block in the verdict's tone: the
-verdict word and icon, then the explanation directly under it. The slips already mark the
-chosen and correct options, so choice questions never restate them. Numeric and short
-answers, whose key is not on screen, list "Your answer" and the correct or reference
-answer before the explanation.
-
-The guided question keeps its controls quiet:
-
-- "Favorite" and "Revisit" are compact pressed toggles in the "Question n of N" row.
-- The footer holds the answer buttons, then "Review and finish", one muted progress line
-  ("3 of 10 checked") and the shortcuts hint.
-- Everything else (mode switch, how the session works, reload, abandon) sits in one
-  "Session" disclosure.
-
-### Course overview and practice setup
-
-Every screen should shorten the path to the next useful question, so each has one
-primary action.
-
-- **Course overview** (`course-overview.tsx`) is a column of ruled sections, not sheets.
-  - An open session comes first, with the same line as Home. **Resume session** is then
-    the only primary action.
-  - The next exam is a header section. Its heading carries the countdown ("Međuispit in
-    20 days"), with no eyebrow; the date is a `<time>`. Readiness is the one figure
-    (Literata `text-3xl`, tabular), with coverage in counts as its subtitle.
-    **Practice for …** is primary; past exams and the weakest units are quieter.
-  - Due review, recommended practice and a compact quick quiz row follow, then the
-    reviewed count and materials.
-  - Headings step down: the h2 is `text-xl`, h3 sections `text-lg`, h4 `text-base`. The
-    readiness range is the only percentage; graded accuracy lives in Progress.
-- **Practice setup** (`practice-setup.tsx`) asks *What to practice*, then *How to
-  practice*.
-  - How lists Recommended practice, Mistakes, and Mock exam once a cycle is chosen; a
-    line explains how to get it before that.
-  - Course questions, Due for review, Favorites, question types and Guided/Exam sit
-    under More options.
-  - A choice with nothing to select is left out, not shown faded, unless it is already
-    selected and has to explain itself.
-
-### Question bank
-
-The bank keeps one level of sheets. Create, Import, AI generation, Browse and the selected
-question are sibling sheets; inside them, the question list, the bulk-organise group,
-source details, the edit form and version history are ruled rows (`divide-y`,
-`border-t border-line`), never boxes inside the sheet. A disclosure that is a sheet
-(`Import question drafts`, `Advanced: AI question generation`) carries the sheet edge
-itself and rules its content.
-
-## Interaction and accessibility
-
-- **Focus**: `:focus-visible` draws a 2 px accent outline, offset 2 px. On tabs the
-  outline is inset, because the tab row scrolls horizontally on narrow screens. Headings
-  that receive focus after navigation (`tabindex="-1"`) show a 2 px accent underline
-  instead of a box.
-- **Touch targets**: 44 px minimum height on buttons, inputs, selects, summaries, and
-  labels that wrap a checkbox or radio. Radios and checkboxes render at 18 px with the
-  accent colour.
-- **Motion**: 150 ms colour transitions on buttons and options only. Under
-  `prefers-reduced-motion: reduce` all transitions and animations are off.
-- **Browser surfaces are themed**: caret and checkbox accent, highlighter `::selection`,
-  scrollbar colour, link underline offset, and `color-scheme` per theme.
-- **Tab titles**: most specific first, then the course, then the product: "Practice ·
-  Formal languages · ExamPrep", "Past exams · …", "Results · …". Every route renders
-  through the client `AppShell`, so it renders React's `<title>` (Next.js recommends it
-  where `metadata` cannot run) from `documentTitle()` in `lib/workspace-route.ts`; the root
-  `metadata` keeps only the description so there is one title element. A course ID is
+- **Destructive actions** sit apart from the forward action, on the other edge of the row,
+  in the danger tone: a bordered red "Obriši" first, then a filled `danger` confirmation
+  next to a "Zadrži" button (past-exam editor).
+- **Pressed secondary buttons** are the only filter and mode-switch recipe (result filters,
+  moderation modes, More destinations). Use them as they are, without underline, `text-muted`
+  or primary-fill overrides. A semantic pressed state (the self-review "Znao sam" / "Nisam
+  znao") may swap the tone.
+- **RichText** (`rich-text.tsx`): question content with formulas and code. Inline code is mono
+  on a faint ink tint; a code block is mono at 14-16 px, no border, and scrolls sideways
+  instead of wrapping. Highlighting is listings-style (semibold keywords, `muted` comments,
+  no colour), so the semantic palette keeps its meaning. A displayed formula is centred and
+  scrolls inside its own box; invalid TeX shows its source in `danger`.
+- **Answer options** (`quiz-answer-editor.tsx`) are full-width slips. The chosen one is
+  `accent-surface` with an accent border and keyboard focus rings the whole slip. After
+  checking, the key is green ("Točan odgovor"), a wrong choice is red ("Vaš odgovor"), and
+  other slips drop to muted text. In a multiple-select question a correct option left
+  unticked reads "Propušteno · Točan odgovor". The slip note sits at the right edge from
+  `sm` and drops onto its own line on phones.
+- **Checked feedback** (`quiz-feedback.tsx`) is one tinted block in the verdict's tone: the
+  verdict word and icon, then the explanation. Choice questions never restate the chosen and
+  correct options, because the slips mark them. Numeric and short answers, whose key is not on
+  screen, list the user's answer and the correct or reference answer before the explanation.
+- **Guided question** keeps its controls quiet: "Favorit" and "Za ponavljanje" are compact
+  pressed toggles in the "Pitanje n od N" row; the footer holds the answer buttons, then
+  "Pregledaj i završi", one muted progress line and the shortcuts hint; the mode switch, how
+  the session works, reload and abandon sit in one "Sesija" disclosure.
+- **Course overview** (`course-overview.tsx`) is a column of ruled sections: an open session
+  first (**Nastavi vježbu** is then the only primary action), the next exam with its
+  countdown and the readiness range as the one figure, then due review, recommended practice
+  and a compact quick quiz. Headings step down h2 `text-xl`, h3 `text-lg`, h4 `text-base`.
+- **Practice setup** (`practice-setup.tsx`) asks what to practice, then how. A choice with
+  nothing to select is left out, not shown faded, unless it is already selected and has to
+  explain itself.
+- **Question bank** keeps one level of cards. Create, Import, AI generation, Browse and the
+  selected question are sibling cards; inside them, rows are separated by rules (`divide-y`,
+  `border-t border-line`), never boxes inside the card.
+- **Tab titles**: most specific first, then the course, then the product ("Vježba · Formalni
+  jezici · ExamPrep", "Prošli ispiti · …", "Rezultati · …", "Vaši kolegiji · ExamPrep",
+  "Upis kolegija · ExamPrep"). `AppShell` renders React's `<title>` from `documentTitle()` in
+  `lib/workspace-route.ts`; the root `metadata` keeps only the description. A course ID is
   never shown while the name is loading.
-- **Language**: the interface is English (`<html lang="en">`), while course content is
-  usually Croatian. Both interface languages are wanted. A Croatian interface, and
-  `lang="hr"` on Croatian content, is a separate change.
 
 ## Tooling
 
-- `.github/hooks/impeccable.json` was removed. It pointed at
-  `.github/skills/impeccable/scripts/impeccable`, a skill that is not part of this
-  repository, so it never ran. `copilot-instructions.md` already treats `.github/hooks/`
-  as a local artifact, and `.gitignore` now keeps it local.
-- To check a UI change against this system, run an installed Impeccable detector
+- `.github/hooks/impeccable.json` was removed; `.github/hooks/` is a local artifact kept out
+  of git. To check a UI change against this system, run an installed Impeccable detector
   locally, for example `impeccable detect --json frontend/src/components/<file>.tsx`.
 
 ## Known gaps
 
-These need markup changes and are left for the practice/results redesign (R13 follow-up):
-
-- Results open with three bare counts. Lead with "n of N correct", the weakest unit and a
-  "practise these mistakes" action.
-
-Left from the component-consistency pass (Impeccable critique P2):
-
-- `progress-panel.tsx` still has one `rounded-lg` disclosure; it changes with the
-  Progress redesign that adds Mistakes and Favorites.
-- Concept review (`concept-review.tsx`) shows concept status as a lowercase neutral badge
-  ("draft", "approved"); it should share the status tones above.
-- The question bank's owner-only "Source details" and version history still list
-  material and chunk IDs; they need material names from the API.
+- Results open with three bare counts. Lead with "n od N točno", the weakest unit and a
+  "vježbaj pogreške" action (results redesign 2d/2e).
+- `progress-panel.tsx` still has one `rounded-lg` disclosure; radius 0 removes it visually
+  but the class should go with the Progress redesign (2f).
+- Concept review (`concept-review.tsx`) shows concept status as a lowercase neutral badge;
+  it should share the status tones above.
+- The question bank's owner-only "Source details" and version history still list material and
+  chunk IDs; they need material names from the API.
 - A moderation card shows the course ID when the faculty course list fails to load.
+- Moderation and faculty screens are still in English; they are converted with their own PR.
+
+## Status against the handoff
+
+Implemented:
+
+- Tokens, five palettes (dark default, Papir, Noćno plava, Visoki kontrast, Vlastita) and
+  the font-size multiplier, theme and appearance controls (`theme.tsx`).
+- Archivo type, radius 0, 2px borders, `ui.tsx` primitives restyled.
+- Navigation bar (top bar and practice focus mode as described above).
+- 8a "Vaši kolegiji": course cards, enrolled list.
+- 8b "Upis kolegija": separate page (`CourseBrowser`, route `/enrol`) with faculty select and
+  search. Enrolled rows read "Upisano ✓" with the accessible name "Upisano, otvori kolegij:
+  <name>".
+
+Pending:
+
+- 8b year filter and question count per row: blocked on a year / question-count field in
+  the course API (`Course` has neither).
+- 8a exam date, percentage and progress bar on course cards (same reason).
+- Mobile 4-tab bar with count badges (Kolegiji, Ponavljanje, Napredak, Postavke).
+- 8c settings page with live preview (palette tiles, marker choice; no language option).
+- Answer markers (shapes or letters), "Vaš odgovor ✓" wording.
+- Practice 1a and mock exam 1e (progress strips, side panel, focus button, timer).
+- Results 2d and answer review 2e.
+- Progress 2f and study plan 2g.
+- Spaced repetition 5a and 5b.
+- Moderator import v2 and quiz pages (6a-6d).
+- Mobile screens 7a-7m and 8d-8e (bottom sheets, bottom action bar).
+- Course page 2b/2c in the new layout.

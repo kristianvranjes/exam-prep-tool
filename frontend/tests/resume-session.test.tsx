@@ -19,7 +19,7 @@ const active: Attempt = { ...summary, status: "ACTIVE",
     { id: "q2", position: 1, type: "TRUE_FALSE", stem: "Two", difficulty: null, options: [], answer: null },
   ] };
 function home(resumable: Parameters<typeof StudentHome>[0]["resumable"], onResume = vi.fn()) {
-  render(<StudentHome courses={[]} loading={false} onOpen={vi.fn()} onJoined={vi.fn()} catalogRevision={0} resumable={resumable} onResume={onResume} />);
+  render(<StudentHome userId="user-1" courses={[]} loading={false} onOpen={vi.fn()} onEnrol={vi.fn()} resumable={resumable} onResume={onResume} />);
   return onResume;
 }
 

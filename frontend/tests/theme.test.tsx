@@ -1,32 +1,30 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ThemeProvider, ThemeSelect } from "../src/components/theme";
 
-let mediaListener: (event: { matches: boolean }) => void;
 beforeEach(() => {
   localStorage.clear();
   document.documentElement.removeAttribute("data-theme");
   vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({
     matches: false,
-    addListener: (listener: typeof mediaListener) => { mediaListener = listener; },
+    addListener: vi.fn(),
     removeListener: vi.fn(),
   }));
 });
 
-it("defaults to System, follows the OS, and persists Light/Dark/System choices", async () => {
+it("defaults to Dark, follows the OS, and persists palette choices", async () => {
   render(<ThemeProvider><ThemeSelect /></ThemeProvider>);
   const select = screen.getByLabelText("Tema");
-  expect(select).toHaveValue("system");
+  expect(select).toHaveValue("dark");
+  await waitFor(() => expect(document.documentElement).toHaveAttribute("data-theme", "dark"));
+  fireEvent.change(select, { target: { value: "system" } });
   await waitFor(() => expect(document.documentElement).toHaveAttribute("data-theme", "light"));
-  vi.mocked(window.matchMedia).mockReturnValue({ matches: true, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList);
-  act(() => mediaListener({ matches: true }));
-  expect(document.documentElement).toHaveAttribute("data-theme", "dark");
-  for (const value of ["light", "dark", "system"]) {
+  for (const value of ["light", "night", "contrast", "dark", "system"]) {
     fireEvent.change(select, { target: { value } });
     expect(select).toHaveValue(value);
     expect(localStorage.getItem("examprep-theme")).toBe(value);
-    expect(document.documentElement).toHaveAttribute("data-theme", value === "system" ? "dark" : value);
+    expect(document.documentElement).toHaveAttribute("data-theme", value === "system" ? "light" : value);
   }
 });
 
@@ -47,5 +45,5 @@ it("renders a stable disabled System selector and theme bootstrap script on the 
   expect(markup).toContain("<script");
   expect(markup).toContain("examprep-theme");
   expect(markup).toContain('disabled=""');
-  expect(markup).toContain('value="system" selected=""');
+  expect(markup).toContain('value="dark" selected=""');
 });

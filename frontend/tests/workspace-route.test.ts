@@ -11,9 +11,15 @@ it("roundtrips attempt and results identities", () => {
 it.each(["/courses/%ZZ", "/courses/%2Fother", "/courses/course/attempts/%3Fid", "/courses/course/unknown", "javascript:alert(1)"])("rejects malformed or unsupported destination %s", path => {
   expect(parseWorkspaceRoute(path)).toBeNull();
 });
+it("parses the enrolment page, with or without a trailing slash", () => {
+  expect(parseWorkspaceRoute("/enrol")).toEqual({ view: "enrol" });
+  expect(parseWorkspaceRoute("/enrol/")).toEqual({ view: "enrol" });
+  expect(parseWorkspaceRoute("/enrol/extra")).toBeNull();
+});
 it("names each route in the tab, most specific part first, without raw course IDs", () => {
   const title = (path: string, course?: string) => documentTitle(parseWorkspaceRoute(path), course);
-  expect(title("/")).toBe("Početna · ExamPrep");
+  expect(title("/")).toBe("Vaši kolegiji · ExamPrep");
+  expect(title("/enrol")).toBe("Upis kolegija · ExamPrep");
   expect(title("/faculty")).toBe("Fakultet · ExamPrep");
   expect(title("/nowhere/at/all")).toBe("Stranica nije dostupna · ExamPrep");
   expect(title(coursePath("c1"), "PPJ")).toBe("PPJ · ExamPrep");
