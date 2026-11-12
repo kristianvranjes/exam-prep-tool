@@ -6,6 +6,8 @@ from sqlalchemy import Connection, text
 NUMERIC_QUESTION_COLUMNS = ("correct_value", "absolute_tolerance", "relative_tolerance", "unit")
 # Added by 0026 and tested by its own roundtrip: older downgrades drop the recorded mode.
 RECORDED_QUIZ_COLUMNS = ("selection_mode",)
+# Added by 0028 and tested by its own roundtrip: older downgrades drop the student's list status.
+MEMBERSHIP_STATUS_COLUMNS = ("status",)
 
 
 def legacy_columns(conn: Connection, table: str, newer: tuple[str, ...]) -> str:
@@ -29,11 +31,16 @@ def legacy_quiz_columns(conn: Connection) -> str:
     return legacy_columns(conn, "quizzes", RECORDED_QUIZ_COLUMNS)
 
 
+def legacy_membership_columns(conn: Connection) -> str:
+    return legacy_columns(conn, "course_memberships", MEMBERSHIP_STATUS_COLUMNS)
+
+
 def legacy_rows(conn: Connection, table: str) -> list[object]:
     """Every row of `table` ordered by id, without columns newer revisions add."""
     columns = {
         "questions": legacy_question_columns,
         "quizzes": legacy_quiz_columns,
+        "course_memberships": legacy_membership_columns,
     }.get(table)
     selected = columns(conn) if columns else "*"
     return list(conn.execute(text(f"SELECT {selected} FROM {table} ORDER BY id")).all())

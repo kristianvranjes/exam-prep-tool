@@ -43,14 +43,28 @@ and are never returned.
 - `POST /courses` requires a moderator of the selected faculty (otherwise 403) and creates an OWNER
   membership in the same transaction. The request requires `faculty_id` of an active
   faculty plus `name` (and optional `code`, `description`). Missing faculty_id is 422;
-  unknown/inactive faculty is 404. Responses include faculty_id and is_active.
-- `GET /courses` lists courses where the authenticated user is a member.
+  unknown/inactive faculty is 404. Responses include faculty_id and is_active. The
+  optional `year_of_study` (1–6) is the year of study the course belongs to.
+- `GET /courses` lists courses where the authenticated user is a member. Each row has the
+  course fields plus `membership_status` (`ACTIVE`, `DONE` or `HIDDEN`),
+  `approved_question_count` (approved questions only) and `next_exam`: the nearest
+  `MIDTERM`, `FINAL` or `FULL_EXAM` exam scope that has a start date and whose last day
+  (`ends_on`, else `starts_on`) is today (UTC) or later, as
+  `{scope_id, kind, name, starts_on, ends_on}`, otherwise `null`. Labs and short quizzes
+  never count. Hidden and finished courses are listed too; the client decides what to show.
 - `GET /courses/{course_id}` returns a member's course; inaccessible courses return
   `404`.
-- `GET /courses/{course_id}/membership` returns the caller's membership role.
+- `GET /courses/{course_id}/membership` returns the caller's membership role and status.
+- `PATCH /courses/{course_id}/membership` takes the strict body `{status}` with `ACTIVE`,
+  `DONE` or `HIDDEN` and changes only the caller's own membership (404 when there is none).
+  The status is the student's own view of the list: access to the course, the student's
+  attempts and progress does not change. `POST /courses/{course_id}/join` on a `HIDDEN`
+  membership makes it `ACTIVE`; an `ACTIVE` or `DONE` one is left as it is.
 - `PATCH /courses/{course_id}` updates `name` (1–150 characters), `code` (nullable,
   at most 50) or `description` (nullable, at most 2000) for an OWNER; joined
-  non-owners receive `403`.
+  non-owners receive `403`. `year_of_study` (1–6, nullable) is changed by a moderator of
+  the course's faculty, who need not own or have joined the course (any other caller
+  receives `403`); a request that also changes another field needs the OWNER rules too.
 - `DELETE /courses/{course_id}` returns `204` for an OWNER after committing the
   course deletion together with durable cleanup intents for every source PDF.
   Existing database cascades remove memberships, materials, questions,
@@ -59,6 +73,16 @@ and are never returned.
   returns safe `503`, retaining all domain rows and PDFs and committing no cleanup
   intents. After commit, best-effort storage cleanup may be deferred: `204` remains
   success, deleted rows stay deleted, and durable cleanup is retryable by operators.
+
+## Interface preferences
+
+- `GET /users/me/preferences` returns the caller's settings, or the defaults for someone who
+  never saved any: `{"palette": "dark", "custom": null, "font_scale": 1.0, "markers": "shapes"}`.
+- `PUT /users/me/preferences` replaces the whole document. `palette` is `dark`, `light`,
+  `night`, `contrast` or `custom`; `custom` is `{bg, text, acc}` as `#rrggbb` and is required
+  when the palette is `custom` (it is kept when another palette is chosen); `font_scale` is
+  0.9, 1, 1.15 or 1.3; `markers` is `shapes` or `letters`. Unknown fields and values are
+  422. The language is not a setting: the interface is Croatian only.
 
 All course endpoints require the session cookie. Validation errors return `422`.
 
@@ -539,8 +563,10 @@ All endpoints require authentication (401 otherwise):
 - `GET /faculties`: active faculty metadata (`id`, `name`, `slug`, `university_name`),
   ordered by name then id. No membership required.
 - `GET /faculties/{faculty_id}/courses`: active courses belonging to that faculty,
-  ordered by name then id. Returns normal course metadata, including faculty_id and
-  is_active, but no materials/questions/answers. Unknown/inactive faculty is 404.
+  ordered by name then id. Returns normal course metadata, including faculty_id, is_active
+  and `year_of_study`, plus `approved_question_count` and `has_moderators` (whether the
+  faculty has any moderator), but no materials/questions/answers. Unknown/inactive faculty
+  is 404.
 - Both catalogs accept `limit` (1-100, default 100) and `offset` (0-10000, default 0).
 - `POST /faculties`: body `name` (1-150 characters, trimmed), optional
   `university_name` (1-200) and optional `slug` (lower-case words joined by single

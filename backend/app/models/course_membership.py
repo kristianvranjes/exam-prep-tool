@@ -3,7 +3,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -23,6 +23,7 @@ class CourseMembership(Base):
     __table_args__ = (
         UniqueConstraint("course_id", "user_id", name="uq_course_membership_course_user"),
         Index("ix_course_memberships_user_id", "user_id"),
+        CheckConstraint("status IN ('ACTIVE','DONE','HIDDEN')", name="ck_membership_status"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -31,6 +32,8 @@ class CourseMembership(Base):
     )
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     role: Mapped[str] = mapped_column(String(10))
+    # The student's own view: DONE leaves the home list, HIDDEN is removed from it. Access stays.
+    status: Mapped[str] = mapped_column(String(10), server_default="ACTIVE", default="ACTIVE")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     course: Mapped["Course"] = relationship(back_populates="memberships")

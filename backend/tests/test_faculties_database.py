@@ -8,7 +8,7 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from community_helpers import provision
 from fastapi.testclient import TestClient
-from migration_helpers import legacy_question_columns
+from migration_helpers import legacy_membership_columns, legacy_question_columns
 from sqlalchemy import delete, select, text
 from sqlalchemy.exc import DataError, IntegrityError
 from test_materials import clients as clients
@@ -164,7 +164,7 @@ def test_join_member_idempotent_concurrent_and_no_elevation(bank):
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(join, range(2)))
     assert all(r.status_code == 200 for r in results)
-    expected = {"course_id": course, "user_id": user_id, "role": "MEMBER"}
+    expected = {"course_id": course, "user_id": user_id, "role": "MEMBER", "status": "ACTIVE"}
     assert results[0].json() == results[1].json() == expected
     with SessionLocal() as db:
         membership = db.scalar(
@@ -216,7 +216,6 @@ def test_join_unavailable_course(clients, inactive):
 
 def historical_rows():
     tables = [
-        "course_memberships",
         "materials",
         "material_sections",
         "material_chunks",
@@ -228,6 +227,10 @@ def historical_rows():
         result = {
             name: conn.execute(text(f"SELECT * FROM {name} ORDER BY id")).all() for name in tables
         }
+        # The list status is new in 0028 and tested by its own roundtrip.
+        result["course_memberships"] = conn.execute(
+            text(f"SELECT {legacy_membership_columns(conn)} FROM course_memberships ORDER BY id")
+        ).all()
         result["questions"] = conn.execute(
             text(f"SELECT {legacy_question_columns(conn)} FROM questions ORDER BY id")
         ).all()
