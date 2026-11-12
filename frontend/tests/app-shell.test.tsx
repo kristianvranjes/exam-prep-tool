@@ -94,11 +94,11 @@ describe("authentication and course flow", () => {
     fireEvent.change(screen.getByLabelText("Lozinka"), { target: { value: "correct horse" } });
     fireEvent.submit(screen.getByRole("form", { name: "Registracija" }));
     expect(await screen.findByRole("heading", { name: "Vaši kolegiji" })).toBeInTheDocument();
-    expect(screen.queryByRole("form", { name: "Create a course" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: "Izradi kolegij" })).not.toBeInTheDocument();
     await openManagement();
-    const form = screen.getByRole("form", { name: "Create a course" });
-    fireEvent.change(within(form).getByLabelText("Faculty"), { target: { value: "faculty-1" } });
-    fireEvent.change(within(form).getByLabelText("Course name"), { target: { value: "Algorithms" } });
+    const form = screen.getByRole("form", { name: "Izradi kolegij" });
+    fireEvent.change(within(form).getByLabelText("Fakultet"), { target: { value: "faculty-1" } });
+    fireEvent.change(within(form).getByLabelText("Naziv kolegija"), { target: { value: "Algorithms" } });
     fireEvent.submit(form);
     await waitFor(() => expect(apiMock.createCourse).toHaveBeenCalledWith({ faculty_id: "faculty-1", name: "Algorithms", code: undefined, description: undefined }));
     expect(await screen.findByRole("heading", { name: "Algorithms" })).toBeVisible();
@@ -111,15 +111,15 @@ describe("authentication and course flow", () => {
     apiMock.createFaculty.mockResolvedValue(fer);
     render(<AppShell />);
     await openManagement();
-    const form = screen.getByRole("form", { name: "Add a faculty" });
-    fireEvent.change(within(form).getByLabelText("Faculty name"), { target: { value: fer.name } });
-    fireEvent.change(within(form).getByLabelText("University (optional)"), { target: { value: " Sveučilište u Zagrebu " } });
+    const form = screen.getByRole("form", { name: "Dodaj fakultet" });
+    fireEvent.change(within(form).getByLabelText("Naziv fakulteta"), { target: { value: fer.name } });
+    fireEvent.change(within(form).getByLabelText("Sveučilište (neobavezno)"), { target: { value: " Sveučilište u Zagrebu " } });
     fireEvent.submit(form);
     await waitFor(() => expect(apiMock.createFaculty).toHaveBeenCalledWith({ name: fer.name, university_name: "Sveučilište u Zagrebu" }));
-    expect(await within(form).findByText(`${fer.name} added. You moderate it, so you can create its courses below.`)).toBeInTheDocument();
-    const courseForm = screen.getByRole("form", { name: "Create a course" });
-    const options = within(within(courseForm).getByLabelText("Faculty")).getAllByRole("option").map(option => option.textContent);
-    expect(options).toEqual(["Select a faculty", "Engineering", fer.name]);
+    expect(await within(form).findByText(`${fer.name} je dodan. Vi ga moderirate, pa kolegije za njega možete izraditi u nastavku.`)).toBeInTheDocument();
+    const courseForm = screen.getByRole("form", { name: "Izradi kolegij" });
+    const options = within(within(courseForm).getByLabelText("Fakultet")).getAllByRole("option").map(option => option.textContent);
+    expect(options).toEqual(["Odaberite fakultet", "Engineering", fer.name]);
   });
 
   it("shows why a faculty could not be added", async () => {
@@ -127,11 +127,11 @@ describe("authentication and course flow", () => {
     apiMock.createFaculty.mockRejectedValue(new Error("A faculty with this address already exists"));
     render(<AppShell />);
     await openManagement();
-    const form = screen.getByRole("form", { name: "Add a faculty" });
-    fireEvent.change(within(form).getByLabelText("Faculty name"), { target: { value: "Engineering" } });
+    const form = screen.getByRole("form", { name: "Dodaj fakultet" });
+    fireEvent.change(within(form).getByLabelText("Naziv fakulteta"), { target: { value: "Engineering" } });
     fireEvent.submit(form);
     expect(await within(form).findByText("A faculty with this address already exists")).toBeInTheDocument();
-    expect(within(form).getByRole("button", { name: "Add faculty" })).toBeEnabled();
+    expect(within(form).getByRole("button", { name: "Dodaj fakultet" })).toBeEnabled();
   });
 
   it("shows login errors", async () => {
@@ -455,7 +455,7 @@ it("directs an empty Home to join without showing a permanent catalog", async ()
   expect(screen.queryByLabelText("Pretraži po fakultetu")).not.toBeInTheDocument();
   fireEvent.click(screen.getAllByRole("button", { name: "Upiši kolegij" })[0]);
   expect(await screen.findByText("Nema dostupnih fakulteta")).toBeVisible();
-  expect(screen.queryByRole("form", { name: "Create a course" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("form", { name: "Izradi kolegij" })).not.toBeInTheDocument();
 });
 
 it("reports faculty loading and joined-course loading errors on Home", async () => {
@@ -470,20 +470,20 @@ it("does not expose faculty tools or course creation to ordinary members", async
   await screen.findByRole("heading", { name: "Vaši kolegiji" });
   await waitFor(() => expect(apiMock.moderatorStatus).toHaveBeenCalledWith("faculty-1"));
   expect(screen.queryByRole("link", { name: "Alati fakulteta" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("form", { name: "Create a course" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("form", { name: "Izradi kolegij" })).not.toBeInTheDocument();
 });
 
 it("keeps moderation and creation secondary and preserves management form state", async () => {
   apiMock.me.mockResolvedValue(user); render(<AppShell />);
   await screen.findByRole("heading", { name: "Vaši kolegiji" });
-  expect(screen.queryByRole("region", { name: "Moderation queue" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Red za moderiranje" })).not.toBeInTheDocument();
   await openManagement();
-  expect(await screen.findByRole("region", { name: "Moderation queue" })).toHaveAttribute("id", "moderation");
-  const form = screen.getByRole("form", { name: "Create a course" });
-  fireEvent.change(within(form).getByLabelText("Course name"), { target: { value: "Unfinished management draft" } });
-  goHome(); expect(screen.queryByRole("form", { name: "Create a course" })).not.toBeInTheDocument();
+  expect(await screen.findByRole("region", { name: "Red za moderiranje" })).toHaveAttribute("id", "moderation");
+  const form = screen.getByRole("form", { name: "Izradi kolegij" });
+  fireEvent.change(within(form).getByLabelText("Naziv kolegija"), { target: { value: "Unfinished management draft" } });
+  goHome(); expect(screen.queryByRole("form", { name: "Izradi kolegij" })).not.toBeInTheDocument();
   await openManagement();
-  expect(within(screen.getByRole("form", { name: "Create a course" })).getByLabelText("Course name")).toHaveValue("Unfinished management draft");
+  expect(within(screen.getByRole("form", { name: "Izradi kolegij" })).getByLabelText("Naziv kolegija")).toHaveValue("Unfinished management draft");
 });
 
 it("joins immediately, opens the course from discovery and avoids repeated joins", async () => {
@@ -532,9 +532,9 @@ it("deduplicates a late join after the same course was created", async () => {
   apiMock.me.mockResolvedValue(user); apiMock.joinCourse.mockReturnValue(join.promise); render(<AppShell />);
   fireEvent.change(await openDiscovery(), { target: { value: "faculty-1" } });
   fireEvent.click(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms" }));
-  await openManagement(); const form = screen.getByRole("form", { name: "Create a course" });
-  fireEvent.change(within(form).getByLabelText("Faculty"), { target: { value: "faculty-1" } });
-  fireEvent.change(within(form).getByLabelText("Course name"), { target: { value: "Algorithms" } }); fireEvent.submit(form);
+  await openManagement(); const form = screen.getByRole("form", { name: "Izradi kolegij" });
+  fireEvent.change(within(form).getByLabelText("Fakultet"), { target: { value: "faculty-1" } });
+  fireEvent.change(within(form).getByLabelText("Naziv kolegija"), { target: { value: "Algorithms" } }); fireEvent.submit(form);
   await screen.findByRole("heading", { name: "Algorithms" });
   await act(async () => join.resolve(membership)); goHome();
   expect(within(screen.getByRole("region", { name: "Vaši kolegiji" })).getAllByRole("button", { name: "Otvori kolegij: Algorithms" })).toHaveLength(1);

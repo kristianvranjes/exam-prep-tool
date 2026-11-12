@@ -1,4 +1,4 @@
-import type { OwnerQuestion, QuestionStatus, QuestionType } from "./api";
+import type { OwnerQuestion, QuestionStatus, QuestionType, ReportReason } from "./api";
 
 type QuestionSource = OwnerQuestion["source"];
 import type { PracticeAnswer } from "./practice-api";
@@ -16,9 +16,9 @@ export const typeLabels: Record<QuestionType, string> = {
 };
 
 export const statusLabels: Record<QuestionStatus, string> = {
-  DRAFT: "Nacrt",
-  PENDING_REVIEW: "Čeka pregled fakulteta",
-  APPROVED: "Odobreno",
+  DRAFT: "Skica",
+  PENDING_REVIEW: "Na pregledu",
+  APPROVED: "Objavljeno",
   REJECTED: "Odbijeno",
   ARCHIVED: "Arhivirano",
 };
@@ -34,9 +34,20 @@ export const statusTones: Record<QuestionStatus, "neutral" | "pending" | "succes
 
 /** Where an owner-visible question came from. Imports from an external AI prompt count as added by a person. */
 export const sourceLabels: Record<QuestionSource, string> = {
-  AI: "AI-generated",
+  AI: "Generirao AI",
   USER: "Napisano ili uvezeno",
 };
+
+/** Report reasons offered to students; moved here from question-bank.tsx so the moderation queue can show the same labels. */
+export const reportReasons: { value: ReportReason; label: string }[] = [
+  { value: "INCORRECT_ANSWER", label: "Netočan odgovor" },
+  { value: "MULTIPLE_CORRECT", label: "Više točnih odgovora" },
+  { value: "UNCLEAR", label: "Nejasno" },
+  { value: "TYPO", label: "Pravopisna greška" },
+  { value: "OUTDATED", label: "Zastarjelo" },
+  { value: "DUPLICATE", label: "Duplikat" },
+  { value: "OTHER", label: "Ostalo" },
+];
 
 // Mirrors `app/services/numbers.py`: one decimal comma or point, optional exponent, nothing else.
 const NUMBER = /^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d+)?$/;
