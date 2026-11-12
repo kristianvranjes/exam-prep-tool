@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -111,7 +112,9 @@ def list_member_courses(db: Session, user: User) -> list[MemberCourseResponse]:
     return [
         MemberCourseResponse(
             **CourseResponse.model_validate(course).model_dump(),
-            membership_status=membership_status,
+            membership_status=cast(
+                MembershipStatus, membership_status
+            ),  # the column is constrained
             approved_question_count=counts.get(course.id, 0),
             next_exam=exams.get(course.id),
         )
