@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import { api, Course, Faculty, User, type CourseMembership } from "../lib/api";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { api, Course, Faculty, User, type CourseMembership, type MemberCourse, type MembershipStatus } from "../lib/api";
+import { migrateLocalCoursePrefs } from "../lib/course-prefs";
 import { CourseWorkspace } from "./course-workspace";
 import { attemptPath, coursePath, documentTitle, parseWorkspaceRoute, type CourseDestination } from "../lib/workspace-route";
 import type { AttemptSummary, Attempt } from "../lib/practice-api";
@@ -18,7 +19,8 @@ import { resumableAttempt, useResumableSessions } from "./use-resumable-sessions
 export function AppShell() {
   const [user, setUser] = useState<User | null>(null);
   const [faculties, setFaculties] = useState<Faculty[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
+  const [courses, setCourses] = useState<MemberCourse[]>([]);
+  const migratedFor = useRef<string | null>(null);
   const [selected, setSelected] = useState<Course | null>(null);
   const [selectedRole, setSelectedRole] = useState<{ courseId: string; role: CourseMembership["role"] } | null>(null);
   const [membershipError, setMembershipError] = useState("");
@@ -112,6 +114,14 @@ export function AppShell() {
       .finally(() => { if (active) setLoadingCourses(false); });
     return () => { active = false; };
   }, [user, courseRetry]);
+  // Finished and removed courses used to live in this browser; send what is left there to the backend once.
+  useEffect(() => {
+    if (!user || loadingCourses || migratedFor.current === user.id) return;
+    migratedFor.current = user.id;
+    void migrateLocalCoursePrefs(user.id, courses, (courseId, status) => api.setMembershipStatus(courseId, status)).then(applied => {
+      if (Object.keys(applied).length) setCourses(current => current.map(course => applied[course.id] ? { ...course, membership_status: applied[course.id] } : course));
+    });
+  }, [user, loadingCourses, courses]);
   useEffect(() => {
     if (!user || !selectedId) return;
     let active = true;
@@ -164,8 +174,16 @@ export function AppShell() {
     return true;
   }
 
+  /** Moves a course between the active, finished and removed parts of the list; undone if saving fails. */
+  function changeCourseStatus(course: MemberCourse, status: MembershipStatus) {
+    const previous = course.membership_status ?? "ACTIVE";
+    const set = (value: MembershipStatus) => setCourses(current => current.map(item => item.id === course.id ? { ...item, membership_status: value } : item));
+    set(status);
+    api.setMembershipStatus(course.id, status).catch(() => { set(previous); setError("Promjena popisa kolegija nije spremljena. Pokušajte ponovno."); });
+  }
+
   function courseUpdated(updated: Course) {
-    setCourses(current => current.map(course => course.id === updated.id ? updated : course));
+    setCourses(current => current.map(course => course.id === updated.id ? { ...course, ...updated } : course));
     setSelected(current => current?.id === updated.id ? updated : current);
     setCatalogRevision(value => value + 1);
   }
@@ -216,12 +234,14 @@ export function AppShell() {
     {view === "unavailable" && <section><h1 id="unavailable-heading" tabIndex={-1} className="text-2xl font-semibold">Page unavailable</h1><Button className="mt-4" onClick={() => navigate("/")}>Back to Home</Button></section>}
     {deletedNotice && <Alert tone="info" className="mb-5">{deletedNotice}</Alert>}
     <div hidden={view !== "home"}>
-      <StudentHome userId={user.id} onEnrol={() => navigate("/enrol")} courses={courses} loading={loadingCourses} onOpen={selectCourse}
+      <StudentHome onEnrol={() => navigate("/enrol")} courses={courses} loading={loadingCourses} onOpen={selectCourse} onStatusChange={changeCourseStatus}
         resumable={resumable} onResume={resumeSession}
         checkingSessions={Object.values(sessions).some(session => session.status === "loading")} />
     </div>
     {view === "enrol" && <CourseBrowser joinedCourses={courses} loadingMembership={loadingCourses} refreshRevision={catalogRevision}
-      onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])}
+      onJoined={course => setCourses(current => current.some(item => item.id === course.id)
+        ? current.map(item => item.id === course.id ? { ...item, membership_status: item.membership_status === "DONE" ? "DONE" : "ACTIVE" } : item)
+        : [...current, { ...course, membership_status: "ACTIVE", next_exam: null }])}
       onOpen={selectCourse} onBack={() => navigate("/")} />}
     {view === "course" && (loadingCourses || !courses.some(course => course.id === routeCourseId) || selectedId !== routeCourseId) && <section>
       {loadingCourses || courses.some(course => course.id === routeCourseId) ? <LoadingState>Loading course…</LoadingState> : <>

@@ -24,12 +24,20 @@ Navigation uses real routes, so reload and Back/Forward work: `/` (Vaši kolegij
 
 Your courses (`/`, "Vaši kolegiji") shows joined courses as cards in the course's own
 colour; the ⋯ menu can mark a course finished or remove it, and finished courses move to
-a "Završeni" section. Because the backend has no leave-course or finished status, these
-choices live in the browser only (`lib/course-prefs.ts`, `localStorage` key
-`examprep-course-prefs:<userId>`). Its empty state links to Course enrolment (`/enrol`,
+a "Završeni" section. These choices are the membership status (`ACTIVE`, `DONE`, `HIDDEN`)
+that `GET /courses` returns and `PATCH /courses/{id}/membership` saves; the app shell applies a
+change at once and puts it back if saving fails. A hidden course keeps its access and counts as
+not enrolled on the enrolment page, where enrolling again shows it again. Before the status
+existed these choices were kept in the browser (`localStorage` key
+`examprep-course-prefs:<userId>`); the app shell sends what is left there to the backend once
+and then forgets it (`migrateLocalCoursePrefs` in `lib/course-prefs.ts`). A card with a dated
+next exam (`next_exam`) shows its name and date, and the readiness estimate from
+`GET /exam-scopes/{id}/readiness` as a progress bar ("oko 70 %", or a hint when there are too
+few answers). Its empty state links to Course enrolment (`/enrol`,
 "Upis kolegija"), where `CourseBrowser` owns faculty/catalog interaction and reuses the
-existing API client and Faculty/Course types. The year filter and a question count per row
-wait for those fields in the course API. Faculties appear in backend order with optional university
+existing API client and Faculty/Course types. Each row shows the year of study, whether the
+faculty has moderators and the number of approved questions; a year filter appears when any
+course of the faculty has a year. Faculties appear in backend order with optional university
 names; Legacy / Unassigned receives the same neutral treatment as every faculty.
 
 Faculty courses load only after selection, never across the whole catalog in advance.

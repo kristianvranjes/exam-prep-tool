@@ -1,19 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api, type Course, type Faculty } from "../lib/api";
+import { api, type CatalogCourse, type Course, type Faculty, type MemberCourse } from "../lib/api";
 import { courseColor } from "../lib/course-prefs";
+import { plural, QUESTIONS } from "../lib/plural";
 import { Alert, Button, EmptyState, Input, LoadingState, Select } from "./ui";
 
 /**
- * The full-page "Upis kolegija" screen. Search state lives in this component, so it resets
+ * The full-page "Upis kolegija" screen. Search and year filter live in this component, so they reset
  * every time the page is opened (the parent mounts it only while the enrol route is active).
- * The Course type carries no year field, so the handoff's year filter is intentionally omitted.
+ * A course hidden from the student's list counts as not enrolled here: enrolling again brings it back.
  */
 export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOpen, onBack, refreshRevision = 0 }: {
-  joinedCourses: Course[];
+  joinedCourses: MemberCourse[];
   loadingMembership: boolean;
-  onJoined: (course: Course) => void;
+  onJoined: (course: CatalogCourse) => void;
   onOpen: (course: Course) => void;
   onBack: () => void;
   refreshRevision?: number;
@@ -23,7 +24,8 @@ export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOp
   const [facultyError, setFacultyError] = useState(false);
   const [facultyRetry, setFacultyRetry] = useState(0);
   const [selectedId, setSelectedId] = useState("");
-  const [catalog, setCatalog] = useState<{ facultyId: string; revision: number; courses: Course[]; failed: boolean } | null>(null);
+  const [catalog, setCatalog] = useState<{ facultyId: string; revision: number; courses: CatalogCourse[]; failed: boolean } | null>(null);
+  const [year, setYear] = useState<number | null>(null);
   const [catalogRetry, setCatalogRetry] = useState(0);
   const [joining, setJoining] = useState<Set<string>>(new Set());
   const [joinErrors, setJoinErrors] = useState<Record<string, string>>({});
@@ -52,7 +54,7 @@ export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOp
     return () => { active = false; };
   }, [selectedId, catalogRetry, refreshRevision]);
 
-  async function join(course: Course) {
+  async function join(course: CatalogCourse) {
     if (pending.current.has(course.id)) return;
     pending.current.add(course.id);
     setJoining(new Set(pending.current));
@@ -75,14 +77,18 @@ export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOp
   const selectedFaculty = faculties.find(faculty => faculty.id === selectedId);
   const currentCatalog = catalog?.facultyId === selectedId && catalog.revision === refreshRevision ? catalog : null;
   const needle = query.trim().toLowerCase();
-  const visibleCourses = currentCatalog ? currentCatalog.courses.filter(course => !needle || course.name.toLowerCase().includes(needle) || (course.code ?? "").toLowerCase().includes(needle)) : [];
+  const enrolled = joinedCourses.filter(course => course.membership_status !== "HIDDEN");
+  const years = currentCatalog ? [...new Set(currentCatalog.courses.map(course => course.year_of_study).filter((value): value is number => value != null))].sort((a, b) => a - b) : [];
+  const shownYear = year !== null && years.includes(year) ? year : null;
+  const visibleCourses = currentCatalog ? currentCatalog.courses.filter(course => (shownYear === null || course.year_of_study === shownYear)
+    && (!needle || course.name.toLowerCase().includes(needle) || (course.code ?? "").toLowerCase().includes(needle))) : [];
   return <section id="browse-courses" tabIndex={-1} aria-labelledby="enrol-heading">
     <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b-2 border-line pb-5">
       <div className="min-w-0">
         <Button variant="secondary" className="mb-4" onClick={onBack}><span aria-hidden="true">←</span> Vaši kolegiji</Button>
         <h1 id="enrol-heading" tabIndex={-1} className="text-4xl font-extrabold tracking-tight sm:text-[2.75rem] sm:leading-[1.1]">Upis kolegija</h1>
       </div>
-      <p className="text-sm font-semibold text-muted tabular-nums">{loadingMembership ? "Provjeravam upis…" : `Upisano: ${joinedCourses.length}`}</p>
+      <p className="text-sm font-semibold text-muted tabular-nums">{loadingMembership ? "Provjeravam upis…" : `Upisano: ${enrolled.length}`}</p>
     </div>
     <div className="mt-6 flex flex-col gap-5">
       {loadingFaculties ? <LoadingState>Učitavam fakultete…</LoadingState> : facultyError ? <div>
@@ -107,12 +113,16 @@ export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOp
         {selectedFaculty && <div className="min-w-0">
           <h2 className="text-lg font-extrabold">{selectedFaculty.name}</h2>
           {selectedFaculty.university_name && <p className="mt-1 text-sm text-muted">{selectedFaculty.university_name}</p>}
+          {years.length > 0 && <div role="group" aria-label="Godina studija" className="mt-4 flex flex-wrap gap-2">
+            {[null, ...years].map(value => <Button key={value ?? "all"} variant="secondary" aria-pressed={shownYear === value} onClick={() => setYear(value)}>{value === null ? "Sve" : `${value}. godina`}</Button>)}
+          </div>}
           {!currentCatalog ? <LoadingState>Učitavam kolegije fakulteta…</LoadingState> : currentCatalog.failed ? <div className="mt-4">
             <Alert>Kolegiji ovog fakulteta nisu učitani. Pokušajte ponovno ili odaberite drugi fakultet.</Alert>
             <Button variant="secondary" className="mt-3" onClick={() => { setCatalog(null); setCatalogRetry(value => value + 1); }}>Ponovno učitaj kolegije</Button>
           </div> : currentCatalog.courses.length === 0 ? <div className="mt-4"><EmptyState title="Nema dostupnih kolegija">Ovaj fakultet još nema aktivnih kolegija. Pokušajte s drugim fakultetom ili se vratite kasnije.</EmptyState></div> : visibleCourses.length === 0 ? <div className="mt-4"><EmptyState title="Nema odgovarajućih kolegija">Nijedan kolegij ovog fakulteta ne odgovara pretrazi „{query.trim()}”. Provjerite pravopis ili obrišite pretragu.</EmptyState></div> : <ul className="mt-4 border-t-2 border-line">
             {visibleCourses.map(course => {
-              const joined = joinedCourses.find(item => item.id === course.id);
+              const joined = enrolled.find(item => item.id === course.id);
+              const meta = [course.year_of_study ? `${course.year_of_study}. godina` : null, course.has_moderators === undefined ? null : course.has_moderators ? "moderatori aktivni" : "još nema moderatora"].filter(Boolean).join(" · ");
               const isJoining = joining.has(course.id);
               return <li key={course.id} className="min-w-0 border-b border-line py-4">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
@@ -120,8 +130,10 @@ export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOp
                   {course.code && <span className="w-16 shrink-0 font-extrabold">{course.code}</span>}
                   <div className="min-w-0 flex-1 basis-48">
                     <h3 className="text-base font-extrabold break-words">{course.name}</h3>
+                    {meta && <p className="mt-1 text-sm text-muted">{meta}</p>}
                     {course.description && <p className="mt-1 text-sm text-muted">{course.description}</p>}
                   </div>
+                  {course.approved_question_count !== undefined && <span className="shrink-0 text-sm text-muted tabular-nums">{course.approved_question_count ? plural(course.approved_question_count, QUESTIONS) : "nema pitanja"}</span>}
                   {joined ? <Button variant="secondary" className="border-line text-muted" aria-label={`Upisano, otvori kolegij: ${course.name}`} onClick={() => onOpen(joined)}>Upisano <span aria-hidden="true">✓</span></Button> :
                     <Button disabled={isJoining || loadingMembership} aria-label={`${isJoining ? "Upisujem" : "Upiši"} kolegij: ${course.name}`} onClick={() => void join(course)}>{isJoining ? "Upisujem…" : "Upiši"}</Button>}
                 </div>

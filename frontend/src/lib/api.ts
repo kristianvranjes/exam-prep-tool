@@ -1,7 +1,16 @@
 export type User = { id: string; email: string; display_name: string; is_active: boolean; created_at: string };
 export type Faculty = { id: string; name: string; slug: string; university_name: string | null };
-export type CourseMembership = { course_id: string; user_id: string; role: "OWNER" | "MEMBER" };
-export type Course = { id: string; faculty_id: string; is_active: boolean; name: string; code: string | null; description: string | null; created_by_user_id: string; created_at: string; updated_at: string };
+/** A student's own view of the course list; the course stays accessible whatever it is. */
+export type MembershipStatus = "ACTIVE" | "DONE" | "HIDDEN";
+export type CourseMembership = { course_id: string; user_id: string; role: "OWNER" | "MEMBER"; status?: MembershipStatus };
+export type Course = { id: string; faculty_id: string; is_active: boolean; name: string; code: string | null; description: string | null; year_of_study?: number | null; created_by_user_id: string; created_at: string; updated_at: string };
+/** The nearest midterm, final or full exam of a course that is today or later. */
+export type NextExam = { scope_id: string; kind: "MIDTERM" | "FINAL" | "FULL_EXAM"; name: string; starts_on: string; ends_on: string | null };
+/** A course in the signed-in user's list. The extra fields come from the backend; missing ones read as active, 0 and none. */
+export type MemberCourse = Course & { membership_status?: MembershipStatus; approved_question_count?: number; next_exam?: NextExam | null };
+/** A course in a faculty's enrolment catalog. */
+export type CatalogCourse = Course & { approved_question_count?: number; has_moderators?: boolean };
+export type Preferences = { palette: "dark" | "light" | "night" | "contrast" | "custom"; custom: { bg: string; text: string; acc: string } | null; font_scale: number; markers: "shapes" | "letters" };
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
@@ -76,7 +85,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 export const api = {
   moderatorStatus: (facultyId: string) => request<{ is_moderator: boolean }>(`/faculties/${facultyId}/moderator-status`),
   faculties: () => request<Faculty[]>("/faculties"),
-  facultyCourses: (facultyId: string) => request<Course[]>(`/faculties/${facultyId}/courses`),
+  facultyCourses: (facultyId: string) => request<CatalogCourse[]>(`/faculties/${facultyId}/courses`),
   questionReview: (facultyId: string, options: { course_id?: string; status?: QuestionStatus; limit?: number; offset?: number } = {}) => {
     const params = new URLSearchParams();
     if (options.status) params.set("status", options.status);
@@ -170,7 +179,10 @@ export const api = {
   register: (body: { email: string; password: string; display_name: string }) => request<User>("/auth/register", { method: "POST", body: JSON.stringify(body) }),
   login: (body: { email: string; password: string }) => request<User>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
   logout: () => request<void>("/auth/logout", { method: "POST" }),
-  courses: () => request<Course[]>("/courses"),
+  courses: () => request<MemberCourse[]>("/courses"),
+  setMembershipStatus: (courseId: string, status: MembershipStatus) => request<CourseMembership>(`/courses/${courseId}/membership`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  preferences: () => request<Preferences>("/users/me/preferences"),
+  savePreferences: (preferences: Preferences) => request<Preferences>("/users/me/preferences", { method: "PUT", body: JSON.stringify(preferences) }),
   course: (id: string) => request<Course>(`/courses/${id}`),
   updateCourse: (id: string, body: { name: string; code: string | null; description: string | null }) => request<Course>(`/courses/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteCourse: (id: string) => request<void>(`/courses/${id}`, { method: "DELETE" }),
