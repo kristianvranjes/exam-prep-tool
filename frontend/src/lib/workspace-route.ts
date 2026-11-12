@@ -1,7 +1,16 @@
 export type CourseDestination = "overview" | "practice" | "papers" | "progress" | "materials" | "more";
+/** Pages outside a course: the course list, enrolment, the cross-course review and progress pages, settings and faculty tools. */
+export type GlobalView = "home" | "enrol" | "review" | "progress" | "settings" | "management";
 export type WorkspaceRoute =
-  | { view: "home" | "management" | "enrol" }
+  | { view: GlobalView }
   | { view: "course"; courseId: string; destination: CourseDestination; attemptId: string | null; results: boolean };
+
+const globalPaths: Record<string, GlobalView> = {
+  "/": "home", "/enrol": "enrol", "/review": "review", "/progress": "progress", "/settings": "settings", "/faculty": "management",
+};
+const globalTitles: Record<GlobalView, string> = {
+  home: "Vaši kolegiji", enrol: "Upis kolegija", review: "Ponavljanje", progress: "Napredak", settings: "Postavke", management: "Fakultet",
+};
 
 export const coursePath = (id: string, destination: CourseDestination = "overview") =>
   `/courses/${encodeURIComponent(id)}${destination === "overview" ? "" : `/${destination}`}`;
@@ -18,16 +27,14 @@ const destinationTitles: Record<CourseDestination, string | null> = {
  */
 export function documentTitle(route: WorkspaceRoute | null, courseName?: string | null) {
   if (!route) return "Stranica nije dostupna · ExamPrep";
-  if (route.view !== "course") return `${route.view === "home" ? "Vaši kolegiji" : route.view === "enrol" ? "Upis kolegija" : "Fakultet"} · ExamPrep`;
+  if (route.view !== "course") return `${globalTitles[route.view]} · ExamPrep`;
   const page = route.results ? "Rezultati" : route.attemptId ? "Vježba" : destinationTitles[route.destination];
   return [page, courseName || (page ? null : "Kolegij"), "ExamPrep"].filter(Boolean).join(" · ");
 }
 
 export function parseWorkspaceRoute(pathname: string): WorkspaceRoute | null {
   const path = pathname.replace(/\/$/, "") || "/";
-  if (path === "/") return { view: "home" };
-  if (path === "/faculty") return { view: "management" };
-  if (path === "/enrol") return { view: "enrol" };
+  if (Object.hasOwn(globalPaths, path)) return { view: globalPaths[path] };
   const match = /^\/courses\/([^/]+)(?:\/(practice|papers|progress|materials|more)|\/attempts\/([^/]+)(\/results)?)?$/.exec(path);
   if (!match) return null;
   try {

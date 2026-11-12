@@ -8,9 +8,13 @@ fakulteta"). The visual system is described in [DESIGN.md](../DESIGN.md).
 
 ExamPrep uses a top navigation bar with a single main study area; below the `md`
 breakpoint the same `nav` becomes a fixed bottom tab bar (`ApplicationFrame`). It holds
-Kolegiji (home), Alati fakulteta (faculty moderators only) and, on mobile,
-Postavke; an appearance settings popover and an account menu sit at the right of the bar.
-Escape closes a popover and restores focus to its button. A skip link reaches the main
+Kolegiji (home), Ponavljanje (`/review`, with a badge counting the questions due now across
+the active courses), Napredak (`/progress`), Alati fakulteta (faculty moderators only) and,
+on mobile, Postavke; a settings link (`/settings`) and an account menu sit at the right of
+the bar. The destinations are links, so they also open in a new tab. Appearance
+preferences (palette, custom colours, font size, answer markers) are saved per user through
+`/users/me/preferences` once signed in, with `localStorage` as the fallback.
+Escape closes the account menu and restores focus to its button. A skip link reaches the main
 content. During an active practice session the bar is replaced by a focus mode with only
 the brand and the settings button.
 

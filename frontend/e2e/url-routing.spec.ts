@@ -123,8 +123,8 @@ for (const width of [1280, 390]) {
       await page.getByRole("button", { name: "Natrag na pregled", exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`${base}$`));
       await page.goto("http://localhost:3000/courses/00000000-0000-0000-0000-000000000000");
-      await expect(page.getByRole("heading", { name: "Course unavailable" })).toBeVisible();
-      await page.getByRole("button", { name: "Back to Home", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Kolegij nije dostupan" })).toBeVisible();
+      await page.getByRole("button", { name: "Natrag na početnu", exact: true }).click();
       await expect(page).toHaveURL("http://localhost:3000/");
       expect(errors).toEqual([]);
     } catch (error) { failed = true; throw error; }

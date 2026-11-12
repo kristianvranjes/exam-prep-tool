@@ -75,6 +75,10 @@ Defined once on `:root` with `color-mix`, so they follow every palette, includin
 | `--muted` | 62 % foreground over background | Secondary text, labels, unselected tabs |
 | `--line-strong` | 36 % foreground over background | Borders that identify a control |
 | `--subtle` | 7 % foreground over surface | Hover fills, neutral tags, skeleton bars |
+| `--track` | 8 % foreground over background | Empty progress tracks, unanswered question marks (handoff neutral-300) |
+| `--quiet` | 17 % foreground over background | "Answered, not checked", the middle heat step (neutral-400) |
+| `--faint` | 31 % foreground over background | Dim figures such as the "/ 40" of a score, "new" cards (neutral-500) |
+| `--soft` | 83 % foreground over background | Descriptive text one step under `foreground` (neutral-800) |
 | `--accent-hover` | 82 % accent, 18 % foreground | Primary button hover |
 | `--accent-foreground` | = background | Text on accent (always the page background) |
 | `--accent-surface` | 16 % accent over background | Selected option, info notices |
@@ -183,24 +187,33 @@ next to text. Icon-only buttons need an `aria-label`.
 Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
 `frontend/src/lib/workspace-route.ts`.
 
-- **Top bar** (all screens except practice): brand `ExamPrep.` (the dot in `accent`),
-  then the destinations (Kolegiji, and Alati fakulteta for moderators) with the current one in
-  `accent`, marked by a 2px accent underline as a non-colour cue, and `aria-current="page"`
-  (the local `tab()` helper in `application-frame.tsx`). On the right an appearance
-  settings button (40 px) that opens the settings popover (theme, font size), then an
-  avatar (32 px square via `min-h-8`, initials, `bg-foreground` / `text-background`) that
-  opens the account menu with Odjava. 2px bottom border, 16 px vertical padding.
+- **Top bar** (all screens except practice): brand `ExamPrep.` (the dot in `accent`) on the
+  left; on the right the destinations Kolegiji, Ponavljanje, Napredak (and Alati fakulteta
+  for moderators) at 14 px / 400, the current one in `accent` with a 2px accent underline as
+  a non-colour cue and `aria-current="page"`. Then a settings icon (40 px) that leads to the
+  settings page (`/settings`) and an avatar (32 px square, initials, `bg-foreground` /
+  `text-background`) that opens the account menu with Odjava. 2px bottom border, 16 px
+  vertical padding. Destinations are links (`next/link`, `NavItem` in
+  `application-frame.tsx`), so they open in a new tab and never share the `button` role
+  with the course tabs; `AppShell` passes them in.
+- **Due badge**: Ponavljanje carries the number of questions due now across the active
+  courses (`useDueCounts`), as a small accent square; the link's accessible name states it
+  ("Ponavljanje, 3 za ponoviti"). No badge when nothing is due.
 - **Mobile bottom tab bar**: below `md` the same `nav` is fixed to the bottom edge with
-  Kolegiji, Alati fakulteta (moderators only) and Postavke tabs (56 px minimum height plus
-  the safe-area inset; the current tab gets a 2px accent bar on top). The Postavke tab opens
-  the settings sheet, positioned above the bar's real height. The handoff's 4-tab bar
-  (Kolegiji, Ponavljanje, Napredak, Postavke; moderator: Kvizovi, Banka, Prijave, Prijedlozi)
-  with count badges is pending.
+  Kolegiji, Ponavljanje (with the badge), Napredak, Alati fakulteta (moderators only) and
+  Postavke (56 px minimum height plus the safe-area inset; the current tab gets a 2px accent
+  bar on top). The handoff's separate moderator bar (Kvizovi, Banka, Prijave, Prijedlozi) is
+  pending.
+- **Width**: 1280 px (`max-w-7xl`); the faculty tools use the handoff's 1440 px moderator
+  frame (`wide`).
 - **Practice focus mode**: while answering there is no main navigation or account menu. The
   frame is called with `focusedPractice`, the nav is hidden, the brand is plain text and the
-  content is narrowed (`max-w-3xl`). The appearance settings button stays in the header so
-  palette and font size can still be changed mid-session. The handoff bar (Save and exit,
-  answered N / M, remaining time) belongs to the practice redesign.
+  content is narrowed (`max-w-3xl`). An appearance button stays in the header and opens a
+  popover so palette and font size can still be changed mid-session. The handoff bar (Save
+  and exit, answered N / M, remaining time) belongs to the practice redesign.
+- **Global pages**: `/review` (`review-home.tsx`), `/progress` (`progress-home.tsx`) and
+  `/settings` (`settings-page.tsx`). They start with a `PageHeader` and list the active
+  courses; the full 5a, 2f and 8c layouts are pending.
 - Skip link "Preskoči na sadržaj" (`.skip-link`) targets `#main-content`; headings that
   receive focus after navigation (`tabindex="-1"`) show an underline instead of a box.
 - Flow: Courses (8a) -> Enrol (8b) is a separate page with a "Vaši kolegiji" back button;
@@ -208,7 +221,7 @@ Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
 
 ## Components (`frontend/src/components/ui.tsx`)
 
-- **Button** (`min-h-11`, `text-sm font-semibold`, 150 ms colour transition):
+- **Button** (`min-h-11`, `text-sm font-extrabold`, 150 ms colour transition):
   - `primary`: accent fill with `accent-foreground` text; one per view, the next step.
   - `secondary`: 2px `line-strong` border on `surface`. With `aria-pressed` it becomes a
     segmented control: inverted fill (`foreground` background, `background` text).
@@ -233,8 +246,28 @@ Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
   the card ends in the exam name and date, the readiness estimate ("oko 70 %", a range's
   midpoint) and a 6px progress bar in the course colour; the bar is a `progressbar` with a
   text value, and a hint replaces the number while there are too few answers.
-- **Segmented control**: two or more `secondary` buttons with `aria-pressed`,
-  or the font-size grid in `AppearanceSettings` (equal columns, 2px outer border).
+- **Segmented control**: `SegmentedControl` for new screens: one joined group (2px
+  `line-strong` outer border, 1px dividers, the chosen segment in `foreground` /
+  `background`), buttons with `aria-pressed` inside a labelled `group`. Older screens use
+  two or more `secondary` buttons with `aria-pressed`, and `AppearanceSettings` its grids.
+- **PageHeader**: optional back button and `label-caps` kicker, the `h1` (44 px, or 56 px
+  with `size="lg"`; 32 / 36 px on phones) with actions on the same row, optional meta line.
+- **StatCell**: a `label-caps` label over a `.hero-number` (64, 72 or 96 px) with a unit and
+  a note. `tone="accent"` fills the cell (the countdown); success, danger and pending only
+  colour the figure.
+- **ProgressBar**: 6, 8 or 14 px on a `track` fill, a `progressbar` with a label; the tone
+  is accent, a state colour, or a course colour passed as `color`.
+- **SegmentBars**: one 6px bar per question (correct, incorrect, answered, empty; the
+  current one ringed in accent). Decorative: the question grid states the same in words.
+- **OptionRow**: an answer row, at least 64 px, 2px border, a 40 px marker box, the text and
+  a note at the right edge ("Vaš odgovor ✓"). It is a `label` around the native radio or
+  checkbox (`peer sr-only`), so roles, names and keyboard behaviour stay native; the whole
+  row takes the focus ring. States: idle, selected (`foreground`), correct (`success`),
+  incorrect (`danger`), dimmed. `optionMarker()` gives letters or shapes, following the
+  user's "Oznake odgovora" preference (`useAnswerMarkers()` in `theme.tsx`).
+- **BottomBar** and **Sheet** (`sheet.tsx`): the phone-only sticky action bar (48-52 px
+  actions) and the bottom sheet that replaces a side panel (`dialog`, Escape closes, focus
+  returns to the opener).
 - **RichText** (`rich-text.tsx`): question content with formulas and code. Code is
   monospace on a faint foreground tint and scrolls sideways instead of wrapping; syntax
   highlighting uses weight and `muted`, not colour, so the semantic palette keeps its
@@ -359,7 +392,14 @@ Implemented:
 - Tokens, five palettes (dark default, Papir, Noćno plava, Visoki kontrast, Vlastita) and
   the font-size multiplier, theme and appearance controls (`theme.tsx`).
 - Archivo type, radius 0, 2px borders, `ui.tsx` primitives restyled.
-- Navigation bar (top bar and practice focus mode as described above).
+- Navigation bar: Kolegiji, Ponavljanje (due badge), Napredak, settings link and account
+  menu; the phone tab bar with the same destinations; practice focus mode as described above.
+- The handoff's neutral steps (`track`, `quiet`, `faint`, `soft`) and the shared primitives
+  for the remaining screens (`SegmentedControl`, `PageHeader`, `StatCell`, `ProgressBar`,
+  `SegmentBars`, `OptionRow`, `BottomBar`, `Sheet`).
+- Answer-marker preference (shapes or letters) and preferences saved per user on the
+  backend (`PreferencesSync`), with `localStorage` as the fallback.
+- First versions of the global pages `/review`, `/progress` and `/settings`.
 - 8a "Vaši kolegiji": course cards with next exam, readiness and progress bar, enrolled
   list, finished and removed courses saved on the backend.
 - 8b "Upis kolegija": separate page (`CourseBrowser`, route `/enrol`) with faculty select,
@@ -368,9 +408,8 @@ Implemented:
 
 Pending:
 
-- Mobile 4-tab bar with count badges (Kolegiji, Ponavljanje, Napredak, Postavke).
-- 8c settings page with live preview (palette tiles, marker choice; no language option).
-- Answer markers (shapes or letters), "Vaš odgovor ✓" wording.
+- 8c settings page layout with live preview and palette tiles (no language option).
+- Answer markers shown on the options, "Vaš odgovor ✓" wording.
 - Practice 1a and mock exam 1e (progress strips, side panel, focus button, timer).
 - Results 2d and answer review 2e.
 - Progress 2f and study plan 2g.

@@ -10,7 +10,13 @@ import { useWorkspaceNavigation } from "./use-workspace-navigation";
 import { StudentHome } from "./student-home";
 import { CourseBrowser } from "./course-browser";
 import { FacultyWorkspace } from "./faculty-workspace";
-import { ApplicationFrame, Brand } from "./application-frame";
+import { BarChart3, BookOpen, GraduationCap, RotateCcw } from "lucide-react";
+import { ApplicationFrame, Brand, type NavItem } from "./application-frame";
+import { ReviewHome } from "./review-home";
+import { ProgressHome } from "./progress-home";
+import { SettingsPage } from "./settings-page";
+import { PreferencesSync } from "./theme";
+import { useDueCounts } from "./use-due-counts";
 import { AuthScreen, type AuthMode } from "./auth-screen";
 import { Alert, Button, LoadingState } from "./ui";
 import { UnsavedChangesProvider } from "./unsaved-changes";
@@ -45,9 +51,9 @@ export function AppShell() {
     const next = parseWorkspaceRoute(target);
     if (next?.view !== "course") return true; // Home and faculty keep the course mounted.
     if (workspaceEdited && selected && next.courseId !== selected.id)
-      return window.confirm("Switch courses and close the current workspace? Any unsaved answers or edits will be lost. Cancel to return and save your work.");
+      return window.confirm("Promijeniti kolegij i zatvoriti trenutni? Nespremljeni odgovori i izmjene bit će izgubljeni. Odustanite da se vratite i spremite rad.");
     if (answerEdited && mountedAttempt?.status === "ACTIVE" && next.courseId === mountedAttempt.course_id && next.destination === "practice" && next.attemptId !== mountedAttempt.id)
-      return window.confirm("Close this session? Your unsaved answer will be lost. Cancel to return and save your work.");
+      return window.confirm("Zatvoriti ovu vježbu? Nespremljeni odgovor bit će izgubljen. Odustanite da se vratite i spremite rad.");
     return true;
   });
   const view = route?.view ?? "unavailable";
@@ -61,6 +67,10 @@ export function AppShell() {
   const resumable = courses.filter(course => sessions[course.id]?.id)
     .sort((a, b) => Number(b.id === selectedId) - Number(a.id === selectedId))
     .map(course => ({ course, attempt: sessions[course.id].attempt }));
+  // Finished and removed courses are out of the daily pages; the counts are re-read on the review page and after a session ends.
+  const activeCourses = courses.filter(course => (course.membership_status ?? "ACTIVE") === "ACTIVE");
+  const due = useDueCounts(user ? activeCourses.map(course => course.id) : [], `${view === "review"}|${mountedAttempt?.status ?? ""}`);
+  const dueTotal = activeCourses.reduce((sum, course) => sum + (due[course.id] ?? 0), 0);
   const onResumableAttemptChange = useCallback((id: string | null) => {
     if (selectedId) updateResumableSession(selectedId, id);
   }, [selectedId, updateResumableSession]);
@@ -94,7 +104,7 @@ export function AppShell() {
 
   useEffect(() => {
     if (!user || checkingSession) return;
-    const id = view === "course" ? destination === "practice" ? "practice" : "selected-course-heading" : view === "management" ? "management-heading" : view === "enrol" ? "enrol-heading" : view === "home" ? "home-heading" : "unavailable-heading";
+    const id = view === "course" ? destination === "practice" ? "practice" : "selected-course-heading" : view === "unavailable" ? "unavailable-heading" : `${view}-heading`;
     const heading = document.getElementById(id);
     heading?.focus({ preventScroll: true });
     if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
@@ -110,7 +120,7 @@ export function AppShell() {
     if (!user) return;
     let active = true;
     api.courses().then(rows => { if (active) setCourses(rows); })
-      .catch(() => { if (active) setError("Could not load courses"); })
+      .catch(() => { if (active) setError("Kolegiji se nisu učitali"); })
       .finally(() => { if (active) setLoadingCourses(false); });
     return () => { active = false; };
   }, [user, courseRetry]);
@@ -127,7 +137,7 @@ export function AppShell() {
     let active = true;
     api.membership(selectedId)
       .then(membership => { if (active) setSelectedRole({ courseId: selectedId, role: membership.role }); })
-      .catch(() => { if (active) setMembershipError("Could not check course permissions. Course tools remain available."); });
+      .catch(() => { if (active) setMembershipError("Ovlasti na kolegiju nisu provjerene. Alati kolegija i dalje su dostupni."); });
     return () => { active = false; };
   }, [user, selectedId, membershipRetry]);
   useEffect(() => {
@@ -136,7 +146,7 @@ export function AppShell() {
     api.faculties().then(async rows => {
       const permissions = await Promise.all(rows.map(row => api.moderatorStatus(row.id)));
       if (active) setFaculties(rows.filter((_, i) => permissions[i].is_moderator));
-    }).catch(() => { if (active) setError("Could not load faculties"); })
+    }).catch(() => { if (active) setError("Fakulteti se nisu učitali"); })
       .finally(() => { if (active) setCheckingFaculties(false); });
     return () => { active = false; };
   }, [user]);
@@ -149,7 +159,7 @@ export function AppShell() {
       setLoadingCourses(true);
       setCheckingFaculties(true);
       setUser(nextUser);
-    } catch (e) { setError(e instanceof Error ? e.message : "Authentication failed"); } finally { setBusy(false); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Prijava nije uspjela"); } finally { setBusy(false); }
   }
 
   async function createCourse(event: FormEvent<HTMLFormElement>) {
@@ -157,14 +167,14 @@ export function AppShell() {
     const form = event.currentTarget;
     const values = Object.fromEntries(new FormData(form));
     try { const course = await api.createCourse({ faculty_id: String(values.faculty_id), name: String(values.name), code: String(values.code || "") || undefined, description: String(values.description || "") || undefined }); setCourses(current => [...current, course]); selectCourse(course); form.reset(); }
-    catch (e) { setError(e instanceof Error ? e.message : "Could not create course"); } finally { setBusy(false); }
+    catch (e) { setError(e instanceof Error ? e.message : "Kolegij nije izrađen"); } finally { setBusy(false); }
   }
 
   async function logout() {
-    if ((workspaceEdited || managementEdited) && !window.confirm("Log out and close your workspaces? Any unsaved answers or edits will be lost.")) return;
+    if ((workspaceEdited || managementEdited) && !window.confirm("Odjaviti se i zatvoriti otvorene kolegije? Nespremljeni odgovori i izmjene bit će izgubljeni.")) return;
     setLoggingOut(true); setError("");
     try { await api.logout(); setUser(null); setCourses([]); setFaculties([]); setSelected(null); setSelectedRole(null); setMembershipError(""); setDeletedNotice(""); setAdaptiveReviewRequest(0); setMountedAttempt(null); setAnswerEdited(false); setManagementVisited(false); setWorkspaceEdited(false); setManagementEdited(false); setMode("login"); navigate("/", true, true); }
-    catch (e) { setError(e instanceof Error ? e.message : "Could not log out. Try again."); }
+    catch (e) { setError(e instanceof Error ? e.message : "Odjava nije uspjela. Pokušajte ponovno."); }
     finally { setLoggingOut(false); }
   }
 
@@ -198,7 +208,7 @@ export function AppShell() {
     setWorkspaceEdited(false);
     navigate("/", true, true);
     setCatalogRevision(value => value + 1);
-    setDeletedNotice(`${deleted.name} was permanently deleted.`);
+    setDeletedNotice(`${deleted.name} je trajno obrisan.`);
   }
 
   function openAdaptiveReview() {
@@ -222,16 +232,22 @@ export function AppShell() {
   // Every route renders through this client shell, so it names the tab with React's <title>, which React hoists
   // into <head>. Root metadata leaves the title out so there is only one title element (see DESIGN.md).
   const tabTitle = <title>{checkingSession || !user ? "ExamPrep" : documentTitle(route, view === "course" && selectedId === routeCourseId ? selected?.name : null)}</title>;
-  if (checkingSession) return <>{tabTitle}<main className="mx-auto max-w-6xl px-6 py-8"><Brand /><LoadingState>Loading your study space…</LoadingState></main></>;
+  if (checkingSession) return <>{tabTitle}<main className="mx-auto max-w-6xl px-6 py-8"><Brand /><LoadingState>Učitavam vaš prostor za učenje…</LoadingState></main></>;
   if (!user) return <>{tabTitle}<AuthScreen mode={mode} busy={busy} error={error} submit={submitAuth} changeMode={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }} /></>;
 
   const isOwner = !!selected && selectedRole?.courseId === selected.id && selectedRole.role === "OWNER";
-  return <>{tabTitle}<ApplicationFrame user={user} courseName={view === "course" && selectedId === routeCourseId ? selected?.name : undefined} logout={() => void logout()} busy={loggingOut}
+  const nav: NavItem[] = [
+    { href: "/", label: "Kolegiji", icon: BookOpen, active: view === "home" || view === "enrol" },
+    { href: "/review", label: "Ponavljanje", icon: RotateCcw, active: view === "review", badge: dueTotal, badgeLabel: "za ponoviti" },
+    { href: "/progress", label: "Napredak", icon: BarChart3, active: view === "progress" },
+    ...(faculties.length > 0 ? [{ href: "/faculty", label: "Alati fakulteta", icon: GraduationCap, active: view === "management" }] : []),
+  ];
+  return <>{tabTitle}<PreferencesSync key={user.id} /><ApplicationFrame user={user} logout={() => void logout()} busy={loggingOut}
     focusedPractice={view === "course" && destination === "practice" && activePractice}
-    onHome={() => navigate("/")} homeActive={view === "home" || view === "enrol"} managementActive={view === "management"}
-    onManagement={faculties.length > 0 ? () => { setManagementVisited(true); navigate("/faculty"); } : undefined}>
+    nav={nav} settingsActive={view === "settings"} wide={view === "management"}
+    onNavigate={href => { if (href === "/faculty") setManagementVisited(true); navigate(href); }}>
     {error && <Alert className="mb-5">{error}</Alert>}
-    {view === "unavailable" && <section><h1 id="unavailable-heading" tabIndex={-1} className="text-2xl font-semibold">Page unavailable</h1><Button className="mt-4" onClick={() => navigate("/")}>Back to Home</Button></section>}
+    {view === "unavailable" && <section><h1 id="unavailable-heading" tabIndex={-1} className="text-2xl font-semibold">Stranica nije dostupna</h1><Button className="mt-4" onClick={() => navigate("/")}>Natrag na početnu</Button></section>}
     {deletedNotice && <Alert tone="info" className="mb-5">{deletedNotice}</Alert>}
     <div hidden={view !== "home"}>
       <StudentHome onEnrol={() => navigate("/enrol")} courses={courses} loading={loadingCourses} onOpen={selectCourse} onStatusChange={changeCourseStatus}
@@ -243,16 +259,21 @@ export function AppShell() {
         ? current.map(item => item.id === course.id ? { ...item, membership_status: item.membership_status === "DONE" ? "DONE" : "ACTIVE" } : item)
         : [...current, { ...course, membership_status: "ACTIVE", next_exam: null }])}
       onOpen={selectCourse} onBack={() => navigate("/")} />}
+    {view === "review" && <ReviewHome courses={activeCourses} due={due} loading={loadingCourses} onEnrol={() => navigate("/enrol")}
+      onOpen={course => { if (navigate(coursePath(course.id, "progress")) && selected?.id !== course.id) activateCourse(course); }} />}
+    {view === "progress" && <ProgressHome courses={activeCourses} loading={loadingCourses} onEnrol={() => navigate("/enrol")}
+      onOpen={course => { if (navigate(coursePath(course.id, "progress")) && selected?.id !== course.id) activateCourse(course); }} />}
+    {view === "settings" && <SettingsPage />}
     {view === "course" && (loadingCourses || !courses.some(course => course.id === routeCourseId) || selectedId !== routeCourseId) && <section>
-      {loadingCourses || courses.some(course => course.id === routeCourseId) ? <LoadingState>Loading course…</LoadingState> : <>
-        <h1 className="text-2xl font-semibold">Course unavailable</h1>
-        <p className="mt-3 text-muted">Open one of Your courses, or join the course from Home.</p>
-        <div className="mt-4 flex gap-3"><Button onClick={() => navigate("/")}>Back to Home</Button><Button variant="secondary" onClick={() => { setError(""); setLoadingCourses(true); setCourseRetry(value => value + 1); }}>Retry courses</Button></div>
+      {loadingCourses || courses.some(course => course.id === routeCourseId) ? <LoadingState>Učitavam kolegij…</LoadingState> : <>
+        <h1 className="text-2xl font-semibold">Kolegij nije dostupan</h1>
+        <p className="mt-3 text-muted">Otvorite jedan od svojih kolegija ili upišite kolegij s početne stranice.</p>
+        <div className="mt-4 flex gap-3"><Button onClick={() => navigate("/")}>Natrag na početnu</Button><Button variant="secondary" onClick={() => { setError(""); setLoadingCourses(true); setCourseRetry(value => value + 1); }}>Ponovno učitaj kolegije</Button></div>
       </>}
     </section>}
     <div hidden={view !== "course" || selectedId !== routeCourseId}>
       {selected && <>
-        {membershipError && <div className="mb-4"><Alert>{membershipError}</Alert><Button variant="secondary" className="mt-3" onClick={() => { setMembershipError(""); setMembershipRetry(value => value + 1); }}>Retry course permissions</Button></div>}
+        {membershipError && <div className="mb-4"><Alert>{membershipError}</Alert><Button variant="secondary" className="mt-3" onClick={() => { setMembershipError(""); setMembershipRetry(value => value + 1); }}>Ponovno provjeri ovlasti</Button></div>}
         <UnsavedChangesProvider key={selected.id} onDirtyChange={setWorkspaceEdited}>
         <CourseWorkspace course={selected} currentUserId={user.id} isOwner={isOwner} isModerator={faculties.some(faculty => faculty.id === selected.faculty_id)} roleKnown={selectedRole?.courseId === selected.id} visible={view === "course" && selectedId === routeCourseId}
           destination={destination} navigate={navigateCourse} goHome={() => navigate("/")}
@@ -267,7 +288,7 @@ export function AppShell() {
       </>}
     </div>
     <div hidden={view !== "management"}>
-      {view === "management" && (checkingFaculties ? <LoadingState>Checking faculty access…</LoadingState> : faculties.length === 0 && <><Alert>Faculty tools are available to faculty moderators.</Alert><Button className="mt-4" onClick={() => navigate("/")}>Back to Home</Button></>)}
+      {view === "management" && (checkingFaculties ? <LoadingState>Provjeravam pristup fakultetu…</LoadingState> : faculties.length === 0 && <><Alert>Alati fakulteta dostupni su moderatorima fakulteta.</Alert><Button className="mt-4" onClick={() => navigate("/")}>Natrag na početnu</Button></>)}
       {managementVisited && faculties.length > 0 && <UnsavedChangesProvider onDirtyChange={setManagementEdited}><FacultyWorkspace faculties={faculties} currentUserId={user.id} busy={busy} createCourse={createCourse} onFacultyCreated={faculty => setFaculties(current => [...current, faculty].sort((a, b) => a.name.localeCompare(b.name, "hr")))} goHome={() => navigate("/")} /></UnsavedChangesProvider>}
     </div>
   </ApplicationFrame></>;
