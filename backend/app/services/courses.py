@@ -1,29 +1,19 @@
-from datetime import UTC, datetime
-from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import exists, func, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models import Course, CourseMembership, MembershipRole, User
-from app.models.exam_scope import ExamScope
 from app.models.faculty import Faculty
-from app.models.faculty_moderator import FacultyModerator
 from app.models.material import Material
-from app.models.question import Question
 from app.schemas.course import (
-    EXAM_KINDS,
-    CatalogCourseResponse,
     CourseCreate,
-    CourseResponse,
     CourseUpdate,
-    MemberCourseResponse,
     MembershipStatus,
-    NextExam,
 )
-from app.services.faculties import active_faculty, list_faculty_courses
+from app.services.faculties import active_faculty
 from app.services.materials.cleanup import cleanup_sources, queue_sources
 from app.services.materials.storage import MaterialStorage
 from app.services.moderation import require_moderator
@@ -58,86 +48,6 @@ def get_member_course(db: Session, user: User, course_id: UUID) -> Course:
     if course is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     return course
-
-
-def approved_question_counts(db: Session, course_ids: list[UUID]) -> dict[UUID, int]:
-    """Questions students can practise, per course; courses without any are absent."""
-    if not course_ids:
-        return {}
-    rows = db.execute(
-        select(Question.course_id, func.count())
-        .where(Question.course_id.in_(course_ids), Question.status == "APPROVED")
-        .group_by(Question.course_id)
-    )
-    return {course_id: count for course_id, count in rows}
-
-
-def next_exams(db: Session, course_ids: list[UUID]) -> dict[UUID, NextExam]:
-    """The nearest dated exam per course whose last day is today or later (UTC date)."""
-    if not course_ids:
-        return {}
-    last_day = func.coalesce(ExamScope.ends_on, ExamScope.starts_on)
-    scopes = db.scalars(
-        select(ExamScope)
-        .where(
-            ExamScope.course_id.in_(course_ids),
-            ExamScope.kind.in_(EXAM_KINDS),
-            ExamScope.starts_on.is_not(None),
-            last_day >= datetime.now(UTC).date(),
-        )
-        .order_by(ExamScope.course_id, ExamScope.starts_on, ExamScope.id)
-    )
-    nearest: dict[UUID, NextExam] = {}
-    for scope in scopes:
-        if scope.course_id not in nearest and scope.starts_on is not None:
-            nearest[scope.course_id] = NextExam(
-                scope_id=scope.id,
-                kind=scope.kind,  # type: ignore[arg-type]  # narrowed by the EXAM_KINDS filter
-                name=scope.name,
-                starts_on=scope.starts_on,
-                ends_on=scope.ends_on,
-            )
-    return nearest
-
-
-def list_member_courses(db: Session, user: User) -> list[MemberCourseResponse]:
-    rows = db.execute(
-        select(Course, CourseMembership.status)
-        .join(CourseMembership)
-        .where(CourseMembership.user_id == user.id)
-    ).all()
-    course_ids = [course.id for course, _ in rows]
-    counts = approved_question_counts(db, course_ids)
-    exams = next_exams(db, course_ids)
-    return [
-        MemberCourseResponse(
-            **CourseResponse.model_validate(course).model_dump(),
-            membership_status=cast(
-                MembershipStatus, membership_status
-            ),  # the column is constrained
-            approved_question_count=counts.get(course.id, 0),
-            next_exam=exams.get(course.id),
-        )
-        for course, membership_status in rows
-    ]
-
-
-def list_catalog_courses(
-    db: Session, faculty_id: UUID, limit: int, offset: int
-) -> list[CatalogCourseResponse]:
-    courses = list_faculty_courses(db, faculty_id, limit, offset)
-    counts = approved_question_counts(db, [course.id for course in courses])
-    has_moderators = bool(
-        db.scalar(select(exists().where(FacultyModerator.faculty_id == faculty_id)))
-    )
-    return [
-        CatalogCourseResponse(
-            **CourseResponse.model_validate(course).model_dump(),
-            approved_question_count=counts.get(course.id, 0),
-            has_moderators=has_moderators,
-        )
-        for course in courses
-    ]
 
 
 def set_membership_status(

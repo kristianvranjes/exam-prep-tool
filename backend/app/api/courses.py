@@ -15,12 +15,12 @@ from app.schemas.course import (
     MembershipResponse,
     MembershipUpdate,
 )
+from app.services.course_summaries import list_member_courses
 from app.services.courses import (
     create_course,
     delete_course,
     get_member_course,
     join_course,
-    list_member_courses,
     set_membership_status,
     update_course,
 )
