@@ -14,8 +14,9 @@ const course: Course = { id: "c1", faculty_id: "f1", name: "Algorithms", code: "
 const onJoined = vi.fn();
 const membership: CourseMembership = { course_id: course.id, user_id: "user-1", role: "MEMBER" };
 const onOpen = vi.fn();
+const onBack = vi.fn();
 function view(joinedCourses: Course[] = [], loadingMembership = false, refreshRevision = 0) {
-  return <CourseBrowser joinedCourses={joinedCourses} loadingMembership={loadingMembership} onJoined={onJoined} onOpen={onOpen} refreshRevision={refreshRevision} />;
+  return <CourseBrowser joinedCourses={joinedCourses} loadingMembership={loadingMembership} onJoined={onJoined} onOpen={onOpen} onBack={onBack} refreshRevision={refreshRevision} />;
 }
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -48,7 +49,7 @@ it("loads faculties in backend order, then courses only on selection", async () 
   expect(screen.getByText("Učitavam kolegije fakulteta…")).toBeInTheDocument();
   loading.resolve([course]);
   expect(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms" })).toBeEnabled();
-  expect(screen.getByText("Nije upisan")).toBeInTheDocument();
+  expect(screen.getByText("Upisano: 0")).toBeInTheDocument();
   await selectFaculty("f2");
   await waitFor(() => expect(mock.facultyCourses.mock.calls).toEqual([["f1"], ["f2"]]));
 });
@@ -62,7 +63,7 @@ it("ignores an old faculty response after a newer selection", async () => {
   expect(await screen.findByText("Nema dostupnih kolegija")).toBeInTheDocument();
   await act(async () => stale.resolve([course]));
   expect(screen.queryByText("Algorithms")).not.toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Legacy / Unassigned" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Legacy / Unassigned", level: 2 })).toBeInTheDocument();
 });
 
 it("does not fetch courses on an external revision until a faculty is selected", async () => {
@@ -113,8 +114,8 @@ it("opens the existing joined course without posting another join", async () => 
   const joined = { ...course, description: "Joined course details" };
   render(view([joined]));
   await selectFaculty();
-  fireEvent.click(await screen.findByRole("button", { name: "Otvori kolegij: Algorithms" }));
-  expect(screen.getByText("Upisan")).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Upisano, otvori kolegij: Algorithms" }));
+  expect(screen.getByRole("button", { name: "Upisano, otvori kolegij: Algorithms" })).toHaveTextContent("Upisano ✓");
   expect(onOpen).toHaveBeenCalledWith(joined);
   expect(mock.joinCourse).not.toHaveBeenCalled();
 });
@@ -135,7 +136,7 @@ it("disables joining while membership is loading and while that join is pending"
   expect(screen.getByRole("status")).toHaveTextContent("Kolegij Algorithms dodan je u Vaše kolegije.");
   expect(mock.joinCourse).toHaveBeenCalledTimes(1);
   rendered.rerender(view([course]));
-  expect(screen.getByRole("button", { name: "Otvori kolegij: Algorithms" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Upisano, otvori kolegij: Algorithms" })).toBeInTheDocument();
 });
 
 it("allows retrying a failed join and keeps the faculty selected", async () => {
@@ -160,4 +161,29 @@ it("does not update a later session when a join finishes after unmount", async (
   rendered.unmount();
   await act(async () => pending.resolve(membership));
   expect(onJoined).not.toHaveBeenCalled();
+});
+
+it("filters the faculty catalog by name or code and starts with an empty search when reopened", async () => {
+  const other: Course = { ...course, id: "c2", name: "Databases", code: "BP", description: null };
+  mock.facultyCourses.mockResolvedValue([course, other]);
+  const first = render(view());
+  await selectFaculty();
+  await screen.findByRole("button", { name: "Upiši kolegij: Databases" });
+  fireEvent.change(screen.getByLabelText("Pretraži kolegije"), { target: { value: "bp" } });
+  expect(screen.queryByRole("button", { name: "Upiši kolegij: Algorithms" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Upiši kolegij: Databases" })).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Pretraži kolegije"), { target: { value: "zzz" } });
+  expect(screen.getByText("Nema odgovarajućih kolegija")).toBeInTheDocument();
+  first.unmount();
+  render(view());
+  await selectFaculty();
+  expect(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms" })).toBeInTheDocument();
+  expect(screen.getByLabelText("Pretraži kolegije")).toHaveValue("");
+});
+
+it("goes back to Your courses", async () => {
+  render(view());
+  await screen.findByLabelText("Pretraži po fakultetu");
+  fireEvent.click(screen.getByRole("button", { name: /Vaši kolegiji/ }));
+  expect(onBack).toHaveBeenCalledTimes(1);
 });

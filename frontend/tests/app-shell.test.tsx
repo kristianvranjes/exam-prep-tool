@@ -64,7 +64,9 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function goHome() { fireEvent.click(within(screen.getByRole("navigation", { name: "Glavna navigacija" })).getByRole("button", { name: "Početna" })); }
+function goHome() { fireEvent.click(within(screen.getByRole("navigation", { name: "Glavna navigacija" })).getByRole("button", { name: "Kolegiji" })); }
+function openAccount() { fireEvent.click(screen.getByRole("button", { name: /^Račun:/ })); }
+function logOut() { openAccount(); fireEvent.click(screen.getByRole("button", { name: "Odjava" })); }
 async function openCourse(name = "Algorithms") {
   fireEvent.click(await within(screen.getByRole("region", { name: "Vaši kolegiji" })).findByRole("button", { name: `Otvori kolegij: ${name}` }));
 }
@@ -74,7 +76,9 @@ async function openSettings() {
   fireEvent.click(await screen.findByRole("button", { name: "Postavke kolegija" }));
   return screen.getByRole("region", { name: "Postavke kolegija" });
 }
-async function openDiscovery() { fireEvent.click(await screen.findByRole("button", { name: "Upiši kolegij" })); return screen.findByLabelText("Pretraži po fakultetu"); }
+async function openDiscovery() { fireEvent.click((await screen.findAllByRole("button", { name: "Upiši kolegij" }))[0]); return screen.findByLabelText("Pretraži po fakultetu"); }
+const enrolPage = () => screen.getByRole("region", { name: "Upis kolegija" });
+function backToCourses() { fireEvent.click(within(enrolPage()).getByRole("button", { name: /Vaši kolegiji/ })); }
 async function openManagement() { fireEvent.click(await screen.findByRole("button", { name: "Alati fakulteta" })); }
 
 describe("authentication and course flow", () => {
@@ -85,7 +89,7 @@ describe("authentication and course flow", () => {
     fireEvent.change(screen.getByLabelText("Ime za prikaz"), { target: { value: "Student" } });
     fireEvent.change(screen.getByLabelText("Lozinka"), { target: { value: "correct horse" } });
     fireEvent.submit(screen.getByRole("form", { name: "Registracija" }));
-    expect(await screen.findByRole("heading", { name: "Početna" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Vaši kolegiji" })).toBeInTheDocument();
     expect(screen.queryByRole("form", { name: "Create a course" })).not.toBeInTheDocument();
     await openManagement();
     const form = screen.getByRole("form", { name: "Create a course" });
@@ -94,7 +98,7 @@ describe("authentication and course flow", () => {
     fireEvent.submit(form);
     await waitFor(() => expect(apiMock.createCourse).toHaveBeenCalledWith({ faculty_id: "faculty-1", name: "Algorithms", code: undefined, description: undefined }));
     expect(await screen.findByRole("heading", { name: "Algorithms" })).toBeVisible();
-    expect(screen.queryByRole("heading", { name: "Početna" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Vaši kolegiji" })).not.toBeInTheDocument();
   });
 
   it("lets a moderator add a faculty and offers it for new courses", async () => {
@@ -155,7 +159,7 @@ it("waits for the session check before showing signed-in Home", async () => {
   expect(screen.getByRole("status")).toHaveTextContent("Loading your study space");
   expect(screen.queryByLabelText("Lozinka")).not.toBeInTheDocument();
   await act(async () => session.resolve(user));
-  const home = await screen.findByRole("heading", { name: "Početna" });
+  const home = await screen.findByRole("heading", { name: "Vaši kolegiji" });
   await waitFor(() => expect(home).toHaveFocus());
   expect(screen.getByRole("region", { name: "Vaši kolegiji" })).toBeVisible();
 });
@@ -170,12 +174,14 @@ it("prioritizes joined courses and opens discovery only on request", async () =>
   expect(screen.queryByRole("region", { name: "Vježba" })).not.toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Nastavite učiti" })).not.toBeInTheDocument();
   const browse = await openDiscovery();
+  expect(window.location.pathname).toBe("/enrol");
   fireEvent.change(browse, { target: { value: "faculty-1" } });
-  await within(screen.getByRole("region", { name: "Pretraži kolegije" })).findByRole("button", { name: "Otvori kolegij: Algorithms" });
-  fireEvent.click(screen.getByRole("button", { name: "Zatvori pretragu kolegija" }));
-  expect(screen.getByLabelText("Pretraži po fakultetu")).not.toBeVisible();
-  await openDiscovery();
-  expect(screen.getByLabelText("Pretraži po fakultetu")).toHaveValue("faculty-1");
+  await within(enrolPage()).findByRole("button", { name: "Upisano, otvori kolegij: Algorithms" });
+  backToCourses();
+  expect(screen.queryByLabelText("Pretraži po fakultetu")).not.toBeInTheDocument();
+  expect(window.location.pathname).toBe("/");
+  // The enrolment page starts fresh on every visit.
+  expect(await openDiscovery()).toHaveValue("");
   expect(apiMock.facultyCourses).toHaveBeenCalledOnce();
 });
 
@@ -188,7 +194,7 @@ it("replaces Home with the selected course overview and switches one destination
   expect(screen.getByRole("heading", { name: "Algorithms" })).toHaveFocus();
   expect(document.title).toBe("Algorithms · ExamPrep");
   expect(screen.queryByRole("region", { name: "Vaši kolegiji" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("heading", { name: "Početna" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Vaši kolegiji" })).not.toBeInTheDocument();
   const nav = screen.getByRole("navigation", { name: "Navigacija kolegija" });
   expect(within(nav).getByRole("button", { name: "Pregled" })).toHaveAttribute("aria-current", "page");
   for (const name of ["Course materials", "Vježba", "Napredak", "Baza pitanja"]) expect(screen.queryByRole("region", { name })).not.toBeInTheDocument();
@@ -205,7 +211,7 @@ it("replaces Home with the selected course overview and switches one destination
   fireEvent.click(screen.getByRole("button", { name: "Baza pitanja" }));
   expect(screen.getByRole("region", { name: "Baza pitanja" })).toHaveTextContent("course-1");
   fireEvent.click(screen.getByRole("button", { name: "Natrag na početnu" }));
-  expect(screen.getByRole("heading", { name: "Početna" })).toHaveFocus();
+  expect(screen.getByRole("heading", { name: "Vaši kolegiji" })).toHaveFocus();
   await openCourse("Statistics");
   expect(screen.getByRole("heading", { name: "Statistics" })).toBeVisible();
   navigate("Vježba");
@@ -213,26 +219,34 @@ it("replaces Home with the selected course overview and switches one destination
   expect(screen.getByRole("link", { name: "Preskoči na sadržaj" })).toHaveAttribute("href", "#main-content");
 });
 
-it("closes the mobile navigation after selection and supports Escape focus", async () => {
+it("marks Courses as the current page and opens settings and account popovers that close with Escape", async () => {
   apiMock.me.mockResolvedValue(user);
   apiMock.courses.mockResolvedValue([course]);
   render(<AppShell />);
   await screen.findByRole("region", { name: "Vaši kolegiji" });
+  const nav = screen.getByRole("navigation", { name: "Glavna navigacija" });
+  expect(within(nav).getByRole("button", { name: "Kolegiji" })).toHaveAttribute("aria-current", "page");
+  expect(await within(nav).findByRole("button", { name: "Alati fakulteta" })).not.toHaveAttribute("aria-current");
+  const settings = screen.getByRole("button", { name: "Postavke izgleda" });
+  expect(settings).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(settings);
+  const panel = screen.getByRole("region", { name: "Postavke" });
+  expect(within(panel).getByLabelText("Tema")).toBeInTheDocument();
+  fireEvent.keyDown(panel, { key: "Escape" });
+  expect(screen.queryByRole("region", { name: "Postavke" })).not.toBeInTheDocument();
+  expect(settings).toHaveFocus();
+  openAccount();
+  expect(screen.getByText(user.email)).toBeVisible();
+  expect(screen.queryByRole("region", { name: "Postavke" })).not.toBeInTheDocument();
+  fireEvent.pointerDown(document.body);
+  expect(screen.queryByText(user.email)).not.toBeInTheDocument();
   await openCourse();
-  const menu = screen.getByRole("button", { name: "Otvori navigaciju" });
-  expect(menu).toHaveAttribute("aria-controls", "app-navigation");
-  fireEvent.click(menu);
-  fireEvent.keyDown(screen.getByRole("navigation", { name: "Glavna navigacija" }), { key: "Escape" });
-  expect(menu).toHaveAttribute("aria-expanded", "false");
-  expect(menu).toHaveFocus();
-  fireEvent.click(menu);
+  expect(within(nav).getByRole("button", { name: "Kolegiji" })).not.toHaveAttribute("aria-current");
+  openAccount();
   goHome();
-  expect(menu).toHaveAttribute("aria-expanded", "false");
-  await openCourse();
-  fireEvent.click(menu);
+  expect(screen.queryByText(user.email)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "ExamPrep, početna" }));
-  expect(menu).toHaveAttribute("aria-expanded", "false");
-  expect(screen.getByRole("heading", { name: "Početna" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Vaši kolegiji" })).toBeVisible();
 });
 
 it("uses membership rather than creator identity for owner settings", async () => {
@@ -285,7 +299,8 @@ it("updates joined and selected metadata and refreshes the previously opened cat
   apiMock.facultyCourses.mockResolvedValueOnce([course]).mockResolvedValueOnce([updated]);
   render(<AppShell />);
   fireEvent.change(await openDiscovery(), { target: { value: "faculty-1" } });
-  await within(screen.getByRole("region", { name: "Pretraži kolegije" })).findByRole("button", { name: "Otvori kolegij: Algorithms" });
+  await within(enrolPage()).findByRole("button", { name: "Upisano, otvori kolegij: Algorithms" });
+  backToCourses();
   await openCourse();
   const settings = await openSettings();
   fireEvent.change(within(settings).getByLabelText("Naziv kolegija"), { target: { value: updated.name } });
@@ -297,8 +312,9 @@ it("updates joined and selected metadata and refreshes the previously opened cat
   expect(screen.getByRole("navigation", { name: "Glavna navigacija" })).toHaveTextContent("Algorithms II");
   goHome();
   expect(within(screen.getByRole("region", { name: "Vaši kolegiji" })).getByRole("button", { name: "Otvori kolegij: Algorithms II" })).toBeVisible();
-  await waitFor(() => expect(apiMock.facultyCourses).toHaveBeenCalledTimes(2));
-  expect(await within(screen.getByRole("region", { name: "Pretraži kolegije" })).findByRole("button", { name: "Otvori kolegij: Algorithms II" })).toBeVisible();
+  fireEvent.change(await openDiscovery(), { target: { value: "faculty-1" } });
+  expect(await within(enrolPage()).findByRole("button", { name: "Upisano, otvori kolegij: Algorithms II" })).toBeVisible();
+  expect(apiMock.facultyCourses).toHaveBeenCalledTimes(2);
 });
 
 it("keeps a saved course update when catalog refresh fails", async () => {
@@ -307,12 +323,15 @@ it("keeps a saved course update when catalog refresh fails", async () => {
   apiMock.facultyCourses.mockResolvedValueOnce([course]).mockRejectedValueOnce(new Error("offline"));
   render(<AppShell />);
   fireEvent.change(await openDiscovery(), { target: { value: "faculty-1" } });
-  await within(screen.getByRole("region", { name: "Pretraži kolegije" })).findByRole("button", { name: "Otvori kolegij: Algorithms" });
+  await within(enrolPage()).findByRole("button", { name: "Upisano, otvori kolegij: Algorithms" });
+  backToCourses();
   await openCourse(); const settings = await openSettings();
   fireEvent.change(within(settings).getByLabelText("Naziv kolegija"), { target: { value: "Algorithms II" } });
   fireEvent.click(within(settings).getByRole("button", { name: "Spremi kolegij" }));
   await screen.findByText("Podaci o kolegiju spremljeni."); goHome();
+  fireEvent.change(await openDiscovery(), { target: { value: "faculty-1" } });
   expect(await screen.findByText(/Kolegiji ovog fakulteta nisu učitani/)).toBeVisible();
+  backToCourses();
   expect(within(screen.getByRole("region", { name: "Vaši kolegiji" })).getByRole("button", { name: "Otvori kolegij: Algorithms II" })).toBeVisible();
 });
 
@@ -329,7 +348,7 @@ it("deletes the selected course, returns Home and clears its tools and practice 
   fireEvent.click(within(settings).getByRole("button", { name: "Trajno obriši kolegij" }));
   await waitFor(() => expect(apiMock.deleteCourse).toHaveBeenCalledWith("course-1"));
   expect(await screen.findByText("Algorithms was permanently deleted.")).toBeVisible();
-  expect(screen.getByRole("heading", { name: "Početna" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Vaši kolegiji" })).toBeVisible();
   for (const name of ["Postavke kolegija", "Vježba", "Napredak", "Baza pitanja"]) expect(screen.queryByRole("region", { name })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Otvori kolegij: Algorithms" })).not.toBeInTheDocument();
   await openCourse("Statistics"); navigate("Vježba");
@@ -348,7 +367,7 @@ it("preserves owner edits on Home and requires consent before switching courses"
   goHome(); expect(confirm).not.toHaveBeenCalled();
   await openCourse("Statistics");
   expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Any unsaved answers or edits will be lost"));
-  expect(screen.getByRole("heading", { name: "Početna" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Vaši kolegiji" })).toBeVisible();
   expect(apiMock.membership).not.toHaveBeenCalledWith("course-2");
   await openCourse();
   expect(within(await openSettings()).getByLabelText("Naziv kolegija")).toHaveValue("Unsaved course name");
@@ -376,7 +395,7 @@ it("logs in and clears the account, courses and selected tools on logout", async
   fireEvent.change(screen.getByLabelText("Lozinka"), { target: { value: "correct horse" } });
   fireEvent.submit(screen.getByRole("form", { name: "Prijava" }));
   await screen.findByRole("region", { name: "Vaši kolegiji" }); await openCourse();
-  fireEvent.click(screen.getByRole("button", { name: "Odjava" }));
+  logOut();
   expect(await screen.findByRole("form", { name: "Prijava" })).toBeInTheDocument();
   expect(apiMock.login).toHaveBeenCalledWith({ email: user.email, password: "correct horse" });
   expect(apiMock.logout).toHaveBeenCalledOnce();
@@ -389,7 +408,7 @@ it("ignores a late owner membership response after logout", async () => {
   apiMock.me.mockResolvedValue(user); apiMock.courses.mockResolvedValue([course]); apiMock.membership.mockReturnValue(pending.promise);
   render(<AppShell />);
   await screen.findByRole("region", { name: "Vaši kolegiji" }); await openCourse();
-  fireEvent.click(screen.getByRole("button", { name: "Odjava" })); await screen.findByRole("form", { name: "Prijava" });
+  logOut(); await screen.findByRole("form", { name: "Prijava" });
   await act(async () => pending.resolve({ ...membership, role: "OWNER" }));
   expect(screen.queryByRole("region", { name: "Postavke kolegija" })).not.toBeInTheDocument();
 });
@@ -398,7 +417,7 @@ it("keeps the signed-in course when logout fails and shows a retryable error", a
   apiMock.me.mockResolvedValue(user); apiMock.courses.mockResolvedValue([course]); apiMock.logout.mockRejectedValue(new Error("Could not log out. Try again."));
   render(<AppShell />);
   await screen.findByRole("region", { name: "Vaši kolegiji" }); await openCourse();
-  fireEvent.click(screen.getByRole("button", { name: "Odjava" }));
+  logOut();
   expect(await screen.findByRole("alert")).toHaveTextContent("Could not log out");
   expect(screen.getByRole("heading", { name: "Algorithms" })).toBeVisible();
   expect(screen.getByRole("button", { name: "Odjava" })).toBeEnabled();
@@ -408,7 +427,7 @@ it("directs an empty Home to join without showing a permanent catalog", async ()
   apiMock.me.mockResolvedValue(user); apiMock.faculties.mockResolvedValue([]); render(<AppShell />);
   expect(await screen.findByRole("heading", { name: "Još nema kolegija" })).toBeVisible();
   expect(screen.queryByLabelText("Pretraži po fakultetu")).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Upiši kolegij" }));
+  fireEvent.click(screen.getAllByRole("button", { name: "Upiši kolegij" })[0]);
   expect(await screen.findByText("Nema dostupnih fakulteta")).toBeVisible();
   expect(screen.queryByRole("form", { name: "Create a course" })).not.toBeInTheDocument();
 });
@@ -416,13 +435,13 @@ it("directs an empty Home to join without showing a permanent catalog", async ()
 it("reports faculty loading and joined-course loading errors on Home", async () => {
   apiMock.me.mockResolvedValue(user); apiMock.faculties.mockRejectedValue(new Error("Unavailable")); apiMock.courses.mockRejectedValue(new Error("Unavailable"));
   render(<AppShell />);
-  await screen.findByRole("heading", { name: "Početna" });
+  await screen.findByRole("heading", { name: "Vaši kolegiji" });
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Could not load faculties|Could not load courses/));
 });
 
 it("does not expose faculty tools or course creation to ordinary members", async () => {
   apiMock.me.mockResolvedValue(user); apiMock.moderatorStatus.mockResolvedValue({ is_moderator: false }); render(<AppShell />);
-  await screen.findByRole("heading", { name: "Početna" });
+  await screen.findByRole("heading", { name: "Vaši kolegiji" });
   await waitFor(() => expect(apiMock.moderatorStatus).toHaveBeenCalledWith("faculty-1"));
   expect(screen.queryByRole("button", { name: "Alati fakulteta" })).not.toBeInTheDocument();
   expect(screen.queryByRole("form", { name: "Create a course" })).not.toBeInTheDocument();
@@ -430,7 +449,7 @@ it("does not expose faculty tools or course creation to ordinary members", async
 
 it("keeps moderation and creation secondary and preserves management form state", async () => {
   apiMock.me.mockResolvedValue(user); render(<AppShell />);
-  await screen.findByRole("heading", { name: "Početna" });
+  await screen.findByRole("heading", { name: "Vaši kolegiji" });
   expect(screen.queryByRole("region", { name: "Moderation queue" })).not.toBeInTheDocument();
   await openManagement();
   expect(await screen.findByRole("region", { name: "Moderation queue" })).toHaveAttribute("id", "moderation");
@@ -445,11 +464,11 @@ it("joins immediately, opens the course from discovery and avoids repeated joins
   apiMock.me.mockResolvedValue(user); apiMock.moderatorStatus.mockResolvedValue({ is_moderator: false }); render(<AppShell />);
   fireEvent.change(await openDiscovery(), { target: { value: "faculty-1" } });
   fireEvent.click(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms" }));
-  expect(await within(screen.getByRole("region", { name: "Vaši kolegiji" })).findByRole("button", { name: "Otvori kolegij: Algorithms" })).toBeVisible();
+  expect(await within(enrolPage()).findByRole("button", { name: "Upisano, otvori kolegij: Algorithms" })).toBeVisible();
   expect(screen.getByText(/Kolegij Algorithms dodan je u Vaše kolegije/)).toBeVisible();
-  fireEvent.click(within(screen.getByRole("region", { name: "Pretraži kolegije" })).getByRole("button", { name: "Otvori kolegij: Algorithms" }));
+  fireEvent.click(within(enrolPage()).getByRole("button", { name: "Upisano, otvori kolegij: Algorithms" }));
   expect(screen.getByRole("heading", { name: "Algorithms" })).toBeVisible();
-  expect(screen.queryByRole("region", { name: "Pretraži kolegije" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Upis kolegija" })).not.toBeInTheDocument();
   goHome();
   expect(within(screen.getByRole("region", { name: "Vaši kolegiji" })).getAllByRole("button", { name: "Otvori kolegij: Algorithms" })).toHaveLength(1);
   expect(apiMock.joinCourse).toHaveBeenCalledOnce();
@@ -477,7 +496,7 @@ it("keeps joined courses and the mounted course intact after discovery errors", 
   fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj kolegije" }));
   fireEvent.click(await screen.findByRole("button", { name: "Upiši kolegij: Statistics" }));
   expect(await screen.findByText(/Upis u kolegij nije uspio/)).toBeVisible();
-  await openCourse(); navigate("Vježba");
+  backToCourses(); await openCourse(); navigate("Vježba");
   expect(screen.getByRole("region", { name: "Vježba" })).toHaveTextContent("course-1");
   expect(apiMock.membership).toHaveBeenCalledOnce();
 });

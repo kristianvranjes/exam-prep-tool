@@ -7,6 +7,7 @@ import { attemptPath, coursePath, documentTitle, parseWorkspaceRoute, type Cours
 import type { AttemptSummary, Attempt } from "../lib/practice-api";
 import { useWorkspaceNavigation } from "./use-workspace-navigation";
 import { StudentHome } from "./student-home";
+import { CourseBrowser } from "./course-browser";
 import { FacultyWorkspace } from "./faculty-workspace";
 import { ApplicationFrame, Brand } from "./application-frame";
 import { AuthScreen, type AuthMode } from "./auth-screen";
@@ -91,7 +92,7 @@ export function AppShell() {
 
   useEffect(() => {
     if (!user || checkingSession) return;
-    const id = view === "course" ? destination === "practice" ? "practice" : "selected-course-heading" : view === "management" ? "management-heading" : view === "home" ? "home-heading" : "unavailable-heading";
+    const id = view === "course" ? destination === "practice" ? "practice" : "selected-course-heading" : view === "management" ? "management-heading" : view === "enrol" ? "enrol-heading" : view === "home" ? "home-heading" : "unavailable-heading";
     const heading = document.getElementById(id);
     heading?.focus({ preventScroll: true });
     if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
@@ -209,17 +210,19 @@ export function AppShell() {
   const isOwner = !!selected && selectedRole?.courseId === selected.id && selectedRole.role === "OWNER";
   return <>{tabTitle}<ApplicationFrame user={user} courseName={view === "course" && selectedId === routeCourseId ? selected?.name : undefined} logout={() => void logout()} busy={loggingOut}
     focusedPractice={view === "course" && destination === "practice" && activePractice}
-    onHome={() => navigate("/")} homeActive={view === "home"} managementActive={view === "management"}
+    onHome={() => navigate("/")} homeActive={view === "home" || view === "enrol"} managementActive={view === "management"}
     onManagement={faculties.length > 0 ? () => { setManagementVisited(true); navigate("/faculty"); } : undefined}>
     {error && <Alert className="mb-5">{error}</Alert>}
     {view === "unavailable" && <section><h1 id="unavailable-heading" tabIndex={-1} className="text-2xl font-semibold">Page unavailable</h1><Button className="mt-4" onClick={() => navigate("/")}>Back to Home</Button></section>}
     {deletedNotice && <Alert tone="info" className="mb-5">{deletedNotice}</Alert>}
     <div hidden={view !== "home"}>
-      <StudentHome courses={courses} loading={loadingCourses} onOpen={selectCourse}
-        onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])}
-        catalogRevision={catalogRevision} resumable={resumable} onResume={resumeSession}
+      <StudentHome userId={user.id} onEnrol={() => navigate("/enrol")} courses={courses} loading={loadingCourses} onOpen={selectCourse}
+        resumable={resumable} onResume={resumeSession}
         checkingSessions={Object.values(sessions).some(session => session.status === "loading")} />
     </div>
+    {view === "enrol" && <CourseBrowser joinedCourses={courses} loadingMembership={loadingCourses} refreshRevision={catalogRevision}
+      onJoined={course => setCourses(current => current.some(item => item.id === course.id) ? current : [...current, course])}
+      onOpen={selectCourse} onBack={() => navigate("/")} />}
     {view === "course" && (loadingCourses || !courses.some(course => course.id === routeCourseId) || selectedId !== routeCourseId) && <section>
       {loadingCourses || courses.some(course => course.id === routeCourseId) ? <LoadingState>Loading course…</LoadingState> : <>
         <h1 className="text-2xl font-semibold">Course unavailable</h1>

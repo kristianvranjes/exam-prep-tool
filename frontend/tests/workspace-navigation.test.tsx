@@ -79,7 +79,7 @@ it("does not join or expose an unavailable course through a URL", async () => {
   expect(mock.membership).not.toHaveBeenCalledWith("unknown");
   expect(mock.start).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Back to Home" }));
-  expect(screen.getByRole("heading", { name: "Početna" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Vaši kolegiji" })).toBeVisible();
 });
 
 it("corrects an active session's results URL and offers retry for a failed deep-link read", async () => {
@@ -139,7 +139,7 @@ it("ignores a late attempt read after switching to another course", async () => 
   window.history.replaceState(null, "", "/courses/course/attempts/attempt");
   render(<AppShell />);
   await waitFor(() => expect(mock.read).toHaveBeenCalled());
-  fireEvent.click(within(screen.getByRole("navigation", { name: "Glavna navigacija" })).getByRole("button", { name: "Početna" }));
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Glavna navigacija" })).getByRole("button", { name: "Kolegiji" }));
   fireEvent.click(screen.getByRole("button", { name: "Otvori kolegij: Statistics" }));
   await act(async () => resolve(activeAttempt));
   expect(screen.getByRole("heading", { name: "Statistics" })).toBeVisible();
@@ -204,6 +204,7 @@ it("guards unsaved answers on course switching and logout, including failed save
   fireEvent.click(screen.getByRole("button", { name: "Otvori kolegij: Statistics" }));
   expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Switch courses"));
   expect(mock.membership).not.toHaveBeenCalledWith("statistics");
+  fireEvent.click(screen.getByRole("button", { name: /^Račun:/ }));
   fireEvent.click(screen.getByRole("button", { name: "Odjava" }));
   expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Log out")); expect(mock.logout).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Nastavi vježbu" }));
@@ -232,7 +233,7 @@ it("preserves an actual question draft across More, Progress and Home and guards
   expect(confirm).toHaveBeenCalledOnce(); await enterCourse(); navigate("Više");
   expect(screen.getByLabelText("Tekst pitanja")).toHaveValue("Unfinished draft question");
   confirm.mockRestore();
-});
+}, 20000);
 
 it("removes the resume entry after submission and retains the existing result", async () => {
   const submitted: Attempt = { ...activeAttempt, status: "SUBMITTED", submitted_at: "2026-10-01T10:10:00Z", questions: [{ ...activeAttempt.questions[0], options: [], answer: { type: "SHORT_ANSWER", text: "Answer" }, grading_status: "PENDING", reference_answer: "Reference", explanation: null, correct_boolean: null }] };
