@@ -53,8 +53,12 @@ class NextExam(BaseModel):
 class MemberCourseResponse(CourseResponse):
     """A course in the caller's own list, with the caller's status and the course's numbers."""
 
+    role: Literal["OWNER", "MEMBER"]
     membership_status: MembershipStatus
     approved_question_count: int
+    # Share of the gradable approved questions the caller still retains (0-100), whether or not an
+    # exam is dated; null when the course has no such questions.
+    mastery_percent: int | None
     next_exam: NextExam | None
 
 

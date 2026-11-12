@@ -8,7 +8,7 @@ from app.models import User
 from app.models.faculty import Faculty
 from app.schemas.course import CatalogCourseResponse
 from app.schemas.faculty import FacultyCreate, FacultyCreation, FacultyResponse
-from app.services.courses import list_catalog_courses
+from app.services.course_summaries import list_catalog_courses
 from app.services.faculties import can_create_faculty, create_faculty, list_faculties
 
 router = APIRouter(prefix="/faculties", tags=["faculties"])

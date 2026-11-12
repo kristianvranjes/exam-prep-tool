@@ -46,10 +46,15 @@ and are never returned.
   unknown/inactive faculty is 404. Responses include faculty_id and is_active. The
   optional `year_of_study` (1–6) is the year of study the course belongs to.
 - `GET /courses` lists courses where the authenticated user is a member. Each row has the
-  course fields plus `membership_status` (`ACTIVE`, `DONE` or `HIDDEN`),
-  `approved_question_count` (approved questions only) and `next_exam`: the nearest
+  course fields plus `role` (`OWNER` or `MEMBER`), `membership_status` (`ACTIVE`, `DONE` or
+  `HIDDEN`), `approved_question_count` (approved questions only), `mastery_percent` and
+  `next_exam`. `mastery_percent` is the share, as a whole percent rounded half up, of the
+  course's approved questions that can be graded automatically (not short answers) whose last
+  answer by the caller was correct and is not overdue by more than its own interval, the
+  retention rule of `readiness-v1`; it is `0` before the first answer and `null` for a course
+  without such questions. `next_exam` is the nearest
   `MIDTERM`, `FINAL` or `FULL_EXAM` exam scope that has a start date and whose last day
-  (`ends_on`, else `starts_on`) is today (UTC) or later, as
+  (`ends_on`, else `starts_on`) is today (the date in Zagreb) or later, as
   `{scope_id, kind, name, starts_on, ends_on}`, otherwise `null`. Labs and short quizzes
   never count. Hidden and finished courses are listed too; the client decides what to show.
 - `GET /courses/{course_id}` returns a member's course; inaccessible courses return
