@@ -23,6 +23,7 @@ const apiMock = vi.hoisted(() => ({
   questionReview: vi.fn().mockResolvedValue([]),
   transitionQuestion: vi.fn(),
   joinCourse: vi.fn(),
+  setMembershipStatus: vi.fn(),
   examScopes: vi.fn().mockResolvedValue([]),
 }));
 
@@ -42,6 +43,7 @@ const course = { id: "course-1", name: "Algorithms", code: "ALG101", description
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.localStorage.clear();
   apiMock.me.mockRejectedValue(new Error("signed out"));
   apiMock.courses.mockResolvedValue([]);
   apiMock.faculties.mockResolvedValue([{ id: "faculty-1", name: "Engineering", slug: "engineering", university_name: null }]);
@@ -512,4 +514,34 @@ it("deduplicates a late join after the same course was created", async () => {
   await screen.findByRole("heading", { name: "Algorithms" });
   await act(async () => join.resolve(membership)); goHome();
   expect(within(screen.getByRole("region", { name: "Vaši kolegiji" })).getAllByRole("button", { name: "Otvori kolegij: Algorithms" })).toHaveLength(1);
+});
+
+it("saves a course removed from the list, and puts it back when saving fails", async () => {
+  apiMock.me.mockResolvedValue(user);
+  apiMock.courses.mockResolvedValue([{ ...course, membership_status: "ACTIVE" }]);
+  apiMock.setMembershipStatus.mockResolvedValueOnce({ ...membership, status: "HIDDEN" }).mockRejectedValueOnce(new Error("offline"));
+  render(<AppShell />);
+  fireEvent.click(await screen.findByRole("button", { name: "Radnje kolegija: Algorithms" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Ukloni s popisa" }));
+  expect(apiMock.setMembershipStatus).toHaveBeenLastCalledWith("course-1", "HIDDEN");
+  expect(screen.queryByRole("button", { name: "Otvori kolegij: Algorithms" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Prikaži skrivene kolegije" }));
+  expect(apiMock.setMembershipStatus).toHaveBeenLastCalledWith("course-1", "ACTIVE");
+  expect(await screen.findByText("Promjena popisa kolegija nije spremljena. Pokušajte ponovno.")).toBeInTheDocument();
+  // The failed change is undone: the course is hidden again, as the backend still has it.
+  expect(screen.queryByRole("button", { name: "Otvori kolegij: Algorithms" })).not.toBeInTheDocument();
+  expect(screen.getByText(/S popisa je skriveno: 1 kolegij\./)).toBeInTheDocument();
+});
+
+it("sends the course choices left in this browser to the backend once", async () => {
+  window.localStorage.setItem("examprep-course-prefs:user-1", JSON.stringify({ "course-1": "done" }));
+  apiMock.me.mockResolvedValue(user);
+  apiMock.courses.mockResolvedValue([{ ...course, membership_status: "ACTIVE" }]);
+  apiMock.setMembershipStatus.mockResolvedValue({ ...membership, status: "DONE" });
+  render(<AppShell />);
+  const finished = await screen.findByRole("region", { name: "Završeni" });
+  expect(within(finished).getByText("Algorithms")).toBeInTheDocument();
+  expect(apiMock.setMembershipStatus).toHaveBeenCalledOnce();
+  expect(apiMock.setMembershipStatus).toHaveBeenCalledWith("course-1", "DONE");
+  expect(window.localStorage.getItem("examprep-course-prefs:user-1")).toBeNull();
 });
