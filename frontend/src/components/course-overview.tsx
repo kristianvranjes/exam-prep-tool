@@ -220,9 +220,9 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
     {courseDescription && <p className="mt-3 max-w-prose text-sm text-muted">{courseDescription}</p>}
   </div>;
   return <div className={`flex min-w-0 flex-col gap-group ${ruled}`}>
-    <div className={cn("grid min-w-0", figures.length > 0 && "lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]")}>
+    <div className={cn("grid min-w-0", figures.length > 0 && "lg:grid-cols-[minmax(0,1.15fr)_minmax(0,3fr)]")}>
       <div className={cn("border-2 border-line", figures.length > 0 && "lg:border-r-0")}>{hero}</div>
-      {figures.length > 0 && <section aria-label="Pregled kolegija" className="grid min-w-0 grid-cols-1 border-2 border-line sm:grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] sm:divide-x-2 sm:divide-line">{figures}</section>}
+      {figures.length > 0 && <section aria-label="Pregled kolegija" className="grid min-w-0 grid-cols-1 border-2 border-line sm:grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))] sm:divide-x-2 sm:divide-line">{figures}</section>}
     </div>
     {checkingSession && !knownAttemptId && <p role="status" className="text-sm text-muted">Provjeravam nedovršene vježbe…</p>}
     {(knownAttemptId || mockExam) && <div className={cn("grid min-w-0 border-2 border-line pt-0!", knownAttemptId && mockExam && "md:grid-cols-2 md:divide-x-2 md:divide-line")}>
@@ -270,7 +270,8 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
         </table></div>}
     </section>}
 
-    {countdown && exam && <section aria-labelledby="overview-exam-heading">
+    <div className="grid min-w-0 gap-group lg:grid-cols-2 lg:gap-0 lg:[&>*+*]:border-l lg:[&>*+*]:border-line lg:[&>*+*]:pl-group lg:[&>*:first-child]:pr-group">
+    {countdown && exam && <section aria-labelledby="overview-exam-heading" className="min-w-0">
       <h3 id="overview-exam-heading" className="text-lg font-semibold">{countdownHeading(exam)}</h3>
       <p className="mt-1 text-sm text-muted">
         {exam.scope.starts_on && <><time dateTime={exam.scope.starts_on}>{formatScopeDates(exam.scope)}</time> · </>}
@@ -326,7 +327,10 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
       </div>}
     </section>}
 
-    <div className={`grid min-w-0 gap-group${materials ? " md:grid-cols-2" : ""}`}>
+    </div>
+
+    <div className="grid min-w-0 gap-group md:grid-cols-2">
+      <div className="min-w-0 space-y-group">
       <section aria-labelledby="overview-progress-heading" className="min-w-0">
         <h3 id="overview-progress-heading" className="text-lg font-semibold">Sažetak napretka</h3>
         {progress.loading ? <p role="status" className="mt-stack text-sm text-muted">Učitavam napredak…</p> : progress.error ?
@@ -346,7 +350,7 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
           </> : <p className="mt-stack text-sm text-muted">Još nema dodanih materijala.</p>}
         {!noQuestions && onMaterials && <Button variant="secondary" className="mt-stack" onClick={onMaterials}>Otvori materijale</Button>}
       </section>}
-    </div>
+      </div>
     <section aria-labelledby={`${id}-else`} className="min-w-0">
       <h3 id={`${id}-else`} className="text-lg font-semibold">Ostalo u kolegiju</h3>
       <ul className="mt-3 border-t-2 border-line">
@@ -363,5 +367,6 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
         </li>)}
       </ul>
     </section>
+    </div>
   </div>;
 }

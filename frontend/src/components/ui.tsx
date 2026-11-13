@@ -188,7 +188,7 @@ export function StatCell({ label, value, unit, note, tone = "plain", size = "lg"
     <div className={cn("p-6", filled && "bg-accent text-accent-foreground", className)}>
       <p className={cn("label-caps", filled && "text-accent-foreground")}>{label}</p>
       <p className={cn("mt-3 flex flex-wrap items-baseline gap-x-2", statTones[tone])}>
-        <span className={cn("hero-number", statSizes[size])}>{value}</span>
+        <span className={cn("hero-number whitespace-nowrap", statSizes[size])}>{value}</span>
         {unit != null && <span className="text-[1.375rem] font-semibold">{unit}</span>}
       </p>
       {note != null && <p className={cn("mt-3 text-sm", filled ? "text-accent-foreground" : "text-soft")}>{note}</p>}
