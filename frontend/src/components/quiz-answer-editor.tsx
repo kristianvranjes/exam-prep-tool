@@ -4,7 +4,7 @@ import { cn } from "../lib/utils";
 import { optionShortcuts, toggleOption } from "./practice-shortcuts";
 import { RichText } from "./rich-text";
 import { useAnswerMarkers } from "./theme";
-import { OptionRow, optionMarker, type OptionState } from "./ui";
+import { OPTION_INPUT_CLASS, OptionRow, optionMarker, type OptionState } from "./ui";
 
 /**
  * Marks the key and a wrong choice once an answer is checked; text, not only color.
@@ -29,7 +29,7 @@ export function QuizAnswerEditor({ question, answer, change, disabled, feedback,
     const labelId = `${question.id}-option-label-${key}`;
     return <OptionRow key={key} state={mark.state as OptionState} marker={optionMarker(index, markers)} note={mark.note}
       control={<input type={kind} name={question.id} checked={chosen} onChange={select}
-        aria-labelledby={labelId} aria-keyshortcuts={shortcuts ? optionShortcuts(question, index) : undefined} className="peer sr-only" />}
+        aria-labelledby={labelId} aria-keyshortcuts={shortcuts ? optionShortcuts(question, index) : undefined} className={OPTION_INPUT_CLASS} />}
       className="rounded-none">
       <span id={labelId} className="min-w-0 flex-1"><RichText text={label} /></span>
     </OptionRow>;

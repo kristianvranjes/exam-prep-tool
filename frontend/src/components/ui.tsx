@@ -248,7 +248,12 @@ const optionMarkers: Record<OptionState, string> = {
 };
 const optionNotes: Partial<Record<OptionState, string>> = { correct: "text-success", incorrect: "text-danger" };
 
-/** An answer option row. The caller passes the native input (class "peer sr-only") as `control`. */
+/**
+ * An answer option row. The caller passes the native input as `control`; give it
+ * `OPTION_INPUT_CLASS` so it covers the whole row invisibly and is the real click target
+ * (a visually hidden 1px input sits under the marker, so pointer tools cannot click it).
+ */
+export const OPTION_INPUT_CLASS = "absolute inset-0 z-10 m-0 size-full cursor-pointer opacity-0 disabled:cursor-default";
 export function OptionRow({ control, marker, state = "idle", note, children, className }: {
   control: React.ReactNode;
   marker: React.ReactNode;
@@ -260,7 +265,7 @@ export function OptionRow({ control, marker, state = "idle", note, children, cla
   return (
     <label
       className={cn(
-        "flex min-h-16 w-full cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 border-2 py-3 pl-3 pr-4 text-lg has-[:disabled]:cursor-default has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent",
+        "relative flex min-h-16 w-full cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 border-2 py-3 pl-3 pr-4 text-lg has-[:disabled]:cursor-default has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent",
         optionRows[state],
         className,
       )}
