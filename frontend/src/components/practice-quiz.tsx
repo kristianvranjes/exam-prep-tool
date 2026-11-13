@@ -203,7 +203,7 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
           <div className="mt-4 flex flex-wrap gap-2"><Button variant="secondary" disabled={busy || offset === 0} onClick={() => void run(() => loadHistory(offset - 20))}>Novije vježbe</Button><Button variant="secondary" disabled={busy || history.length < 20} onClick={() => void run(() => loadHistory(offset + 20))}>Starije vježbe</Button><Button variant="ghost" disabled={busy} onClick={() => void run(() => loadHistory(offset))}>Osvježi povijest vježbi</Button></div>
         </details>
       </>}
-      {visibleAttempt?.status === "ACTIVE" && <ActiveQuiz key={visibleAttempt.id} attempt={visibleAttempt} experience={experience} setExperience={setExperience} update={updateAttempt} back={back} onDirtyChange={onAnswerDirtyChange} />}
+      {visibleAttempt?.status === "ACTIVE" && <ActiveQuiz key={visibleAttempt.id} attempt={visibleAttempt} experience={experience} update={updateAttempt} back={back} onDirtyChange={onAnswerDirtyChange} />}
       {visibleAttempt?.status === "SUBMITTED" && <QuizResults key={visibleAttempt.id} attempt={visibleAttempt} busy={busy} onUpdate={updateAttempt}
         onPracticeAgain={() => void run(async () => { await back(); setHistoryOpen(false); heading.current?.focus(); })}
         onViewProgress={onOpenProgress} onBackToCourse={onBackToCourse} onBackToHistory={() => void run(back)} />}

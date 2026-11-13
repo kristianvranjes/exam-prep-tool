@@ -12,15 +12,15 @@ import { ExamTimer } from "./exam-timer";
 import { FavoriteToggle, useFavorites } from "./favorite-toggle";
 import { CheckedFeedback, ConfidencePicker } from "./quiz-feedback";
 import { QuestionUnits } from "./question-units";
-import { ExperiencePicker, QuizNavigator, type QuizExperience } from "./quiz-navigation";
+import { QuizNavigator, type QuizExperience } from "./quiz-navigation";
 import { Sheet } from "./sheet";
 import { shortcutAnswer, ShortcutsDialog, usePracticeShortcuts } from "./practice-shortcuts";
 import { useUnsavedChanges } from "./unsaved-changes";
 
 type Confirmation = "submit" | "reload" | "back" | "abandon";
-export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdate, back: onBack, onDirtyChange }: {
+export function ActiveQuiz({ attempt, experience, update: onUpdate, back: onBack, onDirtyChange }: {
   attempt: Extract<Attempt, { status: "ACTIVE" }>; experience: QuizExperience;
-  setExperience: (value: QuizExperience) => void; update: (attempt: Attempt) => void; back: () => Promise<void>;
+  update: (attempt: Attempt) => void; back: () => Promise<void>;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [index, setIndex] = useState(() => Math.max(0, attempt.questions.findIndex(question => question.answer === null)));
@@ -221,7 +221,7 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
 
   const jumpToQuestion = (next: number) => { setReview(false); navigate(next); };
   const navigator = (mobile = false) => <QuizNavigator questions={attempt.questions} index={index} flags={flags} busy={busy}
-    columns={paper ? 6 : 4} jump={next => { jumpToQuestion(next); if (mobile) setMobileNavigatorOpen(false); }} />;
+    columns={paper ? 6 : 4} compact={!mobile} jump={next => { jumpToQuestion(next); if (mobile) setMobileNavigatorOpen(false); }} />;
 
   return <div ref={root} className="min-w-0">
     <header aria-label="Traka vježbe" className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b-2 border-line py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[auto_minmax(0,1fr)_auto_auto]">
@@ -343,16 +343,13 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
         {!confirmation && !review && !timeUp && focusMode && <Button variant="ghost" disabled={busy} onClick={openReview} className="mt-5">
           {paper ? "Pregledaj i predaj ispit" : "Pregledaj i završi"}
         </Button>}
-        {!confirmation && <details className="mt-5 border-t border-line pt-3">
-          <summary className="min-h-11 cursor-pointer py-2 font-medium">Vježba</summary>
-          <p className="mt-2 max-w-prose text-sm text-muted">{immediate ? "Provjerite svaki odgovor da vidite rješenje i objašnjenje; provjereni odgovor se više ne može mijenjati. Napredak ponavljanja ažurira se na kraju." : "Promijenjeni odgovori spremaju se prije prelaska na drugo pitanje. Rezultati se prikazuju nakon konačne predaje."} Oznake za povratak vrijede dok je vježba otvorena.</p>
-          <div className="mt-4"><ExperiencePicker value={experience} onChange={setExperience} disabled={busy} /></div>
-          <div className="mt-4 flex flex-wrap gap-2">
+        {!confirmation && <details className="mt-5 border-t border-line pt-2 text-sm text-muted">
+          <summary className="min-h-11 cursor-pointer py-2">Više</summary>
+          <div className="flex flex-wrap gap-2">
             <Button variant="ghost" disabled={busy} onClick={() => requestLeave("reload")}>Ponovno učitaj spremljene odgovore</Button>
             {sessionClosed && <Button variant="ghost" disabled={busy} onClick={() => requestLeave("back")}>Natrag na povijest vježbi</Button>}
             <Button variant="ghost" disabled={busy} onClick={() => { setError(""); setConfirmation("abandon"); }}>Odustani od pokušaja</Button>
           </div>
-          <p className="mt-2 max-w-prose text-sm text-muted">Prije ponovnog učitavanja pitat ćemo želite li spremiti ili odbaciti nespremljene promjene.</p>
         </details>}
       </main>
       {!focusMode && <aside aria-label="Bočna ploča pitanja" className="hidden border-l-2 border-line lg:sticky lg:top-0 lg:block lg:max-h-dvh lg:overflow-y-auto lg:px-5 lg:py-5">
@@ -366,7 +363,6 @@ export function ActiveQuiz({ attempt, experience, setExperience, update: onUpdat
           <p className="flex items-center gap-2"><span aria-hidden="true" className="size-3 border border-quiet bg-quiet" />Odgovoreno</p>
           <p className="flex items-center gap-2"><span aria-hidden="true" className="size-3 border-2 border-accent" />Trenutno pitanje</p>
           <p className="flex items-center gap-2"><Flag aria-hidden="true" className="size-3" />Označeno za povratak</p>
-          {immediate && <p className="text-muted">Provjereni odgovori označeni su riječima Točno ili Netočno.</p>}
         </div>
         {!confirmation && <Button className="mt-5 w-full" disabled={busy} onClick={openReview}>{paper ? "Pregledaj i predaj ispit" : "Pregledaj i završi"}</Button>}
       </aside>}

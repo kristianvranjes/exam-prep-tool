@@ -55,8 +55,12 @@ function topicStatus(unit: UnitResult) {
   return { label: "U tijeku", tone: "text-foreground" };
 }
 
-export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt, checkingSession, activeSession, materials, onResume,
+export function CourseOverview({ courseId, active, courseName, courseCode, courseDescription, onPractice, knownAttemptId, knownAttempt, checkingSession, activeSession, materials, onResume,
   onRecommendedPractice, onStartAttempt, onOpenPractice, onPapers, onProgress, onMaterials, onQuestions }: {
+  /** The course's name, short code and description, shown as the heading of the page (handoff 2b). */
+  courseName: string; courseCode?: string | null; courseDescription?: string | null;
+  /** Opens the practice setup. */
+  onPractice?: () => void;
   /** Opens the course's past exams. */
   onPapers?: () => void;
   /** Opens the practice setup with a mode and focus already chosen (the mock exam). */
@@ -209,8 +213,17 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
     results && results.average_percent !== null && <StatCell key="average" size="md" label="Prosjek" value={`${results.average_percent} %`} note="prosjek rezultata predanih vježbi" />,
   ].filter(Boolean);
 
-  return <div className={`mt-6 flex min-w-0 flex-col gap-group ${ruled}`}>
-    {figures.length > 0 && <section aria-label="Pregled kolegija" className="grid min-w-0 grid-cols-1 border-2 border-line sm:grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] sm:divide-x-2 sm:divide-line">{figures}</section>}
+  const hero = <div className="min-w-0 p-6">
+    {courseCode && <p className="label-caps text-accent">{courseCode}</p>}
+    <h1 id={active ? "selected-course-heading" : undefined} tabIndex={-1} className="mt-2 break-words text-[2.25rem] leading-[1.05] font-extrabold tracking-tight sm:text-[2.75rem]">{courseName}</h1>
+    {exam && <p className="mt-3 text-soft">{exam.scope.name}{exam.scope.starts_on && <> · <time dateTime={exam.scope.starts_on}>{formatScopeDates(exam.scope)}</time></>}</p>}
+    {courseDescription && <p className="mt-3 max-w-prose text-sm text-muted">{courseDescription}</p>}
+  </div>;
+  return <div className={`flex min-w-0 flex-col gap-group ${ruled}`}>
+    <div className={cn("grid min-w-0", figures.length > 0 && "lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]")}>
+      <div className={cn("border-2 border-line", figures.length > 0 && "lg:border-r-0")}>{hero}</div>
+      {figures.length > 0 && <section aria-label="Pregled kolegija" className="grid min-w-0 grid-cols-1 border-2 border-line sm:grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] sm:divide-x-2 sm:divide-line">{figures}</section>}
+    </div>
     {checkingSession && !knownAttemptId && <p role="status" className="text-sm text-muted">Provjeravam nedovršene vježbe…</p>}
     {(knownAttemptId || mockExam) && <div className={cn("grid min-w-0 border-2 border-line pt-0!", knownAttemptId && mockExam && "md:grid-cols-2 md:divide-x-2 md:divide-line")}>
       {knownAttemptId && <section aria-labelledby={`${id}-resume`} className="min-w-0 p-6">
@@ -334,6 +347,21 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
         {!noQuestions && onMaterials && <Button variant="secondary" className="mt-stack" onClick={onMaterials}>Otvori materijale</Button>}
       </section>}
     </div>
-    <p className="text-sm text-muted">Prijedlozi pitanja i alati kolegija nalaze se pod Više.</p>
+    <section aria-labelledby={`${id}-else`} className="min-w-0">
+      <h3 id={`${id}-else`} className="text-lg font-semibold">Ostalo u kolegiju</h3>
+      <ul className="mt-3 border-t-2 border-line">
+        {[
+          onPractice && { key: "practice", title: "Vježba po mjeri", note: "Odaberite cjeline, vrste pitanja i način vježbe.", open: onPractice },
+          onPapers && { key: "papers", title: "Prošli ispiti", note: "Riješite stare ispite uz mjerenje vremena.", open: onPapers },
+          { key: "questions", title: "Baza pitanja i alati", note: "Pitanja, prijedlozi izmjena, cjeline i postavke kolegija.", open: onQuestions },
+        ].filter(Boolean).map(row => row && <li key={row.key} className="border-b border-line">
+          <button type="button" aria-label={`Otvori: ${row.title}`} onClick={row.open}
+            className="flex min-h-14 w-full items-center gap-4 py-3 text-left hover:bg-subtle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent">
+            <span className="min-w-0 flex-1"><span className="block font-semibold">{row.title}</span><span className="block text-sm text-muted">{row.note}</span></span>
+            <span aria-hidden="true" className="px-2 text-lg">→</span>
+          </button>
+        </li>)}
+      </ul>
+    </section>
   </div>;
 }

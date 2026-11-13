@@ -15,7 +15,7 @@ const counts = (course_total: number, due_total = 0): PracticeAvailability => ({
 const material: Material = { id: "m", course_id: "course", original_filename: "notes.pdf", uploaded_by_user_id: "student",
   created_at: "2026-10-01", updated_at: "2026-10-01", status: "READY", processing_error: null,
   media_type: "application/pdf", file_size_bytes: 100 };
-const props = () => ({ courseId: "course", active: true, knownAttemptId: null as string | null,
+const props = () => ({ courseId: "course", courseName: "Algorithms", active: true, knownAttemptId: null as string | null,
   materials: { materials: [material], loading: false, error: false }, onResume: vi.fn(), onRecommendedPractice: vi.fn(),
   onProgress: vi.fn(), onMaterials: vi.fn(), onQuestions: vi.fn() });
 const loaded = () => screen.findByText(/^Ponovljeno:/);

@@ -14,9 +14,11 @@ export function ExperiencePicker({ value, onChange, disabled }: {
   </fieldset>;
 }
 
-export function QuizNavigator({ questions, index, flags, busy, jump, columns = 4 }: {
+export function QuizNavigator({ questions, index, flags, busy, jump, columns = 4, compact = false }: {
   questions: ActiveQuestion[]; index: number; flags: Set<string>; busy: boolean; jump: (index: number) => void;
   columns?: 4 | 6;
+  /** The side panel of the handoff: only the grid. The phone sheet keeps the jump buttons and the note. */
+  compact?: boolean;
 }) {
   function nextMatch(predicate: (question: ActiveQuestion) => boolean) {
     for (let step = 1; step <= questions.length; step++) {
@@ -25,7 +27,7 @@ export function QuizNavigator({ questions, index, flags, busy, jump, columns = 4
     }
   }
   return <nav aria-label="Popis pitanja" className="flex min-w-0 flex-col gap-3">
-    <p className="text-sm text-muted">Oznake za povratak vrijede dok je vježba otvorena.</p>
+    {!compact && <p className="text-sm text-muted">Oznake za povratak vrijede dok je vježba otvorena.</p>}
     <div className={`grid ${columns === 6 ? "grid-cols-6" : "grid-cols-4"} gap-2`}>
       {questions.map((question, position) => {
         const status = question.feedback?.grading_status === "CORRECT" ? "Točno"
@@ -46,9 +48,9 @@ export function QuizNavigator({ questions, index, flags, busy, jump, columns = 4
         </Button>;
       })}
     </div>
-    <div className="flex flex-wrap gap-2">
+    {!compact && <div className="flex flex-wrap gap-2">
       <Button variant="secondary" disabled={busy || questions.every(question => question.answer !== null)} onClick={() => nextMatch(question => question.answer === null)}>Sljedeće bez odgovora</Button>
       <Button variant="secondary" disabled={busy || flags.size === 0} onClick={() => nextMatch(question => flags.has(question.id))}>Sljedeće označeno</Button>
-    </div>
+    </div>}
   </nav>;
 }

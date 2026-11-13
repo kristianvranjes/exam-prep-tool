@@ -33,18 +33,24 @@ for (const width of [1280, 390]) {
       await expect(page.getByRole("region", { name: "Napredak", exact: true })).toBeVisible();
       await page.reload();
       await expect(page.getByRole("region", { name: "Napredak", exact: true })).toBeVisible();
-      const navigation = page.getByRole("navigation", { name: "Navigacija kolegija", exact: true });
-      // Materials are for course managers, so a student's course has no such tab.
-      await expect(navigation.getByRole("button", { name: "Materijali", exact: true })).toHaveCount(0);
-      await navigation.getByRole("button", { name: "Prošli ispiti", exact: true }).click();
+      // The course page links to its other screens; a breadcrumb leads back to it.
+      const openScreen = async (name: "Prošli ispiti" | "Napredak" | "Vježba") => {
+        const nav = page.getByRole("navigation", { name: "Navigacija kolegija", exact: true });
+        await nav.waitFor();
+        const crumbs = nav.getByRole("button");
+        if ((await crumbs.count()) > 1) await crumbs.nth(1).click();
+        const control = { "Prošli ispiti": "Otvori: Prošli ispiti", "Napredak": "Otvori napredak", "Vježba": "Otvori: Vježba po mjeri" }[name];
+        await page.getByRole("button", { name: control, exact: true }).first().click();
+      };
+      // Materials are for course managers, so a student's course page does not offer them.
+      await openScreen("Prošli ispiti");
       await expect(page).toHaveURL(new RegExp(`${base}/papers$`));
+      // Progress to papers goes through the course page, so Back lands there first.
       await page.goBack();
-      await expect(page).toHaveURL(new RegExp(`${base}/progress$`));
-      await expect(page.getByRole("region", { name: "Napredak", exact: true })).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`${base}$`));
       await page.goForward();
       await expect(page).toHaveURL(new RegExp(`${base}/papers$`));
-      await expect(navigation.getByRole("button", { name: "Prošli ispiti", exact: true })).toHaveAttribute("aria-current", "page");
-      await navigation.getByRole("button", { name: "Vježba", exact: true }).click();
+      await openScreen("Vježba");
       await expect(page).toHaveURL(new RegExp(`${base}/practice$`));
       await page.getByRole("radio", { name: "Prilagođeno", exact: true }).check();
       await page.getByRole("spinbutton", { name: "Vlastiti broj pitanja" }).fill("1");
@@ -71,11 +77,13 @@ for (const width of [1280, 390]) {
       await page.reload();
       await expect(answer).toHaveValue("My unsaved explanation");
       await answer.fill("Changed answer after refresh");
-      await page.locator("summary").filter({ hasText: /^Navigacija kolegija$/ }).click();
-      await navigation.getByRole("button", { name: "Napredak", exact: true }).click();
+      // There is no course navigation while answering: Save and leave keeps the answer.
+      await page.getByRole("button", { name: "Spremi i izađi" }).click();
+      await openScreen("Napredak");
       await expect(page).toHaveURL(new RegExp(`${base}/progress$`));
       await expect(page.getByRole("region", { name: "Napredak", exact: true })).toBeVisible();
-      await navigation.getByRole("button", { name: "Vježba", exact: true }).click();
+      await openScreen("Vježba");
+      await page.getByRole("button", { name: "Nastavi vježbu", exact: true }).click();
       await expect(page).toHaveURL(attemptUrl);
       await expect(answer).toHaveValue("Changed answer after refresh");
       // Cancelling Forward is covered by returning to a dirty session from setup.

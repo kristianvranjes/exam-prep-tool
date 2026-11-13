@@ -21,8 +21,8 @@ function attempt(questions: ActiveQuestion[], extra: Partial<Active> = {}): Acti
 }
 function Quiz({ initial, experience = "STUDY" }: { initial: Active; experience?: QuizExperience }) {
   const [value, setValue] = useState<Attempt>(initial);
-  const [mode, setMode] = useState(experience);
-  return value.status === "ACTIVE" ? <ActiveQuiz attempt={value} experience={mode} setExperience={setMode} update={setValue} back={async () => undefined} /> : <p>Handed in</p>;
+  const mode = experience;
+  return value.status === "ACTIVE" ? <ActiveQuiz attempt={value} experience={mode} update={setValue} back={async () => undefined} /> : <p>Handed in</p>;
 }
 const press = (key: string, init: KeyboardEventInit = {}, target: Element = document.activeElement ?? document.body) => fireEvent.keyDown(target, { key, ...init });
 const question = (number: number) => screen.findByRole("heading", { name: new RegExp(`^Pitanje ${number} od`) });
