@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { api, type CatalogCourse, type Course, type Faculty, type MemberCourse } from "../lib/api";
 import { courseColor } from "../lib/course-prefs";
 import { plural, QUESTIONS } from "../lib/plural";
-import { Alert, Button, EmptyState, Input, LoadingState, Select } from "./ui";
+import { Search } from "lucide-react";
+import { Alert, Button, EmptyState, Input, LoadingState, SegmentedControl, Select } from "./ui";
 
 /**
  * The full-page "Upis kolegija" screen. Search and year filter live in this component, so they reset
@@ -83,12 +84,10 @@ export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOp
   const visibleCourses = currentCatalog ? currentCatalog.courses.filter(course => (shownYear === null || course.year_of_study === shownYear)
     && (!needle || course.name.toLowerCase().includes(needle) || (course.code ?? "").toLowerCase().includes(needle))) : [];
   return <section id="browse-courses" tabIndex={-1} aria-labelledby="enrol-heading">
-    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b-2 border-line pb-5">
-      <div className="min-w-0">
-        <Button variant="secondary" className="mb-4" onClick={onBack}><span aria-hidden="true">←</span> Vaši kolegiji</Button>
-        <h1 id="enrol-heading" tabIndex={-1} className="text-4xl font-extrabold tracking-tight sm:text-[2.75rem] sm:leading-[1.1]">Upis kolegija</h1>
-      </div>
-      <p className="text-sm font-semibold text-muted tabular-nums">{loadingMembership ? "Provjeravam upis…" : `Upisano: ${enrolled.length}`}</p>
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-3 border-b-2 border-line pb-5">
+      <Button variant="secondary" onClick={onBack}><span aria-hidden="true">←</span> Vaši kolegiji</Button>
+      <h1 id="enrol-heading" tabIndex={-1} className="min-w-0 text-xl font-extrabold tracking-tight">Upis kolegija</h1>
+      <p className="ml-auto text-sm font-semibold text-muted tabular-nums">{loadingMembership ? "Provjeravam upis…" : `Upisano: ${enrolled.length}`}</p>
     </div>
     <div className="mt-6 flex flex-col gap-5">
       {loadingFaculties ? <LoadingState>Učitavam fakultete…</LoadingState> : facultyError ? <div>
@@ -103,19 +102,23 @@ export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOp
             </Select>
           </label>
           <div>
-            <label className="block text-xs font-semibold tracking-widest text-muted uppercase">Pretraži kolegije
-              <Input type="search" name="course-search" value={query} placeholder="npr. Digitalna logika ili DL" autoComplete="off" aria-describedby="course-search-hint"
-                className="mt-2 h-[52px] border-foreground text-base font-normal tracking-normal text-foreground normal-case" onChange={event => setQuery(event.target.value)} />
-            </label>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block min-w-0 flex-1 basis-64 text-xs font-semibold tracking-widest text-muted uppercase">Pretraži kolegije
+                <span className="relative mt-2 block">
+                  <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted" />
+                  <Input type="search" name="course-search" value={query} placeholder="npr. Digitalna logika ili DL" autoComplete="off" aria-describedby="course-search-hint"
+                    className="h-[52px] border-foreground pl-11 text-base font-normal tracking-normal text-foreground normal-case" onChange={event => setQuery(event.target.value)} />
+                </span>
+              </label>
+              {years.length > 0 && <SegmentedControl label="Godina studija" size="lg" value={shownYear ?? 0} onChange={value => setYear(value === 0 ? null : value)}
+                options={[0, ...years].map(value => ({ value, label: value === 0 ? "Sve" : `${value}. godina` }))} />}
+            </div>
             <span id="course-search-hint" className="mt-1 block text-xs font-normal tracking-normal text-muted normal-case">{selectedId ? "Filtrira kolegije navedene ispod." : "Odaberite fakultet da vidite kolegije; pretraga se primjenjuje kad ga odaberete."}</span>
           </div>
         </div>
         {selectedFaculty && <div className="min-w-0">
           <h2 className="text-lg font-extrabold">{selectedFaculty.name}</h2>
           {selectedFaculty.university_name && <p className="mt-1 text-sm text-muted">{selectedFaculty.university_name}</p>}
-          {years.length > 0 && <div role="group" aria-label="Godina studija" className="mt-4 flex flex-wrap gap-2">
-            {[null, ...years].map(value => <Button key={value ?? "all"} variant="secondary" aria-pressed={shownYear === value} onClick={() => setYear(value)}>{value === null ? "Sve" : `${value}. godina`}</Button>)}
-          </div>}
           {!currentCatalog ? <LoadingState>Učitavam kolegije fakulteta…</LoadingState> : currentCatalog.failed ? <div className="mt-4">
             <Alert>Kolegiji ovog fakulteta nisu učitani. Pokušajte ponovno ili odaberite drugi fakultet.</Alert>
             <Button variant="secondary" className="mt-3" onClick={() => { setCatalog(null); setCatalogRetry(value => value + 1); }}>Ponovno učitaj kolegije</Button>

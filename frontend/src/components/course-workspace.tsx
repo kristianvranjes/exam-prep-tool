@@ -51,8 +51,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
     setQuestionFocus(current => ({ id, request: (current?.request ?? 0) + 1 }));
     setMoreDestination("questions");
   }
-  function openPractice(mode: PracticeSetupRequest["mode"]) {
-    setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode }));
+  function openPractice(mode: PracticeSetupRequest["mode"], focus: Pick<PracticeSetupRequest, "scopeId" | "unitIds"> = {}) {
+    setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode, ...focus }));
     navigate("practice", true);
   }
   // Materials are a tool for the people who run the course; students practise from the question bank.
@@ -73,11 +73,12 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         knownAttemptId={knownAttemptId} knownAttempt={knownAttempt} checkingSession={checkingSession} activeSession={activeSession} materials={manager ? materials : undefined} onResume={onResume}
         onRecommendedPractice={() => openPractice("ADAPTIVE")}
         onStartAttempt={onOpenAttempt}
+        onOpenPractice={request => openPractice(request.mode, request)}
         onPapers={() => navigate("papers")} onProgress={() => navigate("progress")} onMaterials={manager ? () => navigate("materials") : undefined}
         onQuestions={() => { setMoreDestination("questions"); navigate("more"); }} />
     </section>
     <div id="course-practice" hidden={destination !== "practice"}>
-      <div id="practice" tabIndex={-1}><PracticeQuiz courseId={course.id} active={visible && destination === "practice"}
+      <div id="practice" tabIndex={-1} className="outline-none"><PracticeQuiz courseId={course.id} active={visible && destination === "practice"}
         adaptiveReviewRequest={adaptiveReviewRequest} setupRequest={setupRequest} resumeAttemptId={knownAttemptId} onResumableAttemptChange={onResumableAttemptChange}
         routeAttemptId={routeAttemptId} routeResults={routeResults} onAttemptRoute={onAttemptRoute} onAttemptChange={onAttemptChange} onAnswerDirtyChange={onAnswerDirtyChange}
         onOpenMaterials={manager ? () => navigate("materials") : undefined} onOpenQuestions={() => { setMoreDestination("questions"); navigate("more"); }}

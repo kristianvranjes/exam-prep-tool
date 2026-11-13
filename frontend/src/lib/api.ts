@@ -116,6 +116,10 @@ export const api = {
   reviewProgress: (courseId: string, offset = 0) => request<ReviewProgress[]>(`/courses/${courseId}/review-progress?limit=20&offset=${offset}`),
   reviewProgressSummary: (courseId: string) => request<ReviewProgressSummary>(`/courses/${courseId}/review-progress/summary`),
   unitProgress: (courseId: string) => request<UnitProgressSummary>(`/courses/${courseId}/review-progress/units`),
+  /** Cards coming due per Zagreb day for the review outlook; overdue cards count on the first day. */
+  reviewForecast: (courseId: string, days = 14) => request<ReviewForecast>(`/courses/${courseId}/review-progress/forecast?days=${days}`),
+  /** The student's own rating of a question they answered; it only reschedules the review card. */
+  rateReview: (courseId: string, questionId: string, rating: ReviewRating) => request<ReviewRatingResult>(`/courses/${courseId}/review-progress/ratings`, { method: "POST", body: JSON.stringify({ question_id: questionId, rating }) }),
   /** Results in submitted sessions for the course page: units attempted, the average and the best result per unit. */
   courseDashboard: (courseId: string) => request<CourseDashboard>(`/courses/${courseId}/dashboard`),
   /** Weekly results per unit (Mondays in Zagreb time, oldest first) for the progress heat grid. */
@@ -327,6 +331,14 @@ export type ReviewProgress = {
 };
 
 export type ReviewStageCount = { review_stage: number; question_count: number };
+export type ForecastDay = { date: string; count: number };
+export type ReviewForecast = { as_of: string; days: ForecastDay[] };
+export type ReviewRating ="AGAIN" | "HARD" | "GOOD" | "EASY";
+export type ReviewRatingResult = {
+  question_id: string; rating: ReviewRating; interval_minutes: number; due_at: string;
+  repetitions: number; lapses: number; scheduling_version: string;
+};
+
 export type ReviewProgressSummary = {
   as_of: string;
   reviewed_questions: number;

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -78,3 +78,15 @@ class UnitProgress(BaseModel):
 class UnitProgressSummary(BaseModel):
     as_of: datetime
     units: list[UnitProgress]
+
+
+class ForecastDay(BaseModel):
+    date: date
+    count: int
+
+
+class ReviewForecast(BaseModel):
+    """Cards coming due per day, Zagreb days from today; overdue cards count toward today."""
+
+    as_of: datetime
+    days: list[ForecastDay]

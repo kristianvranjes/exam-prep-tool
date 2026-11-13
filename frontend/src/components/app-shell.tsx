@@ -260,8 +260,10 @@ export function AppShell() {
         : [...current, { ...course, membership_status: "ACTIVE", next_exam: null }])}
       onOpen={selectCourse} onBack={() => navigate("/")} />}
     {view === "review" && <ReviewHome courses={activeCourses} due={due} loading={loadingCourses} onEnrol={() => navigate("/enrol")}
+      onStartAttempt={attempt => { const course = courses.find(item => item.id === attempt.course_id); if (navigate(attemptPath(attempt.course_id, attempt.id)) && course && selected?.id !== course.id) activateCourse(course); }}
       onOpen={course => { if (navigate(coursePath(course.id, "progress")) && selected?.id !== course.id) activateCourse(course); }} />}
     {view === "progress" && <ProgressHome courses={activeCourses} loading={loadingCourses} onEnrol={() => navigate("/enrol")}
+      onStartAttempt={attempt => { const course = courses.find(item => item.id === attempt.course_id); if (navigate(attemptPath(attempt.course_id, attempt.id)) && course && selected?.id !== course.id) activateCourse(course); }}
       onOpen={course => { if (navigate(coursePath(course.id, "progress")) && selected?.id !== course.id) activateCourse(course); }} />}
     {view === "settings" && <SettingsPage />}
     {view === "course" && (loadingCourses || !courses.some(course => course.id === routeCourseId) || selectedId !== routeCourseId) && <section>

@@ -188,6 +188,10 @@ Comparisons use one server UTC `as_of` timestamp. `reviewed_questions` may excee
 metrics remain populated while due/upcoming are zero and `next_due_at` is null.
 Empty summaries have zero counts and null dates.
 
+`GET /courses/{course_id}/review-progress/forecast?days=14` (1 to 60 days) returns `{as_of, days}`: one
+`{date, count}` per Zagreb calendar day from today, counting the caller's practice-eligible review cards
+that come due that day. Cards already overdue are counted on the first day. Non-members get 404.
+
 `GET /courses/{course_id}/review-progress/units` returns `{as_of, units}` with one
 row per course unit in unit order (archived units included, `is_archived` set):
 `unit_id`, `title`, `position`, `reviewed_questions`, `resolved_review_count`,

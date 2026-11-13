@@ -350,3 +350,13 @@ it("lists the visible questions in an index that moves focus to the result", () 
   expect(screen.getByRole("article", { name: "Rezultat pitanja 1" })).toHaveFocus();
   expect(within(index).getAllByRole("listitem")).toHaveLength(1);
 });
+
+it("offers a rating only for graded questions from the bank in results that can change", () => {
+  const attempt = submitted([{ ...mistake, source_question_id: "bank-1" }, { ...correct, source_question_id: "bank-2" }, short]);
+  const { unmount } = render(<QuizResults attempt={attempt} onUpdate={vi.fn()} onPracticeAgain={vi.fn()} onBackToHistory={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
+  expect(screen.getAllByRole("group", { name: "Koliko ste dobro znali ovo pitanje?" })).toHaveLength(2);
+  unmount();
+  render(<QuizResults attempt={attempt} onPracticeAgain={vi.fn()} onBackToHistory={vi.fn()} />);
+  expect(screen.queryByRole("group", { name: "Koliko ste dobro znali ovo pitanje?" })).not.toBeInTheDocument();
+});
