@@ -212,7 +212,7 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
   return <div className={`mt-6 flex min-w-0 flex-col gap-group ${ruled}`}>
     {figures.length > 0 && <section aria-label="Pregled kolegija" className="grid min-w-0 grid-cols-1 border-2 border-line sm:grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] sm:divide-x-2 sm:divide-line">{figures}</section>}
     {checkingSession && !knownAttemptId && <p role="status" className="text-sm text-muted">Provjeravam nedovršene vježbe…</p>}
-    {(knownAttemptId || mockExam) && <div className={cn("grid min-w-0 border-2 border-line", knownAttemptId && mockExam && "md:grid-cols-2 md:divide-x-2 md:divide-line")}>
+    {(knownAttemptId || mockExam) && <div className={cn("grid min-w-0 border-2 border-line pt-0!", knownAttemptId && mockExam && "md:grid-cols-2 md:divide-x-2 md:divide-line")}>
       {knownAttemptId && <section aria-labelledby={`${id}-resume`} className="min-w-0 p-6">
         <p className="label-caps">Nastavi gdje si stao</p>
         <h3 id={`${id}-resume`} className="mt-3 text-lg font-semibold">Nastavite učiti</h3>

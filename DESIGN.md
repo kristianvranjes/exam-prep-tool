@@ -425,15 +425,19 @@ Implemented:
 - 8b "Upis kolegija": separate page (`CourseBrowser`, route `/enrol`) with faculty select,
   search, year filter, question count and moderator note per row. Enrolled rows read
   "Upisano ✓" with the accessible name "Upisano, otvori kolegij: <name>".
+- Review 5a: due today with an estimate and "Započni ponavljanje", learning and mature counts (from the card stage),
+  decks by unit and a 14-day outlook from `GET /review-progress/forecast`. 5b: Ponovno / Teško / Dobro / Lako
+  in the answer review (the card exists once the session is submitted), stating when the question returns.
+- Course page 2b: the figures strip, the continue and mock-exam cards, and a "Kvizovi po temama" table with filters,
+  results and a status in words. Enrolment 8b: back, title and count in one bar, search with icon and year filter in one row.
+  Sign-in 2a: split screen (without Google sign-in, which waits for the backend).
+- Progress 2f on the global page: the weekly grid beside "Ponovi ove teme" (weakest topics by latest result).
 
 Pending:
 
-
 - Answer review 2e as a true master-detail (one question at a time, Prethodno/Sljedeće netočno);
   for now the review is a filtered list with a sticky index.
-- Progress 2f's "Ponovi ove teme" panel and study plan 2g.
-- Spaced repetition 5a and 5b.
+- Study plan 2g and course page 2c (wait for the plan data); Google sign-in on 2a.
 - Moderator import v2 and quiz pages (6a-6d).
 - Remaining mobile screens 7a-7m and 8d-8e (practice question sheet and safe-area-aware
   answer actions are implemented with 1a/1e).
-- Course page 2c (alternative): the study plan for today waits for the plan data.
