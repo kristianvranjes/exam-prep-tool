@@ -119,3 +119,14 @@ def test_a_week_starts_on_monday_in_zagreb_time():
     # 23:30 UTC on Sunday 2026-11-15 is already Monday 2026-11-16 in Zagreb.
     assert week_start(datetime(2026, 11, 15, 23, 30, tzinfo=UTC)) == date(2026, 11, 16)
     assert week_start(datetime(2026, 11, 15, 12, 0, tzinfo=UTC)) == date(2026, 11, 9)
+
+
+def test_the_average_is_the_mean_of_the_sessions_not_their_sum(bank):
+    owner, member, _, course, rows = bank
+    link(owner, true_false(rows)["id"], unit(owner, course, "Logika"))
+    results = [
+        submit_true_false(member, course, value=False),
+        submit_true_false(member, course, value=True),
+    ]
+    assert sorted(results) == [False, True]
+    assert dashboard(member, course)["average_percent"] == 50

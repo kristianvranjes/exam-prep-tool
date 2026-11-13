@@ -81,8 +81,11 @@ def course_dashboard(db: Session, user: User, course_id: UUID) -> CourseDashboar
         ).group_by(Answer.attempt_id)
     ).all()
     session_percents = [percent_half_up(right, graded) for _, graded, right in overall]
+    # The mean of the whole percents, rounded half up.
     average = (
-        percent_half_up(sum(session_percents), len(session_percents)) if session_percents else None
+        (2 * sum(session_percents) + len(session_percents)) // (2 * len(session_percents))
+        if session_percents
+        else None
     )
 
     # Per unit and session: correct of graded, ordered by when the session was submitted.
