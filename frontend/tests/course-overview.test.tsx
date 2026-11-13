@@ -390,3 +390,45 @@ it("hides due review when nothing is due or a session is open", async () => {
   await loaded();
   expect(screen.queryByRole("button", { name: "Ponovi dospjela pitanja" })).not.toBeInTheDocument();
 });
+
+const unitResults = [
+  { unit_id: "u1", title: "Booleova algebra", position: 0, attempts: 5, best_percent: 94, last_percent: 90 },
+  { unit_id: "u2", title: "Minimizacija", position: 1, attempts: 3, best_percent: 60, last_percent: 48 },
+  { unit_id: "u3", title: "Bistabili", position: 2, attempts: 0, best_percent: null, last_percent: null },
+];
+
+it("lists the units with their results and states each one in words", async () => {
+  mock.courseDashboard.mockResolvedValue({ as_of: "2026-10-20", units_total: 3, units_attempted: 2, average_percent: 70, units: unitResults });
+  render(<CourseOverview {...props()} onStartAttempt={vi.fn()} />);
+  const table = await screen.findByRole("table", { name: "Rezultati po temama" });
+  expect(within(screen.getByRole("row", { name: /Booleova algebra/ })).getByText("Savladano")).toBeVisible();
+  expect(within(screen.getByRole("row", { name: /Minimizacija/ })).getByText("Za ponavljanje")).toBeVisible();
+  expect(within(screen.getByRole("row", { name: /Bistabili/ })).getByText("Nije započeto")).toBeVisible();
+  expect(within(table).getByRole("progressbar", { name: "Savladanost: Minimizacija" })).toHaveAttribute("aria-valuenow", "48");
+  expect(screen.getByRole("button", { name: "Nastavi: Booleova algebra" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Započni: Bistabili" })).toBeVisible();
+});
+
+it("filters the units to the ones not started or below 60 percent and starts one", async () => {
+  mock.courseDashboard.mockResolvedValue({ as_of: "2026-10-20", units_total: 3, units_attempted: 2, average_percent: 70, units: unitResults });
+  mock.focusedPractice.mockResolvedValue({ id: "attempt" } as Attempt);
+  const onStartAttempt = vi.fn();
+  render(<CourseOverview {...props()} onStartAttempt={onStartAttempt} />);
+  await screen.findByRole("table", { name: "Rezultati po temama" });
+  fireEvent.click(screen.getByRole("button", { name: "Ispod 60 %" }));
+  expect(screen.queryByRole("row", { name: /Booleova algebra/ })).not.toBeInTheDocument();
+  expect(screen.getByRole("row", { name: /Minimizacija/ })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Nezapočete" }));
+  expect(screen.getByRole("row", { name: /Bistabili/ })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Započni: Bistabili" }));
+  await waitFor(() => expect(mock.focusedPractice).toHaveBeenCalledWith("course", { unit_ids: ["u3"] }));
+  await waitFor(() => expect(onStartAttempt).toHaveBeenCalledWith({ id: "attempt" }));
+});
+
+it("offers the mock exam for the coming exam and opens its setup", async () => {
+  mock.examScopes.mockResolvedValue([dated("mi", "2026-11-23")]);
+  const onOpenPractice = vi.fn();
+  render(<CourseOverview {...props()} onStartAttempt={vi.fn()} onOpenPractice={onOpenPractice} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Započni probni ispit" }));
+  expect(onOpenPractice).toHaveBeenCalledWith({ mode: "MOCK", scopeId: "mi" });
+});
