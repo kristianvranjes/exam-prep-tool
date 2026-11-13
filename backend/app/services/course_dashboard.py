@@ -6,6 +6,7 @@ never changes one. Abandoned and unfinished sessions are ignored.
 """
 
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -74,7 +75,7 @@ def course_dashboard(db: Session, user: User, course_id: UUID) -> CourseDashboar
     correct = Answer.grading_status == "CORRECT"
 
     # Overall result per session, counting each answer once however many units its question has.
-    overall = db.execute(
+    overall: Sequence[Any] = db.execute(
         _graded_answers(
             user, course_id, Answer.attempt_id, func.count(), func.count().filter(correct)
         ).group_by(Answer.attempt_id)
@@ -85,7 +86,7 @@ def course_dashboard(db: Session, user: User, course_id: UUID) -> CourseDashboar
     )
 
     # Per unit and session: correct of graded, ordered by when the session was submitted.
-    rows = db.execute(
+    rows: Sequence[Any] = db.execute(
         _in_units(
             _graded_answers(
                 user,
@@ -134,7 +135,7 @@ def progress_series(
     index = {monday: position for position, monday in enumerate(mondays)}
     window_start = datetime.combine(mondays[0], datetime.min.time(), tzinfo=EXAM_TIMEZONE)
 
-    rows = db.execute(
+    rows: Sequence[Any] = db.execute(
         _in_units(
             _graded_answers(
                 user,
