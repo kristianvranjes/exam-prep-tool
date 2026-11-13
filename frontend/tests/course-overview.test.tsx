@@ -165,6 +165,21 @@ it("leads with the next exam: the countdown in its heading, coverage in counts a
   expect(screen.getAllByRole("button").filter(button => button.classList.contains("bg-accent"))).toHaveLength(1);
 });
 
+it("shows the days to the next exam as a large figure above the sections", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 9, 20, 12));
+  mock.examScopes.mockResolvedValue([dated("mi", "2026-11-23", "2026-12-01")]);
+  render(<CourseOverview {...props()} onStartAttempt={vi.fn()} />);
+  const figures = await screen.findByRole("region", { name: "Pregled kolegija" });
+  expect(figures).toHaveTextContent("Do ispita34dana");
+  expect(figures).toHaveTextContent("Međuispit");
+});
+
+it("leaves the figures out when no exam is dated and nothing is due", async () => {
+  render(<CourseOverview {...props()} />);
+  expect(await screen.findByRole("region", { name: "Sažetak napretka" })).toBeVisible();
+  expect(screen.queryByRole("region", { name: "Pregled kolegija" })).not.toBeInTheDocument();
+});
+
 const paper = (id: string, exam_scope_id: string | null, status: ExamPaper["status"] = "PUBLISHED") => ({ id, exam_scope_id, status }) as ExamPaper;
 
 it("names past exams for the coming cycle, falling back to every published paper", () => {

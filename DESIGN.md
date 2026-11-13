@@ -400,6 +400,10 @@ Implemented:
   `SegmentBars`, `OptionRow`, `BottomBar`, `Sheet`).
 - Answer-marker preference (shapes or letters) and preferences saved per user on the
   backend (`PreferencesSync`), with `localStorage` as the fallback.
+- Settings 8c: palette tiles (radio group, five palettes plus "Prema sustavu"), font size, answer
+  markers and custom colours on the left, a live sample question on the right (no language option).
+- Course page 2b: a figures strip ("Do ispita" filled with the accent, "Na redu") above the existing
+  sections.
 - Practice 1a and mock exam 1e: one segment per question, the answered count, an always-available
   question grid, status labels and return flags, a desktop focus toggle, and a phone question
   sheet. The timed exam shows the remaining-time block; answer saving and submission behavior
@@ -415,11 +419,11 @@ Implemented:
 
 Pending:
 
-- 8c settings page layout with live preview and palette tiles (no language option).
 - Results 2d and answer review 2e.
 - Progress 2f and study plan 2g.
 - Spaced repetition 5a and 5b.
 - Moderator import v2 and quiz pages (6a-6d).
 - Remaining mobile screens 7a-7m and 8d-8e (practice question sheet and safe-area-aware
   answer actions are implemented with 1a/1e).
-- Course page 2b/2c in the new layout.
+- Course page 2b/2c: the figures strip has the days to the exam and the due count; solved quizzes
+  and the average (and 2c's study plan) wait for the course-dashboard and plan backend data.

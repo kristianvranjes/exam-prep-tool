@@ -10,7 +10,7 @@ import { ReadinessFigure, ReadinessUnits } from "./exam-readiness";
 import { kindLabels } from "./exam-scopes";
 import { ResumeSession } from "./resume-session";
 import { resumableAttempt, type ResumableAttempt } from "./use-resumable-sessions";
-import { Alert, Button, Select } from "./ui";
+import { Alert, Button, Select, StatCell } from "./ui";
 import { QUESTIONS, UNITS, plural, pluralForm } from "../lib/plural";
 
 type ProgressState = { loading: boolean; summary: ReviewProgressSummary | null; error: boolean };
@@ -174,7 +174,15 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
   const coverage = coverageLine(countdown?.coverage ?? null);
   const unitCount = exam?.scope.unit_ids.length ?? 0;
 
+  // Handoff 2b: the figures that matter first, large. Only what the course data already holds is shown.
+  const figures = [
+    exam && !exam.ongoing && <StatCell key="days" tone="accent" size="md" label="Do ispita" value={exam.days} unit={pluralForm(exam.days, ["dan", "dana", "dana"])}
+      note={exam.scope.starts_on ? `${exam.scope.name} · ${formatScopeDates(exam.scope)}` : exam.scope.name} />,
+    availability !== "loading" && showDue && <StatCell key="due" size="md" label="Na redu" value={due} unit={pluralForm(due, QUESTIONS)} note="dospjela pitanja za ponavljanje" />,
+  ].filter(Boolean);
+
   return <div className={`mt-6 flex min-w-0 flex-col gap-group ${ruled}`}>
+    {figures.length > 0 && <section aria-label="Pregled kolegija" className="grid min-w-0 grid-cols-1 border-2 border-line sm:grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] sm:divide-x-2 sm:divide-line">{figures}</section>}
     {checkingSession && !knownAttemptId && <p role="status" className="text-sm text-muted">Provjeravam nedovršene vježbe…</p>}
     {knownAttemptId && <section aria-labelledby={`${id}-resume`}>
       <h3 id={`${id}-resume`} className="text-lg font-semibold">Nastavite učiti</h3>
