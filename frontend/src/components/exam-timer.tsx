@@ -55,9 +55,10 @@ export function ExamTimer({ deadline, serverTime, durationMinutes, answeredPoint
   const elapsedShare = durationMinutes ? Math.min(1, Math.max(0, 1 - remaining / (durationMinutes * 60))) : null;
   const pointsShare = totalPoints ? answeredPoints / totalPoints : 0;
   const behind = elapsedShare !== null && elapsedShare - pointsShare > 0.15;
-  return <section aria-label="Vrijeme ispita" className={cn("sticky top-0 z-10 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 rounded-control border px-4 py-3", urgent ? "border-danger/40 bg-danger-surface" : "border-line bg-surface")}>
-    <p className="text-sm text-muted">Preostalo vrijeme <span role="timer" aria-label={`Preostalo vrijeme ${formatRemaining(remaining)}`} className={cn("ml-1 text-xl font-semibold tabular-nums text-foreground", urgent && "text-danger")}>{formatRemaining(remaining)}</span></p>
-    {elapsedShare !== null && <p className="text-sm text-muted">Odgovoreno {formatPoints(answeredPoints)} od {formatPoints(totalPoints)} bodova · iskorišteno {Math.round(elapsedShare * 100)}% vremena{remaining > 0 && <> · <span className={behind ? "font-medium text-foreground" : undefined}>{behind ? "Kasnite" : "U tempu"}</span></>}</p>}
+  return <section aria-label="Vrijeme ispita" className={cn("flex w-full min-w-0 flex-col justify-center gap-1 px-4 py-2 sm:w-auto", urgent ? "bg-danger text-danger-foreground" : "bg-accent text-accent-foreground")}>
+    <p className="label-caps text-inherit">Preostalo vrijeme</p>
+    <span role="timer" aria-label={`Preostalo vrijeme ${formatRemaining(remaining)}`} className="font-display text-4xl font-extrabold leading-none tabular-nums sm:text-5xl">{formatRemaining(remaining)}</span>
+    {elapsedShare !== null && <p className="text-xs text-inherit">Odgovoreno {formatPoints(answeredPoints)} od {formatPoints(totalPoints)} bodova · iskorišteno {Math.round(elapsedShare * 100)}% vremena{remaining > 0 && <> · {behind ? "Kasnite" : "U tempu"}</>}</p>}
     <p aria-live="assertive" className="sr-only">{announcement}</p>
     {announcement && remaining > 0 && <p aria-hidden="true" className="w-full text-sm font-medium">{announcement}</p>}
   </section>;

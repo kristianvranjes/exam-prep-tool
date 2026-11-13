@@ -209,8 +209,9 @@ Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
 - **Practice focus mode**: while answering there is no main navigation or account menu. The
   frame is called with `focusedPractice`, the nav is hidden, the brand is plain text and the
   content is narrowed (`max-w-3xl`). An appearance button stays in the header and opens a
-  popover so palette and font size can still be changed mid-session. The handoff bar (Save
-  and exit, answered N / M, remaining time) belongs to the practice redesign.
+  popover so palette and font size can still be changed mid-session. `ActiveQuiz` adds the
+  session bar (Spremi i izađi, Odgovoreno N / M, remaining time), question progress strip, status
+  navigator and desktop focus toggle; the phone navigator is a bottom sheet.
 - **Global pages**: `/review` (`review-home.tsx`), `/progress` (`progress-home.tsx`) and
   `/settings` (`settings-page.tsx`). They start with a `PageHeader` and list the active
   courses; the full 5a, 2f and 8c layouts are pending.
@@ -399,6 +400,12 @@ Implemented:
   `SegmentBars`, `OptionRow`, `BottomBar`, `Sheet`).
 - Answer-marker preference (shapes or letters) and preferences saved per user on the
   backend (`PreferencesSync`), with `localStorage` as the fallback.
+- Practice 1a and mock exam 1e: one segment per question, the answered count, an always-available
+  question grid, status labels and return flags, a desktop focus toggle, and a phone question
+  sheet. The timed exam shows the remaining-time block; answer saving and submission behavior
+  remain unchanged.
+- Answer options use the selected shape/letter markers and state the correct answer with
+  "Vaš odgovor ✓" wording.
 - First versions of the global pages `/review`, `/progress` and `/settings`.
 - 8a "Vaši kolegiji": course cards with next exam, readiness and progress bar, enrolled
   list, finished and removed courses saved on the backend.
@@ -409,11 +416,10 @@ Implemented:
 Pending:
 
 - 8c settings page layout with live preview and palette tiles (no language option).
-- Answer markers shown on the options, "Vaš odgovor ✓" wording.
-- Practice 1a and mock exam 1e (progress strips, side panel, focus button, timer).
 - Results 2d and answer review 2e.
 - Progress 2f and study plan 2g.
 - Spaced repetition 5a and 5b.
 - Moderator import v2 and quiz pages (6a-6d).
-- Mobile screens 7a-7m and 8d-8e (bottom sheets, bottom action bar).
+- Remaining mobile screens 7a-7m and 8d-8e (practice question sheet and safe-area-aware
+  answer actions are implemented with 1a/1e).
 - Course page 2b/2c in the new layout.

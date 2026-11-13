@@ -3,16 +3,18 @@ import { numberProblem } from "../lib/question-types";
 import { cn } from "../lib/utils";
 import { optionShortcuts, toggleOption } from "./practice-shortcuts";
 import { RichText } from "./rich-text";
+import { useAnswerMarkers } from "./theme";
+import { OPTION_INPUT_CLASS, OptionRow, optionMarker, type OptionState } from "./ui";
 
 /**
  * Marks the key and a wrong choice once an answer is checked; text, not only color.
  * In a multiple-select question a correct option left unticked is called out as missed.
  */
 function choiceMark(correct: boolean, chosen: boolean, feedback: QuestionFeedback | null | undefined, multiple: boolean) {
-  if (!feedback) return { tone: "hover:border-line-strong hover:bg-subtle has-[:checked]:border-accent has-[:checked]:bg-accent-surface", note: null };
-  if (correct) return { tone: "border-success bg-success-surface [&>span:last-child]:text-success", note: chosen ? "Vaš odgovor · Točno" : multiple ? "Propušteno · Točan odgovor" : "Točan odgovor" };
-  if (chosen) return { tone: "border-danger bg-danger-surface [&>span:last-child]:text-danger", note: "Vaš odgovor" };
-  return { tone: "text-muted", note: null };
+  if (!feedback) return { state: chosen ? "selected" as const : "idle" as const, note: null };
+  if (correct) return { state: "correct" as const, note: chosen ? "Vaš odgovor ✓" : multiple ? "Propušteno · Točan odgovor" : "Točan odgovor" };
+  if (chosen) return { state: "incorrect" as const, note: "Vaš odgovor · Netočno" };
+  return { state: "dimmed" as const, note: null };
 }
 
 export function QuizAnswerEditor({ question, answer, change, disabled, feedback, shortcuts = false }: {
@@ -21,19 +23,22 @@ export function QuizAnswerEditor({ question, answer, change, disabled, feedback,
   /** Announces the answer keys of the active quiz on each option. */
   shortcuts?: boolean;
 }) {
+  const markers = useAnswerMarkers();
   const choice = (index: number, key: string, label: string, chosen: boolean, correct: boolean, select: () => void, kind: "radio" | "checkbox" = "radio") => {
     const mark = choiceMark(correct, chosen, feedback, kind === "checkbox");
-    // On narrow screens the note drops below the option text instead of squeezing it.
-    return <label key={key} className={cn("flex-wrap gap-y-1 rounded-control border border-line-strong/50 bg-surface p-3 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent [&>input:focus-visible]:outline-none", mark.tone)}>
-      <input type={kind} name={question.id} checked={chosen} onChange={select} aria-keyshortcuts={shortcuts ? optionShortcuts(question, index) : undefined} /> <RichText text={label} className="min-w-0 flex-1" />
-      {mark.note && <span className="basis-full pl-7 text-sm font-medium sm:basis-auto sm:pl-3">{mark.note}</span>}
-    </label>;
+    const labelId = `${question.id}-option-label-${key}`;
+    return <OptionRow key={key} state={mark.state as OptionState} marker={optionMarker(index, markers)} note={mark.note}
+      control={<input type={kind} name={question.id} checked={chosen} onChange={select}
+        aria-labelledby={labelId} aria-keyshortcuts={shortcuts ? optionShortcuts(question, index) : undefined} className={OPTION_INPUT_CLASS} />}
+      className="rounded-none">
+      <span id={labelId} className="min-w-0 flex-1"><RichText text={label} /></span>
+    </OptionRow>;
   };
   const selected = answer?.type === "MULTIPLE_SELECT" ? answer.option_positions : [];
   const typed = answer?.type === "NUMERIC" ? answer.value : "";
   const problem = typed ? numberProblem(typed) : null;
   return <fieldset disabled={disabled || Boolean(feedback)} className="flex min-w-0 flex-col gap-3">
-      <legend className="mb-5 w-full max-w-prose break-words font-display text-xl font-medium leading-relaxed sm:text-2xl"><RichText text={question.stem} /></legend>
+      <legend className="mb-5 w-full max-w-prose break-words font-display text-[1.75rem] font-extrabold leading-tight sm:text-[2rem]"><RichText text={question.stem} /></legend>
       {question.type === "MULTIPLE_CHOICE" && question.options.map((option, index) => choice(index, String(option.position), option.text,
         answer?.type === "MULTIPLE_CHOICE" && answer.option_position === option.position,
         Boolean(feedback?.options.find(key => key.position === option.position)?.is_correct),

@@ -27,7 +27,7 @@ it("counts down against the server clock, warns at 10, 5 and 1 minutes, and expi
   expect(screen.getByText("Još 10 minuta.", { selector: "[aria-live]" })).toBeInTheDocument();
   await act(async () => { vi.advanceTimersByTime(5 * 60_000); });
   expect(screen.getByText("Još 5 minuta.", { selector: "[aria-live]" })).toBeInTheDocument();
-  expect(screen.getByLabelText("Vrijeme ispita")).toHaveClass("bg-danger-surface");
+  expect(screen.getByLabelText("Vrijeme ispita")).toHaveClass("bg-danger", "text-danger-foreground");
   await act(async () => { vi.advanceTimersByTime(4 * 60_000); });
   expect(screen.getByText(/Još 1 minuta. Spremite trenutni odgovor/, { selector: "[aria-live]" })).toBeInTheDocument();
   expect(onExpire).not.toHaveBeenCalled();
