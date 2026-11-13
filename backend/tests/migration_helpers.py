@@ -8,6 +8,8 @@ NUMERIC_QUESTION_COLUMNS = ("correct_value", "absolute_tolerance", "relative_tol
 RECORDED_QUIZ_COLUMNS = ("selection_mode",)
 # Added by 0028 and tested by its own roundtrip: older downgrades drop the student's list status.
 MEMBERSHIP_STATUS_COLUMNS = ("status",)
+# Added by 0029 and tested by its own roundtrip: older downgrades drop the rating schedule.
+REVIEW_SCHEDULE_COLUMNS = ("interval_minutes", "repetitions", "lapses", "last_rating")
 
 
 def legacy_columns(conn: Connection, table: str, newer: tuple[str, ...]) -> str:
@@ -35,12 +37,17 @@ def legacy_membership_columns(conn: Connection) -> str:
     return legacy_columns(conn, "course_memberships", MEMBERSHIP_STATUS_COLUMNS)
 
 
+def legacy_review_columns(conn: Connection) -> str:
+    return legacy_columns(conn, "question_review_progress", REVIEW_SCHEDULE_COLUMNS)
+
+
 def legacy_rows(conn: Connection, table: str) -> list[object]:
     """Every row of `table` ordered by id, without columns newer revisions add."""
     columns = {
         "questions": legacy_question_columns,
         "quizzes": legacy_quiz_columns,
         "course_memberships": legacy_membership_columns,
+        "question_review_progress": legacy_review_columns,
     }.get(table)
     selected = columns(conn) if columns else "*"
     return list(conn.execute(text(f"SELECT {selected} FROM {table} ORDER BY id")).all())
