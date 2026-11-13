@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { api, type ProgressSeries } from "../lib/api";
 import { cn } from "../lib/utils";
 
@@ -26,6 +26,7 @@ function weekLabel(iso: string) {
  * something to show, and when the series cannot be loaded.
  */
 export function ProgressHeatmap({ courseId }: { courseId: string }) {
+  const headingId = useId();
   const [series, setSeries] = useState<ProgressSeries | null>(null);
   useEffect(() => {
     let current = true;
@@ -37,8 +38,8 @@ export function ProgressHeatmap({ courseId }: { courseId: string }) {
 
   const units = series?.units.filter(unit => unit.cells.some(cell => cell.graded_count > 0)) ?? [];
   if (!series || units.length === 0) return null;
-  return <section aria-labelledby="heatmap-heading" className="min-w-0 space-y-4">
-    <h3 id="heatmap-heading" className="text-lg font-semibold">Savladanost po tjednima</h3>
+  return <section aria-labelledby={`${headingId}-heatmap`} className="min-w-0 space-y-4">
+    <h3 id={`${headingId}-heatmap`} className="text-lg font-semibold">Savladanost po tjednima</h3>
     <p className="max-w-prose text-sm text-muted">Udio točnih automatski ocijenjenih odgovora iz cjeline u tom tjednu, prema predanim vježbama.</p>
     <div className="overflow-x-auto">
       <table className="w-full min-w-[32rem] border-separate border-spacing-1">
