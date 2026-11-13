@@ -195,7 +195,20 @@ row per course unit in unit order (archived units included, `is_archived` set):
 in every unit it is currently linked to, so rows overlap. A course without units
 returns an empty list. See [progress by unit](COURSE_UNITS.md#progress-by-unit).
 
-All three endpoints return 404 for missing/inaccessible courses and 401 without
+`GET /courses/{course_id}/dashboard` returns the caller's results in submitted sessions for
+the course page: `{as_of, units_total, units_attempted, average_percent, units}`. Each unit
+(active ones only, in unit order) has `unit_id`, `title`, `position`, `attempts`,
+`best_percent` and `last_percent`. Only automatically graded answers count; short answers,
+self-assessments, abandoned and unfinished sessions never do. A question counts in every unit
+it is linked to. `average_percent` is the mean of the sessions' overall results, and
+percentages are whole numbers rounded half up, or null without data.
+
+`GET /courses/{course_id}/progress-series?weeks=8` (1 to 26 weeks) returns `{weeks, units}`:
+`weeks` are the Mondays (Zagreb time) of the window, oldest first, and each unit has `cells`
+aligned with them, each `{percent, graded_count}` with `percent` null for a week without
+graded answers.
+
+All three review-progress endpoints return 404 for missing/inaccessible courses and 401 without
 authentication, and return only the caller's own progress. Reads never delete,
 reschedule or otherwise change persisted progress and expose no user ID,
 scheduling version, snapshots or answer keys. ADAPTIVE remains due-first, not
