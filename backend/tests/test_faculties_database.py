@@ -8,7 +8,11 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from community_helpers import provision
 from fastapi.testclient import TestClient
-from migration_helpers import legacy_membership_columns, legacy_question_columns
+from migration_helpers import (
+    legacy_membership_columns,
+    legacy_question_columns,
+    legacy_review_columns,
+)
 from sqlalchemy import delete, select, text
 from sqlalchemy.exc import DataError, IntegrityError
 from test_materials import clients as clients
@@ -221,12 +225,15 @@ def historical_rows():
         "material_chunks",
         "question_options",
         "question_versions",
-        "question_review_progress",
     ]
     with engine.connect() as conn:
         result = {
             name: conn.execute(text(f"SELECT * FROM {name} ORDER BY id")).all() for name in tables
         }
+        # The rating schedule is new in 0029 and tested by its own roundtrip.
+        result["question_review_progress"] = conn.execute(
+            text(f"SELECT {legacy_review_columns(conn)} FROM question_review_progress ORDER BY id")
+        ).all()
         # The list status is new in 0028 and tested by its own roundtrip.
         result["course_memberships"] = conn.execute(
             text(f"SELECT {legacy_membership_columns(conn)} FROM course_memberships ORDER BY id")

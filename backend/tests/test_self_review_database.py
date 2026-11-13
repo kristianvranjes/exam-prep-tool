@@ -3,6 +3,7 @@ import os
 import pytest
 from alembic.config import Config
 from fastapi.testclient import TestClient
+from migration_helpers import legacy_review_columns
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from test_paper_sessions_database import published, take
@@ -42,7 +43,11 @@ def graded_rows():
                 text(f"SELECT {ANSWER_COLUMNS} FROM answers ORDER BY id")
             ).all(),
             "progress": conn.execute(
-                text("SELECT * FROM question_review_progress ORDER BY id")
+                text(
+                    "SELECT "
+                    + legacy_review_columns(conn)
+                    + " FROM question_review_progress ORDER BY id"
+                )
             ).all(),
         }
 
@@ -235,7 +240,7 @@ def test_0025_roundtrip_keeps_answers_and_guards_recorded_self_reviews(bank):
         with pytest.raises(RuntimeError, match="self-assessments exist"):
             command.downgrade(config, "0024")
         with engine.connect() as conn:
-            assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0028"
+            assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0029"
         assert member.get(path).json() == assessed
         review(member, path, short, None)
         for _ in range(2):
