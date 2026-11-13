@@ -408,6 +408,9 @@ Implemented:
   graded otherwise), the share of points and minutes used for a paper, a per-unit bar list
   (weakest first, "k/n" in words), and a numbered grid of all questions. Practice results show
   no percentage; the existing review filters and wording are unchanged.
+- Answer review 2e, first version: a Favoriti filter beside Pogreške / Samoprocjena / Svi odgovori,
+  a sticky index of the visible questions on desktop that moves focus to the result, and
+  "Prijavi grešku u pitanju" on questions that come from the bank (shared `ReportIssue`).
 - Answer options use the selected shape/letter markers and state the correct answer with
   "Vaš odgovor ✓" wording.
 - First versions of the global pages `/review`, `/progress` and `/settings`.
@@ -420,7 +423,8 @@ Implemented:
 Pending:
 
 - 8c settings page layout with live preview and palette tiles (no language option).
-- Answer review 2e (master-detail on desktop, filter Netočna / Sva / Označena, "Prijavi grešku u pitanju").
+- Answer review 2e as a true master-detail (one question at a time, Prethodno/Sljedeće netočno);
+  for now the review is a filtered list with a sticky index.
 - Progress 2f and study plan 2g.
 - Spaced repetition 5a and 5b.
 - Moderator import v2 and quiz pages (6a-6d).

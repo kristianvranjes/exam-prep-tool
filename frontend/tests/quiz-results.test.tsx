@@ -324,3 +324,29 @@ it("shows the share of points and the minutes against the limit for a timed pape
     onPracticeAgain={vi.fn()} onBackToHistory={vi.fn()} />);
   expect(screen.getByText("75 % · 10 od 90 minuta")).toBeVisible();
 });
+
+it("filters the review to favorites and offers a report for questions from the bank", () => {
+  open([{ ...mistake, source_question_id: "bank-1", favorite: false }, { ...correct, source_question_id: "bank-2", favorite: true }, short]);
+  const favorites = screen.getByRole("button", { name: "Favoriti" });
+  expect(favorites).toBeEnabled();
+  fireEvent.click(favorites);
+  expect(favorites).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getAllByRole("article")).toHaveLength(1);
+  expect(within(screen.getByRole("article", { name: "Rezultat pitanja 2" })).getByRole("button", { name: "Prijavi grešku u pitanju" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
+  // The pending short answer has no bank question behind it, so there is nothing to report.
+  expect(within(screen.getByRole("article", { name: "Rezultat pitanja 3" })).queryByRole("button", { name: "Prijavi grešku u pitanju" })).not.toBeInTheDocument();
+});
+
+it("keeps the favorites filter disabled while nothing is a favorite", () => {
+  open();
+  expect(screen.getByRole("button", { name: "Favoriti" })).toBeDisabled();
+});
+
+it("lists the visible questions in an index that moves focus to the result", () => {
+  open();
+  const index = screen.getByRole("navigation", { name: "Popis pitanja u pregledu" });
+  fireEvent.click(within(index).getByRole("button", { name: "Skoči na pitanje 1" }));
+  expect(screen.getByRole("article", { name: "Rezultat pitanja 1" })).toHaveFocus();
+  expect(within(index).getAllByRole("listitem")).toHaveLength(1);
+});

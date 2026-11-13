@@ -4,15 +4,16 @@ import { answerText, keyText } from "../lib/question-types";
 import { practiceApi, type Attempt, type Confidence, type PaperScore, type PaperSession, type ResultQuestion } from "../lib/practice-api";
 import { FavoriteToggle, useFavorites } from "./favorite-toggle";
 import { QuestionUnits } from "./question-units";
+import { ReportIssue } from "./question-report";
 import { RichText } from "./rich-text";
 import { SelfAssessment, selfReviewLabels, type SaveSelfReview } from "./quiz-feedback";
 import { Button, ProgressBar, Surface } from "./ui";
 import { cn } from "../lib/utils";
 import { ANSWERS, plural } from "../lib/plural";
 
-type ReviewView = "INCORRECT" | "PENDING" | "ALL";
+type ReviewView = "INCORRECT" | "PENDING" | "FAVORITES" | "ALL";
 type SubmittedAttempt = Extract<Attempt, { status: "SUBMITTED" }>;
-const viewLabels: Record<ReviewView, string> = { INCORRECT: "Pogreške", PENDING: "Samoprocjena", ALL: "Svi odgovori" };
+const viewLabels: Record<ReviewView, string> = { INCORRECT: "Pogreške", PENDING: "Samoprocjena", FAVORITES: "Favoriti", ALL: "Svi odgovori" };
 const confidenceNotes: Record<Confidence, string> = { SURE: "označeno: siguran sam", UNSURE: "označeno: nisam siguran", GUESS: "označeno: pogađao sam" };
 const statusLabels: Record<ResultQuestion["grading_status"], string> = { CORRECT: "Točno", INCORRECT: "Netočno", PENDING: "Potrebna samoprocjena", UNANSWERED: "Ostavljeno prazno" };
 const countTones: Record<string, string> = { "Točno": "text-success", "Netočno": "text-danger" };
@@ -178,7 +179,14 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
     return async verdict => onUpdate(await practiceApi.selfReview(attempt.course_id, attempt.id, question.id, verdict));
   }
   const visibleQuestions = attempt.questions.map((question, index) => ({ question, number: index + 1 }))
-    .filter(({ question }) => view === "ALL" || question.grading_status === view);
+    .filter(({ question }) => view === "ALL" || (view === "FAVORITES" ? favorites.value(question) : question.grading_status === view));
+  const favoriteCount = attempt.questions.filter(question => favorites.value(question)).length;
+  /** Scrolls to a question's result and moves focus there, so the keyboard follows the index. */
+  function jumpTo(id: string) {
+    const target = document.getElementById(`result-${id}`);
+    target?.scrollIntoView?.({ block: "start" });
+    target?.focus();
+  }
   const summary: [string, number, string?][] = [["Točno", counts.CORRECT], ["Netočno", counts.INCORRECT], ["Kratki odgovori", counts.PENDING, selfReviewNote(tally)], ...(counts.UNANSWERED ? [["Ostavljeno prazno", counts.UNANSWERED] as [string, number]] : [])];
 
   const graded = counts.CORRECT + counts.INCORRECT;
@@ -221,22 +229,36 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
     {hasResults && <QuestionGrid questions={attempt.questions} />}
     {hasResults && <section aria-label="Pregled odgovora" className="space-y-5">
       <div role="group" aria-label="Filtri rezultata" className="flex flex-wrap gap-2">
-        {(["INCORRECT", "PENDING", "ALL"] as const).map(filter => <Button key={filter} variant="secondary" aria-pressed={view === filter}
-          disabled={filter !== "ALL" && counts[filter] === 0} onClick={() => setView(filter)}>{viewLabels[filter]}</Button>)}
+        {(["INCORRECT", "PENDING", "FAVORITES", "ALL"] as const).map(filter => <Button key={filter} variant="secondary" aria-pressed={view === filter}
+          disabled={filter === "FAVORITES" ? favoriteCount === 0 : filter !== "ALL" && counts[filter] === 0} onClick={() => setView(filter)}>{viewLabels[filter]}</Button>)}
       </div>
       <div><h3 ref={reviewHeading} tabIndex={-1} className="text-lg font-semibold">{viewLabels[view]}</h3><p role="status" className="mt-1 text-sm text-muted">{plural(visibleQuestions.length, ANSWERS)}</p></div>
+      <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+      <nav aria-label="Popis pitanja u pregledu" className="hidden lg:block">
+        <ol className="sticky top-4 max-h-[calc(100dvh-2rem)] overflow-y-auto border-2 border-line">{visibleQuestions.map(({ question, number }) =>
+          <li key={question.id} className="border-b border-line last:border-b-0">
+            <button type="button" aria-label={`Skoči na pitanje ${number}`} onClick={() => jumpTo(question.id)}
+              className="grid min-h-14 w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-3 px-4 py-3 text-left hover:bg-subtle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent">
+              <span className={cn("text-[0.9375rem] font-extrabold tabular-nums", statusTone(question))}>{number}</span>
+              <span className="min-w-0"><span className="block truncate text-sm font-semibold">{question.stem.replace(/\s+/g, " ")}</span>
+                <span className="block truncate text-xs text-muted">{[statusLabel(question), question.units?.[0]?.title].filter(Boolean).join(" · ")}</span></span>
+            </button>
+          </li>)}</ol>
+      </nav>
       <div className="space-y-5">{visibleQuestions.map(({ question, number }) => {
         const correct = question.grading_status === "CORRECT";
         const header = <div className="space-y-2"><h4 className="text-lg font-semibold">{number}. <RichText text={question.stem} /></h4><QuestionUnits units={question.units} />
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"><p className={cn("text-sm", statusTone(question))}>{[paperItemLabel(number, question.label), statusLabel(question), itemPoints(question), question.confidence && confidenceNotes[question.confidence]].filter(Boolean).join(" · ")}</p>
             <FavoriteToggle favorites={favorites} question={question} label={`Favorit: pitanje ${number}`} /></div></div>;
-        return <article key={question.id} aria-label={`Rezultat pitanja ${number}`} className="min-w-0">
+        return <article key={question.id} id={`result-${question.id}`} tabIndex={-1} aria-label={`Rezultat pitanja ${number}`} className="min-w-0 scroll-mt-4 outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent">
           {correct ? <div className="space-y-3 border-b border-line py-4">
             {header}
             <details><summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">Pogledaj odgovor{question.explanation ? " i objašnjenje" : ""}</summary><div className="mt-3 max-w-prose"><ResultAnswers question={question} /></div></details>
           </div> : <Surface className="space-y-5">{header}<div className="max-w-prose"><ResultAnswers question={question} onSelfReview={selfReview(question)} /></div></Surface>}
+          {question.source_question_id && <div className="mt-3"><ReportIssue questionId={question.source_question_id} label="Prijavi grešku u pitanju" bordered={false} /></div>}
         </article>;
       })}</div>
+      </div>
     </section>}
     <div className="border-t border-line pt-3"><Button variant="ghost" disabled={busy} onClick={onBackToHistory}>Natrag na povijest vježbi</Button></div>
   </section>;
