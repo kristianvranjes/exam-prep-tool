@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -10,8 +10,10 @@ from app.models.course_unit import CourseUnit, QuestionUnit
 from app.models.question import Question
 from app.models.user_question_progress import ReviewRatingEvent, UserQuestionProgress
 from app.schemas.progress import (
+    ForecastDay,
     ProgressResponse,
     ProgressSummary,
+    ReviewForecast,
     ReviewRatingResult,
     StageCount,
     UnitProgress,
@@ -307,5 +309,41 @@ def summarize_unit_progress(db: Session, user: User, course_id: UUID) -> UnitPro
                 due_now=row[8],
             )
             for row in rows
+        ],
+    )
+
+
+def review_forecast(
+    db: Session, user: User, course_id: UUID, days: int, today: date | None = None
+) -> ReviewForecast:
+    """How many practice-eligible cards come due on each of the next `days` days.
+
+    Days are Zagreb calendar days. Cards already overdue are counted on the first day.
+    """
+    # Imported here: course_summaries needs services that themselves import this module.
+    from app.services.course_summaries import EXAM_TIMEZONE, zagreb_today
+
+    get_member_course(db, user, course_id)
+    first = today or zagreb_today()
+    end = datetime.combine(first + timedelta(days=days), time.min, tzinfo=EXAM_TIMEZONE)
+    due_times = db.scalars(
+        select(UserQuestionProgress.due_at)
+        .join(Question, Question.id == UserQuestionProgress.question_id)
+        .where(
+            UserQuestionProgress.user_id == user.id,
+            Question.course_id == course_id,
+            practice_eligible(user.id),
+            UserQuestionProgress.due_at < end,
+        )
+    ).all()
+    counts = [0] * days
+    for due_at in due_times:
+        offset = (due_at.astimezone(EXAM_TIMEZONE).date() - first).days
+        counts[min(max(offset, 0), days - 1)] += 1
+    return ReviewForecast(
+        as_of=datetime.now(UTC),
+        days=[
+            ForecastDay(date=first + timedelta(days=index), count=count)
+            for index, count in enumerate(counts)
         ],
     )

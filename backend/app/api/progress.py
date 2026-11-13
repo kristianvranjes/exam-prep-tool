@@ -8,6 +8,7 @@ from app.models import User
 from app.schemas.progress import (
     ProgressResponse,
     ProgressSummary,
+    ReviewForecast,
     ReviewRatingRequest,
     ReviewRatingResult,
     UnitProgressSummary,
@@ -15,6 +16,7 @@ from app.schemas.progress import (
 from app.services.progress import (
     apply_rating,
     list_progress,
+    review_forecast,
     summarize_progress,
     summarize_unit_progress,
 )
@@ -59,3 +61,13 @@ def get_course_unit_progress(
     db: Session = Depends(get_db),
 ) -> UnitProgressSummary:
     return summarize_unit_progress(db, user, course_id)
+
+
+@router.get("/forecast", response_model=ReviewForecast)
+def get_course_review_forecast(
+    course_id: UUID,
+    days: int = Query(14, ge=1, le=60),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ReviewForecast:
+    return review_forecast(db, user, course_id, days)
