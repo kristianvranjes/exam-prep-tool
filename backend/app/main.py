@@ -8,6 +8,7 @@ from app.api.auth import router as auth_router
 from app.api.concepts import router as concepts_router
 from app.api.course_units import router as course_units_router
 from app.api.courses import router as courses_router
+from app.api.dashboard import router as dashboard_router
 from app.api.exam_papers import router as exam_papers_router
 from app.api.exam_scopes import router as exam_scopes_router
 from app.api.faculties import router as faculties_router
@@ -75,3 +76,4 @@ app.include_router(favorites_router)
 app.include_router(mistakes_router)
 
 app.include_router(progress_router)
+app.include_router(dashboard_router)
