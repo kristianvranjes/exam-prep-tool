@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { QUESTION_TYPES } from "../lib/question-types";
-import { api, type CourseUnit, type ExamPaper, type ExamScope, type ExamScopeCoverage, type ExamScopeReadiness, type ReviewProgressSummary } from "../lib/api";
+import { api, type CourseDashboard, type CourseUnit, type ExamPaper, type ExamScope, type ExamScopeCoverage, type ExamScopeReadiness, type ReviewProgressSummary } from "../lib/api";
 import { countdownHeading, formatScopeDates, localIsoDate, nextExam, type NextExam } from "../lib/exam-dates";
 import { practiceApi, type Attempt, type PracticeFocus } from "../lib/practice-api";
 import type { MaterialsSummary } from "./course-materials";
@@ -69,6 +69,7 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
   const [focusedError, setFocusedError] = useState("");
   const [papers, setPapers] = useState<ExamPaper[]>([]);
   const [readAttempt, setReadAttempt] = useState<ResumableAttempt | null>(null);
+  const [results, setResults] = useState<CourseDashboard | null>(null);
 
   useEffect(() => {
     if (!active) return;
@@ -86,6 +87,11 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
       setQuickError("");
       setFocusedError("");
       setPapers([]);
+      setResults(null);
+      // Solved units and the average are optional context: left out until they arrive, and on failure.
+      void Promise.resolve().then(() => api.courseDashboard(courseId)).then(data => {
+        if (current) setResults(data ?? null);
+      }).catch(() => undefined);
       // Published past exams are offered next to the countdown; without them the link is left out.
       void Promise.resolve().then(() => api.examPapers(courseId)).then(rows => {
         if (current) setPapers((rows?.papers ?? []).filter(paper => paper.status === "PUBLISHED"));
@@ -179,6 +185,9 @@ export function CourseOverview({ courseId, active, knownAttemptId, knownAttempt,
     exam && !exam.ongoing && <StatCell key="days" tone="accent" size="md" label="Do ispita" value={exam.days} unit={pluralForm(exam.days, ["dan", "dana", "dana"])}
       note={exam.scope.starts_on ? `${exam.scope.name} · ${formatScopeDates(exam.scope)}` : exam.scope.name} />,
     availability !== "loading" && showDue && <StatCell key="due" size="md" label="Na redu" value={due} unit={pluralForm(due, QUESTIONS)} note="dospjela pitanja za ponavljanje" />,
+    results && results.units_total > 0 && <StatCell key="solved" size="md" label="Riješeni kvizovi" value={results.units_attempted} unit={`/ ${results.units_total}`}
+      note="cjeline s barem jednim ocijenjenim odgovorom" />,
+    results && results.average_percent !== null && <StatCell key="average" size="md" label="Prosjek" value={`${results.average_percent} %`} note="prosjek rezultata predanih vježbi" />,
   ].filter(Boolean);
 
   return <div className={`mt-6 flex min-w-0 flex-col gap-group ${ruled}`}>

@@ -5,7 +5,7 @@ import type { ResumableAttempt } from "../src/components/use-resumable-sessions"
 import type { ExamPaper, ExamScope, ExamScopeReadiness, Material, ReviewProgressSummary } from "../src/lib/api";
 import type { Attempt, PracticeAvailability } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ reviewProgressSummary: vi.fn(), availability: vi.fn(), reviewDue: vi.fn(), quickQuiz: vi.fn(), focusedPractice: vi.fn(), examScopes: vi.fn(), examScopeCoverage: vi.fn(), examScopeReadiness: vi.fn(), units: vi.fn(), examPapers: vi.fn(), read: vi.fn() }));
+const mock = vi.hoisted(() => ({ courseDashboard: vi.fn(), reviewProgressSummary: vi.fn(), availability: vi.fn(), reviewDue: vi.fn(), quickQuiz: vi.fn(), focusedPractice: vi.fn(), examScopes: vi.fn(), examScopeCoverage: vi.fn(), examScopeReadiness: vi.fn(), units: vi.fn(), examPapers: vi.fn(), read: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 const summary: ReviewProgressSummary = { as_of: "2026-10-05", reviewed_questions: 3, due_now: 42, upcoming: 1,
@@ -172,6 +172,23 @@ it("shows the days to the next exam as a large figure above the sections", async
   const figures = await screen.findByRole("region", { name: "Pregled kolegija" });
   expect(figures).toHaveTextContent("Do ispita34dana");
   expect(figures).toHaveTextContent("Međuispit");
+});
+
+it("shows the solved units and the average of the submitted sessions", async () => {
+  mock.courseDashboard.mockResolvedValue({ as_of: "2026-10-20", units_total: 32, units_attempted: 14, average_percent: 72, units: [] });
+  render(<CourseOverview {...props()} />);
+  const figures = await screen.findByRole("region", { name: "Pregled kolegija" });
+  expect(mock.courseDashboard).toHaveBeenCalledWith("course");
+  expect(figures).toHaveTextContent("Riješeni kvizovi14/ 32");
+  expect(figures).toHaveTextContent("Prosjek72 %");
+});
+
+it("leaves the average out until a session was submitted", async () => {
+  mock.courseDashboard.mockResolvedValue({ as_of: "2026-10-20", units_total: 3, units_attempted: 0, average_percent: null, units: [] });
+  render(<CourseOverview {...props()} />);
+  const figures = await screen.findByRole("region", { name: "Pregled kolegija" });
+  expect(figures).toHaveTextContent("Riješeni kvizovi0/ 3");
+  expect(figures).not.toHaveTextContent("Prosjek");
 });
 
 it("leaves the figures out when no exam is dated and nothing is due", async () => {

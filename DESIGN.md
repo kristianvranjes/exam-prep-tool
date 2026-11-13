@@ -402,8 +402,10 @@ Implemented:
   backend (`PreferencesSync`), with `localStorage` as the fallback.
 - Settings 8c: palette tiles (radio group, five palettes plus "Prema sustavu"), font size, answer
   markers and custom colours on the left, a live sample question on the right (no language option).
-- Course page 2b: a figures strip ("Do ispita" filled with the accent, "Na redu") above the existing
-  sections.
+- Course page 2b: a figures strip ("Do ispita" filled with the accent, "Na redu", "Riješeni kvizovi"
+  as units attempted of total, "Prosjek" of the submitted sessions) above the existing sections.
+- Progress 2f: a units-by-weeks grid ("Savladanost po tjednima", eight weeks) as a table; every cell
+  states its percentage in words and numbers, thresholds as in the handoff.
 - Practice 1a and mock exam 1e: one segment per question, the answered count, an always-available
   question grid, status labels and return flags, a desktop focus toggle, and a phone question
   sheet. The timed exam shows the remaining-time block; answer saving and submission behavior
@@ -429,10 +431,9 @@ Pending:
 
 - Answer review 2e as a true master-detail (one question at a time, Prethodno/Sljedeće netočno);
   for now the review is a filtered list with a sticky index.
-- Progress 2f and study plan 2g.
+- Progress 2f's "Ponovi ove teme" panel and study plan 2g.
 - Spaced repetition 5a and 5b.
 - Moderator import v2 and quiz pages (6a-6d).
 - Remaining mobile screens 7a-7m and 8d-8e (practice question sheet and safe-area-aware
   answer actions are implemented with 1a/1e).
-- Course page 2b/2c: the figures strip has the days to the exam and the due count; solved quizzes
-  and the average (and 2c's study plan) wait for the course-dashboard and plan backend data.
+- Course page 2c (alternative): the study plan for today waits for the plan data.
