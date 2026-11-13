@@ -300,3 +300,27 @@ it("reports self-assessed paper points apart from the objective score", async ()
   expect(summary).toHaveTextContent("Sam objektivni rezultat ne odlučuje o pragu prolaza od 4 boda");
   expect(screen.getByText("Zadatak 3 · Po samoprocjeni točno · +3 od 3 boda, nije u objektivnom rezultatu")).toBeVisible();
 });
+
+it("summarises correct answers per unit, weakest first, and the time used, without percentages", () => {
+  const logic = { id: "u1", title: "Logika" };
+  const sets = { id: "u2", title: "Skupovi" };
+  open([
+    { ...mistake, units: [logic] }, { ...mistake, id: "m2", units: [logic, sets] },
+    { ...correct, units: [sets] }, { ...correct, id: "c2", units: [sets] }, { ...short, units: [sets] },
+  ]);
+  const topics = screen.getByRole("region", { name: "Rezultati po temama" });
+  const bars = within(topics).getAllByRole("progressbar");
+  expect(bars.map(bar => bar.getAttribute("aria-label"))).toEqual(["Logika: 0 od 2 točno", "Skupovi: 2 od 3 točno"]);
+  expect(topics).toHaveTextContent("0/2");
+  expect(topics).toHaveTextContent("2/3");
+  expect(screen.getByText("trajanje 10 min")).toBeVisible();
+  expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+});
+
+it("shows the share of points and the minutes against the limit for a timed paper", () => {
+  const paper = { exam_paper_id: "p1", title: "MI", total_points: 4, wrong_answer_penalty: 0, pass_threshold: 2, duration_minutes: 90 };
+  render(<QuizResults attempt={{ ...submitted([{ ...correct, points: 3, earned_points: 3 }, { ...mistake, points: 1, earned_points: 0 }]), paper,
+    score: { version: "paper-scoring-v1", earned: 3, max_points: 4, correct_points: 3, penalty_points: 0, pending_points: 0, unanswered_count: 0, passed: true } }}
+    onPracticeAgain={vi.fn()} onBackToHistory={vi.fn()} />);
+  expect(screen.getByText("75 % · 10 od 90 minuta")).toBeVisible();
+});
