@@ -151,10 +151,10 @@ it("lets a creator edit and submit without granting OWNER moderation", async () 
   expect(screen.getByText(/Materijal material1 · isječak 1/)).not.toBeVisible();
   fireEvent.click(screen.getByText("Detalji izvora"));
   expect(screen.getByText(/Materijal material1 · isječak 1/)).toBeVisible();
-  expect(screen.getByText("Izvor: AI-generated · Zadatak generiranja job1")).toBeVisible();
+  expect(screen.getByText("Izvor: Generirao AI · Zadatak generiranja job1")).toBeVisible();
   // Review states are words in a semantic tone: a draft is neutral, never the raw enum.
   const selectedCard = screen.getByRole("article", { name: "Odabrano pitanje" });
-  expect(within(selectedCard).getByText("Nacrt")).toHaveClass("bg-subtle", "text-muted");
+  expect(within(selectedCard).getByText("Skica")).toHaveClass("bg-subtle", "text-muted");
   expect(selectedCard).not.toHaveTextContent("DRAFT");
   fireEvent.click(screen.getByRole("button", { name: "Uredi pitanje" }));
   fireEvent.change(screen.getByLabelText("Tekst pitanja"), { target: { value: "Revised matrix question?" } });
@@ -164,8 +164,8 @@ it("lets a creator edit and submit without granting OWNER moderation", async () 
   await waitFor(() => expect(mock.editQuestion).toHaveBeenCalledWith("q1", expect.objectContaining({ stem: "Revised matrix question?", options: [{ text: "A table", is_correct: false }, { text: "Revised option", is_correct: true }] })));
   fireEvent.click(await screen.findByRole("button", { name: "Pošalji na pregled" }));
   await waitFor(() => expect(screen.queryByRole("button", { name: "Pošalji na pregled" })).not.toBeInTheDocument());
-  expect(screen.getByRole("article", { name: "Odabrano pitanje" })).toHaveTextContent("Čeka pregled fakulteta");
-  expect(within(screen.getByRole("article", { name: "Odabrano pitanje" })).getByText("Čeka pregled fakulteta")).toHaveClass("bg-pending-surface", "text-pending");
+  expect(screen.getByRole("article", { name: "Odabrano pitanje" })).toHaveTextContent("Na pregledu");
+  expect(within(screen.getByRole("article", { name: "Odabrano pitanje" })).getByText("Na pregledu")).toHaveClass("bg-pending-surface", "text-pending");
   expect(screen.queryByRole("button", { name: "Odobri pitanje" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Odbij pitanje" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Prikaži verzije" }));
@@ -255,7 +255,7 @@ it("keeps a rejected mutation visible and displays the API error", async () => {
 
 it("sends owner filters to the bounded listing API", async () => {
   await open();
-  expect(screen.getByRole("option", { name: "Čeka pregled fakulteta" })).toHaveValue("PENDING_REVIEW");
+  expect(screen.getByRole("option", { name: "Na pregledu" })).toHaveValue("PENDING_REVIEW");
   fireEvent.change(await screen.findByLabelText("Status"), { target: { value: "PENDING_REVIEW" } });
   fireEvent.change(screen.getByLabelText("Vrsta"), { target: { value: "SHORT_ANSWER" } });
   await waitFor(() => expect(mock.questions).toHaveBeenLastCalledWith("course", { status: "PENDING_REVIEW", type: "SHORT_ANSWER", limit: 20, offset: 0 }));
@@ -400,7 +400,7 @@ it("archives approved content as a moderator and retains version access", async 
   await open();
   fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
   const archive = await screen.findByRole("button", { name: "Arhiviraj pitanje" });
-  expect(within(screen.getByRole("article", { name: "Odabrano pitanje" })).getByText("Odobreno")).toHaveClass("bg-success-surface", "text-success");
+  expect(within(screen.getByRole("article", { name: "Odabrano pitanje" })).getByText("Objavljeno")).toHaveClass("bg-success-surface", "text-success");
   fireEvent.click(archive);
   await waitFor(() => expect(screen.queryByRole("button", { name: "Arhiviraj pitanje" })).not.toBeInTheDocument());
   expect(within(screen.getByRole("article", { name: "Odabrano pitanje" })).getByText("Arhivirano")).toHaveClass("bg-subtle", "text-muted");

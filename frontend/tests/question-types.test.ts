@@ -30,9 +30,9 @@ it("reads answers and keys back for every type", () => {
 });
 
 it("labels review states in words with the semantic tone of each", () => {
-  expect(statusLabels.PENDING_REVIEW).toBe("Čeka pregled fakulteta");
+  expect(statusLabels.PENDING_REVIEW).toBe("Na pregledu");
   expect(statusTones).toEqual({ DRAFT: "neutral", PENDING_REVIEW: "pending", APPROVED: "success", REJECTED: "danger", ARCHIVED: "neutral" });
-  expect(sourceLabels).toEqual({ AI: "AI-generated", USER: "Napisano ili uvezeno" });
+  expect(sourceLabels).toEqual({ AI: "Generirao AI", USER: "Napisano ili uvezeno" });
 });
 
 it("numbers paper items and keeps a staff label only when it says more than the number", () => {

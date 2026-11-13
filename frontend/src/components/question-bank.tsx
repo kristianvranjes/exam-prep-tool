@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { api, Concept, type CourseUnit, OwnerQuestion, Question, QuestionAction, QuestionCreate, QuestionEdit, QuestionStatus, QuestionType, QuestionVersion, type ReportReason } from "../lib/api";
 
-import { CLASSIC_TYPES, keyText, numberProblem, QUESTION_TYPES, sourceLabels, statusLabels, typeLabels } from "../lib/question-types";
+import { CLASSIC_TYPES, keyText, numberProblem, QUESTION_TYPES, reportReasons, sourceLabels, statusLabels, typeLabels } from "../lib/question-types";
 import { plural, QUESTIONS } from "../lib/plural";
 import { QuestionBadges } from "./question-badges";
 import { QuizImport } from "./quiz-import";
@@ -365,16 +365,6 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
     </article>}
   </div>;
 }
-
-const reportReasons: { value: ReportReason; label: string }[] = [
-  { value: "INCORRECT_ANSWER", label: "Netočan odgovor" },
-  { value: "MULTIPLE_CORRECT", label: "Više točnih odgovora" },
-  { value: "UNCLEAR", label: "Nejasno" },
-  { value: "TYPO", label: "Pravopisna greška" },
-  { value: "OUTDATED", label: "Zastarjelo" },
-  { value: "DUPLICATE", label: "Duplikat" },
-  { value: "OTHER", label: "Ostalo" },
-];
 
 function ReportIssue({ questionId }: { questionId: string }) {
   const [open, setOpen] = useState(false);
