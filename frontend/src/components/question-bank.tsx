@@ -1,15 +1,16 @@
 "use client";
 
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
-import { api, Concept, type CourseUnit, OwnerQuestion, Question, QuestionAction, QuestionCreate, QuestionEdit, QuestionStatus, QuestionType, QuestionVersion, type ReportReason } from "../lib/api";
+import { api, Concept, type CourseUnit, OwnerQuestion, Question, QuestionAction, QuestionCreate, QuestionEdit, QuestionStatus, QuestionType, QuestionVersion } from "../lib/api";
 
-import { CLASSIC_TYPES, keyText, numberProblem, QUESTION_TYPES, reportReasons, sourceLabels, statusLabels, typeLabels } from "../lib/question-types";
+import { CLASSIC_TYPES, keyText, numberProblem, QUESTION_TYPES, sourceLabels, statusLabels, typeLabels } from "../lib/question-types";
 import { plural, QUESTIONS } from "../lib/plural";
 import { QuestionBadges } from "./question-badges";
 import { QuizImport } from "./quiz-import";
 import { FormattingHelp, RichText, RichTextPreview } from "./rich-text";
 import { SuggestQuestionEdit } from "./suggest-question-edit";
 import { DraftForm } from "./unsaved-changes";
+import { ReportIssue } from "./question-report";
 import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
 
 const types: QuestionType[] = QUESTION_TYPES;
@@ -364,49 +365,6 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
       {joined && selected.status === "APPROVED" && <SuggestQuestionEdit key={"suggest:" + selected.id} question={{ id: selected.id, type: selected.type, stem: selected.stem, difficulty: selected.difficulty, options: selected.options.map(({ position, text }) => ({ position, text })) }} />}
     </article>}
   </div>;
-}
-
-function ReportIssue({ questionId }: { questionId: string }) {
-  const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState<ReportReason>("UNCLEAR");
-  const [details, setDetails] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const inFlight = useRef(false);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (inFlight.current) return;
-    if (reason === "OTHER" && !details.trim()) { setError("Za razlog Ostalo potrebni su detalji."); return; }
-    inFlight.current = true; setBusy(true); setError(""); setNotice("");
-    try {
-      await api.reportQuestion(questionId, { reason, details: details.trim() || null });
-      setOpen(false); setReason("UNCLEAR"); setDetails("");
-      setNotice("Prijava je poslana na pregled fakulteta.");
-    } catch (e) { setError(e instanceof Error ? e.message : "Prijavu nije moguće poslati. Pokušajte ponovno."); }
-    finally { inFlight.current = false; setBusy(false); }
-  }
-
-  return <section className="space-y-3 border-t border-line pt-4" aria-label="Prijava problema">
-    {notice && <p role="status">{notice}</p>}
-    {error && <Alert>{error}</Alert>}
-    {!open && <Button type="button" variant="secondary" onClick={() => { setOpen(true); setError(""); }}>Prijavi problem</Button>}
-    {open && <DraftForm aria-label="Prijava problema s pitanjem" onSubmit={event => void submit(event)} className="space-y-3">
-      <label className="block text-sm font-medium">Razlog
-        <Select value={reason} onChange={event => setReason(event.target.value as ReportReason)} disabled={busy} className="mt-2">
-          {reportReasons.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </Select>
-      </label>
-      <label className="block text-sm font-medium">Detalji
-        <textarea className={textareaClass + " mt-2"} value={details} maxLength={1000} required={reason === "OTHER"} disabled={busy} onChange={event => setDetails(event.target.value)} />
-      </label>
-      <div className="flex gap-2">
-        <Button type="submit" disabled={busy || (reason === "OTHER" && !details.trim())}>{busy ? "Slanje…" : "Pošalji prijavu"}</Button>
-        <Button type="button" variant="secondary" disabled={busy} onClick={() => { setOpen(false); setError(""); }}>Odustani</Button>
-      </div>
-    </DraftForm>}
-  </section>;
 }
 
 function QuestionUnitsEditor({ question, units, busy, save }: { question: Question; units: CourseUnit[]; busy: boolean; save: (unitIds: string[]) => Promise<void> }) {

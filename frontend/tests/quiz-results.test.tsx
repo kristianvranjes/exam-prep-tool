@@ -300,3 +300,53 @@ it("reports self-assessed paper points apart from the objective score", async ()
   expect(summary).toHaveTextContent("Sam objektivni rezultat ne odlučuje o pragu prolaza od 4 boda");
   expect(screen.getByText("Zadatak 3 · Po samoprocjeni točno · +3 od 3 boda, nije u objektivnom rezultatu")).toBeVisible();
 });
+
+it("summarises correct answers per unit, weakest first, and the time used, without percentages", () => {
+  const logic = { id: "u1", title: "Logika" };
+  const sets = { id: "u2", title: "Skupovi" };
+  open([
+    { ...mistake, units: [logic] }, { ...mistake, id: "m2", units: [logic, sets] },
+    { ...correct, units: [sets] }, { ...correct, id: "c2", units: [sets] }, { ...short, units: [sets] },
+  ]);
+  const topics = screen.getByRole("region", { name: "Rezultati po temama" });
+  const bars = within(topics).getAllByRole("progressbar");
+  expect(bars.map(bar => bar.getAttribute("aria-label"))).toEqual(["Logika: 0 od 2 točno", "Skupovi: 2 od 3 točno"]);
+  expect(topics).toHaveTextContent("0/2");
+  expect(topics).toHaveTextContent("2/3");
+  expect(screen.getByText("trajanje 10 min")).toBeVisible();
+  expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+});
+
+it("shows the share of points and the minutes against the limit for a timed paper", () => {
+  const paper = { exam_paper_id: "p1", title: "MI", total_points: 4, wrong_answer_penalty: 0, pass_threshold: 2, duration_minutes: 90 };
+  render(<QuizResults attempt={{ ...submitted([{ ...correct, points: 3, earned_points: 3 }, { ...mistake, points: 1, earned_points: 0 }]), paper,
+    score: { version: "paper-scoring-v1", earned: 3, max_points: 4, correct_points: 3, penalty_points: 0, pending_points: 0, unanswered_count: 0, passed: true } }}
+    onPracticeAgain={vi.fn()} onBackToHistory={vi.fn()} />);
+  expect(screen.getByText("75 % · 10 od 90 minuta")).toBeVisible();
+});
+
+it("filters the review to favorites and offers a report for questions from the bank", () => {
+  open([{ ...mistake, source_question_id: "bank-1", favorite: false }, { ...correct, source_question_id: "bank-2", favorite: true }, short]);
+  const favorites = screen.getByRole("button", { name: "Favoriti" });
+  expect(favorites).toBeEnabled();
+  fireEvent.click(favorites);
+  expect(favorites).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getAllByRole("article")).toHaveLength(1);
+  expect(within(screen.getByRole("article", { name: "Rezultat pitanja 2" })).getByRole("button", { name: "Prijavi grešku u pitanju" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
+  // The pending short answer has no bank question behind it, so there is nothing to report.
+  expect(within(screen.getByRole("article", { name: "Rezultat pitanja 3" })).queryByRole("button", { name: "Prijavi grešku u pitanju" })).not.toBeInTheDocument();
+});
+
+it("keeps the favorites filter disabled while nothing is a favorite", () => {
+  open();
+  expect(screen.getByRole("button", { name: "Favoriti" })).toBeDisabled();
+});
+
+it("lists the visible questions in an index that moves focus to the result", () => {
+  open();
+  const index = screen.getByRole("navigation", { name: "Popis pitanja u pregledu" });
+  fireEvent.click(within(index).getByRole("button", { name: "Skoči na pitanje 1" }));
+  expect(screen.getByRole("article", { name: "Rezultat pitanja 1" })).toHaveFocus();
+  expect(within(index).getAllByRole("listitem")).toHaveLength(1);
+});
