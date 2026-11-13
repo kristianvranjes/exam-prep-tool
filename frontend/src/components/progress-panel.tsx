@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ReviewProgress, type ReviewProgressSummary, type UnitProgress } from "../lib/api";
 import { practiceApi, type Attempt } from "../lib/practice-api";
 import { FavoritesList, MistakesList } from "./review-lists";
+import { ProgressHeatmap } from "./progress-heatmap";
 import { Alert, Badge, Button, EmptyState, LoadingState, Surface } from "./ui";
 import { ANSWERS, QUESTIONS, plural } from "../lib/plural";
 
@@ -155,6 +156,7 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, on
           </dl>
           <p className="max-w-prose text-sm text-muted">Točnost broji automatski ocijenjene odgovore iz svih vježbi, uključujući ponovljena pitanja. Kratki odgovori zahtijevaju samoprocjenu i ne mijenjaju točnost ni raspored ponavljanja.</p>
         </section>}
+        <ProgressHeatmap courseId={courseId} />
         {hasHistory && units.length > 0 && <section aria-labelledby="unit-progress-heading" className="space-y-4">
           <h3 id="unit-progress-heading" className="text-lg font-semibold">Po cjelinama</h3>
           <p className="max-w-prose text-sm text-muted">Pitanje povezano s više cjelina broji se u svakoj od njih, pa zbroj po cjelinama može biti veći od ukupnog za kolegij. Točnost pokazuje koliko su često vaši automatski ocijenjeni odgovori bili točni; nije mjera znanja.</p>

@@ -116,6 +116,10 @@ export const api = {
   reviewProgress: (courseId: string, offset = 0) => request<ReviewProgress[]>(`/courses/${courseId}/review-progress?limit=20&offset=${offset}`),
   reviewProgressSummary: (courseId: string) => request<ReviewProgressSummary>(`/courses/${courseId}/review-progress/summary`),
   unitProgress: (courseId: string) => request<UnitProgressSummary>(`/courses/${courseId}/review-progress/units`),
+  /** Results in submitted sessions for the course page: units attempted, the average and the best result per unit. */
+  courseDashboard: (courseId: string) => request<CourseDashboard>(`/courses/${courseId}/dashboard`),
+  /** Weekly results per unit (Mondays in Zagreb time, oldest first) for the progress heat grid. */
+  progressSeries: (courseId: string, weeks = 8) => request<ProgressSeries>(`/courses/${courseId}/progress-series?weeks=${weeks}`),
   membership: (courseId: string) => request<{ role: "OWNER" | "MEMBER" }>(`/courses/${courseId}/membership`),
   concepts: (courseId: string, materialId?: string) => request<Concept[]>(`/courses/${courseId}/concepts${materialId ? `?material_id=${encodeURIComponent(materialId)}` : ""}`),
   questions: (courseId: string, filters: { status?: QuestionStatus; type?: QuestionType; unit_id?: string; unassigned?: boolean; limit?: number; offset?: number } = {}) => {
@@ -343,3 +347,9 @@ export type UnitProgress = {
   correct_review_count: number; incorrect_review_count: number; due_now: number;
 };
 export type UnitProgressSummary = { as_of: string; units: UnitProgress[] };
+/** Percents are whole numbers; null where nothing was graded. */
+export type UnitResult = { unit_id: string; title: string; position: number; attempts: number; best_percent: number | null; last_percent: number | null };
+export type CourseDashboard = { as_of: string; units_total: number; units_attempted: number; average_percent: number | null; units: UnitResult[] };
+export type WeekCell = { percent: number | null; graded_count: number };
+export type UnitSeries = { unit_id: string; title: string; position: number; cells: WeekCell[] };
+export type ProgressSeries = { weeks: string[]; units: UnitSeries[] };

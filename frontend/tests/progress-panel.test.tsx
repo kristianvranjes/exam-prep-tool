@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { ProgressPanel } from "../src/components/progress-panel";
 import type { ReviewProgress, ReviewProgressSummary, UnitProgress } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ reviewProgress: vi.fn(), reviewProgressSummary: vi.fn(), unitProgress: vi.fn(), reviewDue: vi.fn(), mistakes: vi.fn(), favorites: vi.fn() }));
+const mock = vi.hoisted(() => ({ reviewProgress: vi.fn(), reviewProgressSummary: vi.fn(), unitProgress: vi.fn(), progressSeries: vi.fn(), reviewDue: vi.fn(), mistakes: vi.fn(), favorites: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 
@@ -48,6 +48,35 @@ beforeEach(() => {
   // The review lists have their own tests in review-lists.test.tsx.
   mock.mistakes.mockResolvedValue([]);
   mock.favorites.mockResolvedValue([]);
+});
+
+it("shows the weekly results per unit as numbers, with a dash where nothing was answered", async () => {
+  mock.progressSeries.mockResolvedValue({ weeks: ["2030-01-07", "2030-01-14"], units: [
+    { unit_id: "u1", title: "Logika", position: 0, cells: [{ percent: 40, graded_count: 5 }, { percent: 90, graded_count: 10 }] },
+    { unit_id: "u2", title: "Skupovi", position: 1, cells: [{ percent: null, graded_count: 0 }, { percent: 75, graded_count: 4 }] },
+    { unit_id: "u3", title: "Nevježbano", position: 2, cells: [{ percent: null, graded_count: 0 }, { percent: null, graded_count: 0 }] },
+  ] });
+  render(<ProgressPanel courseId="course" />);
+  const grid = await screen.findByRole("table", { name: "Točnost po cjelinama i tjednima" });
+  expect(mock.progressSeries).toHaveBeenCalledWith("course", 8);
+  expect(within(grid).getByRole("row", { name: /Logika/ })).toHaveTextContent("40 posto, 5 odgovora");
+  expect(within(grid).getByRole("row", { name: /Logika/ })).toHaveTextContent("90 posto, 10 odgovora");
+  expect(within(grid).getByRole("row", { name: /Skupovi/ })).toHaveTextContent("Bez odgovora");
+  // A unit without any graded answer in the window is left out.
+  expect(within(grid).queryByText("Nevježbano")).not.toBeInTheDocument();
+});
+
+it("leaves the weekly grid out when nothing was answered or the series cannot be loaded", async () => {
+  mock.progressSeries.mockResolvedValue({ weeks: ["2030-01-07"], units: [{ unit_id: "u1", title: "Logika", position: 0, cells: [{ percent: null, graded_count: 0 }] }] });
+  const view = render(<ProgressPanel courseId="course" />);
+  await open();
+  await waitFor(() => expect(mock.progressSeries).toHaveBeenCalled());
+  expect(screen.queryByRole("table", { name: "Točnost po cjelinama i tjednima" })).not.toBeInTheDocument();
+  view.unmount();
+  mock.progressSeries.mockRejectedValue(new Error("Offline"));
+  render(<ProgressPanel courseId="course" />);
+  await open();
+  expect(screen.queryByRole("table", { name: "Točnost po cjelinama i tjednima" })).not.toBeInTheDocument();
 });
 
 it("loads only when Progress becomes active and does not flash empty metrics", async () => {
