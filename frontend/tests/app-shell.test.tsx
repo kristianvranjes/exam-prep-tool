@@ -245,7 +245,9 @@ it("opens the review, progress and settings pages from the navigation and counts
   expect(settings).toHaveLength(2); // the header icon and the phone tab
   fireEvent.click(settings[0]);
   const page = await screen.findByRole("region", { name: "Postavke" });
-  expect(within(page).getByLabelText("Tema")).toBeInTheDocument();
+  expect(within(page).getByRole("radiogroup", { name: "Paleta" })).toBeInTheDocument();
+  expect(within(page).getAllByRole("radio")).toHaveLength(6);
+  expect(within(page).getByRole("region", { name: "Pregled postavki" })).toBeInTheDocument();
   expect(settings[0]).toHaveAttribute("aria-current", "page");
   apiMock.reviewProgressSummary.mockResolvedValue({ reviewed_questions: 0, resolved_review_count: 0 });
 });
