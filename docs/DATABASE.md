@@ -205,6 +205,18 @@ resolved/correct/incorrect review counts that must add up, `last_result`
 is indexed for due selection. Both FKs cascade. There is no backfill of historical
 attempts; downgrade drops only this table. See [PRACTICE.md](PRACTICE.md) for scheduling.
 
+## Rating-based scheduling migration 0029
+
+Revision **0029** (`down_revision = 0028`) adds `interval_minutes` (null or positive),
+`repetitions` and `lapses` (not negative, default 0) and `last_rating`
+(`AGAIN`/`HARD`/`GOOD`/`EASY` or null) to `question_review_progress`, and creates
+`review_rating_events` (id, user, question, `rating`, `rated_at`, `interval_minutes`, `due_at`,
+`scheduling_version`; both FKs cascade; indexed by user, question and time). Existing rows keep
+`leitner-v1` and their due time; their interval comes from the stage (10 minutes, 1, 3, 7, 14
+and 30 days), `repetitions` from the stage, `lapses` from the incorrect count and `last_rating`
+from the last result (CORRECT → GOOD, INCORRECT → AGAIN). A rating moves a card to
+`srs-v2` (see [API.md](API.md)); downgrade drops the events and the new columns only.
+
 ## Faculty catalog migration 0010
 
 Revision 0010 follows 0009. `faculties` stores UUID id, name (1-150 characters,

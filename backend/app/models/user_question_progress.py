@@ -21,6 +21,14 @@ class UserQuestionProgress(Base):
             name="ck_review_counts",
         ),
         CheckConstraint("length(scheduling_version) > 0", name="ck_review_version"),
+        CheckConstraint(
+            "interval_minutes IS NULL OR interval_minutes > 0", name="ck_review_interval"
+        ),
+        CheckConstraint("repetitions >= 0 AND lapses >= 0", name="ck_review_repetitions"),
+        CheckConstraint(
+            "last_rating IS NULL OR last_rating IN ('AGAIN', 'HARD', 'GOOD', 'EASY')",
+            name="ck_review_last_rating",
+        ),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
@@ -35,5 +43,33 @@ class UserQuestionProgress(Base):
     last_reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     scheduling_version: Mapped[str] = mapped_column(String(64))
+    # Rating-based scheduling (srs-v2): the current gap, successful repetitions in a row, forgotten
+    # times and the last rating. Null/zero on rows no rating has touched, until migration 0029's
+    # derived values are replaced by the first rating.
+    interval_minutes: Mapped[int | None]
+    repetitions: Mapped[int] = mapped_column(server_default="0", default=0)
+    lapses: Mapped[int] = mapped_column(server_default="0", default=0)
+    last_rating: Mapped[str | None] = mapped_column(String(10))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ReviewRatingEvent(Base):
+    """One rating a student gave a question, kept so the history survives later reschedules."""
+
+    __tablename__ = "review_rating_events"
+    __table_args__ = (
+        Index("ix_rating_event_user_question", "user_id", "question_id", "rated_at"),
+        CheckConstraint(
+            "rating IN ('AGAIN', 'HARD', 'GOOD', 'EASY')", name="ck_rating_event_rating"
+        ),
+        CheckConstraint("interval_minutes > 0", name="ck_rating_event_interval"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    question_id: Mapped[UUID] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"))
+    rating: Mapped[str] = mapped_column(String(10))
+    rated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    interval_minutes: Mapped[int]
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    scheduling_version: Mapped[str] = mapped_column(String(64))

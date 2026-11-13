@@ -5,8 +5,19 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_db
 from app.models import User
-from app.schemas.progress import ProgressResponse, ProgressSummary, UnitProgressSummary
-from app.services.progress import list_progress, summarize_progress, summarize_unit_progress
+from app.schemas.progress import (
+    ProgressResponse,
+    ProgressSummary,
+    ReviewRatingRequest,
+    ReviewRatingResult,
+    UnitProgressSummary,
+)
+from app.services.progress import (
+    apply_rating,
+    list_progress,
+    summarize_progress,
+    summarize_unit_progress,
+)
 
 router = APIRouter(prefix="/courses/{course_id}/review-progress", tags=["progress"])
 
@@ -20,6 +31,16 @@ def get_course_progress(
     db: Session = Depends(get_db),
 ) -> list[ProgressResponse]:
     return list_progress(db, user, course_id, limit, offset)
+
+
+@router.post("/ratings", response_model=ReviewRatingResult)
+def rate_review_card(
+    course_id: UUID,
+    data: ReviewRatingRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ReviewRatingResult:
+    return apply_rating(db, user, course_id, data.question_id, data.rating)
 
 
 @router.get("/summary", response_model=ProgressSummary)

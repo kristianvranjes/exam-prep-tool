@@ -19,6 +19,27 @@ class ProgressResponse(BaseModel):
     due_at: datetime
 
 
+class ReviewRatingRequest(BaseModel):
+    """The student's own verdict after seeing the answer: AGAIN (Ponovno), HARD (Teško),
+    GOOD (Dobro) or EASY (Lako)."""
+
+    question_id: UUID
+    rating: Literal["AGAIN", "HARD", "GOOD", "EASY"]
+
+
+class ReviewRatingResult(BaseModel):
+    """The schedule a rating left: the gap in minutes (the uncapped one), the due time (capped by
+    the next exam day), successful repetitions in a row and the times the card was forgotten."""
+
+    question_id: UUID
+    rating: Literal["AGAIN", "HARD", "GOOD", "EASY"]
+    interval_minutes: int
+    due_at: datetime
+    repetitions: int
+    lapses: int
+    scheduling_version: str
+
+
 class StageCount(BaseModel):
     review_stage: int
     question_count: int

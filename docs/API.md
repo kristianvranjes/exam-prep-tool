@@ -195,6 +195,19 @@ row per course unit in unit order (archived units included, `is_archived` set):
 in every unit it is currently linked to, so rows overlap. A course without units
 returns an empty list. See [progress by unit](COURSE_UNITS.md#progress-by-unit).
 
+`POST /courses/{course_id}/review-progress/ratings` with `{question_id, rating}`
+(`AGAIN` Ponovno, `HARD` Teško, `GOOD` Dobro, `EASY` Lako) reschedules the caller's card for a
+question they have already answered in the course (404 otherwise, also for non-members) and
+returns `{question_id, rating, interval_minutes, due_at, repetitions, lapses,
+scheduling_version}`. Scheduling is `srs-v2`: `AGAIN` makes the card due in 10 minutes, resets
+`repetitions` and adds a lapse; the other ratings multiply the previous gap (at least one day)
+by 1.2, 2.5 or 3.3, up to a year. `due_at` never passes the start (Zagreb time) of the course's
+next exam day while that is still ahead, but `interval_minutes` stays the uncapped gap. A
+rating changes only these schedule fields and appends a `review_rating_events` row; answer
+counts, `review_stage` and `last_result` stay as grading left them. A graded answer on a card
+already on `srs-v2` counts as `GOOD` or `AGAIN` with the same rules; cards no rating has
+touched stay on `leitner-v1`.
+
 `GET /courses/{course_id}/dashboard` returns the caller's results in submitted sessions for
 the course page: `{as_of, units_total, units_attempted, average_percent, units}`. Each unit
 (active ones only, in unit order) has `unit_id`, `title`, `position`, `attempts`,

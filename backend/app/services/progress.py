@@ -1,16 +1,18 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
+from fastapi import HTTPException, status
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from app.models import User
 from app.models.course_unit import CourseUnit, QuestionUnit
 from app.models.question import Question
-from app.models.user_question_progress import UserQuestionProgress
+from app.models.user_question_progress import ReviewRatingEvent, UserQuestionProgress
 from app.schemas.progress import (
     ProgressResponse,
     ProgressSummary,
+    ReviewRatingResult,
     StageCount,
     UnitProgress,
     UnitProgressSummary,
@@ -18,7 +20,13 @@ from app.schemas.progress import (
 from app.schemas.quiz import Grade
 from app.services.courses import get_member_course
 from app.services.practice_eligibility import practice_eligible
-from app.services.scheduling import schedule
+from app.services.scheduling import (
+    SRS_VERSION,
+    Rating,
+    rating_for_result,
+    schedule,
+    schedule_rating,
+)
 
 
 def apply_reviews(
@@ -51,9 +59,11 @@ def apply_reviews(
             .execution_options(populate_existing=True)
         )
     }
+    exams = _exam_starts(db, sources)
     for question_id in sources:
         result = resolved[question_id]
         row = existing.get(question_id)
+        previous_version = row.scheduling_version if row is not None else None
         transition = schedule(row.review_stage if row else 0, result, submitted_at)
         assert transition is not None
         if row is None:
@@ -69,12 +79,113 @@ def apply_reviews(
         row.review_stage = transition.review_stage
         row.due_at = transition.due_at
         row.scheduling_version = transition.scheduling_version
+        if previous_version == SRS_VERSION:
+            # A card already on rating-based scheduling stays on it: a graded answer counts as
+            # GOOD or AGAIN, with the same intervals and exam-day cap as an explicit rating.
+            rating = rating_for_result(result)
+            assert rating is not None
+            rated = schedule_rating(
+                row.interval_minutes,
+                row.repetitions,
+                row.lapses,
+                rating,
+                submitted_at,
+                exams.get(question_id),
+            )
+            row.due_at = rated.due_at
+            row.interval_minutes = rated.interval_minutes
+            row.repetitions = rated.repetitions
+            row.lapses = rated.lapses
+            row.last_rating = rating
+            row.scheduling_version = rated.scheduling_version
         row.resolved_review_count += 1
         row.correct_review_count += int(result == "CORRECT")
         row.incorrect_review_count += int(result == "INCORRECT")
         row.last_result = result
         row.last_reviewed_at = submitted_at
         row.updated_at = submitted_at
+
+
+def _exam_starts(db: Session, question_ids: list[UUID]) -> dict[UUID, date]:
+    """The start of each question's course's next exam, for the cap on review due times."""
+    # Imported here: course_summaries needs services that themselves import this module.
+    from app.services.course_summaries import next_exams, zagreb_today
+
+    rows = db.execute(
+        select(Question.id, Question.course_id).where(Question.id.in_(question_ids))
+    ).all()
+    exams = next_exams(db, list({course_id for _, course_id in rows}), zagreb_today())
+    return {
+        question_id: exams[course_id].starts_on
+        for question_id, course_id in rows
+        if course_id in exams
+    }
+
+
+def apply_rating(
+    db: Session,
+    user: User,
+    course_id: UUID,
+    question_id: UUID,
+    rating: Rating,
+    rated_at: datetime | None = None,
+) -> ReviewRatingResult:
+    """Reschedule a card by the student's own rating (srs-v2).
+
+    Only a question the user has already answered in this course can be rated: its card comes
+    from that answer. A rating changes the schedule fields only; the answer counts, the stage and
+    the last result stay as grading left them, so nothing is counted twice.
+    """
+    get_member_course(db, user, course_id)
+    rated_at = rated_at or datetime.now(UTC)
+    row = db.scalar(
+        select(UserQuestionProgress)
+        .join(Question, Question.id == UserQuestionProgress.question_id)
+        .where(
+            UserQuestionProgress.user_id == user.id,
+            UserQuestionProgress.question_id == question_id,
+            Question.course_id == course_id,
+        )
+        .with_for_update()
+    )
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No review card for this question")
+    rated = schedule_rating(
+        row.interval_minutes,
+        row.repetitions,
+        row.lapses,
+        rating,
+        rated_at,
+        _exam_starts(db, [question_id]).get(question_id),
+    )
+    row.due_at = rated.due_at
+    row.interval_minutes = rated.interval_minutes
+    row.repetitions = rated.repetitions
+    row.lapses = rated.lapses
+    row.last_rating = rating
+    row.scheduling_version = rated.scheduling_version
+    row.updated_at = rated_at
+    db.add(
+        ReviewRatingEvent(
+            user_id=user.id,
+            question_id=question_id,
+            rating=rating,
+            rated_at=rated_at,
+            interval_minutes=rated.interval_minutes,
+            due_at=rated.due_at,
+            scheduling_version=rated.scheduling_version,
+        )
+    )
+    db.commit()
+    return ReviewRatingResult(
+        question_id=question_id,
+        rating=rating,
+        interval_minutes=rated.interval_minutes,
+        due_at=rated.due_at,
+        repetitions=rated.repetitions,
+        lapses=rated.lapses,
+        scheduling_version=rated.scheduling_version,
+    )
 
 
 def list_progress(
