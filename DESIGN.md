@@ -433,6 +433,11 @@ Implemented:
   Sign-in 2a: split screen (without Google sign-in, which waits for the backend).
 - Progress 2f on the global page: the weekly grid beside "Ponovi ove teme" (weakest topics by latest result).
 
+- Course page 2b (second round of the handoff): heading with the code and the results (Riješeni kvizovi, Prosjek), an exam card
+  (days, estimate by topic, weakest topics, "Vježbaj za ..." and "Probni ispit"), "Nastavi gdje si stao" (or the recommended practice),
+  a quick quiz with topic chips, "Teme" as cards with filters and a state in words, and the links to progress, custom practice,
+  past exams, materials and the question bank. No tabs; the plan screen is left out until the plan data exists.
+
 Pending:
 
 - Answer review 2e as a true master-detail (one question at a time, Prethodno/Sljedeće netočno);

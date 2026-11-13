@@ -2,23 +2,23 @@
 
 import { useEffect, useId, useState } from "react";
 import { QUESTION_TYPES } from "../lib/question-types";
-import { api, type UnitResult, type CourseDashboard, type CourseUnit, type ExamPaper, type ExamScope, type ExamScopeCoverage, type ExamScopeReadiness, type ReviewProgressSummary } from "../lib/api";
-import { countdownHeading, formatScopeDates, localIsoDate, nextExam, type NextExam } from "../lib/exam-dates";
+import { api, type CourseDashboard, type CourseUnit, type ExamPaper, type ExamScope, type ExamScopeReadiness, type ReviewProgressSummary, type UnitProgress, type UnitResult } from "../lib/api";
+import { formatScopeDates, localIsoDate, nextExam, type NextExam } from "../lib/exam-dates";
 import { practiceApi, type Attempt, type PracticeFocus } from "../lib/practice-api";
 import type { MaterialsSummary } from "./course-materials";
-import { ReadinessFigure, ReadinessUnits } from "./exam-readiness";
 import { kindLabels } from "./exam-scopes";
 import { ResumeSession } from "./resume-session";
 import { resumableAttempt, type ResumableAttempt } from "./use-resumable-sessions";
+import { Alert, Button, ProgressBar, SegmentedControl } from "./ui";
 import type { PracticeSetupRequest } from "./practice-quiz";
-import { Alert, Button, ProgressBar, SegmentedControl, Select, StatCell } from "./ui";
 import { QUESTIONS, UNITS, plural, pluralForm } from "../lib/plural";
 import { cn } from "../lib/utils";
 
-type ProgressState = { loading: boolean; summary: ReviewProgressSummary | null; error: boolean };
 type Availability = "loading" | "available" | "empty" | "unknown";
-type Countdown = { exam: NextExam; coverage: ExamScopeCoverage | null; readiness: ExamScopeReadiness | null };
+type Countdown = { exam: NextExam; readiness: ExamScopeReadiness | null };
 type QuickTargets = { scopes: ExamScope[]; units: CourseUnit[] };
+type TopicFilter = "ALL" | "NEW" | "WEAK";
+const topicFilters = [{ value: "ALL", label: "Sve teme" }, { value: "NEW", label: "Nezapočete" }, { value: "WEAK", label: "Ispod 60 %" }] as const;
 
 /** The quick quiz picker's value: "" for the whole course, `scope:<id>` or `unit:<id>`. */
 function quickFocus(value: string): PracticeFocus | undefined {
@@ -35,29 +35,25 @@ export function pastExamsLabel(papers: ExamPaper[], scopeId: string) {
   return `${forScope ? "Riješi prošli ispit za ovaj rok" : "Riješi prošli ispit"} (${count})`;
 }
 
-/** Coverage of the coming cycle in counts, so the readiness range stays the overview's only percentage. */
-function coverageLine(coverage: ExamScopeCoverage | null) {
-  if (!coverage || coverage.question_count === 0) return undefined;
-  return `Vježbali ste ${coverage.reviewed_count} od ${coverage.question_count} odobrenih pitanja`;
+/** A unit's state in words, from its latest result: the bar never carries the meaning alone (handoff 2g). */
+function unitState(unit: { attempts: number; percent: number | null }) {
+  if (!unit.attempts || unit.percent === null) return { label: "Nije započeto", tone: "text-muted", bar: "foreground" as const, value: 0 };
+  if (unit.percent >= 80) return { label: `Savladano · ${unit.percent} %`, tone: "text-success", bar: "success" as const, value: unit.percent };
+  if (unit.percent >= 60) return { label: `U tijeku · ${unit.percent} %`, tone: "text-accent", bar: "accent" as const, value: unit.percent };
+  return { label: `Za ponavljanje · ${unit.percent} %`, tone: "text-danger", bar: "danger" as const, value: unit.percent };
 }
 
-/** Sections are ruled like an exam sheet: a hairline between them, never a stack of boxes. */
-const ruled = "[&>*+*]:border-t [&>*+*]:border-line [&>*+*]:pt-group";
-
-type TopicFilter = "ALL" | "NEW" | "WEAK";
-const topicFilters = [{ value: "ALL", label: "Sve teme" }, { value: "NEW", label: "Nezapočete" }, { value: "WEAK", label: "Ispod 60 %" }] as const;
-
-/** A unit's state in words, from its latest result: the bar never carries the meaning alone. */
-function topicStatus(unit: UnitResult) {
-  if (!unit.attempts || unit.last_percent === null) return { label: "Nije započeto", tone: "text-muted" };
-  if (unit.last_percent < 60) return { label: "Za ponavljanje", tone: "text-danger" };
-  if (unit.last_percent >= 85) return { label: "Savladano", tone: "text-success" };
-  return { label: "U tijeku", tone: "text-foreground" };
+/** The readiness bar's segment for one unit: its estimate's midpoint as a share of the segment. */
+function segmentTone(percent: number | null) {
+  if (percent === null) return "bg-track";
+  if (percent >= 70) return "bg-success";
+  if (percent >= 40) return "bg-accent";
+  return "bg-danger";
 }
 
-export function CourseOverview({ courseId, active, courseName, courseCode, courseDescription, onPractice, knownAttemptId, knownAttempt, checkingSession, activeSession, materials, onResume,
-  onRecommendedPractice, onStartAttempt, onOpenPractice, onPapers, onProgress, onMaterials, onQuestions }: {
-  /** The course's name, short code and description, shown as the heading of the page (handoff 2b). */
+export function CourseOverview({ courseId, active, courseName, courseCode, courseDescription, onPractice, onOpenPractice, knownAttemptId, knownAttempt, checkingSession, activeSession, materials, onResume,
+  onRecommendedPractice, onStartAttempt, onPapers, onProgress, onMaterials, onQuestions }: {
+  /** The course's name, short code and description, the heading of the page (handoff 2g). */
   courseName: string; courseCode?: string | null; courseDescription?: string | null;
   /** Opens the practice setup. */
   onPractice?: () => void;
@@ -74,8 +70,9 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
   onStartAttempt?: (attempt: Attempt) => void;
 }) {
   const id = useId();
-  const [progress, setProgress] = useState<ProgressState>({ loading: true, summary: null, error: false });
+  const [summary, setSummary] = useState<ReviewProgressSummary | null>(null);
   const [availability, setAvailability] = useState<Availability>("loading");
+  const [questionTotal, setQuestionTotal] = useState<number | null>(null);
   const [countdown, setCountdown] = useState<Countdown | null>(null);
   const [due, setDue] = useState(0);
   const [reviewing, setReviewing] = useState(false);
@@ -89,6 +86,7 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
   const [papers, setPapers] = useState<ExamPaper[]>([]);
   const [readAttempt, setReadAttempt] = useState<ResumableAttempt | null>(null);
   const [results, setResults] = useState<CourseDashboard | null>(null);
+  const [answered, setAnswered] = useState<UnitProgress[]>([]);
   const [topicFilter, setTopicFilter] = useState<TopicFilter>("ALL");
 
   useEffect(() => {
@@ -97,8 +95,9 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
     // Refresh when returning from practice/content tools; never show old course data after a switch.
     queueMicrotask(() => {
       if (!current) return;
-      setProgress({ loading: true, summary: null, error: false });
+      setSummary(null);
       setAvailability("loading");
+      setQuestionTotal(null);
       setCountdown(null);
       setDue(0);
       setReviewError("");
@@ -108,23 +107,26 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
       setFocusedError("");
       setPapers([]);
       setResults(null);
-      // Solved units and the average are optional context: left out until they arrive, and on failure.
+      setAnswered([]);
+      // Unit results and answered counts are optional context: left out until they arrive, and on failure.
       void Promise.resolve().then(() => api.courseDashboard(courseId)).then(data => {
         if (current) setResults(data ?? null);
       }).catch(() => undefined);
-      // Published past exams are offered next to the countdown; without them the link is left out.
+      void Promise.resolve().then(() => api.unitProgress(courseId)).then(data => {
+        if (current) setAnswered(data?.units ?? []);
+      }).catch(() => undefined);
+      // Published past exams: the link to them is left out when the list cannot be read.
       void Promise.resolve().then(() => api.examPapers(courseId)).then(rows => {
         if (current) setPapers((rows?.papers ?? []).filter(paper => paper.status === "PUBLISHED"));
       }).catch(() => undefined);
-      void api.reviewProgressSummary(courseId).then(summary => {
-        if (current) setProgress({ loading: false, summary, error: false });
-      }).catch(() => {
-        if (current) setProgress({ loading: false, summary: null, error: true });
-      });
+      void Promise.resolve().then(() => api.reviewProgressSummary(courseId)).then(data => {
+        if (current) setSummary(data ?? null);
+      }).catch(() => undefined);
       // Counts every practice-eligible course question with the same rules as session start.
       void practiceApi.availability(courseId, QUESTION_TYPES).then(counts => {
         if (!current) return;
         setAvailability(counts.course_total > 0 ? "available" : "empty");
+        setQuestionTotal(counts.course_total);
         // Due questions not already waiting in an unfinished session.
         setDue(counts.due_total ?? 0);
       }).catch(() => { if (current) setAvailability("unknown"); });
@@ -134,14 +136,13 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
         setTargets(value => ({ ...value, scopes: scopes ?? [] }));
         const exam = nextExam(scopes, localIsoDate());
         if (!exam) return;
-        setCountdown({ exam, coverage: null, readiness: null });
-        // Each part appears when it arrives; a failed one is left out.
+        setCountdown({ exam, readiness: null });
+        // The estimate appears when it arrives; a failed one is left out.
         void api.examScopeReadiness(exam.scope.id).then(readiness => {
           if (current) setCountdown(value => value && { ...value, readiness });
         }).catch(() => undefined);
-        return api.examScopeCoverage(exam.scope.id).then(coverage => { if (current) setCountdown(value => value && { ...value, coverage }); });
       }).catch(() => undefined);
-      // Units only refine the quick quiz; without them it covers the whole course.
+      // Units are the cards of the page and refine the quick quiz; without them it covers the whole course.
       void Promise.resolve().then(() => api.units(courseId)).then(units => {
         if (current) setTargets(value => ({ ...value, units: units ?? [] }));
       }).catch(() => undefined);
@@ -165,13 +166,11 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
 
   const noQuestions = availability === "empty";
   const sessionOpen = Boolean(knownAttemptId) || Boolean(activeSession);
-  const showDue = due > 0 && !activeSession && Boolean(onStartAttempt);
-  const showQuick = !activeSession && Boolean(onStartAttempt);
-  // One primary action: Resume while a session is open, then the coming exam, then due review, then recommended practice.
-  const examLeads = Boolean(countdown && onStartAttempt);
-  const examPrimary = !sessionOpen && !noQuestions && examLeads;
-  const duePrimary = !sessionOpen && !examPrimary && showDue;
-  const recommendedPrimary = !sessionOpen && !examPrimary && !duePrimary;
+  const canStart = !activeSession && Boolean(onStartAttempt);
+  const showDue = due > 0 && canStart;
+  const exam = countdown?.exam;
+  const examPrimary = !sessionOpen && !noQuestions && Boolean(countdown && onStartAttempt);
+
   async function reviewDue() {
     if (!onStartAttempt || reviewing) return;
     setReviewing(true); setReviewError("");
@@ -194,179 +193,159 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
     catch (cause) { setFocusedError(cause instanceof Error ? cause.message : "Vježba nije pokrenuta. Pokušajte ponovno."); }
     finally { setFocusedStarting(false); }
   }
-  const summary = progress.summary;
-  const recentMaterials = [...(materials?.materials ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 2);
-  const exam = countdown?.exam;
-  const coverage = coverageLine(countdown?.coverage ?? null);
+
+  // The unit cards: every active unit, with its latest result and how many of its questions were answered.
+  const resultOf = new Map<string, UnitResult>((results?.units ?? []).map(unit => [unit.unit_id, unit]));
+  const answeredOf = new Map<string, number>(answered.map(unit => [unit.unit_id, unit.reviewed_questions]));
+  const unitCards = (targets.units.length > 0 ? targets.units.filter(unit => !unit.is_archived).map(unit => ({ id: unit.id, title: unit.title, total: unit.approved_question_count }))
+    : (results?.units ?? []).map(unit => ({ id: unit.unit_id, title: unit.title, total: null as number | null }))).map(unit => {
+    const result = resultOf.get(unit.id);
+    const state = unitState({ attempts: result?.attempts ?? 0, percent: result?.last_percent ?? null });
+    return { ...unit, answered: answeredOf.get(unit.id) ?? 0, state, started: Boolean(result?.attempts), best: result?.best_percent ?? null,
+      repeat: Boolean(result?.attempts) && result?.last_percent != null && result.last_percent < 60 };
+  });
+  const nextUnit = unitCards.find(unit => !unit.started)?.id;
+  const shownUnits = unitCards.filter(unit => topicFilter === "ALL" || (topicFilter === "NEW" ? !unit.started : unit.repeat));
+  const notStarted = unitCards.filter(unit => !unit.started).length;
+
   const unitCount = exam?.scope.unit_ids.length ?? 0;
-  const mockExam = countdown && onOpenPractice && !activeSession && !noQuestions ? countdown.exam : null;
-  const topics = results?.units ?? [];
-  const shownTopics = topics.filter(unit => topicFilter === "ALL" || (topicFilter === "NEW" ? !unit.attempts : unit.last_percent !== null && unit.last_percent < 60));
+  const range = countdown?.readiness?.readiness;
+  const weakest = (countdown?.readiness?.weakest_unit_ids ?? []).map(unitId => countdown?.readiness?.units.find(unit => unit.unit_id === unitId)?.title).filter(Boolean);
+  const quickLabel = quickTarget === "" ? "Cijeli kolegij"
+    : quickTarget.startsWith("scope:") ? targets.scopes.find(scope => scope.id === quickTarget.slice(6))?.name ?? "Cijeli kolegij"
+    : targets.units.find(unit => unit.id === quickTarget.slice(5))?.title ?? "Cijeli kolegij";
+  const quickChoices = [{ value: "", label: "Cijeli kolegij" },
+    ...targets.scopes.map(scope => ({ value: `scope:${scope.id}`, label: `${scope.name} ${scope.academic_year} · ${kindLabels[scope.kind]}` })),
+    ...targets.units.filter(unit => !unit.is_archived).map(unit => ({ value: `unit:${unit.id}`, label: unit.title }))];
+  const more = [
+    { key: "progress", name: "Napredak", note: summary && summary.resolved_review_count > 0 ? `${summary.resolved_review_count} odgovora` : "Rezultati i ponavljanje", label: "Otvori napredak", open: onProgress },
+    onPractice && { key: "practice", name: "Vježba po mjeri", note: "Cjeline i vrste pitanja", label: "Otvori: Vježba po mjeri", open: onPractice },
+    onPapers && { key: "papers", name: "Prošli ispiti", note: papers.length ? `${papers.length} objavljeno · s mjerenjem vremena` : "S mjerenjem vremena", label: "Otvori: Prošli ispiti", open: onPapers },
+    onMaterials && materials && { key: "materials", name: "Materijali", note: materials.materials.length ? plural(materials.materials.length, ["materijal", "materijala", "materijala"]) : "Još nema", label: "Otvori materijale", open: onMaterials },
+    { key: "questions", name: "Baza pitanja", note: "Prijedlozi i postavke", label: "Otvori: Baza pitanja i alati", open: onQuestions },
+  ].filter(Boolean) as { key: string; name: string; note: string; label: string; open: () => void }[];
 
-  // Handoff 2b: the figures that matter first, large. Only what the course data already holds is shown.
-  const figures = [
-    exam && !exam.ongoing && <StatCell key="days" tone="accent" size="md" label="Do ispita" value={exam.days} unit={pluralForm(exam.days, ["dan", "dana", "dana"])}
-      note={exam.scope.starts_on ? `${exam.scope.name} · ${formatScopeDates(exam.scope)}` : exam.scope.name} />,
-    availability !== "loading" && showDue && <StatCell key="due" size="md" label="Na redu" value={due} unit={pluralForm(due, QUESTIONS)} note="dospjela pitanja za ponavljanje" />,
-    results && results.units_total > 0 && <StatCell key="solved" size="md" label="Riješeni kvizovi" value={results.units_attempted} unit={`/ ${results.units_total}`}
-      note="cjeline s barem jednim ocijenjenim odgovorom" />,
-    results && results.average_percent !== null && <StatCell key="average" size="md" label="Prosjek" value={`${results.average_percent} %`} note="prosjek rezultata predanih vježbi" />,
-  ].filter(Boolean);
-
-  const hero = <div className="min-w-0 p-6">
-    {courseCode && <p className="label-caps text-accent">{courseCode}</p>}
-    <h1 id={active ? "selected-course-heading" : undefined} tabIndex={-1} className="mt-2 break-words text-[2.25rem] leading-[1.05] font-extrabold tracking-tight sm:text-[2.75rem]">{courseName}</h1>
-    {exam && <p className="mt-3 text-soft">{exam.scope.name}{exam.scope.starts_on && <> · <time dateTime={exam.scope.starts_on}>{formatScopeDates(exam.scope)}</time></>}</p>}
-    {courseDescription && <p className="mt-3 max-w-prose text-sm text-muted">{courseDescription}</p>}
-  </div>;
-  return <div className={`flex min-w-0 flex-col gap-group ${ruled}`}>
-    <div className={cn("grid min-w-0", figures.length > 0 && "lg:grid-cols-[minmax(0,1.15fr)_minmax(0,3fr)]")}>
-      <div className={cn("border-2 border-line", figures.length > 0 && "lg:border-r-0")}>{hero}</div>
-      {figures.length > 0 && <section aria-label="Pregled kolegija" className="grid min-w-0 grid-cols-1 border-2 border-line sm:grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))] sm:divide-x-2 sm:divide-line">{figures}</section>}
+  const resumeCard = knownAttemptId ? <section aria-labelledby={`${id}-resume`} className="min-w-0 bg-accent-surface p-6">
+    <p className="label-caps text-accent">Nastavi gdje si stao</p>
+    <h2 id={`${id}-resume`} className="mt-3 text-lg font-semibold">Nastavite učiti</h2>
+    <ResumeSession className="mt-stack" attempt={resumeDetails} onResume={onResume} />
+  </section> : null;
+  return <div className="flex min-w-0 flex-col gap-8">
+    <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+      <div className="min-w-0">
+        {courseCode && <p className="label-caps text-accent">{courseCode}</p>}
+        <h1 id={active ? "selected-course-heading" : undefined} tabIndex={-1} className="mt-1 min-w-0 break-words text-[2.25rem] leading-[1.05] font-extrabold tracking-tight sm:text-[2.75rem]">{courseName}</h1>
+        {questionTotal ? <p className="mt-2 text-sm text-soft">{plural(questionTotal, QUESTIONS)}</p> : null}
+      </div>
+      {results && results.units_total > 0 && <dl aria-label="Rezultati kolegija" className="flex gap-8">
+        <div><dt className="label-caps">Riješeni kvizovi</dt><dd className="mt-1 text-2xl font-extrabold tabular-nums">{results.units_attempted}<span className="ml-1 text-base font-semibold text-muted">/ {results.units_total}</span></dd></div>
+        {results.average_percent !== null && <div><dt className="label-caps">Prosjek</dt><dd className="mt-1 text-2xl font-extrabold tabular-nums">{results.average_percent} %</dd></div>}
+      </dl>}
     </div>
+    {courseDescription && <p className="-mt-4 max-w-prose text-sm text-muted">{courseDescription}</p>}
     {checkingSession && !knownAttemptId && <p role="status" className="text-sm text-muted">Provjeravam nedovršene vježbe…</p>}
-    {(knownAttemptId || mockExam) && <div className={cn("grid min-w-0 border-2 border-line pt-0!", knownAttemptId && mockExam && "md:grid-cols-2 md:divide-x-2 md:divide-line")}>
-      {knownAttemptId && <section aria-labelledby={`${id}-resume`} className="min-w-0 p-6">
-        <p className="label-caps">Nastavi gdje si stao</p>
-        <h3 id={`${id}-resume`} className="mt-3 text-lg font-semibold">Nastavite učiti</h3>
-        <ResumeSession className="mt-stack" attempt={resumeDetails} onResume={onResume} />
-      </section>}
-      {mockExam && <section aria-labelledby={`${id}-mock`} className={cn("min-w-0 bg-subtle p-6", knownAttemptId && "border-t-2 border-line md:border-t-0")}>
-        <p className="label-caps">Probni ispit</p>
-        <h3 id={`${id}-mock`} className="mt-3 text-lg font-semibold">Kao na pravom ispitu</h3>
-        <p className="mt-1 max-w-prose text-sm text-muted">Pitanja iz svih cjelina roka {mockExam.scope.name}, uz mjerenje vremena. Rezultati se vide na kraju.</p>
-        <Button variant="secondary" className="mt-stack" aria-describedby={`${id}-mock`} onClick={() => onOpenPractice?.({ mode: "MOCK", scopeId: mockExam.scope.id })}>Započni probni ispit</Button>
-      </section>}
-    </div>}
 
-    {topics.length > 0 && <section aria-labelledby={`${id}-topics`} className="min-w-0">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 id={`${id}-topics`} className="text-lg font-semibold">Kvizovi po temama</h3>
-        <SegmentedControl label="Prikaz tema" size="sm" value={topicFilter} onChange={setTopicFilter} options={topicFilters} />
-      </div>
-      {shownTopics.length === 0 ? <p className="mt-3 border-y border-line py-4 text-sm text-muted">Nema tema za ovaj prikaz.</p>
-        : <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[34rem] border-t-2 border-line text-left text-sm">
-          <caption className="sr-only">Rezultati po temama</caption>
-          <thead><tr className="label-caps">
-            <th scope="col" className="py-3 pr-4 font-medium">Tema</th>
-            <th scope="col" className="py-3 pr-4 font-medium">Pokušaja</th>
-            <th scope="col" className="py-3 pr-4 font-medium">Najbolji rezultat</th>
-            <th scope="col" className="py-3 pr-4 font-medium">Savladanost</th>
-            <th scope="col" className="py-3 pr-4 font-medium">Status</th>
-            <th scope="col" className="py-3"><span className="sr-only">Radnja</span></th>
-          </tr></thead>
-          <tbody>{shownTopics.map(unit => {
-            const status = topicStatus(unit);
-            return <tr key={unit.unit_id} className="border-t border-line">
-              <th scope="row" className="py-3 pr-4 font-semibold">{unit.title}</th>
-              <td className="py-3 pr-4 tabular-nums">{unit.attempts}</td>
-              <td className="py-3 pr-4 tabular-nums">{unit.best_percent === null ? "—" : `${unit.best_percent} %`}</td>
-              <td className="w-44 py-3 pr-4"><ProgressBar label={`Savladanost: ${unit.title}`} value={unit.last_percent ?? 0} tone={unit.last_percent !== null && unit.last_percent < 60 ? "danger" : "foreground"} /></td>
-              <td className={cn("py-3 pr-4 font-semibold", status.tone)}>{status.label}</td>
-              <td className="py-3 text-right">{onStartAttempt && !activeSession && !noQuestions && <Button variant="ghost" disabled={focusedStarting} aria-label={`${unit.attempts ? "Nastavi" : "Započni"}: ${unit.title}`}
-                onClick={() => void focusedPractice({ unit_ids: [unit.unit_id] })}>{unit.attempts ? "Nastavi" : "Započni"}</Button>}</td>
-            </tr>;
-          })}</tbody>
-        </table></div>}
-    </section>}
 
-    <div className="grid min-w-0 gap-group lg:grid-cols-2 lg:gap-0 lg:[&>*+*]:border-l lg:[&>*+*]:border-line lg:[&>*+*]:pl-group lg:[&>*:first-child]:pr-group">
-    {countdown && exam && <section aria-labelledby="overview-exam-heading" className="min-w-0">
-      <h3 id="overview-exam-heading" className="text-lg font-semibold">{countdownHeading(exam)}</h3>
-      <p className="mt-1 text-sm text-muted">
-        {exam.scope.starts_on && <><time dateTime={exam.scope.starts_on}>{formatScopeDates(exam.scope)}</time> · </>}
-        Obuhvaća {plural(unitCount, UNITS)}
-      </p>
-      <div className="mt-group">
-        {countdown.readiness ? <ReadinessFigure readiness={countdown.readiness} subtitle={coverage} />
-          : coverage && <p className="max-w-prose text-sm text-muted">{coverage}</p>}
-      </div>
-      {!activeSession && !noQuestions && (onStartAttempt || (onPapers && papers.length > 0)) && <div className="mt-group">
-        <div className="flex flex-col items-stretch gap-stack sm:flex-row sm:flex-wrap sm:items-center">
-          {onStartAttempt && <Button variant={examPrimary ? "primary" : "secondary"} disabled={focusedStarting} aria-describedby={`${id}-focused`} onClick={() => void focusedPractice({ exam_scope_id: exam.scope.id })}>{focusedStarting ? "Pokrećem vježbu…" : `Vježbaj za ${exam.scope.name}`}</Button>}
-          {onPapers && papers.length > 0 && <Button variant="ghost" onClick={onPapers}>{pastExamsLabel(papers, exam.scope.id)}</Button>}
-        </div>
-        {onStartAttempt && <p id={`${id}-focused`} className="mt-2 max-w-prose text-sm text-muted">Počinje odmah, a svaki se odgovor provjerava čim ga date. Broj i vrstu pitanja birate pod Vježba.</p>}
-        {focusedError && <Alert className="mt-stack max-w-prose">{focusedError}</Alert>}
-      </div>}
-      {countdown.readiness && <ReadinessUnits readiness={countdown.readiness} busy={focusedStarting}
-        onPracticeUnit={activeSession || !onStartAttempt ? undefined : unitId => void focusedPractice({ unit_ids: [unitId] })} />}
-    </section>}
-
-    {noQuestions ? <section aria-labelledby="overview-next-heading">
-      <h3 id="overview-next-heading" className="text-lg font-semibold">Što dalje učiti</h3>
+    {noQuestions && resumeCard}
+    {noQuestions ? <section aria-labelledby="overview-next-heading" className="min-w-0 border-2 border-line p-6">
+      <h2 id="overview-next-heading" className="text-lg font-semibold">Što dalje učiti</h2>
       <p className="mt-stack font-semibold">Ovaj kolegij još nema pitanja za vježbu.</p>
       <p className="mt-1 max-w-prose text-sm text-muted">{onMaterials ? "Pročitajte materijale kolegija ili predložite pitanje kroz bazu pitanja." : "Pitanja se pojavljuju ovdje kad ih fakultet odobri. Možete predložiti pitanje kroz bazu pitanja."}</p>
       <div className="mt-stack flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
         {onMaterials && <Button variant={sessionOpen ? "secondary" : "primary"} onClick={onMaterials}>Otvori materijale</Button>}
         <Button variant={onMaterials ? "ghost" : "secondary"} onClick={onQuestions}>Predloži pitanje</Button>
       </div>
-    </section> : !activeSession && <section aria-labelledby="overview-next-heading">
-      <h3 id="overview-next-heading" className="text-lg font-semibold">{examLeads ? "Drugi načini učenja" : "Što dalje učiti"}</h3>
-      {showDue && <p className="mt-stack max-w-prose">Za ponavljanje: {plural(due, QUESTIONS)}. Ponovi dospjela pitanja pokreće vođenu vježbu s {due > 20 ? "20 najranije dospjelih" : "njima"}, od najranije dospjelih.</p>}
-      <p className={`max-w-prose text-sm text-muted ${showDue ? "mt-1" : "mt-stack"}`}>Preporučena vježba prvo daje pitanja koja treba ponoviti, a zatim druga korisna pitanja kolegija. Broj i vrste pitanja birate prije početka.</p>
-      {knownAttemptId && <p className="mt-1 max-w-prose text-sm text-muted">Otvorena vježba ostaje sačuvana. Njezina pitanja ne ulaze u nove vježbe.</p>}
-      {reviewError && <Alert className="mt-stack max-w-prose">{reviewError}</Alert>}
-      <div className="mt-stack flex flex-col items-stretch gap-stack sm:flex-row sm:flex-wrap sm:items-center">
-        {showDue && <Button variant={duePrimary ? "primary" : "secondary"} disabled={reviewing} onClick={() => void reviewDue()}>{reviewing ? "Pokrećem ponavljanje…" : "Ponovi dospjela pitanja"}</Button>}
-        <Button variant={recommendedPrimary ? "primary" : "secondary"} onClick={onRecommendedPractice}>Započni preporučenu vježbu</Button>
+    </section> : <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+      <section aria-labelledby="overview-exam-heading" className="min-w-0 border-t-[3px] border-accent bg-surface p-8">
+        {exam ? <>
+          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+            {!exam.ongoing && <span aria-hidden="true" className="hero-number text-[5rem] text-accent">{exam.days}</span>}
+            <div>
+              <h2 id="overview-exam-heading" className="text-2xl font-extrabold">{exam.ongoing ? `${exam.scope.name} traje` : `${pluralForm(exam.days, ["dan", "dana", "dana"])} do ispita`}<span className="sr-only">{!exam.ongoing && ` — ${plural(exam.days, ["dan", "dana", "dana"])}`}</span></h2>
+              <p className="mt-1 text-sm text-soft">{exam.scope.name} · {exam.scope.starts_on && <><time dateTime={exam.scope.starts_on}>{formatScopeDates(exam.scope)}</time> · </>}obuhvaća {plural(unitCount, UNITS)}</p>
+            </div>
+          </div>
+          <div className="mt-6">
+            <div className="flex items-baseline justify-between gap-3"><span className="label-caps">Spremnost po temama</span>
+              {range && <span className="font-extrabold tabular-nums"><span aria-hidden="true">Procjena {Math.round(range.low * 100) === Math.round(range.high * 100) ? `${Math.round(range.low * 100)}` : `${Math.round(range.low * 100)}–${Math.round(range.high * 100)}`} %</span>
+                <span className="sr-only">Procijenjena spremnost: {Math.round(range.low * 100)} do {Math.round(range.high * 100)} posto</span></span>}
+            </div>
+            {countdown?.readiness && countdown.readiness.units.length > 0 && <div aria-hidden="true" className="mt-2 flex gap-1">{countdown.readiness.units.map(unit => {
+              const middle = unit.readiness ? Math.round((unit.readiness.low + unit.readiness.high) / 2 * 100) : null;
+              return <div key={unit.unit_id} className="h-2 min-w-0 flex-1 bg-track"><div className={cn("h-full", segmentTone(middle))} style={{ width: `${middle ?? 0}%` }} /></div>;
+            })}</div>}
+            <p className="mt-2 text-sm text-muted">{countdown?.readiness && !range
+              ? countdown.readiness.question_count === 0 ? "Cjeline ovog roka još nemaju automatski ocijenjenih pitanja, pa se spremnost ne može procijeniti."
+                : `Još nema dovoljno odgovora: odgovorili ste na ${countdown.readiness.answered_count} od ${countdown.readiness.question_count} automatski ocijenjenih pitanja.`
+              : [weakest.length > 0 ? `Najslabije: ${weakest.join(", ")}` : null, notStarted > 0 ? plural(notStarted, ["tema još nije započeta", "teme još nisu započete", "tema još nije započeto"]) : null].filter(Boolean).join(" · ")}</p>
+          </div>
+          {canStart && !noQuestions && <>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Button variant={examPrimary ? "primary" : "secondary"} className="h-12 px-6" disabled={focusedStarting} aria-describedby={`${id}-focused`} onClick={() => void focusedPractice({ exam_scope_id: exam.scope.id })}>{focusedStarting ? "Pokrećem vježbu…" : `Vježbaj za ${exam.scope.name}`}</Button>
+              {onOpenPractice && <Button variant="secondary" className="h-12 px-5" onClick={() => onOpenPractice({ mode: "MOCK", scopeId: exam.scope.id })}>Probni ispit</Button>}
+            </div>
+            <p id={`${id}-focused`} className="mt-3 text-sm text-muted">Vježba prvo daje pitanja za ponavljanje, zatim nova. Odgovor se provjerava odmah.</p>
+          </>}
+          {focusedError && <Alert className="mt-stack max-w-prose">{focusedError}</Alert>}
+        </> : <>
+          <h2 id="overview-exam-heading" className="text-2xl font-extrabold">Nema ispita u rasporedu</h2>
+          <p className="mt-2 max-w-prose text-sm text-muted">Ispitni rok s datumom pokazuje odbrojavanje i procjenu spremnosti. Dotad možete učiti po cjelinama ili preporučenom vježbom.</p>
+        </>}
+      </section>
+
+      <div className="flex min-w-0 flex-col gap-4">
+        {resumeCard ?? (canStart && <button type="button" aria-label="Započni preporučenu vježbu" onClick={onRecommendedPractice}
+          className={cn("min-w-0 p-6 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent", sessionOpen ? "border-2 border-line bg-surface hover:bg-subtle" : "bg-accent-surface hover:bg-subtle")}>
+          <span className="flex items-baseline justify-between gap-3"><span className="text-lg font-extrabold">Preporučena vježba</span><span aria-hidden="true" className="text-xl">→</span></span>
+          <span className="mt-2 block text-sm text-soft">Prvo pitanja za ponavljanje, zatim nova iz kolegija.</span>
+        </button>)}
+        {showDue && <div className="border-2 border-line p-6">
+          <p className="flex flex-wrap items-baseline justify-between gap-x-3"><span className="text-lg font-extrabold">Za ponavljanje</span><span className="text-sm text-soft">{plural(due, QUESTIONS)}</span></p>
+          <p className="mt-1 text-sm text-muted">Dospjela pitanja, od najranije dospjelih{due > 20 ? " (najviše 20 odjednom)" : ""}.</p>
+          {reviewError && <Alert className="mt-stack">{reviewError}</Alert>}
+          <Button variant="secondary" className="mt-stack" disabled={reviewing} onClick={() => void reviewDue()}>{reviewing ? "Pokrećem ponavljanje…" : "Ponovi dospjela pitanja"}</Button>
+        </div>}
+        {canStart && <div role="group" aria-labelledby={`${id}-quick`} className="min-w-0 bg-surface p-6">
+          <p className="flex items-baseline justify-between gap-3"><span id={`${id}-quick`} className="text-lg font-extrabold">Brzi kviz</span><span className="text-sm text-soft">5 pitanja · provjera odmah</span></p>
+          {quickChoices.length > 1 && <div role="group" aria-label="Pitanja iz" className="mt-3 flex flex-wrap gap-2">
+            {quickChoices.map(choice => <button key={choice.value} type="button" aria-pressed={quickTarget === choice.value} disabled={quickStarting}
+              onClick={() => { setQuickTarget(choice.value); setQuickError(""); }}
+              className="border px-3 py-1.5 text-sm border-line-strong aria-pressed:border-accent aria-pressed:bg-accent-surface aria-pressed:text-accent hover:bg-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">{choice.label}</button>)}
+          </div>}
+          {quickError && <Alert className="mt-stack">{quickError}</Alert>}
+          <Button variant="secondary" className="mt-4" disabled={quickStarting} aria-label={`Započni brzi kviz: ${quickLabel}`} onClick={() => void quickQuiz()}>{quickStarting ? "Pokrećem brzi kviz…" : `Započni · ${quickLabel}`}</Button>
+        </div>}
       </div>
-      {showQuick && <div role="group" aria-labelledby={`${id}-quick`} aria-describedby={`${id}-quick-about`} className="mt-group">
-        <p><span id={`${id}-quick`} className="font-medium">Brzi kviz</span> <span id={`${id}-quick-about`} className="text-sm text-muted">Pet pitanja, svako se provjerava čim odgovorite, odabrana kao u preporučenoj vježbi.</span></p>
-        <div className="mt-2 flex flex-col items-stretch gap-stack sm:flex-row sm:items-end">
-          {(targets.scopes.length > 0 || targets.units.length > 0) && <label className="block min-w-0 text-sm font-medium sm:w-72">Pitanja iz
-            <Select className="mt-1" value={quickTarget} disabled={quickStarting} onChange={event => { setQuickTarget(event.target.value); setQuickError(""); }}>
-              <option value="">Cijeli kolegij</option>
-              {targets.scopes.length > 0 && <optgroup label="Ispitni rokovi">{targets.scopes.map(scope => <option key={scope.id} value={`scope:${scope.id}`}>{scope.name} {scope.academic_year} · {kindLabels[scope.kind]}</option>)}</optgroup>}
-              {targets.units.length > 0 && <optgroup label="Cjeline">{targets.units.map(unit => <option key={unit.id} value={`unit:${unit.id}`}>{unit.title}</option>)}</optgroup>}
-            </Select>
-          </label>}
-          <Button variant="secondary" className="shrink-0" disabled={quickStarting} onClick={() => void quickQuiz()}>{quickStarting ? "Pokrećem brzi kviz…" : "Započni brzi kviz"}</Button>
-        </div>
-        {quickError && <Alert className="mt-stack max-w-prose">{quickError}</Alert>}
-      </div>}
+    </div>}
+
+    {unitCards.length > 0 && <section aria-labelledby={`${id}-units`} className="min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-3"><h2 id={`${id}-units`} className="text-xl font-extrabold">Teme</h2>
+        <SegmentedControl label="Prikaz tema" size="sm" value={topicFilter} onChange={setTopicFilter} options={topicFilters} /></div>
+      {shownUnits.length === 0 ? <p className="mt-3 border-y border-line py-4 text-sm text-muted">Nema tema za ovaj prikaz.</p> : <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {shownUnits.map(unit => {
+          const tag = unit.repeat ? "Ponovi" : unit.id === nextUnit ? "Sljedeća" : null;
+          const body = <>
+            <span className="flex items-start justify-between gap-3"><span className="font-extrabold break-words">{unit.title}</span>
+              {tag && <span className="shrink-0 bg-accent px-2 py-0.5 text-[0.6875rem] font-extrabold tracking-wide text-accent-foreground uppercase">{tag}</span>}</span>
+            <ProgressBar className="mt-4" label={`Savladanost: ${unit.title}`} value={unit.state.value} tone={unit.state.bar} />
+            <span className="mt-3 flex flex-wrap items-baseline justify-between gap-x-3 text-sm"><span className={cn("font-extrabold", unit.state.tone)}>{unit.state.label}</span>
+              <span className="tabular-nums text-soft">{unit.total === null ? `Odgovoreno ${unit.answered}` : `Odgovoreno ${unit.answered} / ${unit.total}`} · najbolji {unit.best === null ? "—" : `${unit.best} %`}</span></span>
+          </>;
+          return <li key={unit.id} className="min-w-0">
+            {canStart && !noQuestions ? <button type="button" disabled={focusedStarting} aria-label={`Vježbaj: ${unit.title}`} onClick={() => void focusedPractice({ unit_ids: [unit.id] })}
+              className="block h-full w-full bg-surface p-5 text-left hover:bg-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">{body}</button>
+              : <div className="h-full bg-surface p-5">{body}</div>}
+          </li>;
+        })}
+      </ul>}
     </section>}
 
-    </div>
-
-    <div className="grid min-w-0 gap-group md:grid-cols-2">
-      <div className="min-w-0 space-y-group">
-      <section aria-labelledby="overview-progress-heading" className="min-w-0">
-        <h3 id="overview-progress-heading" className="text-lg font-semibold">Sažetak napretka</h3>
-        {progress.loading ? <p role="status" className="mt-stack text-sm text-muted">Učitavam napredak…</p> : progress.error ?
-          <p className="mt-stack text-sm text-muted">Sažetak napretka nije učitan. Otvorite Napredak i pokušajte ponovno.</p> :
-          summary && summary.reviewed_questions > 0 ? <>
-            <p className="mt-stack">Ponovljeno: <span className="font-semibold tabular-nums">{summary.reviewed_questions}</span> {pluralForm(summary.reviewed_questions, QUESTIONS)}</p>
-            <p className="mt-1 max-w-prose text-sm text-muted">Točnost i raspored ponavljanja nalaze se u Napretku.</p>
-          </> : <p className="mt-stack max-w-prose text-sm text-muted">Napredak se pojavljuje nakon vježbe s automatski ocijenjenim pitanjima. Kratki odgovori koriste samoprocjenu.</p>}
-        <Button variant="secondary" className="mt-stack" onClick={onProgress}>Otvori napredak</Button>
-      </section>
-      {materials && <section aria-labelledby="overview-materials-heading" className="min-w-0">
-        <h3 id="overview-materials-heading" className="text-lg font-semibold">Materijali</h3>
-        {materials.loading ? <p role="status" className="mt-stack text-sm text-muted">Učitavam materijale…</p> : materials.error ?
-          <p className="mt-stack text-sm text-muted">Sažetak materijala nije učitan. Otvorite Materijale i pokušajte ponovno.</p> : materials.materials.length ? <>
-            <p className="mt-stack text-sm text-muted">{plural(materials.materials.length, ["materijal", "materijala", "materijala"])}</p>
-            <ul aria-label="Nedavni materijali" className="mt-2 space-y-1 text-sm">{recentMaterials.map(material => <li key={material.id} className="break-words [overflow-wrap:anywhere]">{material.original_filename}</li>)}</ul>
-          </> : <p className="mt-stack text-sm text-muted">Još nema dodanih materijala.</p>}
-        {!noQuestions && onMaterials && <Button variant="secondary" className="mt-stack" onClick={onMaterials}>Otvori materijale</Button>}
-      </section>}
-      </div>
-    <section aria-labelledby={`${id}-else`} className="min-w-0">
-      <h3 id={`${id}-else`} className="text-lg font-semibold">Ostalo u kolegiju</h3>
-      <ul className="mt-3 border-t-2 border-line">
-        {[
-          onPractice && { key: "practice", title: "Vježba po mjeri", note: "Odaberite cjeline, vrste pitanja i način vježbe.", open: onPractice },
-          onPapers && { key: "papers", title: "Prošli ispiti", note: "Riješite stare ispite uz mjerenje vremena.", open: onPapers },
-          { key: "questions", title: "Baza pitanja i alati", note: "Pitanja, prijedlozi izmjena, cjeline i postavke kolegija.", open: onQuestions },
-        ].filter(Boolean).map(row => row && <li key={row.key} className="border-b border-line">
-          <button type="button" aria-label={`Otvori: ${row.title}`} onClick={row.open}
-            className="flex min-h-14 w-full items-center gap-4 py-3 text-left hover:bg-subtle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent">
-            <span className="min-w-0 flex-1"><span className="block font-semibold">{row.title}</span><span className="block text-sm text-muted">{row.note}</span></span>
-            <span aria-hidden="true" className="px-2 text-lg">→</span>
-          </button>
-        </li>)}
-      </ul>
-    </section>
-    </div>
+    <nav aria-label="Ostalo u kolegiju" className="grid min-w-0 gap-x-4 border-t-2 border-line pt-2 sm:grid-cols-2 lg:grid-cols-5">
+      {more.map(item => <button key={item.key} type="button" aria-label={item.label} onClick={item.open}
+        className="min-w-0 px-3 py-4 text-left hover:bg-surface focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent">
+        <span className="block font-extrabold">{item.name} <span aria-hidden="true">→</span></span>
+        <span className="mt-1 block text-sm text-muted">{item.note}</span>
+      </button>)}
+    </nav>
   </div>;
 }

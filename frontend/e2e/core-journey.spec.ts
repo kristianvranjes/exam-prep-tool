@@ -79,8 +79,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(materialDetail.getByRole("region", { name: "Izdvojeni tekst materijala" }))
       .toContainText("Deterministic study notes.");
     await openScreen(moderator, "Pregled");
-    await expect(moderator.getByRole("region", { name: "Materijali", exact: true })).toContainText("1 materijal");
-    await expect(moderator.getByRole("list", { name: "Nedavni materijali" })).toContainText("e2e-notes.pdf");
+    await expect(moderator.getByRole("navigation", { name: "Ostalo u kolegiju" })).toContainText("1 materijal");
     await moderator.getByRole("navigation", { name: "Navigacija kolegija" }).getByRole("button", { name: "Vaši kolegiji" }).click();
     await expect(moderatorCourses.getByRole("button", { name: `Otvori kolegij: ${courseName}`, exact: true })).toHaveCount(1);
     await moderator.getByRole("link", { name: "Alati fakulteta", exact: true }).click();
@@ -101,7 +100,6 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(student.getByRole("heading", { name: courseName, exact: true })).toBeVisible();
     await expect(student.getByText("Ovaj kolegij još nema pitanja za vježbu.")).toBeVisible();
     await expect(student.getByRole("region", { name: "Materijali", exact: true })).toHaveCount(0);
-    await expect(student.getByText(/Napredak se pojavljuje nakon vježbe s automatski ocijenjenim pitanjima/)).toBeVisible();
     await expect(student.getByRole("button", { name: "Nastavi vježbu" })).toHaveCount(0);
     await test.info().attach("overview-empty", { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
     await expect(studentCourses).toBeHidden();
@@ -280,12 +278,11 @@ test("moderator and student complete the core exam-preparation journey", async (
       await student.setViewportSize(viewport);
       await openScreen(student, "Pregled");
       const overview = student.locator("#course-overview");
-      await expect(overview.getByRole("heading", { name: "Što dalje učiti" })).toBeVisible();
+      await expect(overview.getByRole("heading", { name: "Nema ispita u rasporedu" })).toBeVisible();
       await expect(overview.getByRole("button", { name: "Nastavi vježbu" })).toHaveCount(0);
-      await expect(overview.getByRole("button", { name: "Započni preporučenu vježbu" })).toHaveClass(primaryFill);
+      await expect(overview.getByRole("button", { name: "Započni preporučenu vježbu" })).toBeVisible();
       // Graded accuracy is shown in Progress; the overview summary keeps a count only.
-      await expect(overview.getByRole("region", { name: "Sažetak napretka" })).toContainText(/Ponovljeno: \d+ pitanj/);
-      await expect(overview.getByRole("region", { name: "Sažetak napretka" })).not.toContainText("%");
+      await expect(overview.getByRole("navigation", { name: "Ostalo u kolegiju" })).toContainText(/\d+ odgovora/);
       await expect.poll(() => student.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await test.info().attach(`overview-${viewport.width}`, { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
       await overview.getByRole("button", { name: "Otvori napredak" }).click();
