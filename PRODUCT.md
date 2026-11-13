@@ -36,8 +36,8 @@ what enters the bank.
 - The academic calendar drives use: winter midterms 23 Nov – 1 Dec 2026, finals
   1–12 Feb 2027, exam terms 15–26 Feb 2027, summer midterms around 19–30 Apr 2027.
   Traffic peaks in the one or two weeks before each exam period.
-- Course content (question stems, options, explanations, unit and scope names such as
-  "Međuispit") is written in Croatian. The interface copy is English today.
+- The interface is Croatian. Course questions and explanations may contain Croatian prose,
+  mathematical notation, technical symbols, code, or source-language text.
 - Questions come from course materials, past exams and student contributions; many
   courses (for example PPJ, compilers) include grammar notation, symbols (→, ε, ∪) and
   code fragments in question text.
@@ -52,8 +52,8 @@ what enters the bank.
   multiple-select questions with formulas and code highlighting come later (R4).
 - Student project, local-first and cloud-optional; infrastructure cost must stay near
   zero.
-- Interface language: both English and Croatian are wanted. English is the only UI
-  language today; a Croatian interface is an open decision for a later change.
+- Interface language: Croatian only. English UI localization and a language switch are out
+  of scope unless the product owner revisits this decision.
 
 ## Brand Commitments
 

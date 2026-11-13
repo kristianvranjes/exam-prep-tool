@@ -300,7 +300,6 @@ async function start(experience: "Vođena vježba" | "Ispitna vježba" = "Vođen
   fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   await screen.findByText("Choose a number");
   fireEvent.click(screen.getByText("Vježba", { selector: "summary" }));
-  if (experience === "Ispitna vježba") fireEvent.click(screen.getByText("Popis pitanja", { selector: "summary" }));
 }
 function allAnswered() {
   current.questions[0].answer = { type: "MULTIPLE_CHOICE", option_position: 1 };
@@ -320,7 +319,7 @@ it("keeps Study/Exam separate from the selection strategy and saves before navig
   expect(mock.start).toHaveBeenCalledWith("course", 5, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"], "ADAPTIVE", undefined, "END");
   fireEvent.click(screen.getByText("Vježba", { selector: "summary" }));
   fireEvent.click(screen.getByLabelText("Vođena vježba"));
-  expect(screen.queryByRole("navigation", { name: "Popis pitanja" })).not.toBeInTheDocument();
+  expect(screen.getByRole("navigation", { name: "Popis pitanja" })).toBeInTheDocument();
   expect(screen.queryByText("The sky is green")).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("Two"));
   expect(screen.getByText("Nespremljene promjene")).toBeInTheDocument();
@@ -373,6 +372,22 @@ it("supports direct jumps, answered states, local flags and revisit actions in E
   expect(screen.getByRole("button", { name: "Sljedeće označeno" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Sljedeće bez odgovora" }));
   await screen.findByText("The sky is green");
+});
+
+it("keeps question navigation available in guided practice, with focus and phone controls", async () => {
+  await start();
+  expect(screen.getByRole("navigation", { name: "Popis pitanja" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Sakrij bočnu ploču (fokus)" }));
+  expect(screen.queryByRole("navigation", { name: "Popis pitanja" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Prikaži bočnu ploču" }));
+  expect(screen.getByRole("navigation", { name: "Popis pitanja" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Popis pitanja, pitanje 1 od 3" }));
+  const sheet = screen.getByRole("dialog", { name: "Pitanja" });
+  fireEvent.click(within(sheet).getByRole("button", { name: /Pitanje 2/ }));
+  await screen.findByText("The sky is green");
+  expect(screen.queryByRole("dialog", { name: "Pitanja" })).not.toBeInTheDocument();
 });
 
 it("requires an explicit decision before leaving or reloading an edited answer", async () => {
@@ -983,7 +998,7 @@ it("marks a missed multiple-select option on the slips and spells out only a typ
   expect(within(feedback).getByRole("heading", { name: "Netočno" })).toBeVisible();
   expect(within(feedback).getByText("4 is even.")).toBeVisible();
   expect(within(feedback).queryByText(/Your answer|Correct answer/)).not.toBeInTheDocument();
-  expect(screen.getByText("Vaš odgovor · Točno")).toBeVisible();
+  expect(screen.getByText("Vaš odgovor ✓")).toBeVisible();
   expect(screen.getByText("Propušteno · Točan odgovor")).toBeVisible();
   expect(screen.getByRole("checkbox", { name: /^3/ })).not.toBeChecked();
   expect(screen.getByText("provjereno 1 od 2")).toBeVisible();
@@ -1061,9 +1076,9 @@ it("takes a past paper with points, skips and clears answers, and hands it in wi
   await screen.findByText("Choose a number");
   expect(screen.getByText("Zadatak 1 · 2 boda")).toBeVisible();
   expect(screen.queryByText(/Item 1/)).not.toBeInTheDocument();
-  // The paper header states the title, size, time limit and scoring rule above the questions.
-  const header = screen.getByRole("banner", { name: "Ispitni list" });
-  expect(within(header).getByRole("heading", { level: 2 })).toBeVisible();
+  // The session bar carries the title; the paper region carries its size, time limit and scoring rule.
+  const header = screen.getByRole("region", { name: "Ispitni list" });
+  expect(screen.getByRole("heading", { level: 1, name: "MI 2025/26" })).toBeVisible();
   expect(within(header).getByText(/· 90 min$/)).toBeVisible();
   expect(within(header).getByText("Netočan odgovor oduzima ¼ bodova zadatka; prazan nosi 0 bodova.")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Preskoči zasad" }));
@@ -1077,7 +1092,7 @@ it("takes a past paper with points, skips and clears answers, and hands it in wi
   fireEvent.click(screen.getByRole("button", { name: "Ostavi prazno" }));
   await waitFor(() => expect(mock.clear).toHaveBeenCalledWith("course", "attempt", "tf"));
   expect(screen.getByLabelText("Netočno")).not.toBeChecked();
-  fireEvent.click(screen.getByRole("button", { name: "Pregledaj i završi" }));
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj i predaj ispit" }));
   expect(await screen.findByText("Bez odgovora: 3 pitanja. Prazna pitanja nose 0 bodova.")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Predaj ispit" }));
   fireEvent.click(screen.getByRole("button", { name: "Potvrdi konačnu predaju" }));
