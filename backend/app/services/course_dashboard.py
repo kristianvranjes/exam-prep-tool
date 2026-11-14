@@ -180,7 +180,11 @@ def last_mock(db: Session, user: User, course_id: UUID) -> LastMock | None:
         .where(QuizAttempt.id == attempt_id, QuizQuestion.points.is_not(None))
     ).all()
     result = score(
-        [ItemResult(points, cast(Grade | None, grade)) for points, grade in rows],
+        [
+            ItemResult(points, cast(Grade | None, grade))
+            for points, grade in rows
+            if points is not None
+        ],
         Decimal(str(scoring["wrong_answer_penalty"])),
         None,
     )
