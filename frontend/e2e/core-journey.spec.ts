@@ -18,6 +18,9 @@ async function openScreen(page: Page, name: "Pregled" | "Vježba" | "Prošli isp
   if ((await crumbs.count()) > 1) await crumbs.nth(1).click();
   const control = { "Pregled": null, "Vježba": "Otvori: Vježba po mjeri", "Prošli ispiti": "Otvori: Prošli ispiti", "Napredak": "Otvori napredak", "Materijali": "Otvori materijale", "Više": "Otvori: Baza pitanja i alati" }[name];
   if (control) await page.getByRole("button", { name: control, exact: true }).first().click();
+  // The screen is open once the address says so; the previous one is still visible until then.
+  const suffix = { "Pregled": "", "Vježba": "/practice", "Prošli ispiti": "/papers", "Napredak": "/progress", "Materijali": "/materials", "Više": "/more" }[name];
+  await expect(page).toHaveURL(new RegExp(`/courses/[^/]+${suffix}$`));
 }
 
 async function login(page: Page, email: string) {

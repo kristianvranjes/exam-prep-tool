@@ -83,6 +83,7 @@ for (const width of [1280, 390]) {
       await expect(page).toHaveURL(new RegExp(`${base}/progress$`));
       await expect(page.getByRole("region", { name: "Napredak", exact: true })).toBeVisible();
       await openScreen("Vježba");
+      await expect(page).toHaveURL(new RegExp(`${base}/practice$`));
       await page.getByRole("button", { name: "Nastavi vježbu", exact: true }).click();
       await expect(page).toHaveURL(attemptUrl);
       await expect(answer).toHaveValue("Changed answer after refresh");
