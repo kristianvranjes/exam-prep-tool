@@ -29,12 +29,12 @@ function PaletteTiles() {
     <div role="radiogroup" aria-label="Paleta" className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
       {tiles.map(tile => {
         const colours = tile.value === "custom" ? [custom.bg, custom.text, custom.acc] : SWATCHES[tile.value];
-        return <label key={tile.value} className="relative flex min-h-11 cursor-pointer flex-col gap-2 border-2 border-line p-2 has-[:checked]:border-foreground has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent">
+        return <label key={tile.value} className="relative flex min-h-11 cursor-pointer flex-col items-stretch gap-2 border-2 border-line p-2 has-[:checked]:border-foreground has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent">
           <input type="radio" name="palette" value={tile.value} checked={current === tile.value} disabled={!mounted}
             onChange={() => setTheme(tile.value)} className={OPTION_INPUT_CLASS} />
           {colours
-            ? <span aria-hidden="true" className="flex h-8 overflow-hidden border border-line">{colours.map((colour, index) => <span key={index} className="flex-1" style={{ backgroundColor: colour }} />)}</span>
-            : <span aria-hidden="true" className="grid h-8 place-items-center border border-line text-xs text-muted">auto</span>}
+            ? <span aria-hidden="true" className="flex h-8 w-full overflow-hidden border border-line">{colours.map((colour, index) => <span key={index} className="flex-1" style={{ backgroundColor: colour }} />)}</span>
+            : <span aria-hidden="true" className="grid h-8 w-full place-items-center border border-line text-xs text-muted">auto</span>}
           <span className="text-sm font-semibold">{tile.label}</span>
         </label>;
       })}

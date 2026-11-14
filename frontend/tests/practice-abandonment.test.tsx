@@ -36,7 +36,7 @@ async function start(mode = "Vođena vježba") {
   fireEvent.click(screen.getByRole("button", { name: "Prethodno" }));
   await screen.findByLabelText("One");
   expect(screen.getByRole("button", { name: "Odustani od pokušaja" })).not.toBeVisible();
-  fireEvent.click(screen.getByText("Vježba", { selector: "summary" }));
+  fireEvent.click(screen.getByText("Više", { selector: "summary" }));
 }
 
 it.each(["Vođena vježba", "Ispitna vježba"])("requires confirmation, warns about unsaved edits, and cancels without mutation in %s", async mode => {

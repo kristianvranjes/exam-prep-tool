@@ -107,7 +107,7 @@ it("keeps failed saves unsaved and allows reloading an already submitted attempt
   expect(screen.getByText("Spremanje nije uspjelo")).toBeInTheDocument();
   await mock.submit();
   expect(screen.getByRole("button", { name: "Ponovno učitaj spremljene odgovore" })).not.toBeVisible();
-  fireEvent.click(screen.getByText("Vježba", { selector: "summary" }));
+  fireEvent.click(screen.getByText("Više", { selector: "summary" }));
   expect(mock.read).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj spremljene odgovore" }));
   fireEvent.click(screen.getByRole("button", { name: "Odbaci promjene i nastavi" }));
@@ -136,7 +136,7 @@ it("reloads the saved selection even when the current draft differs", async () =
   fireEvent.click(screen.getByRole("button", { name: "Prethodno" }));
   await screen.findByText("Spremljeno");
   fireEvent.click(screen.getByLabelText("Two"));
-  fireEvent.click(screen.getByText("Vježba", { selector: "summary" }));
+  fireEvent.click(screen.getByText("Više", { selector: "summary" }));
   fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj spremljene odgovore" }));
   expect(screen.getByRole("region", { name: "Nespremljen odgovor" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Odbaci promjene i nastavi" }));
@@ -299,7 +299,7 @@ async function start(experience: "Vođena vježba" | "Ispitna vježba" = "Vođen
   fireEvent.click(screen.getByLabelText(experience));
   fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   await screen.findByText("Choose a number");
-  fireEvent.click(screen.getByText("Vježba", { selector: "summary" }));
+  fireEvent.click(screen.getByText("Više", { selector: "summary" }));
 }
 function allAnswered() {
   current.questions[0].answer = { type: "MULTIPLE_CHOICE", option_position: 1 };
@@ -317,8 +317,6 @@ it("keeps Study/Exam separate from the selection strategy and saves before navig
   fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   await screen.findByText("Choose a number");
   expect(mock.start).toHaveBeenCalledWith("course", 5, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"], "ADAPTIVE", undefined, "END");
-  fireEvent.click(screen.getByText("Vježba", { selector: "summary" }));
-  fireEvent.click(screen.getByLabelText("Vođena vježba"));
   expect(screen.getByRole("navigation", { name: "Popis pitanja" })).toBeInTheDocument();
   expect(screen.queryByText("The sky is green")).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("Two"));
@@ -362,13 +360,14 @@ it("supports direct jumps, answered states, local flags and revisit actions in E
   fireEvent.click(within(nav).getByRole("button", { name: /Pitanje 3/ }));
   await screen.findByText("Explain gravity");
   expect(within(nav).getByRole("button", { name: /Pitanje 1.*Spremljeno.*Označeno/ })).toBeInTheDocument();
+  // The side panel is only the grid; the jump buttons are in the question sheet.
+  fireEvent.click(screen.getByRole("button", { name: /Popis pitanja, pitanje/ }));
   fireEvent.click(screen.getByRole("button", { name: "Sljedeće označeno" }));
   await screen.findByText("Choose a number");
   expect(screen.getByRole("button", { name: "Vrati se" })).toHaveAttribute("aria-pressed", "true");
-  fireEvent.click(screen.getByLabelText("Vođena vježba"));
-  fireEvent.click(screen.getByLabelText("Ispitna vježba"));
   expect(screen.getByRole("button", { name: "Vrati se" })).toHaveAttribute("aria-pressed", "true");
   fireEvent.click(screen.getByRole("button", { name: "Vrati se" }));
+  fireEvent.click(screen.getByRole("button", { name: /Popis pitanja, pitanje/ }));
   expect(screen.getByRole("button", { name: "Sljedeće označeno" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Sljedeće bez odgovora" }));
   await screen.findByText("The sky is green");
@@ -703,8 +702,8 @@ it("waits for unfinished-session discovery before showing an empty setup", async
 it("focuses the answering loop and keeps settings and recovery secondary", async () => {
   await start();
   await waitFor(() => expect(screen.getByText("Pitanje 1 od 3")).toHaveFocus());
-  fireEvent.click(screen.getByText("Vježba", { selector: "summary" }));
-  expect(screen.getByRole("radio", { name: "Vođena vježba" })).not.toBeVisible();
+  fireEvent.click(screen.getByText("Više", { selector: "summary" }));
+  expect(screen.queryByRole("radio", { name: "Vođena vježba" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Ponovno učitaj spremljene odgovore" })).not.toBeVisible();
   expect(screen.queryByRole("button", { name: "Save answer" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Sljedeće pitanje" })).not.toBeInTheDocument();
@@ -821,7 +820,6 @@ it('returns directly to marked questions from Guided review without changing exp
   fireEvent.click(screen.getByRole('button', { name: 'Spremi i pregledaj' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Pregledaj označena' }));
   expect(await screen.findByLabelText('One')).toBeChecked();
-  expect(screen.getByRole('radio', { name: 'Vođena vježba' })).toBeChecked();
   expect(mock.submit).not.toHaveBeenCalled();
 });
 
@@ -1035,8 +1033,6 @@ it("resumes a guided session with checking enabled", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Nastavi vježbu" }));
   await screen.findByText("Choose a number");
   expect(screen.getByRole("button", { name: "Provjeri odgovor" })).toBeInTheDocument();
-  fireEvent.click(screen.getByText("Vježba", { selector: "summary" }));
-  expect(screen.getByLabelText("Vođena vježba")).toBeChecked();
 });
 
 it("opens setup focused on the exam cycle requested from the overview", async () => {

@@ -31,7 +31,7 @@ beforeEach(() => {
 function star() { return screen.getByRole("button", { name: "Favorit" }); }
 
 it("stars the active question and keeps the choice while moving between questions", async () => {
-  render(<ActiveQuiz attempt={structuredClone(active)} experience="EXAM" setExperience={vi.fn()} update={vi.fn()} back={vi.fn(async () => {})} />);
+  render(<ActiveQuiz attempt={structuredClone(active)} experience="EXAM" update={vi.fn()} back={vi.fn(async () => {})} />);
   expect(star()).toHaveAttribute("aria-pressed", "false");
   fireEvent.click(star());
   await waitFor(() => expect(star()).toHaveAttribute("aria-pressed", "true"));
@@ -60,7 +60,7 @@ it("stars the active question and keeps the choice while moving between question
 it("toggles the star with S, which no answer key uses", async () => {
   expect(shortcutAction("S")).toEqual({ kind: "favorite" });
   expect(shortcutAction("f")).toEqual({ kind: "choice", key: "f" });
-  render(<ActiveQuiz attempt={structuredClone(active)} experience="EXAM" setExperience={vi.fn()} update={vi.fn()} back={vi.fn(async () => {})} />);
+  render(<ActiveQuiz attempt={structuredClone(active)} experience="EXAM" update={vi.fn()} back={vi.fn(async () => {})} />);
   expect(star()).toHaveAttribute("aria-keyshortcuts", "S");
   fireEvent.keyDown(document.body, { key: "s" });
   await waitFor(() => expect(star()).toHaveAttribute("aria-pressed", "true"));
@@ -75,7 +75,7 @@ it("toggles the star with S, which no answer key uses", async () => {
 
 it("explains a refused favorite and leaves the star unpressed", async () => {
   mock.favorite.mockRejectedValueOnce(new Error("Only approved questions and your own drafts can be favorited"));
-  render(<ActiveQuiz attempt={structuredClone(active)} experience="STUDY" setExperience={vi.fn()} update={vi.fn()} back={vi.fn(async () => {})} />);
+  render(<ActiveQuiz attempt={structuredClone(active)} experience="STUDY" update={vi.fn()} back={vi.fn(async () => {})} />);
   fireEvent.click(star());
   expect(await screen.findByRole("alert")).toHaveTextContent("Only approved questions and your own drafts can be favorited");
   expect(star()).toHaveAttribute("aria-pressed", "false");

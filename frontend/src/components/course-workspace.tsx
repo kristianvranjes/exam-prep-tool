@@ -17,10 +17,6 @@ import { Button, LoadingState } from "./ui";
 import type { ResumableAttempt } from "./use-resumable-sessions";
 
 export type { CourseDestination } from "../lib/workspace-route";
-const destinations: { id: CourseDestination; label: string }[] = [
-  { id: "overview", label: "Pregled" }, { id: "practice", label: "Vježba" }, { id: "papers", label: "Prošli ispiti" },
-  { id: "progress", label: "Napredak" }, { id: "materials", label: "Materijali" }, { id: "more", label: "Više" },
-];
 
 export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = false, roleKnown = true, visible, destination, navigate, goHome, checkingSession,
   adaptiveReviewRequest, onOpenAdaptiveReview, knownAttemptId, knownAttempt, onResume, onResumableAttemptChange, activeSession, routeAttemptId, routeResults, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onUpdated, onDeleted, onOpenAttempt }: {
@@ -55,21 +51,19 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
     setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode, ...focus }));
     navigate("practice", true);
   }
-  // Materials are a tool for the people who run the course; students practise from the question bank.
-  const tabs = manager ? destinations : destinations.filter(item => item.id !== "materials");
-  const navigation = <nav aria-label="Navigacija kolegija" className="flex overflow-x-auto [scrollbar-width:none] shadow-[inset_0_-1px_0_var(--line)] sm:gap-x-1">
-      {tabs.map(item => <Button key={item.id} variant="tab" aria-current={destination === item.id ? "page" : undefined} aria-controls={`course-${item.id}`} onClick={() => navigate(item.id)}>{item.label}</Button>)}
-    </nav>;
+  // The handoff has no tabs: the course page leads on to practice, papers, progress and the rest, and every other
+  // screen shows the way back as a breadcrumb.
+  const breadcrumb = <nav aria-label="Navigacija kolegija" className="mb-3 flex flex-wrap items-center gap-x-2 text-sm text-muted">
+    <Button variant="ghost" className="px-0" onClick={goHome}><span aria-hidden="true">←</span> Vaši kolegiji</Button>
+    {destination !== "overview" && <><span aria-hidden="true">·</span><Button variant="ghost" className="px-0" onClick={() => navigate("overview")}>{course.name}</Button></>}
+  </nav>;
   // Hide destinations instead of unmounting: answers, drafts and uploads stay in memory.
   return <section aria-labelledby="selected-course-heading">
-    {!focused && <Button variant="ghost" className="mb-4" onClick={goHome}>Natrag na početnu</Button>}
-    <h1 id="selected-course-heading" tabIndex={-1} className={focused ? "break-words text-lg font-semibold" : "break-words text-3xl font-semibold tracking-tight"}>{course.name}{focused && " · Vježba"}</h1>
-    {!focused && course.code && <p className="mt-2 text-sm text-muted">{course.code}</p>}
-    {!focused && <div className="mt-6">{navigation}</div>}
-    <section id="course-overview" hidden={destination !== "overview"} aria-labelledby="overview-heading" className="mt-6">
-      <h2 id="overview-heading" className="text-xl font-semibold">Pregled</h2>
-      {course.description && <p className="mt-3 max-w-prose text-muted">{course.description}</p>}
-      <CourseOverview courseId={course.id} active={visible && destination === "overview"}
+    {!focused && breadcrumb}
+    {destination !== "overview" && <h1 id="selected-course-heading" tabIndex={-1} className={focused ? "sr-only" : "break-words text-3xl font-extrabold tracking-tight"}>{course.name}{focused && " · Vježba"}</h1>}
+    <section id="course-overview" hidden={destination !== "overview"} aria-label={`Pregled kolegija ${course.name}`}>
+      <CourseOverview courseId={course.id} active={visible && destination === "overview"} courseName={course.name} courseCode={course.code} courseDescription={course.description}
+        onPractice={() => navigate("practice")}
         knownAttemptId={knownAttemptId} knownAttempt={knownAttempt} checkingSession={checkingSession} activeSession={activeSession} materials={manager ? materials : undefined} onResume={onResume}
         onRecommendedPractice={() => openPractice("ADAPTIVE")}
         onStartAttempt={onOpenAttempt}
@@ -84,12 +78,6 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         onOpenMaterials={manager ? () => navigate("materials") : undefined} onOpenQuestions={() => { setMoreDestination("questions"); navigate("more"); }}
         onOpenProgress={() => navigate("progress")} onBackToCourse={() => navigate("overview")} /></div>
     </div>
-    {focused && <details className="mt-6 border-t border-line pt-3">
-      <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">Navigacija kolegija</summary>
-      <p className="my-3 text-sm text-muted">Vježba ostaje otvorena kad odete na drugi zaslon kolegija. Odaberite Spremi i izađi da spremite odgovor i vratite se na povijest vježbi.</p>
-      <Button variant="ghost" className="mb-4" onClick={goHome}>Natrag na početnu</Button>
-      {navigation}
-    </details>}
     {/* Past papers are the main way to rehearse an exam, so they get their own destination. */}
     {destination === "papers" && <div id="course-papers"><ExamPapers courseId={course.id} onStartAttempt={onOpenAttempt} /></div>}
     <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} onStartAttempt={onOpenAttempt}

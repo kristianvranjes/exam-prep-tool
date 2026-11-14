@@ -103,6 +103,6 @@ export function ApplicationFrame({ user, logout, busy, nav, onNavigate, settings
         </div>}
       </div>
     </header>
-    <main id="main-content" tabIndex={-1} className={cn("mx-auto min-w-0 px-4 pt-8 sm:px-8", focusedPractice ? "w-full max-w-3xl pb-8" : cn(width, "pb-24 md:pb-8"))}>{children}</main>
+    <main id="main-content" tabIndex={-1} className={cn("mx-auto min-w-0 px-4 pt-8 sm:px-8", focusedPractice ? cn(width, "pb-8") : cn(width, "pb-24 md:pb-8"))}>{children}</main>
   </div>;
 }

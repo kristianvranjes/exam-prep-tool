@@ -74,7 +74,17 @@ function logOut() { openAccount(); fireEvent.click(screen.getByRole("button", { 
 async function openCourse(name = "Algorithms") {
   fireEvent.click(await within(screen.getByRole("region", { name: "Vaši kolegiji" })).findByRole("button", { name: `Otvori kolegij: ${name}` }));
 }
-function navigate(name: string) { fireEvent.click(within(screen.getByRole("navigation", { name: "Navigacija kolegija" })).getByRole("button", { name })); }
+/** The handoff has no course tabs: go back to the course page through the breadcrumb, then take its link. */
+function navigate(name: string) {
+  const nav = screen.getByRole("navigation", { name: "Navigacija kolegija" });
+  const buttons = within(nav).getAllByRole("button");
+  if (buttons.length > 1) fireEvent.click(buttons[1]);
+  const control = {
+    "Pregled": null, "Vježba": "Otvori: Vježba po mjeri", "Prošli ispiti": "Otvori: Prošli ispiti", "Napredak": "Otvori napredak",
+    "Materijali": "Otvori materijale", "Više": "Otvori: Baza pitanja i alati",
+  }[name];
+  if (control) fireEvent.click(screen.getAllByRole("button", { name: control })[0]);
+}
 async function openSettings() {
   navigate("Više");
   fireEvent.click(await screen.findByRole("button", { name: "Postavke kolegija" }));
@@ -200,7 +210,8 @@ it("replaces Home with the selected course overview and switches one destination
   expect(screen.queryByRole("region", { name: "Vaši kolegiji" })).not.toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Vaši kolegiji" })).not.toBeInTheDocument();
   const nav = screen.getByRole("navigation", { name: "Navigacija kolegija" });
-  expect(within(nav).getByRole("button", { name: "Pregled" })).toHaveAttribute("aria-current", "page");
+  // On the course page the breadcrumb only leads back to the course list.
+  expect(within(nav).getAllByRole("button")).toHaveLength(1);
   for (const name of ["Course materials", "Vježba", "Napredak", "Baza pitanja"]) expect(screen.queryByRole("region", { name })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Započni preporučenu vježbu" }));
   expect(screen.getByRole("region", { name: "Vježba" })).toHaveTextContent("course-1");
@@ -214,7 +225,7 @@ it("replaces Home with the selected course overview and switches one destination
   navigate("Više");
   fireEvent.click(screen.getByRole("button", { name: "Baza pitanja" }));
   expect(screen.getByRole("region", { name: "Baza pitanja" })).toHaveTextContent("course-1");
-  fireEvent.click(screen.getByRole("button", { name: "Natrag na početnu" }));
+  fireEvent.click(screen.getByRole("button", { name: "Vaši kolegiji" }));
   expect(screen.getByRole("heading", { name: "Vaši kolegiji" })).toHaveFocus();
   await openCourse("Statistics");
   expect(screen.getByRole("heading", { name: "Statistics" })).toBeVisible();
