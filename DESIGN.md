@@ -438,11 +438,14 @@ Implemented:
   a quick quiz with topic chips, "Teme" as cards with filters and a state in words, and the links to progress, custom practice,
   past exams, materials and the question bank. No tabs; the plan screen is left out until the plan data exists.
 
+- The top bar is sticky on every page; side panels that stick sit below it.
+- Past exams 9a (table with kind filter, date, duration, points, tasks, best result and Riješi/Ponovi) and 9b (rules, scoring and the task list before a paper starts, with the clock or without).
+- Results 2d without the course heading above them, and 2e as one answer at a time with an index and Prethodno / Sljedeće (netočno).
+- Moderator: "Moderator" beside the brand and the page header on the faculty tools; 6b import of several files with a preview of every question (what is missing, warnings, errors) before anything is sent; the unit list as ruled rows.
+
 Pending:
 
-- Answer review 2e as a true master-detail (one question at a time, Prethodno/Sljedeće netočno);
-  for now the review is a filtered list with a sticky index.
 - Study plan 2g and course page 2c (wait for the plan data); Google sign-in on 2a.
-- Moderator import v2 and quiz pages (6a-6d).
+- Moderator quiz list and quiz page (6a, 6c: need a quiz status and question order), the single-question editor (6d) and the duplicate/unknown-topic warnings of the import (need the server).
 - Remaining mobile screens 7a-7m and 8d-8e (practice question sheet and safe-area-aware
   answer actions are implemented with 1a/1e).
