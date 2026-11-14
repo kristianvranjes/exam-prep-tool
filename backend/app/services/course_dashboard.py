@@ -16,7 +16,9 @@ from sqlalchemy.orm import Session
 
 from app.models import User
 from app.models.course_unit import CourseUnit, QuestionUnit
+from app.models.question import Question
 from app.models.quiz import Answer, Quiz, QuizAttempt, QuizQuestion
+from app.models.user_question_progress import UserQuestionProgress
 from app.schemas.dashboard import (
     CourseDashboard,
     ProgressSeries,
@@ -106,6 +108,20 @@ def course_dashboard(db: Session, user: User, course_id: UUID) -> CourseDashboar
     for unit_id, attempt_id, moment, graded, right in rows:
         sessions[unit_id].append((moment, str(attempt_id), percent_half_up(right, graded)))
 
+    # Questions answered and graded at least once, per unit (one in two units counts twice).
+    answered: dict[UUID, int] = {
+        unit_id: count
+        for unit_id, count in db.execute(
+            select(
+                QuestionUnit.unit_id, func.count(func.distinct(UserQuestionProgress.question_id))
+            )
+            .select_from(UserQuestionProgress)
+            .join(Question, Question.id == UserQuestionProgress.question_id)
+            .join(QuestionUnit, QuestionUnit.question_id == Question.id)
+            .where(UserQuestionProgress.user_id == user.id, Question.course_id == course_id)
+            .group_by(QuestionUnit.unit_id)
+        ).all()
+    }
     results: list[UnitResult] = []
     for unit in units:
         percents = [percent for _, _, percent in sorted(sessions.get(unit.id, []))]
@@ -117,6 +133,7 @@ def course_dashboard(db: Session, user: User, course_id: UUID) -> CourseDashboar
                 attempts=len(percents),
                 best_percent=max(percents) if percents else None,
                 last_percent=percents[-1] if percents else None,
+                answered_questions=answered.get(unit.id, 0),
             )
         )
     return CourseDashboard(

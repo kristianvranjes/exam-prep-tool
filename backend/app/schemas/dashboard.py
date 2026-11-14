@@ -17,6 +17,8 @@ class UnitResult(BaseModel):
     attempts: int
     best_percent: int | None
     last_percent: int | None
+    # Distinct questions of the unit the caller has a review card for, i.e. has answered and graded.
+    answered_questions: int = 0
 
 
 class CourseDashboard(BaseModel):

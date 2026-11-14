@@ -6,7 +6,7 @@ from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import case, delete, func, select
+from sqlalchemy import and_, case, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.models import Course, CourseMembership, User
 from app.models.exam_paper import ExamPaper, ExamPaperItem
 from app.models.exam_scope import ExamScope
 from app.models.question import Question
+from app.models.quiz import Answer, Quiz, QuizAttempt, QuizQuestion
 from app.schemas.exam_paper import (
     MAX_COURSE_PAPERS,
     ExamPaperCreate,
@@ -22,14 +23,17 @@ from app.schemas.exam_paper import (
     ExamPaperList,
     ExamPaperSummary,
     ExamPaperUpdate,
+    PaperBest,
     PaperItemManager,
     PaperItemPublic,
     PaperStatus,
 )
 from app.schemas.exam_scope import ExamScopeKind
 from app.schemas.question import QuestionStatus, QuestionType, normalize
+from app.schemas.quiz import Grade
 from app.services.course_units import is_course_owner, lock_course
 from app.services.moderation import course_moderator
+from app.services.paper_scoring import ItemResult, score
 
 KIND_ORDER = case(
     (ExamPaper.kind == "MIDTERM", 0),
@@ -137,7 +141,60 @@ def list_papers(
             .offset(offset)
         )
     )
-    return ExamPaperList(can_manage=manage, papers=summaries(db, papers))
+    best = best_scores(db, user.id, [paper.id for paper in papers])
+    return ExamPaperList(
+        can_manage=manage,
+        papers=[row.model_copy(update={"best": best.get(row.id)}) for row in summaries(db, papers)],
+    )
+
+
+def best_scores(db: Session, user_id: UUID, paper_ids: list[UUID]) -> dict[UUID, PaperBest]:
+    """The caller's best finished attempt per paper, scored by the rule frozen when it started.
+
+    Pending short answers are not guessed into the points, as in the attempt's own score.
+    """
+    if not paper_ids:
+        return {}
+    rows = db.execute(
+        select(
+            QuizAttempt.id,
+            Quiz.exam_paper_id,
+            Quiz.scoring,
+            QuizQuestion.points,
+            Answer.grading_status,
+        )
+        .select_from(QuizAttempt)
+        .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+        .join(QuizQuestion, QuizQuestion.quiz_id == Quiz.id)
+        .outerjoin(
+            Answer,
+            and_(Answer.attempt_id == QuizAttempt.id, Answer.quiz_question_id == QuizQuestion.id),
+        )
+        .where(
+            Quiz.user_id == user_id,
+            Quiz.exam_paper_id.in_(paper_ids),
+            QuizAttempt.status == "SUBMITTED",
+            QuizQuestion.points.is_not(None),
+        )
+    ).all()
+    attempts: dict[UUID, tuple[UUID, dict[str, object], list[ItemResult]]] = {}
+    for attempt_id, paper_id, scoring, points, grade in rows:
+        if scoring is None or paper_id is None or points is None:
+            continue
+        _, _, items = attempts.setdefault(attempt_id, (paper_id, scoring, []))
+        items.append(ItemResult(points, cast(Grade | None, grade)))
+    best: dict[UUID, PaperBest] = {}
+    for paper_id, scoring, items in attempts.values():
+        threshold = scoring["pass_threshold"]
+        result = score(
+            items,
+            Decimal(str(scoring["wrong_answer_penalty"])),
+            None if threshold is None else Decimal(str(threshold)),
+        )
+        earned = float(result.earned)
+        if paper_id not in best or earned > best[paper_id].earned:
+            best[paper_id] = PaperBest(earned=earned, max_points=float(result.max_points))
+    return best
 
 
 def detail(db: Session, paper: ExamPaper, manage: bool) -> ExamPaperDetail:

@@ -130,3 +130,21 @@ def test_the_average_is_the_mean_of_the_sessions_not_their_sum(bank):
     ]
     assert sorted(results) == [False, True]
     assert dashboard(member, course)["average_percent"] == 50
+
+
+def test_each_unit_counts_the_distinct_questions_answered_in_it(bank):
+    owner, member, _, course, rows = bank
+    first = unit(owner, course, "Logika")
+    unit(owner, course, "Skupovi")
+    link(owner, true_false(rows)["id"], first)
+    before = {
+        item["title"]: item["answered_questions"] for item in dashboard(member, course)["units"]
+    }
+    assert before == {"Logika": 0, "Skupovi": 0}
+    submit_true_false(member, course)
+    submit_true_false(member, course)
+    after = {
+        item["title"]: item["answered_questions"] for item in dashboard(member, course)["units"]
+    }
+    # Answering the same question twice still counts it once.
+    assert after == {"Logika": 1, "Skupovi": 0}

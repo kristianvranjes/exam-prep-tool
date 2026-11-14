@@ -97,6 +97,13 @@ class ExamPaperItems(StrictModel):
         return self
 
 
+class PaperBest(BaseModel):
+    """The caller's best finished attempt at a paper, by the points it earned."""
+
+    earned: float
+    max_points: float
+
+
 class ExamPaperSummary(BaseModel):
     id: UUID
     course_id: UUID
@@ -115,6 +122,8 @@ class ExamPaperSummary(BaseModel):
     total_points: float
     created_at: datetime
     updated_at: datetime
+    # Only the list fills it, and only with the caller's own attempts.
+    best: PaperBest | None = None
 
 
 class PaperItemPublic(BaseModel):

@@ -238,6 +238,8 @@ export type ExamPaperBody = {
 export type ExamPaper = ExamPaperBody & {
   id: string; course_id: string; status: "DRAFT" | "PUBLISHED"; published_at: string | null;
   item_count: number; total_points: number; created_at: string; updated_at: string;
+  /** The caller's best finished attempt; only the list fills it. */
+  best?: { earned: number; max_points: number } | null;
 };
 export type ExamPaperItemInput = { question_id: string; points: number; label: string | null };
 /** Members see an item's structure only; managers also see which question it is. */
@@ -360,7 +362,7 @@ export type UnitProgress = {
 };
 export type UnitProgressSummary = { as_of: string; units: UnitProgress[] };
 /** Percents are whole numbers; null where nothing was graded. */
-export type UnitResult = { unit_id: string; title: string; position: number; attempts: number; best_percent: number | null; last_percent: number | null };
+export type UnitResult = { unit_id: string; title: string; position: number; attempts: number; best_percent: number | null; last_percent: number | null; answered_questions?: number };
 export type CourseDashboard = { as_of: string; units_total: number; units_attempted: number; average_percent: number | null; units: UnitResult[] };
 export type WeekCell = { percent: number | null; graded_count: number };
 export type UnitSeries = { unit_id: string; title: string; position: number; cells: WeekCell[] };
