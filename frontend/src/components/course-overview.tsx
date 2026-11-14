@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { QUESTION_TYPES } from "../lib/question-types";
-import { api, type CourseDashboard, type CourseUnit, type ExamPaper, type ExamScope, type ExamScopeReadiness, type ReviewProgressSummary, type UnitProgress, type UnitResult } from "../lib/api";
+import { api, type CourseDashboard, type CourseUnit, type ExamPaper, type ExamScope, type ExamScopeReadiness, type ReviewProgressSummary, type UnitResult } from "../lib/api";
 import { formatScopeDates, localIsoDate, nextExam, type NextExam } from "../lib/exam-dates";
 import { practiceApi, type Attempt, type PracticeFocus } from "../lib/practice-api";
 import type { MaterialsSummary } from "./course-materials";
@@ -86,7 +86,6 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
   const [papers, setPapers] = useState<ExamPaper[]>([]);
   const [readAttempt, setReadAttempt] = useState<ResumableAttempt | null>(null);
   const [results, setResults] = useState<CourseDashboard | null>(null);
-  const [answered, setAnswered] = useState<UnitProgress[]>([]);
   const [topicFilter, setTopicFilter] = useState<TopicFilter>("ALL");
 
   useEffect(() => {
@@ -107,13 +106,9 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
       setFocusedError("");
       setPapers([]);
       setResults(null);
-      setAnswered([]);
       // Unit results and answered counts are optional context: left out until they arrive, and on failure.
       void Promise.resolve().then(() => api.courseDashboard(courseId)).then(data => {
         if (current) setResults(data ?? null);
-      }).catch(() => undefined);
-      void Promise.resolve().then(() => api.unitProgress(courseId)).then(data => {
-        if (current) setAnswered(data?.units ?? []);
       }).catch(() => undefined);
       // Published past exams: the link to them is left out when the list cannot be read.
       void Promise.resolve().then(() => api.examPapers(courseId)).then(rows => {
@@ -196,12 +191,11 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
 
   // The unit cards: every active unit, with its latest result and how many of its questions were answered.
   const resultOf = new Map<string, UnitResult>((results?.units ?? []).map(unit => [unit.unit_id, unit]));
-  const answeredOf = new Map<string, number>(answered.map(unit => [unit.unit_id, unit.reviewed_questions]));
   const unitCards = (targets.units.length > 0 ? targets.units.filter(unit => !unit.is_archived).map(unit => ({ id: unit.id, title: unit.title, total: unit.approved_question_count }))
     : (results?.units ?? []).map(unit => ({ id: unit.unit_id, title: unit.title, total: null as number | null }))).map(unit => {
     const result = resultOf.get(unit.id);
     const state = unitState({ attempts: result?.attempts ?? 0, percent: result?.last_percent ?? null });
-    return { ...unit, answered: answeredOf.get(unit.id) ?? 0, state, started: Boolean(result?.attempts), best: result?.best_percent ?? null,
+    return { ...unit, answered: result?.answered_questions ?? 0, state, started: Boolean(result?.attempts), best: result?.best_percent ?? null,
       repeat: Boolean(result?.attempts) && result?.last_percent != null && result.last_percent < 60 };
   });
   const nextUnit = unitCards.find(unit => !unit.started)?.id;

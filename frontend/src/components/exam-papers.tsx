@@ -14,33 +14,6 @@ import { DraftForm } from "./unsaved-changes";
 const YEAR = /^\d{4}\/\d{2}$/;
 const PAGE = 50;
 
-type Best = { earned: number; max: number };
-
-/** The student's best finished attempt per paper, read from their history; a paper without one shows a dash. */
-function useBestScores(courseId: string, papers: ExamPaper[] | undefined) {
-  const [best, setBest] = useState<Record<string, Best>>({});
-  const ids = papers?.filter((paper) => paper.status === "PUBLISHED").map((paper) => paper.id).join(",") ?? "";
-  useEffect(() => {
-    if (!ids) return;
-    let current = true;
-    const wanted = new Set(ids.split(","));
-    void Promise.resolve().then(() => practiceApi.history(courseId)).then(async (rows) => {
-      const done = (rows ?? []).filter((attempt) => attempt.status === "SUBMITTED" && attempt.paper?.exam_paper_id && wanted.has(attempt.paper.exam_paper_id)).slice(0, 15);
-      const attempts = await Promise.all(done.map((attempt) => Promise.resolve().then(() => practiceApi.read(courseId, attempt.id)).catch(() => null)));
-      const next: Record<string, Best> = {};
-      for (const attempt of attempts) {
-        const paperId = attempt?.paper?.exam_paper_id;
-        if (!paperId || attempt?.status !== "SUBMITTED" || !attempt.score) continue;
-        const earned = attempt.score.earned;
-        if (!next[paperId] || earned > next[paperId].earned) next[paperId] = { earned, max: attempt.score.max_points };
-      }
-      if (current) setBest(next);
-    }).catch(() => undefined);
-    return () => { current = false; };
-  }, [courseId, ids]);
-  return best;
-}
-
 const kindFilters = [{ value: "ALL", label: "Svi" }, { value: "FINAL", label: "Završni" }, { value: "MIDTERM", label: "Međuispiti" }, { value: "OTHER", label: "Ostalo" }] as const;
 type KindFilter = (typeof kindFilters)[number]["value"];
 const matchesFilter = (paper: ExamPaper, filter: KindFilter) => filter === "ALL"
@@ -54,7 +27,7 @@ function shortDate(iso: string) {
 
 /** Handoff 9b: what a paper is before it starts, with the rules and scoring of the original exam. */
 function PaperIntro({ paperId, best, starting, onBack, onStart }: {
-  paperId: string; best?: Best; starting: boolean; onBack: () => void; onStart: (paper: ExamPaperDetail, timed: boolean) => void;
+  paperId: string; best?: { earned: number; max_points: number } | null; starting: boolean; onBack: () => void; onStart: (paper: ExamPaperDetail, timed: boolean) => void;
 }) {
   const [paper, setPaper] = useState<ExamPaperDetail | null>(null);
   const [error, setError] = useState("");
@@ -95,7 +68,7 @@ function PaperIntro({ paperId, best, starting, onBack, onStart }: {
             <Button className="h-12 px-6" disabled={starting} onClick={() => onStart(paper, true)}>{starting ? "Pokrećem…" : paper.duration_minutes ? `Započni rok · ${paper.duration_minutes} min` : "Započni rok"}</Button>
             {paper.duration_minutes && <Button variant="secondary" className="h-12 px-5" disabled={starting} onClick={() => onStart(paper, false)}>Vježbaj bez vremena</Button>}
           </div>
-          {best && <p className="mt-4 text-sm text-soft">Vaš najbolji: <span className="font-extrabold tabular-nums">{formatPoints(best.earned)} / {formatPoints(best.max)}</span></p>}
+          {best && <p className="mt-4 text-sm text-soft">Vaš najbolji: <span className="font-extrabold tabular-nums">{formatPoints(best.earned)} / {formatPoints(best.max_points)}</span></p>}
         </div>
         <div className="min-w-0">
           <h3 className="text-lg font-extrabold">Bodovanje</h3>
@@ -123,7 +96,6 @@ export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onS
   const [startError, setStartError] = useState("");
   const [viewing, setViewing] = useState<string | null>(null);
   const [filter, setFilter] = useState<KindFilter>("ALL");
-  const best = useBestScores(courseId, list?.papers);
 
   async function take(paper: { id: string }, timed: boolean) {
     if (!onStartAttempt || starting) return;
@@ -148,7 +120,7 @@ export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onS
 
   if (viewing) return <div className="mt-6 min-w-0">
     {startError && <Alert className="mb-4 max-w-prose">{startError}</Alert>}
-    <PaperIntro paperId={viewing} best={best[viewing]} starting={starting === viewing} onBack={() => { setViewing(null); setStartError(""); }} onStart={(paper, timed) => void take(paper, timed)} />
+    <PaperIntro paperId={viewing} best={list?.papers.find((paper) => paper.id === viewing)?.best} starting={starting === viewing} onBack={() => { setViewing(null); setStartError(""); }} onStart={(paper, timed) => void take(paper, timed)} />
   </div>;
 
   return <section aria-labelledby="exam-papers-heading" className="mt-6 min-w-0 space-y-6">
@@ -180,7 +152,7 @@ export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onS
         <th scope="col" className="py-3"><span className="sr-only">Radnja</span></th>
       </tr></thead>
       <tbody>{rows.map((paper) => {
-        const mine = best[paper.id];
+        const mine = paper.best;
         return <Fragment key={paper.id}><tr className="border-t border-line align-middle">
           <th scope="row" className="py-4 pr-4 text-base font-extrabold break-words [overflow-wrap:anywhere]">{paper.title}
             {(list?.canManage || paper.term_label) && <span className="mt-1 flex flex-wrap gap-2 text-xs font-normal text-muted">
@@ -192,7 +164,7 @@ export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onS
           <td className="py-4 pr-4 tabular-nums">{paper.duration_minutes ? `${paper.duration_minutes} min` : "—"}</td>
           <td className="py-4 pr-4 tabular-nums">{formatPoints(paper.total_points)}</td>
           <td className="py-4 pr-4 tabular-nums">{paper.item_count}</td>
-          <td className="py-4 pr-4 font-extrabold tabular-nums">{mine ? `${formatPoints(mine.earned)} / ${formatPoints(mine.max)}` : "—"}</td>
+          <td className="py-4 pr-4 font-extrabold tabular-nums">{mine ? `${formatPoints(mine.earned)} / ${formatPoints(mine.max_points)}` : "—"}</td>
           <td className="py-4 text-right"><div className="flex flex-wrap justify-end gap-2">
             {onStartAttempt && paper.status === "PUBLISHED" && <Button variant={mine ? "secondary" : "primary"} aria-label={`${mine ? "Ponovi" : "Riješi"} ${paper.title}`} onClick={() => { setStartError(""); setViewing(paper.id); }}>{mine ? "Ponovi" : "Riješi"}</Button>}
             {list?.canManage && <Button variant="secondary" aria-label={`Otvori ${paper.title}`} aria-expanded={selected === paper.id} onClick={() => { setNotice(""); setSelected(selected === paper.id ? null : paper.id); }}>{selected === paper.id ? "Zatvori" : "Uredi"}</Button>}

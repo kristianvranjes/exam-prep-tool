@@ -16,7 +16,7 @@ const material: Material = { id: "m", course_id: "course", original_filename: "n
 const props = () => ({ courseId: "course", courseName: "Algorithms", courseCode: "ALG", active: true, knownAttemptId: null as string | null,
   onResume: vi.fn(), onRecommendedPractice: vi.fn(), onProgress: vi.fn(), onQuestions: vi.fn(), onPractice: vi.fn(), onPapers: vi.fn() });
 const unit = (id: string, title: string, approved_question_count = 10) => ({ id, course_id: "course", position: 0, title, description: null, is_archived: false, approved_question_count, created_at: "2026-10-01", updated_at: "2026-10-01" });
-const result = (unit_id: string, title: string, attempts: number, last_percent: number | null) => ({ unit_id, title, position: 0, attempts, best_percent: last_percent, last_percent });
+const result = (unit_id: string, title: string, attempts: number, last_percent: number | null, answered_questions = 0) => ({ unit_id, title, position: 0, attempts, best_percent: last_percent, last_percent, answered_questions });
 const dated = (id: string, starts_on: string | null, ends_on: string | null = null): ExamScope => ({ id, course_id: "course",
   academic_year: "2026/27", kind: "MIDTERM", name: id === "mi" ? "Međuispit" : id, unit_ids: ["u1", "u2"], starts_on, ends_on,
   approved_question_count: 40, created_at: "2026-10-01", updated_at: "2026-10-01" });
@@ -100,8 +100,7 @@ it("names past exams for the cycle, or all of them when none belong to it", () =
 it("lists the units as cards with their state in words and how many questions were answered", async () => {
   mock.units.mockResolvedValue([unit("u1", "Booleova algebra"), unit("u2", "Bistabili"), unit("u3", "Automati"), unit("u4", "Sklopovi")]);
   mock.courseDashboard.mockResolvedValue({ as_of: "2026-10-20", units_total: 4, units_attempted: 3, average_percent: 50,
-    units: [result("u1", "Booleova algebra", 5, 78), result("u2", "Bistabili", 2, 12), result("u3", "Automati", 0, null), result("u4", "Sklopovi", 3, 55)] });
-  mock.unitProgress.mockResolvedValue({ as_of: "x", units: [{ unit_id: "u1", title: "", position: 0, is_archived: false, reviewed_questions: 10, resolved_review_count: 0, correct_review_count: 0, incorrect_review_count: 0, due_now: 0 }] });
+    units: [result("u1", "Booleova algebra", 5, 78, 10), result("u2", "Bistabili", 2, 12), result("u3", "Automati", 0, null), result("u4", "Sklopovi", 3, 55)] });
   render(<CourseOverview {...props()} onStartAttempt={vi.fn()} />);
   const first = await screen.findByRole("button", { name: "Vježbaj: Booleova algebra" });
   await waitFor(() => expect(first).toHaveTextContent("U tijeku · 78 %"));

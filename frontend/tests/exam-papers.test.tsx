@@ -174,11 +174,12 @@ it("shows the rules and scoring of a paper before it starts, then starts it with
   expect(await screen.findByRole("table", { name: "Prošli ispiti" })).toBeVisible();
 });
 
-it("shows the best finished attempt beside each paper and offers to repeat it", async () => {
-  mock.examPapers.mockResolvedValue({ can_manage: false, papers: [{ ...paper, status: "PUBLISHED", total_points: 40 }] });
-  practice.history.mockResolvedValue([{ id: "a1", status: "SUBMITTED", paper: { exam_paper_id: "p1" } }, { id: "a2", status: "SUBMITTED", paper: { exam_paper_id: "p1" } }]);
-  practice.read.mockImplementation(async (_course: string, id: string) => ({ id, status: "SUBMITTED", paper: { exam_paper_id: "p1" }, score: { earned: id === "a1" ? 19 : 28, max_points: 40 } }));
+it("shows the best finished attempt the list gives beside each paper and offers to repeat it", async () => {
+  mock.examPapers.mockResolvedValue({ can_manage: false, papers: [{ ...paper, status: "PUBLISHED", total_points: 40, best: { earned: 28, max_points: 40 } }, { ...paper, id: "p2", title: "Nikad rješavan", status: "PUBLISHED" }] });
   render(<ExamPapers courseId="course" onStartAttempt={vi.fn()} />);
   expect(await screen.findByText("28 / 40")).toBeVisible();
   expect(screen.getByRole("button", { name: "Ponovi Međuispit 2025/26" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Riješi Nikad rješavan" })).toBeVisible();
+  // The history is no longer read just to find the best.
+  expect(practice.history).not.toHaveBeenCalled();
 });

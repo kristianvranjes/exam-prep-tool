@@ -215,7 +215,7 @@ touched stay on `leitner-v1`.
 `GET /courses/{course_id}/dashboard` returns the caller's results in submitted sessions for
 the course page: `{as_of, units_total, units_attempted, average_percent, units}`. Each unit
 (active ones only, in unit order) has `unit_id`, `title`, `position`, `attempts`,
-`best_percent` and `last_percent`. Only automatically graded answers count; short answers,
+`best_percent`, `last_percent` and `answered_questions` (distinct questions of the unit the caller has answered and had graded, counted once however often they were answered). Only automatically graded answers count; short answers,
 self-assessments, abandoned and unfinished sessions never do. A question counts in every unit
 it is linked to. `average_percent` is the mean of the sessions' overall results, and
 percentages are whole numbers rounded half up, or null without data.
@@ -462,7 +462,7 @@ members read published papers only. See [past exams](PAST_EXAMS.md).
 
 | Route | Contract |
 | --- | --- |
-| GET `/courses/{course_id}/exam-papers` | Members and managers; optional `academic_year`, `kind`, `limit` (1–100, default 50), `offset`. Returns `{can_manage, papers}`; members get published papers only. Newest year first, then exam date (latest first), kind and title. Each paper has its details, `status`, `published_at`, `item_count` and `total_points`. |
+| GET `/courses/{course_id}/exam-papers` | Members and managers; optional `academic_year`, `kind`, `limit` (1–100, default 50), `offset`. Returns `{can_manage, papers}`; members get published papers only. Newest year first, then exam date (latest first), kind and title. Each paper has its details, `status`, `published_at`, `item_count`, `total_points` and `best`: the caller's best finished attempt as `{earned, max_points}` (scored by the rule frozen at its start, pending short answers not guessed in), or null without one. Only the list fills `best`, and only with the caller's own attempts. |
 | POST `/courses/{course_id}/exam-papers` | Managers; strict `{academic_year, kind, title}` plus optional `term_label`, `exam_date`, `exam_scope_id` (same course, else 422), `duration_minutes`, `wrong_answer_penalty`, `pass_threshold`. 201 with the DRAFT detail; 409 for a duplicate title in that year or more than 200 papers. |
 | GET `/exam-papers/{paper_id}` | Detail with `can_manage` and ordered `items`. Members: published only (else 404), items as `{position, label, points, type}`. Managers also get `question_id`, `stem`, `question_status`. |
 | PATCH `/exam-papers/{paper_id}` | Managers; any subset of the create fields. `null` clears optional fields; `academic_year`, `kind`, `title` and `wrong_answer_penalty` cannot be null. Allowed while published. |
