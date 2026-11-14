@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { api, type Faculty } from "../lib/api";
 import { FacultyModeration } from "./faculty-moderation";
-import { Alert, Button, Input, Select, Surface } from "./ui";
+import { Alert, Button, Input, PageHeader, Select, Surface } from "./ui";
 import { DraftForm } from "./unsaved-changes";
 
 export function FacultyWorkspace({ faculties, currentUserId, busy, createCourse, onFacultyCreated, goHome }: {
@@ -34,8 +34,7 @@ export function FacultyWorkspace({ faculties, currentUserId, busy, createCourse,
   }
 
   return <>
-    <Button variant="ghost" className="mb-4" onClick={goHome}>Natrag na početnu</Button>
-    <h1 id="management-heading" tabIndex={-1} className="text-3xl font-semibold tracking-tight">Alati fakulteta</h1>
+    <PageHeader title="Alati fakulteta" headingId="management-heading" kicker="Moderator" back={{ label: "Natrag na početnu", onClick: goHome }} />
     <FacultyModeration currentUserId={currentUserId} moderatedFaculties={faculties} />
     <Surface className="mt-10">
       <DraftForm onSubmit={addFaculty} className="space-y-4" aria-label="Dodaj fakultet">
