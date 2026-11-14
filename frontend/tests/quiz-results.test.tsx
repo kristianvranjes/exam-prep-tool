@@ -31,6 +31,9 @@ function open(questions?: ResultQuestion[], busy = false) {
   render(<QuizResults attempt={submitted(questions)} busy={busy} {...actions} />);
   return actions;
 }
+const indexItems = () => within(screen.getByRole("navigation", { name: "Popis pitanja u pregledu" })).getAllByRole("listitem");
+/** The review shows one question at a time: pick it in the index. */
+const show = (number: number) => fireEvent.click(screen.getByRole("button", { name: `Skoči na pitanje ${number}` }));
 function answerText(article: HTMLElement, label: string) { return within(article).getByText(label, { exact: true }).nextElementSibling; }
 
 it("counts frozen statuses separately and defaults to mistakes without exposing IDs or scores", () => {
@@ -50,7 +53,8 @@ it("counts frozen statuses separately and defaults to mistakes without exposing 
 it("Review mistakes switches back from All answers and focuses review without navigating", async () => {
   const actions = open();
   fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
-  expect(screen.getAllByRole("article")).toHaveLength(3);
+  expect(indexItems()).toHaveLength(3);
+  expect(screen.getAllByRole("article")).toHaveLength(1);
   fireEvent.click(screen.getByRole("button", { name: "Pregledaj pogreške" }));
   await waitFor(() => expect(screen.getByRole("heading", { name: "Pogreške" })).toHaveFocus());
   expect(screen.getAllByRole("article")).toHaveLength(1);
@@ -81,6 +85,7 @@ it("defaults to self-review without mistakes and preserves short-answer whitespa
 it("keeps correct answers quieter and expandable under All answers with readable true/false labels", () => {
   open();
   fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
+  show(2);
   const result = screen.getByRole("article", { name: "Rezultat pitanja 2" });
   expect(within(result).getByText("Točno", { exact: true })).toBeVisible();
   expect(answerText(result, "Vaš odgovor")).not.toBeVisible();
@@ -147,7 +152,7 @@ it("keeps existing results visible while navigation is pending and prevents repe
   fireEvent.click(screen.getByRole("button", { name: "Vježbaj ponovno" }));
   expect(actions.onPracticeAgain).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
-  expect(screen.getAllByRole("article")).toHaveLength(3);
+  expect(indexItems()).toHaveLength(3);
 });
 
 it("shows missing saved answers neutrally and does not create an empty explanation", () => {
@@ -161,6 +166,7 @@ it("labels each reviewed question with its course units", () => {
   const result = screen.getByRole("article", { name: "Rezultat pitanja 1" });
   expect(within(within(result).getByRole("list", { name: "Cjeline kolegija" })).getByText("Regular expressions")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
+  show(2);
   expect(within(screen.getByRole("article", { name: "Rezultat pitanja 2" })).queryByRole("list", { name: "Cjeline kolegija" })).not.toBeInTheDocument();
 });
 
@@ -169,6 +175,7 @@ it("shows recorded confidence and flags correct answers that were guesses", () =
   expect(screen.getByText("Točni odgovori označeni kao pogađanje: 1. Vježbajte ih ponovno prije ispita.")).toBeVisible();
   expect(screen.getByText("Netočno · označeno: siguran sam")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
+  show(2);
   expect(screen.getByText("Točno · označeno: pogađao sam")).toBeVisible();
 });
 
@@ -196,8 +203,11 @@ it("scores a past paper with negative marking, pending self-review and blanks", 
   expect(screen.getByLabelText("Sažetak rezultata")).toHaveTextContent("Ostavljeno prazno1");
   expect(screen.getByText("Zadatak 1 · Netočno · −0.5 od 2 boda")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
+  show(3);
   expect(screen.getByText("Zadatak 3 · Potrebna samoprocjena · do 3 boda nakon samoprocjene")).toBeVisible();
+  show(4);
   expect(screen.getByText("Ostavljeno prazno · 0 od 0.5 boda")).toBeVisible();
+  show(2);
   expect(screen.getByText("Zadatak 2 · Točno · +1 od 1 bod")).toBeVisible();
 });
 
@@ -334,6 +344,7 @@ it("filters the review to favorites and offers a report for questions from the b
   expect(screen.getAllByRole("article")).toHaveLength(1);
   expect(within(screen.getByRole("article", { name: "Rezultat pitanja 2" })).getByRole("button", { name: "Prijavi grešku u pitanju" })).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
+  show(3);
   // The pending short answer has no bank question behind it, so there is nothing to report.
   expect(within(screen.getByRole("article", { name: "Rezultat pitanja 3" })).queryByRole("button", { name: "Prijavi grešku u pitanju" })).not.toBeInTheDocument();
 });
@@ -343,19 +354,37 @@ it("keeps the favorites filter disabled while nothing is a favorite", () => {
   expect(screen.getByRole("button", { name: "Favoriti" })).toBeDisabled();
 });
 
-it("lists the visible questions in an index that moves focus to the result", () => {
+it("lists the visible questions in an index that shows one result at a time and moves focus to it", async () => {
   open();
   const index = screen.getByRole("navigation", { name: "Popis pitanja u pregledu" });
   fireEvent.click(within(index).getByRole("button", { name: "Skoči na pitanje 1" }));
-  expect(screen.getByRole("article", { name: "Rezultat pitanja 1" })).toHaveFocus();
+  await waitFor(() => expect(screen.getByRole("article", { name: "Rezultat pitanja 1" })).toHaveFocus());
   expect(within(index).getAllByRole("listitem")).toHaveLength(1);
+});
+
+it("steps through the answers with Prethodno and Sljedeće, naming the mistakes in the mistakes view", () => {
+  open([mistake, { ...mistake, id: "second", position: 1, stem: "Second mistake" }, correct]);
+  expect(screen.getByText("Pitanje 1 od 3")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Prethodno" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Sljedeće netočno" }));
+  expect(screen.getByRole("article", { name: "Rezultat pitanja 2" })).toBeVisible();
+  expect(screen.getByText("Pitanje 2 od 3")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Sljedeće netočno" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Prethodno" }));
+  expect(screen.getByRole("article", { name: "Rezultat pitanja 1" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
+  expect(screen.getByRole("button", { name: "Sljedeće" })).toBeEnabled();
 });
 
 it("offers a rating only for graded questions from the bank in results that can change", () => {
   const attempt = submitted([{ ...mistake, source_question_id: "bank-1" }, { ...correct, source_question_id: "bank-2" }, short]);
   const { unmount } = render(<QuizResults attempt={attempt} onUpdate={vi.fn()} onPracticeAgain={vi.fn()} onBackToHistory={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
-  expect(screen.getAllByRole("group", { name: "Koliko ste dobro znali ovo pitanje?" })).toHaveLength(2);
+  expect(screen.getAllByRole("group", { name: "Koliko ste dobro znali ovo pitanje?" })).toHaveLength(1);
+  show(2);
+  expect(screen.getAllByRole("group", { name: "Koliko ste dobro znali ovo pitanje?" })).toHaveLength(1);
+  show(3);
+  expect(screen.queryByRole("group", { name: "Koliko ste dobro znali ovo pitanje?" })).not.toBeInTheDocument();
   unmount();
   render(<QuizResults attempt={attempt} onPracticeAgain={vi.fn()} onBackToHistory={vi.fn()} />);
   expect(screen.queryByRole("group", { name: "Koliko ste dobro znali ovo pitanje?" })).not.toBeInTheDocument();

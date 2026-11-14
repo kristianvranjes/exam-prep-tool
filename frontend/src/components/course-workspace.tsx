@@ -59,8 +59,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
   </nav>;
   // Hide destinations instead of unmounting: answers, drafts and uploads stay in memory.
   return <section aria-labelledby="selected-course-heading">
-    {!focused && breadcrumb}
-    {destination !== "overview" && <h1 id="selected-course-heading" tabIndex={-1} className={focused ? "sr-only" : "break-words text-3xl font-extrabold tracking-tight"}>{course.name}{focused && " · Vježba"}</h1>}
+    {!focused && !routeResults && breadcrumb}
+    {destination !== "overview" && <h1 id="selected-course-heading" tabIndex={-1} className={focused || routeResults ? "sr-only" : "break-words text-3xl font-extrabold tracking-tight"}>{course.name}{focused && " · Vježba"}</h1>}
     <section id="course-overview" hidden={destination !== "overview"} aria-label={`Pregled kolegija ${course.name}`}>
       <CourseOverview courseId={course.id} active={visible && destination === "overview"} courseName={course.name} courseCode={course.code} courseDescription={course.description}
         onPractice={() => navigate("practice")}

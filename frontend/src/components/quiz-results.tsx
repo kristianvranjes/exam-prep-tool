@@ -165,6 +165,7 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
   const counts = { CORRECT: 0, INCORRECT: 0, PENDING: 0, UNANSWERED: 0 };
   for (const question of attempt.questions) counts[question.grading_status]++;
   const tally = selfReviewTally(attempt.questions);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<ReviewView>(() => counts.INCORRECT > 0 ? "INCORRECT" : counts.PENDING > 0 ? "PENDING" : "ALL");
   const hasResults = attempt.questions.length > 0;
   const primaryView = counts.INCORRECT > 0 ? "INCORRECT" : tally.unreviewed > 0 ? "PENDING" : null;
@@ -182,11 +183,13 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
   const visibleQuestions = attempt.questions.map((question, index) => ({ question, number: index + 1 }))
     .filter(({ question }) => view === "ALL" || (view === "FAVORITES" ? favorites.value(question) : question.grading_status === view));
   const favoriteCount = attempt.questions.filter(question => favorites.value(question)).length;
-  /** Scrolls to a question's result and moves focus there, so the keyboard follows the index. */
-  function jumpTo(id: string) {
-    const target = document.getElementById(`result-${id}`);
-    target?.scrollIntoView?.({ block: "start" });
-    target?.focus();
+  // Handoff 2e: one question at a time, chosen in the index or with Prethodno / Sljedeće.
+  const selected = visibleQuestions.find(item => item.question.id === selectedId) ?? visibleQuestions[0];
+  const selectedIndex = selected ? visibleQuestions.indexOf(selected) : -1;
+  /** Shows a question's result and moves focus there, so the keyboard follows the index. */
+  function select(id: string) {
+    setSelectedId(id);
+    requestAnimationFrame(() => document.getElementById(`result-${id}`)?.focus());
   }
   const summary: [string, number, string?][] = [["Točno", counts.CORRECT], ["Netočno", counts.INCORRECT], ["Kratki odgovori", counts.PENDING, selfReviewNote(tally)], ...(counts.UNANSWERED ? [["Ostavljeno prazno", counts.UNANSWERED] as [string, number]] : [])];
 
@@ -202,6 +205,7 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
     <div className="grid min-w-0 gap-8 lg:grid-cols-2 lg:gap-12">
     <div className="flex min-w-0 flex-col gap-7">
     <div>
+      <p className="label-caps mb-2 text-accent">{attempt.paper?.title ?? attempt.focus_label ?? "Vježba"} · predano</p>
       <h2 ref={heading} tabIndex={-1} className="font-display text-2xl font-extrabold">{hasResults ? "Vježba je završena" : "Rezultati nisu dostupni"}</h2>
       <p className="mt-2 max-w-prose text-sm text-muted">{hasResults ? "Predani odgovori su spremljeni i više se ne mogu mijenjati." : "Za ovu vježbu nema rezultata. Vratite se na postavke vježbe ili otvorite drugu vježbu iz povijesti."}</p>
     </div>
@@ -235,18 +239,26 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
       </div>
       <div><h3 ref={reviewHeading} tabIndex={-1} className="text-lg font-semibold">{viewLabels[view]}</h3><p role="status" className="mt-1 text-sm text-muted">{plural(visibleQuestions.length, ANSWERS)}</p></div>
       <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
-      <nav aria-label="Popis pitanja u pregledu" className="hidden lg:block">
-        <ol className="sticky top-24 max-h-[calc(100dvh-7rem)] overflow-y-auto border-2 border-line">{visibleQuestions.map(({ question, number }) =>
-          <li key={question.id} className="border-b border-line last:border-b-0">
-            <button type="button" aria-label={`Skoči na pitanje ${number}`} onClick={() => jumpTo(question.id)}
-              className="grid min-h-14 w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-3 px-4 py-3 text-left hover:bg-subtle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent">
+      <nav aria-label="Popis pitanja u pregledu" className="min-w-0">
+        <ol className="flex flex-wrap gap-2 lg:sticky lg:top-24 lg:block lg:max-h-[calc(100dvh-7rem)] lg:gap-0 lg:overflow-y-auto lg:border-2 lg:border-line">{visibleQuestions.map(({ question, number }) =>
+          <li key={question.id} className="lg:border-b lg:border-line lg:last:border-b-0">
+            <button type="button" aria-label={`Skoči na pitanje ${number}`} aria-current={selected?.question.id === question.id ? "true" : undefined} onClick={() => select(question.id)}
+              className="flex size-11 items-center justify-center border-2 border-line hover:bg-subtle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent aria-[current=true]:border-foreground aria-[current=true]:bg-subtle lg:grid lg:size-auto lg:min-h-14 lg:w-full lg:grid-cols-[2.25rem_minmax(0,1fr)] lg:items-center lg:gap-3 lg:border-0 lg:px-4 lg:py-3 lg:text-left lg:aria-[current=true]:shadow-[inset_4px_0_0_var(--accent)]">
               <span className={cn("text-[0.9375rem] font-extrabold tabular-nums", statusTone(question))}>{number}</span>
-              <span className="min-w-0"><span className="block truncate text-sm font-semibold">{question.stem.replace(/\s+/g, " ")}</span>
+              <span className="hidden min-w-0 lg:block"><span className="block truncate text-sm font-semibold">{question.stem.replace(/\s+/g, " ")}</span>
                 <span className="block truncate text-xs text-muted">{[statusLabel(question), question.units?.[0]?.title].filter(Boolean).join(" · ")}</span></span>
             </button>
           </li>)}</ol>
       </nav>
-      <div className="space-y-5">{visibleQuestions.map(({ question, number }) => {
+      <div className="min-w-0 space-y-5">
+        {selected && <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-line pb-3">
+          <p className="label-caps">Pitanje {selected.number} od {attempt.questions.length}</p>
+          <div className="flex gap-2">
+            <Button variant="secondary" disabled={selectedIndex <= 0} onClick={() => select(visibleQuestions[selectedIndex - 1].question.id)}>Prethodno</Button>
+            <Button variant="secondary" disabled={selectedIndex >= visibleQuestions.length - 1} onClick={() => select(visibleQuestions[selectedIndex + 1].question.id)}>{view === "INCORRECT" ? "Sljedeće netočno" : "Sljedeće"}</Button>
+          </div>
+        </div>}
+        {(selected ? [selected] : []).map(({ question, number }) => {
         const correct = question.grading_status === "CORRECT";
         const header = <div className="space-y-2"><h4 className="text-lg font-semibold">{number}. <RichText text={question.stem} /></h4><QuestionUnits units={question.units} />
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"><p className={cn("text-sm", statusTone(question))}>{[paperItemLabel(number, question.label), statusLabel(question), itemPoints(question), question.confidence && confidenceNotes[question.confidence]].filter(Boolean).join(" · ")}</p>
