@@ -7,6 +7,12 @@ export function localIsoDate(now = new Date()) {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
+/** "7. 9. 2026." written out by hand: the day is a calendar date, and engines disagree about padding it. */
+export function shortDate(iso: string) {
+  const [year, month, day] = iso.slice(0, 10).split("-").map(Number);
+  return `${day}. ${month}. ${year}.`;
+}
+
 function utcDay(iso: string) {
   const [year, month, day] = iso.split("-").map(Number);
   return Date.UTC(year, month - 1, day);

@@ -56,8 +56,14 @@ class PracticeFilters(FocusFilters):
         return self
 
 
+# Generated sessions hold at most 20 questions; only a mock exam may go up to a paper's size.
+MAX_GENERATED_QUESTIONS = 20
+MAX_MOCK_QUESTIONS = 60
+MAX_MOCK_MINUTES = 600
+
+
 class StartQuiz(PracticeFilters):
-    count: int = Field(default=5, ge=1, le=20)
+    count: int = Field(default=5, ge=1, le=MAX_MOCK_QUESTIONS)
     # Not a selection filter: availability is the same in both modes.
     feedback_mode: FeedbackMode = "END"
     # Marks the quick quiz, an ADAPTIVE preset; only the recorded mode (QUICK) differs.
@@ -67,6 +73,34 @@ class StartQuiz(PracticeFilters):
     def quick_quiz_is_adaptive(self) -> Self:
         if self.quick_quiz and self.selection_mode != "ADAPTIVE":
             raise ValueError("A quick quiz uses ADAPTIVE selection")
+        return self
+
+    @model_validator(mode="after")
+    def count_within_mode_limit(self) -> Self:
+        if self.selection_mode != "MOCK" and self.count > MAX_GENERATED_QUESTIONS:
+            raise ValueError(f"At most {MAX_GENERATED_QUESTIONS} questions outside a mock exam")
+        return self
+
+
+class StartMock(StrictModel):
+    """A generated exam simulation: questions spread across an exam scope, one point each.
+
+    Without `duration_minutes` the exam has no time limit. Results come at the end by default,
+    as in a real exam; there is no negative marking and no pass mark.
+    """
+
+    exam_scope_id: UnitId
+    count: int = Field(default=20, ge=1, le=MAX_MOCK_QUESTIONS)
+    duration_minutes: int | None = Field(default=None, ge=1, le=MAX_MOCK_MINUTES)
+    question_types: list[QuestionType] = Field(
+        default_factory=default_types, min_length=1, max_length=5
+    )
+    feedback_mode: FeedbackMode = "END"
+
+    @model_validator(mode="after")
+    def unique_types(self) -> Self:
+        if len(set(self.question_types)) != len(self.question_types):
+            raise ValueError("Question types must be unique")
         return self
 
 

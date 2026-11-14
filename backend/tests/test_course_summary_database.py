@@ -251,7 +251,7 @@ def test_0028_roundtrip_drops_the_new_columns_and_keeps_courses_and_memberships(
                 )
             command.upgrade(config, "head")
             with engine.connect() as conn:
-                assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0029"
+                assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0030"
             # Years, statuses and preferences are not restored: everyone starts at the defaults.
             assert mine(member, course)["membership_status"] == "ACTIVE"
             assert mine(member, course)["year_of_study"] is None

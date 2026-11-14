@@ -21,6 +21,17 @@ class UnitResult(BaseModel):
     answered_questions: int = 0
 
 
+class LastMock(BaseModel):
+    """The caller's latest finished mock exam, scored like a paper session (points, no guessing at
+    short answers still awaiting review)."""
+
+    attempt_id: UUID
+    title: str
+    earned: float
+    max_points: float
+    submitted_at: datetime
+
+
 class CourseDashboard(BaseModel):
     """The figures at the top of the course page (handoff 2b).
 
@@ -33,6 +44,7 @@ class CourseDashboard(BaseModel):
     units_attempted: int
     average_percent: int | None
     units: list[UnitResult]
+    last_mock: LastMock | None = None
 
 
 class WeekCell(BaseModel):

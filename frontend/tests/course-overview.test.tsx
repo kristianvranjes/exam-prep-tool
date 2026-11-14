@@ -285,6 +285,16 @@ it("offers the mock exam beside the exam practice and opens its setup", async ()
   expect(onOpenPractice).toHaveBeenCalledWith({ mode: "MOCK", scopeId: "mi" });
 });
 
+it("names the last finished mock exam with its points and date under the exam practice", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 9, 20, 12));
+  mock.examScopes.mockResolvedValue([dated("mi", "2026-11-23")]);
+  mock.courseDashboard.mockResolvedValue({ as_of: "2026-10-20", units_total: 3, units_attempted: 0, average_percent: null, units: [],
+    last_mock: { attempt_id: "a1", title: "Probni ispit · MI", earned: 26, max_points: 40, submitted_at: "2026-10-18T10:00:00Z" } });
+  render(<CourseOverview {...props()} onStartAttempt={vi.fn()} onOpenPractice={vi.fn()} />);
+  const line = await screen.findByText(/Zadnji probni ispit/);
+  expect(line).toHaveTextContent("Zadnji probni ispit: 26 / 40 · 18. 10. 2026.");
+});
+
 it("filters the topics to the ones not started or below 60 percent", async () => {
   mock.units.mockResolvedValue([unit("u1", "Booleova algebra"), unit("u2", "Bistabili"), unit("u3", "Automati")]);
   mock.courseDashboard.mockResolvedValue({ as_of: "2026-10-20", units_total: 3, units_attempted: 2, average_percent: 50,

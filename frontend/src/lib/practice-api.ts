@@ -151,6 +151,8 @@ export const practiceApi = {
   favorite: (course: string, question: string) => request<FavoriteState>(`/courses/${course}/favorites/${question}`, { method: "POST" }),
   unfavorite: (course: string, question: string) => request<FavoriteState>(`/courses/${course}/favorites/${question}`, { method: "DELETE" }),
   startPaper: (paperId: string, feedback_mode: FeedbackMode = "END", timed = true) => request<Attempt>(`/exam-papers/${paperId}/attempts`, { method: "POST", body: JSON.stringify({ feedback_mode, timed }) }),
+  /** A scored exam simulation over an exam cycle: one point per question and an optional time limit. */
+  startMock: (course: string, body: { exam_scope_id: string; count?: number; duration_minutes?: number | null; question_types?: QuestionType[]; feedback_mode?: FeedbackMode }) => request<Attempt>(`/courses/${course}/mock-exams`, { method: "POST", body: JSON.stringify(body) }),
   abandon: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/abandon`, { method: "POST" }),
   submit: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/submit`, { method: "POST" }),
 };

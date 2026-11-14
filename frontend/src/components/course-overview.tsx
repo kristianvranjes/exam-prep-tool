@@ -3,7 +3,8 @@
 import { useEffect, useId, useState } from "react";
 import { QUESTION_TYPES } from "../lib/question-types";
 import { api, type CourseDashboard, type CourseUnit, type ExamPaper, type ExamScope, type ExamScopeReadiness, type ReviewProgressSummary, type UnitResult } from "../lib/api";
-import { formatScopeDates, localIsoDate, nextExam, type NextExam } from "../lib/exam-dates";
+import { formatScopeDates, localIsoDate, nextExam, shortDate, type NextExam } from "../lib/exam-dates";
+import { formatPoints } from "../lib/points";
 import { practiceApi, type Attempt, type PracticeFocus } from "../lib/practice-api";
 import type { MaterialsSummary } from "./course-materials";
 import { kindLabels } from "./exam-scopes";
@@ -278,7 +279,7 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
               <Button variant={examPrimary ? "primary" : "secondary"} className="h-12 px-6" disabled={focusedStarting} aria-describedby={`${id}-focused`} onClick={() => void focusedPractice({ exam_scope_id: exam.scope.id })}>{focusedStarting ? "Pokrećem vježbu…" : `Vježbaj za ${exam.scope.name}`}</Button>
               {onOpenPractice && <Button variant="secondary" className="h-12 px-5" onClick={() => onOpenPractice({ mode: "MOCK", scopeId: exam.scope.id })}>Probni ispit</Button>}
             </div>
-            <p id={`${id}-focused`} className="mt-3 text-sm text-muted">Vježba prvo daje pitanja za ponavljanje, zatim nova. Odgovor se provjerava odmah.</p>
+            <p id={`${id}-focused`} className="mt-3 text-sm text-muted">Vježba prvo daje pitanja za ponavljanje, zatim nova. Odgovor se provjerava odmah.{results?.last_mock && <> Zadnji probni ispit: <span className="font-semibold tabular-nums text-text">{formatPoints(results.last_mock.earned)} / {formatPoints(results.last_mock.max_points)}</span> · {shortDate(localIsoDate(new Date(results.last_mock.submitted_at)))}</>}</p>
           </>}
           {focusedError && <Alert className="mt-stack max-w-prose">{focusedError}</Alert>}
         </> : <>

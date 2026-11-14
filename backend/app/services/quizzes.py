@@ -37,6 +37,7 @@ from app.schemas.quiz import (
     SelfReview,
     SelfReviewRequest,
     SelfReviewSummary,
+    StartMock,
     StartPaper,
     StartQuiz,
     SubmittedAttempt,
@@ -308,6 +309,40 @@ def availability(
 
 
 def start(db: Session, user: User, course_id: UUID, data: StartQuiz) -> AttemptResponse:
+    return start_generated(db, user, course_id, data)
+
+
+def start_mock(db: Session, user: User, course_id: UUID, data: StartMock) -> AttemptResponse:
+    """A mock exam: the MOCK selection, one point per question and an optional deadline."""
+    selection = StartQuiz(
+        selection_mode="MOCK",
+        exam_scope_id=data.exam_scope_id,
+        count=data.count,
+        question_types=data.question_types,
+        feedback_mode=data.feedback_mode,
+    )
+    return start_generated(db, user, course_id, selection, mock=data)
+
+
+def mock_scoring(mock: StartMock, label: str | None, questions: int) -> dict[str, object]:
+    """The rule frozen with a mock exam: one point per question, no penalty, no pass mark."""
+    return {
+        "version": SCORING_VERSION,
+        "title": f"Probni ispit · {label}",
+        "total_points": str(questions),
+        "wrong_answer_penalty": "0",
+        "pass_threshold": None,
+        "duration_minutes": mock.duration_minutes,
+    }
+
+
+def start_generated(
+    db: Session,
+    user: User,
+    course_id: UUID,
+    data: StartQuiz,
+    mock: StartMock | None = None,
+) -> AttemptResponse:
     get_member_course(db, user, course_id)
     try:
         # Serialize all starts for this user so adaptive exclusion sees committed starts.
@@ -333,12 +368,22 @@ def start(db: Session, user: User, course_id: UUID, data: StartQuiz) -> AttemptR
             focus_label=label,
             feedback_mode=data.feedback_mode,
             selection_mode="QUICK" if data.quick_quiz else data.selection_mode,
+            # Left unset for practice: an explicit None would be stored as JSON null, not NULL.
+            **({} if mock is None else {"scoring": mock_scoring(mock, label, len(questions))}),
         )
         db.add(quiz)
         db.flush()
+        points = None if mock is None else Decimal(1)
         for position, question in enumerate(questions):
-            db.add(snapshot_row(db, quiz, position, question))
-        attempt = QuizAttempt(quiz_id=quiz.id)
+            db.add(snapshot_row(db, quiz, position, question, points))
+        # The single clock reading of this start; only a timed exam needs it as the attempt's start.
+        timing: dict[str, datetime] = {}
+        if mock is not None and mock.duration_minutes:
+            timing = {
+                "started_at": selection_time,
+                "deadline_at": selection_time + timedelta(minutes=mock.duration_minutes),
+            }
+        attempt = QuizAttempt(quiz_id=quiz.id, **timing)
         db.add(attempt)
         db.flush()
         result = representation(db, attempt, course_id)
