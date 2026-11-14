@@ -37,8 +37,8 @@ for (const width of [1280, 390]) {
       const openScreen = async (name: "Prošli ispiti" | "Napredak" | "Vježba") => {
         const nav = page.getByRole("navigation", { name: "Navigacija kolegija", exact: true });
         await nav.waitFor();
-        const crumbs = nav.getByRole("button");
-        if ((await crumbs.count()) > 1) await crumbs.nth(1).click();
+        // Only a screen other than the course page has the course in its breadcrumb.
+        if (!/\/courses\/[^/]+$/.test(page.url())) await nav.getByRole("button").nth(1).click({ timeout: 10_000 });
         const control = { "Prošli ispiti": "Otvori: Prošli ispiti", "Napredak": "Otvori napredak", "Vježba": "Otvori: Vježba po mjeri" }[name];
         await page.getByRole("button", { name: control, exact: true }).first().click();
       };

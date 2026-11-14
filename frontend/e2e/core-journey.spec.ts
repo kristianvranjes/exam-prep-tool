@@ -14,8 +14,8 @@ const primaryFill = /(?:^|\s)bg-accent(?:\s|$)/;
 async function openScreen(page: Page, name: "Pregled" | "Vježba" | "Prošli ispiti" | "Napredak" | "Materijali" | "Više", settled = true) {
   const nav = page.getByRole("navigation", { name: "Navigacija kolegija" });
   await nav.waitFor();
-  const crumbs = nav.getByRole("button");
-  if ((await crumbs.count()) > 1) await crumbs.nth(1).click();
+  // Only a screen other than the course page has the course in its breadcrumb; the address tells which one this is.
+  if (!/\/courses\/[^/]+$/.test(page.url())) await nav.getByRole("button").nth(1).click({ timeout: 10_000 });
   const control = { "Pregled": null, "Vježba": "Otvori: Vježba po mjeri", "Prošli ispiti": "Otvori: Prošli ispiti", "Napredak": "Otvori napredak", "Materijali": "Otvori materijale", "Više": "Otvori: Baza pitanja i alati" }[name];
   if (control) await page.getByRole("button", { name: control, exact: true }).first().click();
   // The screen is open once the address says so; the previous one is still visible until then.
