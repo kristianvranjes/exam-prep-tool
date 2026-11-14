@@ -43,7 +43,8 @@ class Quiz(Base):
             name="ck_quiz_selection_mode",
         ),
         CheckConstraint(
-            "selection_mode IS NULL OR (selection_mode = 'PAPER') = (scoring IS NOT NULL)",
+            "selection_mode IS NULL OR selection_mode = 'MOCK' "
+            "OR (selection_mode = 'PAPER') = (scoring IS NOT NULL)",
             name="ck_quiz_selection_mode_paper",
         ),
     )

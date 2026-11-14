@@ -218,7 +218,9 @@ the course page: `{as_of, units_total, units_attempted, average_percent, units}`
 `best_percent`, `last_percent` and `answered_questions` (distinct questions of the unit the caller has answered and had graded, counted once however often they were answered). Only automatically graded answers count; short answers,
 self-assessments, abandoned and unfinished sessions never do. A question counts in every unit
 it is linked to. `average_percent` is the mean of the sessions' overall results, and
-percentages are whole numbers rounded half up, or null without data.
+percentages are whole numbers rounded half up, or null without data. `last_mock` is the caller's latest
+submitted [mock exam](#mock-exams) as `{attempt_id, title, earned, max_points, submitted_at}`, or null;
+only scored mock exams count, never mock practice started through `/attempts`.
 
 `GET /courses/{course_id}/progress-series?weeks=8` (1 to 26 weeks) returns `{weeks, units}`:
 `weeks` are the Mondays (Zagreb time) of the window, oldest first, and each unit has `cells`
@@ -405,7 +407,8 @@ focus, whatever the requested mode. See
 `MISTAKES` selects questions whose latest resolved review was incorrect (oldest review
 first), `DUE` questions due now (earliest due first), `FAVORITES` the caller's
 practice-eligible favorites (oldest favorite first), and `MOCK` spreads `count` evenly
-across the units of the required `exam_scope_id` (422 without one). All four exclude
+across the units of the required `exam_scope_id` (422 without one; unlike every other mode `count`
+may go up to 60 here, otherwise 20). All four exclude
 questions in the caller's active attempts and return 409 when fewer than `count`
 qualify. See [mistakes, due review and mock exams](PRACTICE.md#mistakes-due-review-and-mock-exams-r5-r3)
 and [favorites](PRACTICE.md#favorites-and-the-quick-quiz-r5). Optional `quick_quiz: true`
@@ -413,6 +416,19 @@ and [favorites](PRACTICE.md#favorites-and-the-quick-quiz-r5). Optional `quick_qu
 only records the session as `QUICK` for
 [pilot metrics](PRACTICE.md#recorded-selection-mode-migration-0026). The recorded mode
 is not returned.
+
+### Mock exams
+
+`POST /courses/{course_id}/mock-exams` — members, 201 with the attempt. A generated exam simulation
+over an exam scope: `{exam_scope_id, count?, duration_minutes?, question_types?, feedback_mode?}`.
+`count` is 1–60 (default 20), `duration_minutes` 1–600 or omitted for no time limit, and
+`feedback_mode` defaults to `END`. Questions are chosen exactly as `MOCK` practice chooses them
+(spread across the scope's units, 409 when fewer than `count` qualify, 404 for an unknown scope)
+and each is worth one point. The attempt carries a frozen `paper` rule like a past-paper session
+(`exam_paper_id` null, title `Probni ispit · <scope>`, `total_points`, `wrong_answer_penalty` 0, no
+pass mark, `duration_minutes`) and, when timed, a server-enforced `deadline_at` with `server_time`.
+Answering, submitting and results work as in [paper sessions](PAST_EXAMS.md), and the submitted attempt
+returns `score`. The course dashboard returns the latest finished one as `last_mock`.
 
 ### Favorites (R5)
 

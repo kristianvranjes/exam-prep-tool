@@ -143,10 +143,13 @@ def test_mock_exam_needs_an_exam_scope():
     for data in [{}, {"unit_ids": [unit]}]:
         with pytest.raises(ValidationError, match="mock exam needs an exam scope"):
             StartQuiz.model_validate({"selection_mode": "MOCK", **data})
-    mock = StartQuiz.model_validate({"selection_mode": "MOCK", "exam_scope_id": unit, "count": 20})
-    assert mock.count == 20
+    # Only a mock exam may be larger than generated practice, up to the size of a paper.
+    mock = StartQuiz.model_validate({"selection_mode": "MOCK", "exam_scope_id": unit, "count": 60})
+    assert mock.count == 60
     with pytest.raises(ValidationError):
-        StartQuiz.model_validate({"selection_mode": "MOCK", "exam_scope_id": unit, "count": 21})
+        StartQuiz.model_validate({"selection_mode": "MOCK", "exam_scope_id": unit, "count": 61})
+    with pytest.raises(ValidationError, match="At most 20 questions"):
+        StartQuiz.model_validate({"selection_mode": "ADAPTIVE", "count": 21})
 
 
 def test_spread_round_robins_units_in_order():

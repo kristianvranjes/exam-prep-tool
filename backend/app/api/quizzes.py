@@ -14,12 +14,14 @@ from app.schemas.quiz import (
     PracticeAvailability,
     PracticeFilters,
     SelfReviewRequest,
+    StartMock,
     StartQuiz,
 )
 from app.services import quizzes
 
 router = APIRouter(prefix="/courses/{course_id}/attempts", tags=["practice"])
 availability_router = APIRouter(tags=["practice"])
+mock_router = APIRouter(prefix="/courses/{course_id}/mock-exams", tags=["practice"])
 
 
 @availability_router.get(
@@ -32,6 +34,16 @@ def availability(
     db: Session = Depends(get_db),
 ) -> PracticeAvailability:
     return quizzes.availability(db, user, course_id, filters)
+
+
+@mock_router.post("", response_model=AttemptResponse, status_code=201)
+def start_mock(
+    course_id: UUID,
+    data: StartMock,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AttemptResponse:
+    return quizzes.start_mock(db, user, course_id, data)
 
 
 @router.post("", response_model=AttemptResponse, status_code=201)

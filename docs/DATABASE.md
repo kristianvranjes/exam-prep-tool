@@ -217,6 +217,14 @@ and 30 days), `repetitions` from the stage, `lapses` from the incorrect count an
 from the last result (CORRECT → GOOD, INCORRECT → AGAIN). A rating moves a card to
 `srs-v2` (see [API.md](API.md)); downgrade drops the events and the new columns only.
 
+## Scored mock exam migration 0030
+
+Revision **0030** (`down_revision = 0029`) relaxes `ck_quiz_selection_mode_paper`: a quiz still has a
+frozen `scoring` rule exactly when it is `PAPER`, except that `MOCK` may have one too (a timed, scored
+mock exam; plain mock practice has none). No column or row changes. Downgrade first sets
+`selection_mode` to NULL for the scored `MOCK` quizzes, which only forgets their recorded mode, and
+then restores the stricter constraint; sessions, answers and scores are untouched.
+
 ## Faculty catalog migration 0010
 
 Revision 0010 follows 0009. `faculties` stores UUID id, name (1-150 characters,

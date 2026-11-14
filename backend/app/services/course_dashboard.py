@@ -8,10 +8,11 @@ never changes one. Abandoned and unfinished sessions are ignored.
 from collections import defaultdict
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from decimal import Decimal
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, and_, func, select
 from sqlalchemy.orm import Session
 
 from app.models import User
@@ -21,13 +22,16 @@ from app.models.quiz import Answer, Quiz, QuizAttempt, QuizQuestion
 from app.models.user_question_progress import UserQuestionProgress
 from app.schemas.dashboard import (
     CourseDashboard,
+    LastMock,
     ProgressSeries,
     UnitResult,
     UnitSeries,
     WeekCell,
 )
+from app.schemas.quiz import Grade
 from app.services.course_summaries import EXAM_TIMEZONE, percent_half_up, zagreb_today
 from app.services.courses import get_member_course
+from app.services.paper_scoring import ItemResult, score
 
 GRADED = ("CORRECT", "INCORRECT")
 
@@ -142,6 +146,50 @@ def course_dashboard(db: Session, user: User, course_id: UUID) -> CourseDashboar
         units_attempted=sum(1 for result in results if result.attempts),
         average_percent=average,
         units=results,
+        last_mock=last_mock(db, user, course_id),
+    )
+
+
+def last_mock(db: Session, user: User, course_id: UUID) -> LastMock | None:
+    """The caller's latest submitted scored mock exam, with the points it earned."""
+    latest = db.execute(
+        select(QuizAttempt.id, QuizAttempt.submitted_at, Quiz.scoring)
+        .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+        .where(
+            Quiz.user_id == user.id,
+            Quiz.course_id == course_id,
+            Quiz.selection_mode == "MOCK",
+            Quiz.scoring.is_not(None),
+            QuizAttempt.status == "SUBMITTED",
+        )
+        .order_by(QuizAttempt.submitted_at.desc(), QuizAttempt.id)
+        .limit(1)
+    ).first()
+    if latest is None:
+        return None
+    attempt_id, submitted_at, scoring = latest
+    assert scoring is not None and submitted_at is not None
+    rows = db.execute(
+        select(QuizQuestion.points, Answer.grading_status)
+        .select_from(QuizQuestion)
+        .join(QuizAttempt, QuizAttempt.quiz_id == QuizQuestion.quiz_id)
+        .outerjoin(
+            Answer,
+            and_(Answer.attempt_id == QuizAttempt.id, Answer.quiz_question_id == QuizQuestion.id),
+        )
+        .where(QuizAttempt.id == attempt_id, QuizQuestion.points.is_not(None))
+    ).all()
+    result = score(
+        [ItemResult(points, cast(Grade | None, grade)) for points, grade in rows],
+        Decimal(str(scoring["wrong_answer_penalty"])),
+        None,
+    )
+    return LastMock(
+        attempt_id=attempt_id,
+        title=str(scoring["title"]),
+        earned=float(result.earned),
+        max_points=float(result.max_points),
+        submitted_at=submitted_at,
     )
 
 

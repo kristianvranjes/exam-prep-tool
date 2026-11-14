@@ -2,6 +2,7 @@
 
 import { Fragment, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api, type CourseUnit, type ExamPaper, type ExamPaperBody, type ExamPaperDetail, type ExamPaperItemInput, type ExamScope, type ExamScopeKind, type Question } from "../lib/api";
+import { shortDate } from "../lib/exam-dates";
 import { typeLabels } from "../lib/question-types";
 import { formatPoints, penaltyLabels, penaltyText, pointsLabel } from "../lib/points";
 import { QUESTIONS, plural } from "../lib/plural";
@@ -18,12 +19,6 @@ const kindFilters = [{ value: "ALL", label: "Svi" }, { value: "FINAL", label: "Z
 type KindFilter = (typeof kindFilters)[number]["value"];
 const matchesFilter = (paper: ExamPaper, filter: KindFilter) => filter === "ALL"
   || (filter === "FINAL" ? paper.kind === "FINAL" || paper.kind === "FULL_EXAM" : filter === "MIDTERM" ? paper.kind === "MIDTERM" : paper.kind === "LAB" || paper.kind === "QUIZ");
-
-/** "7. 9. 2026." written out by hand: the day is a calendar date, and engines disagree about padding it. */
-function shortDate(iso: string) {
-  const [year, month, day] = iso.slice(0, 10).split("-").map(Number);
-  return `${day}. ${month}. ${year}.`;
-}
 
 /** Handoff 9b: what a paper is before it starts, with the rules and scoring of the original exam. */
 function PaperIntro({ paperId, best, starting, onBack, onStart }: {

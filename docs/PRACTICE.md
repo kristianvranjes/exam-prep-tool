@@ -464,9 +464,18 @@ best-ranked question not chosen yet. A question linked to several scope units is
 once, by the first unit that reaches it. A unit with nothing left drops out while the
 others keep filling, so `count` is spread as evenly as availability allows: 7 questions
 over three well-stocked units are 3 + 2 + 2. The session lists the chosen questions unit
-by unit, each unit's in the order it chose them. Mock exams keep the 1–20 count limit,
-have no points or time limit, and use the requested feedback mode; the setup starts
-them as exam practice. Questions outside the scope's units are never selected.
+by unit, each unit's in the order it chose them. Started through `POST .../attempts`, a mock
+exam is practice: it may hold up to 60 questions (every other mode keeps the 1–20 limit), has no
+points or time limit, and uses the requested feedback mode; the setup starts it as exam practice.
+Questions outside the scope's units are never selected.
+
+**Scored mock exams.** `POST /courses/{course_id}/mock-exams` ([API](API.md#mock-exams)) runs the
+same selection but makes the session an exam simulation: each question is worth one point, the
+`paper-scoring-v1` rule is frozen with no negative marking and no pass mark, and an optional
+`duration_minutes` becomes the server-enforced deadline of a past-paper session. It is recorded as
+`MOCK` like the practice variant; the presence of a frozen rule tells them apart (migration 0030).
+The course dashboard's `last_mock` is the latest submitted one. Short answers awaiting self-review
+are never guessed into the score, as for papers.
 
 **Mistakes list.** `GET /courses/{course_id}/mistakes` ([API](API.md#mistakes-r5)) lists
 the same questions with their stems, reusing the MISTAKES predicate and the type and

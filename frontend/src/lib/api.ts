@@ -363,7 +363,9 @@ export type UnitProgress = {
 export type UnitProgressSummary = { as_of: string; units: UnitProgress[] };
 /** Percents are whole numbers; null where nothing was graded. */
 export type UnitResult = { unit_id: string; title: string; position: number; attempts: number; best_percent: number | null; last_percent: number | null; answered_questions?: number };
-export type CourseDashboard = { as_of: string; units_total: number; units_attempted: number; average_percent: number | null; units: UnitResult[] };
+export type CourseDashboard = { as_of: string; units_total: number; units_attempted: number; average_percent: number | null; units: UnitResult[]; last_mock?: LastMock | null };
+/** The latest finished mock exam; points, not percent, as the exam is scored by points. */
+export type LastMock = { attempt_id: string; title: string; earned: number; max_points: number; submitted_at: string };
 export type WeekCell = { percent: number | null; graded_count: number };
 export type UnitSeries = { unit_id: string; title: string; position: number; cells: WeekCell[] };
 export type ProgressSeries = { weeks: string[]; units: UnitSeries[] };
