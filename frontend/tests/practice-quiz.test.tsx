@@ -82,7 +82,7 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
   await screen.findByText("Vježba je završena");
   expect(screen.queryByRole("button", { name: "Potvrdi konačnu predaju" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
-  expect(screen.getAllByRole("article").filter(article => within(article).queryByText("Točno"))).toHaveLength(2);
+  fireEvent.click(screen.getByRole("button", { name: "Skoči na pitanje 3" }));
   expect(within(screen.getByRole("article", { name: "Rezultat pitanja 3" })).getByText("Potrebna samoprocjena")).toBeInTheDocument();
   expect(screen.getByText("Mass attracts mass", { exact: true })).toBeInTheDocument();
 });
@@ -452,14 +452,19 @@ it("preserves answers on submit failure, retries, and derives result counts from
   expect(results).toHaveTextContent("Točno1");
   expect(results).toHaveTextContent("Netočno1");
   expect(results).toHaveTextContent("Kratki odgovori1");
+  const show = (number: number) => fireEvent.click(screen.getByRole("button", { name: `Skoči na pitanje ${number}` }));
+  show(1);
   expect(within(screen.getByRole("article", { name: "Rezultat pitanja 1" })).getByText("Netočno")).toBeInTheDocument();
-  expect(within(screen.getByRole("article", { name: "Rezultat pitanja 2" })).getByText("Točno")).toBeInTheDocument();
-  expect(within(screen.getByRole("article", { name: "Rezultat pitanja 3" })).getByText("Potrebna samoprocjena")).toBeInTheDocument();
   expect(within(screen.getByRole("article", { name: "Rezultat pitanja 1" })).getByText("Two", { exact: true })).toBeInTheDocument();
   expect(screen.getByText("One", { exact: true })).toBeInTheDocument();
+  show(2);
+  expect(within(screen.getByRole("article", { name: "Rezultat pitanja 2" })).getByText("Točno")).toBeInTheDocument();
+  show(3);
+  expect(within(screen.getByRole("article", { name: "Rezultat pitanja 3" })).getByText("Potrebna samoprocjena")).toBeInTheDocument();
+  show(2);
   fireEvent.click(within(screen.getByRole("article", { name: "Rezultat pitanja 2" })).getByText("Pogledaj odgovor i objašnjenje"));
   expect(within(screen.getByRole("article", { name: "Rezultat pitanja 2" })).getAllByText("Netočno", { exact: true })).toHaveLength(2);
-  expect(screen.getAllByText("Reviewed explanation")).toHaveLength(3);
+  expect(screen.getAllByText("Reviewed explanation")).toHaveLength(1);
 });
 
 it("saves the current draft before opening the review step", async () => {
@@ -1169,6 +1174,7 @@ it("answers numeric and multiple-select questions and shows their keys in result
   await screen.findByRole("heading", { name: "Vježba je završena" });
   fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
   expect(screen.getByText("9.81 m/s² (± 0.05)")).toBeInTheDocument();
-  // The saved selection and the key read the same here.
+  // The saved selection and the key read the same here (the second question is shown on its own).
+  fireEvent.click(screen.getByRole("button", { name: "Skoči na pitanje 2" }));
   expect(screen.getAllByText("2; 3", { selector: "dd" })).toHaveLength(2);
 });

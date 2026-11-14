@@ -9,7 +9,7 @@ const mock = vi.hoisted(() => ({
   publishExamPaper: vi.fn(), unpublishExamPaper: vi.fn(), deleteExamPaper: vi.fn(), examScopes: vi.fn(), units: vi.fn(), questions: vi.fn(),
 }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
-const practice = vi.hoisted(() => ({ startPaper: vi.fn() }));
+const practice = vi.hoisted(() => ({ startPaper: vi.fn(), history: vi.fn(), read: vi.fn() }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: practice }));
 
 const paper: ExamPaper = {
@@ -31,16 +31,38 @@ it("formats points without trailing zeros", () => {
   expect([formatPoints(2), formatPoints(1.5), formatPoints(2.25)]).toEqual(["2", "1.5", "2.25"]);
 });
 
-it("shows members published papers with their structure and no management tools", async () => {
-  mock.examPapers.mockResolvedValue({ can_manage: false, papers: [{ ...paper, status: "PUBLISHED", item_count: 3, total_points: 6.5 }] });
-  render(<ExamPapers courseId="course" />);
-  const list = await screen.findByRole("list", { name: "Prošli ispiti 2025/26" });
-  expect(list).toHaveTextContent("Međuispit 2025/26");
-  expect(list).toHaveTextContent("Jesenski rok · pon, 24. stu");
-  expect(list).toHaveTextContent("3 pitanja · 6.5 boda · 90 min · −¼ bodova zadatka");
+it("lists published papers as a table, newest first, with no management tools for members", async () => {
+  mock.examPapers.mockResolvedValue({ can_manage: false, papers: [
+    { ...paper, status: "PUBLISHED", item_count: 3, total_points: 6.5, pass_threshold: 3 },
+    { ...paper, id: "p3", title: "Završni 2024/25", kind: "FINAL", exam_date: "2025-02-03", duration_minutes: 120, status: "PUBLISHED", item_count: 12, total_points: 40 },
+    { ...paper, id: "p2", title: "Draft only" },
+  ] });
+  render(<ExamPapers courseId="course" onStartAttempt={vi.fn()} />);
+  const table = await screen.findByRole("table", { name: "Prošli ispiti" });
+  const rows = within(table).getAllByRole("row").slice(1);
+  expect(rows[0]).toHaveTextContent("Međuispit 2025/26");
+  expect(rows[0]).toHaveTextContent("24. 11. 2025.");
+  expect(rows[0]).toHaveTextContent("90 min");
+  expect(rows[0]).toHaveTextContent("6.5");
+  expect(rows[1]).toHaveTextContent("Završni 2024/25");
+  expect(rows[1]).toHaveTextContent("3. 2. 2025.");
   expect(screen.getByText(/Pitanja ostaju skrivena dok ne počnete rješavati ispit/)).toBeVisible();
-  expect(screen.queryByRole("button", { name: /Open|Add past exam/ })).not.toBeInTheDocument();
-  expect(within(list).queryByText("Objavljeno")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Otvori|Dodaj prošli ispit/ })).not.toBeInTheDocument();
+  expect(screen.queryByText("Objavljeno")).not.toBeInTheDocument();
+});
+
+it("filters the table by the kind of exam", async () => {
+  mock.examPapers.mockResolvedValue({ can_manage: false, papers: [
+    { ...paper, status: "PUBLISHED" },
+    { ...paper, id: "p3", title: "Završni 2024/25", kind: "FINAL", exam_date: "2025-02-03", status: "PUBLISHED" },
+  ] });
+  render(<ExamPapers courseId="course" />);
+  await screen.findByRole("table", { name: "Prošli ispiti" });
+  fireEvent.click(screen.getByRole("button", { name: "Završni" }));
+  expect(screen.queryByText("Međuispit 2025/26")).not.toBeInTheDocument();
+  expect(screen.getByText("Završni 2024/25")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Ostalo" }));
+  expect(screen.getByText("Nema ispita ove vrste.")).toBeVisible();
 });
 
 it("adds a paper, chooses and orders its questions with points, and publishes after saving", async () => {
@@ -125,19 +147,38 @@ it("locks the questions of a published paper and deletes only drafts after confi
   expect(await screen.findByText("Obrisano: Međuispit 2025/26.")).toBeVisible();
 });
 
-it("starts a published paper as a session and reports a failed start", async () => {
-  mock.examPapers.mockResolvedValue({ can_manage: false, papers: [{ ...paper, status: "PUBLISHED", item_count: 3, total_points: 6 }, { ...paper, id: "p2", title: "Draft only" }] });
+it("shows the rules and scoring of a paper before it starts, then starts it with or without the clock", async () => {
+  mock.examPapers.mockResolvedValue({ can_manage: false, papers: [{ ...paper, status: "PUBLISHED", item_count: 2, total_points: 6, pass_threshold: 3 }, { ...paper, id: "p2", title: "Draft only" }] });
+  mock.examPaper.mockResolvedValue(detail({ can_manage: false, status: "PUBLISHED", item_count: 2, total_points: 6, pass_threshold: 3,
+    items: [{ position: 0, label: "Zad. 1", points: 4, type: "MULTIPLE_CHOICE" }, { position: 1, label: null, points: 2, type: "TRUE_FALSE" }] }));
   const attempt = { id: "a1", course_id: "course", status: "ACTIVE", started_at: "2026-10-21", submitted_at: null, questions: [] };
   practice.startPaper.mockRejectedValueOnce(new Error("Only published papers can be taken")).mockResolvedValue(attempt);
   const onStartAttempt = vi.fn();
   render(<ExamPapers courseId="course" onStartAttempt={onStartAttempt} />);
-  expect(await screen.findByRole("button", { name: "Riješi Međuispit 2025/26" })).toHaveTextContent("Riješi ovaj ispit · 90 min");
-  fireEvent.click(screen.getByRole("button", { name: "Riješi Međuispit 2025/26" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Only published papers can be taken");
   expect(screen.queryByRole("button", { name: "Riješi Draft only" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Riješi Međuispit 2025/26" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Riješi Međuispit 2025/26" }));
+  expect(await screen.findByRole("heading", { name: "Međuispit 2025/26" })).toBeVisible();
+  expect(screen.getByLabelText("Podaci o ispitu")).toHaveTextContent("Trajanje90 min");
+  expect(screen.getByLabelText("Podaci o ispitu")).toHaveTextContent("Prag3");
+  expect(screen.getByText("−¼ bodova zadatka")).toBeVisible();
+  expect(screen.getByText("Kao na roku, bez miješanja")).toBeVisible();
+  expect(within(screen.getByRole("list", { name: "Zadaci i bodovi" })).getAllByRole("listitem")).toHaveLength(2);
+  fireEvent.click(screen.getByRole("button", { name: "Započni rok · 90 min" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Only published papers can be taken");
+  fireEvent.click(screen.getByRole("button", { name: "Započni rok · 90 min" }));
   await waitFor(() => expect(onStartAttempt).toHaveBeenCalledWith(attempt));
   expect(practice.startPaper).toHaveBeenLastCalledWith("p1", "END", true);
-  fireEvent.click(screen.getByRole("button", { name: "Vježbaj Međuispit 2025/26 bez vremenskog ograničenja" }));
+  fireEvent.click(screen.getByRole("button", { name: "Vježbaj bez vremena" }));
   await waitFor(() => expect(practice.startPaper).toHaveBeenLastCalledWith("p1", "END", false));
+  fireEvent.click(screen.getByRole("button", { name: /Prošli ispiti/ }));
+  expect(await screen.findByRole("table", { name: "Prošli ispiti" })).toBeVisible();
+});
+
+it("shows the best finished attempt beside each paper and offers to repeat it", async () => {
+  mock.examPapers.mockResolvedValue({ can_manage: false, papers: [{ ...paper, status: "PUBLISHED", total_points: 40 }] });
+  practice.history.mockResolvedValue([{ id: "a1", status: "SUBMITTED", paper: { exam_paper_id: "p1" } }, { id: "a2", status: "SUBMITTED", paper: { exam_paper_id: "p1" } }]);
+  practice.read.mockImplementation(async (_course: string, id: string) => ({ id, status: "SUBMITTED", paper: { exam_paper_id: "p1" }, score: { earned: id === "a1" ? 19 : 28, max_points: 40 } }));
+  render(<ExamPapers courseId="course" onStartAttempt={vi.fn()} />);
+  expect(await screen.findByText("28 / 40")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Ponovi Međuispit 2025/26" })).toBeVisible();
 });

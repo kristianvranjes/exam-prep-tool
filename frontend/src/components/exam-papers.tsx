@@ -1,27 +1,116 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api, type CourseUnit, type ExamPaper, type ExamPaperBody, type ExamPaperDetail, type ExamPaperItemInput, type ExamScope, type ExamScopeKind, type Question } from "../lib/api";
-import { formatExamDate } from "../lib/exam-dates";
 import { typeLabels } from "../lib/question-types";
-import { penaltyLabels, penaltyText, pointsLabel } from "../lib/points";
+import { formatPoints, penaltyLabels, penaltyText, pointsLabel } from "../lib/points";
 import { QUESTIONS, plural } from "../lib/plural";
 import { practiceApi, type Attempt } from "../lib/practice-api";
 import { currentAcademicYear, kindLabels } from "./exam-scopes";
 import { RichText } from "./rich-text";
-import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
+import { Alert, Badge, Button, EmptyState, Input, LoadingState, SegmentedControl, Select, Surface } from "./ui";
 import { DraftForm } from "./unsaved-changes";
 
 const YEAR = /^\d{4}\/\d{2}$/;
 const PAGE = 50;
 
-function paperFacts(paper: ExamPaper) {
-  return [
-    plural(paper.item_count, QUESTIONS),
-    pointsLabel(paper.total_points),
-    paper.duration_minutes ? `${paper.duration_minutes} min` : null,
-    paper.wrong_answer_penalty > 0 ? penaltyText(paper.wrong_answer_penalty) : null,
-  ].filter(Boolean).join(" · ");
+type Best = { earned: number; max: number };
+
+/** The student's best finished attempt per paper, read from their history; a paper without one shows a dash. */
+function useBestScores(courseId: string, papers: ExamPaper[] | undefined) {
+  const [best, setBest] = useState<Record<string, Best>>({});
+  const ids = papers?.filter((paper) => paper.status === "PUBLISHED").map((paper) => paper.id).join(",") ?? "";
+  useEffect(() => {
+    if (!ids) return;
+    let current = true;
+    const wanted = new Set(ids.split(","));
+    void Promise.resolve().then(() => practiceApi.history(courseId)).then(async (rows) => {
+      const done = (rows ?? []).filter((attempt) => attempt.status === "SUBMITTED" && attempt.paper?.exam_paper_id && wanted.has(attempt.paper.exam_paper_id)).slice(0, 15);
+      const attempts = await Promise.all(done.map((attempt) => Promise.resolve().then(() => practiceApi.read(courseId, attempt.id)).catch(() => null)));
+      const next: Record<string, Best> = {};
+      for (const attempt of attempts) {
+        const paperId = attempt?.paper?.exam_paper_id;
+        if (!paperId || attempt?.status !== "SUBMITTED" || !attempt.score) continue;
+        const earned = attempt.score.earned;
+        if (!next[paperId] || earned > next[paperId].earned) next[paperId] = { earned, max: attempt.score.max_points };
+      }
+      if (current) setBest(next);
+    }).catch(() => undefined);
+    return () => { current = false; };
+  }, [courseId, ids]);
+  return best;
+}
+
+const kindFilters = [{ value: "ALL", label: "Svi" }, { value: "FINAL", label: "Završni" }, { value: "MIDTERM", label: "Međuispiti" }, { value: "OTHER", label: "Ostalo" }] as const;
+type KindFilter = (typeof kindFilters)[number]["value"];
+const matchesFilter = (paper: ExamPaper, filter: KindFilter) => filter === "ALL"
+  || (filter === "FINAL" ? paper.kind === "FINAL" || paper.kind === "FULL_EXAM" : filter === "MIDTERM" ? paper.kind === "MIDTERM" : paper.kind === "LAB" || paper.kind === "QUIZ");
+
+/** "7. 9. 2026." written out by hand: the day is a calendar date, and engines disagree about padding it. */
+function shortDate(iso: string) {
+  const [year, month, day] = iso.slice(0, 10).split("-").map(Number);
+  return `${day}. ${month}. ${year}.`;
+}
+
+/** Handoff 9b: what a paper is before it starts, with the rules and scoring of the original exam. */
+function PaperIntro({ paperId, best, starting, onBack, onStart }: {
+  paperId: string; best?: Best; starting: boolean; onBack: () => void; onStart: (paper: ExamPaperDetail, timed: boolean) => void;
+}) {
+  const [paper, setPaper] = useState<ExamPaperDetail | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let current = true;
+    void Promise.resolve().then(() => api.examPaper(paperId)).then((detail) => { if (current) setPaper(detail); })
+      .catch(() => { if (current) setError("Ispit nije učitan. Pokušajte ponovno."); });
+    return () => { current = false; };
+  }, [paperId]);
+  const stats = paper ? [
+    { label: "Trajanje", value: paper.duration_minutes ? `${paper.duration_minutes} min` : "Bez ograničenja" },
+    { label: "Bodovi", value: formatPoints(paper.total_points) },
+    { label: "Prag", value: paper.pass_threshold == null ? "—" : formatPoints(paper.pass_threshold) },
+    { label: "Zadataka", value: String(paper.item_count) },
+  ] : [];
+  return <section aria-labelledby="paper-intro-heading" className="min-w-0">
+    <Button variant="ghost" className="px-0" onClick={onBack}><span aria-hidden="true">←</span> Prošli ispiti</Button>
+    {!paper && !error && <LoadingState>Učitavam ispit…</LoadingState>}
+    {error && <Alert className="mt-3 max-w-prose">{error}</Alert>}
+    {paper && <>
+      <h2 id="paper-intro-heading" className="mt-3 text-[2.25rem] leading-[1.05] font-extrabold tracking-tight">{paper.title}</h2>
+      <p className="mt-2 text-soft">{[kindLabels[paper.kind], paper.exam_date ? shortDate(paper.exam_date) : paper.term_label].filter(Boolean).join(" · ")}</p>
+      <dl aria-label="Podaci o ispitu" className="mt-8 grid grid-cols-2 border-y-2 border-line sm:grid-cols-4 sm:divide-x-2 sm:divide-line">
+        {stats.map((stat) => <div key={stat.label} className="px-0 py-5 sm:px-6 sm:first:pl-0"><dt className="label-caps">{stat.label}</dt><dd className="mt-2 text-3xl font-extrabold tabular-nums">{stat.value}</dd></div>)}
+      </dl>
+      <div className="mt-10 grid min-w-0 gap-10 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <div className="min-w-0">
+          <h3 className="text-lg font-extrabold">Pravila roka</h3>
+          <dl className="mt-3 border-t-2 border-line">
+            {[
+              ["Netočan odgovor", paper.wrong_answer_penalty > 0 ? penaltyText(paper.wrong_answer_penalty) : "Bez negativnih bodova"],
+              ["Bez odgovora", "0 bodova"],
+              ["Redoslijed", "Kao na roku, bez miješanja"],
+              ["Provjera odgovora", "Nakon predaje ispita"],
+            ].map(([term, value]) => <div key={term} className="flex flex-wrap justify-between gap-x-6 gap-y-1 border-b border-line py-3"><dt className="text-soft">{term}</dt><dd className="font-extrabold">{value}</dd></div>)}
+          </dl>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <Button className="h-12 px-6" disabled={starting} onClick={() => onStart(paper, true)}>{starting ? "Pokrećem…" : paper.duration_minutes ? `Započni rok · ${paper.duration_minutes} min` : "Započni rok"}</Button>
+            {paper.duration_minutes && <Button variant="secondary" className="h-12 px-5" disabled={starting} onClick={() => onStart(paper, false)}>Vježbaj bez vremena</Button>}
+          </div>
+          {best && <p className="mt-4 text-sm text-soft">Vaš najbolji: <span className="font-extrabold tabular-nums">{formatPoints(best.earned)} / {formatPoints(best.max)}</span></p>}
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-lg font-extrabold">Bodovanje</h3>
+          {paper.items.length === 0 ? <p className="mt-3 border-y border-line py-4 text-sm text-muted">Ovaj ispit još nema zadataka.</p>
+            : <ol aria-label="Zadaci i bodovi" className="mt-3 border-t-2 border-line">
+              {paper.items.map((item) => <li key={item.position} className="flex items-baseline gap-4 border-b border-line py-2.5">
+                <span className="w-7 shrink-0 font-extrabold tabular-nums text-soft">{item.position + 1}</span>
+                <span className="min-w-0 flex-1 text-sm">{item.label ?? typeLabels[item.type]}<span className="block text-xs text-muted">{typeLabels[item.type]}</span></span>
+                <span className="shrink-0 font-extrabold tabular-nums">{formatPoints(item.points)} b</span>
+              </li>)}
+            </ol>}
+        </div>
+      </div>
+    </>}
+  </section>;
 }
 
 export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onStartAttempt?: (attempt: Attempt) => void }) {
@@ -32,8 +121,11 @@ export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onS
   const [notice, setNotice] = useState("");
   const [starting, setStarting] = useState<string | null>(null);
   const [startError, setStartError] = useState("");
+  const [viewing, setViewing] = useState<string | null>(null);
+  const [filter, setFilter] = useState<KindFilter>("ALL");
+  const best = useBestScores(courseId, list?.papers);
 
-  async function take(paper: ExamPaper, timed: boolean) {
+  async function take(paper: { id: string }, timed: boolean) {
     if (!onStartAttempt || starting) return;
     setStarting(paper.id); setStartError("");
     try { onStartAttempt(await practiceApi.startPaper(paper.id, "END", timed)); }
@@ -50,44 +142,66 @@ export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onS
   }, [courseId, revision]);
 
   const refresh = useCallback((message = "") => { setNotice(message); setRevision((value) => value + 1); }, []);
-  const years = [...new Set(list?.papers.map((paper) => paper.academic_year) ?? [])];
+  // Newest first: by the exam's date, and by the academic year for papers without one.
+  const rows = [...(list?.papers ?? [])].filter((paper) => (list?.canManage || paper.status === "PUBLISHED") && matchesFilter(paper, filter))
+    .sort((a, b) => (b.exam_date ?? "").localeCompare(a.exam_date ?? "") || b.academic_year.localeCompare(a.academic_year));
 
-  return <section aria-labelledby="exam-papers-heading" className="mt-6 min-w-0 space-y-5">
-    <div className="max-w-prose">
-      <h3 id="exam-papers-heading" className="text-xl font-semibold">Prošli ispiti</h3>
-      <p className="mt-2 text-sm text-muted">{list?.canManage
-        ? "Unesite stvarni prošli ispit s pitanjima u izvornom redoslijedu, bodovima i pravilom bodovanja. Studenti vide ispit tek kad ga objavite."
-        : "Stvarni prošli ispiti s izvornim pitanjima, bodovima i bodovanjem. Pitanja ostaju skrivena dok ne počnete rješavati ispit."}</p>
+  if (viewing) return <div className="mt-6 min-w-0">
+    {startError && <Alert className="mb-4 max-w-prose">{startError}</Alert>}
+    <PaperIntro paperId={viewing} best={best[viewing]} starting={starting === viewing} onBack={() => { setViewing(null); setStartError(""); }} onStart={(paper, timed) => void take(paper, timed)} />
+  </div>;
+
+  return <section aria-labelledby="exam-papers-heading" className="mt-6 min-w-0 space-y-6">
+    <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+      <div className="min-w-0">
+        <h2 id="exam-papers-heading" className="text-[2.25rem] leading-[1.05] font-extrabold tracking-tight sm:text-[2.75rem]">Prošli ispiti</h2>
+        <p className="mt-2 max-w-prose text-sm text-muted">{list?.canManage
+          ? "Unesite stvarni prošli ispit s pitanjima u izvornom redoslijedu, bodovima i pravilom bodovanja. Studenti vide ispit tek kad ga objavite."
+          : "Izvorno vrijeme, bodovanje i prag. Pitanja ostaju skrivena dok ne počnete rješavati ispit."}</p>
+      </div>
+      {list && list.papers.length > 0 && <SegmentedControl label="Vrsta ispita" value={filter} onChange={setFilter} options={kindFilters} />}
     </div>
     {!list && !loadError && <LoadingState>Učitavam prošle ispite…</LoadingState>}
     {loadError && <div className="space-y-3"><Alert>{loadError}</Alert><Button variant="secondary" onClick={() => { setLoadError(""); setRevision((value) => value + 1); }}>Ponovno učitaj prošle ispite</Button></div>}
     {notice && <Alert tone="info">{notice}</Alert>}
     {startError && <Alert>{startError}</Alert>}
     {list && list.papers.length === 0 && <EmptyState title="Još nema prošlih ispita.">{list.canManage ? "Dodajte prvi prošli ispit ispod." : "Nastavnici još nisu objavili prošle ispite."}</EmptyState>}
-    {list && years.map((year) => <div key={year} className="space-y-2">
-      <h4 className="font-semibold">Akademska godina {year}</h4>
-      <ul aria-label={`Prošli ispiti ${year}`} className="space-y-2">
-        {list.papers.filter((paper) => paper.academic_year === year).map((paper) => <li key={paper.id} className="min-w-0 rounded-control border border-line bg-surface p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="break-words font-medium [overflow-wrap:anywhere]">{paper.title}</p>
-              {(paper.term_label || paper.exam_date) && <p className="mt-1 text-sm">{[paper.term_label, paper.exam_date && formatExamDate(paper.exam_date)].filter(Boolean).join(" · ")}</p>}
-              <p className="mt-1 text-sm text-muted">{paperFacts(paper)}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge>{kindLabels[paper.kind]}</Badge>
-              {list.canManage && <Badge tone={paper.status === "PUBLISHED" ? "success" : "neutral"}>{paper.status === "PUBLISHED" ? "Objavljeno" : "Nacrt"}</Badge>}
-            </div>
-          </div>
-          {onStartAttempt && paper.status === "PUBLISHED" && <>
-            <Button className="mt-3 mr-2" disabled={starting !== null} aria-label={`Riješi ${paper.title}`} onClick={() => void take(paper, true)}>{starting === paper.id ? "Pokrećem…" : paper.duration_minutes ? `Riješi ovaj ispit · ${paper.duration_minutes} min` : "Riješi ovaj ispit"}</Button>
-            {paper.duration_minutes && <Button variant="ghost" className="mt-3 mr-2" disabled={starting !== null} aria-label={`Vježbaj ${paper.title} bez vremenskog ograničenja`} onClick={() => void take(paper, false)}>Vježbaj bez štoperice</Button>}
-          </>}
-          {list.canManage && <Button variant="secondary" className="mt-3" aria-label={`Otvori ${paper.title}`} aria-expanded={selected === paper.id} onClick={() => { setNotice(""); setSelected(selected === paper.id ? null : paper.id); }}>{selected === paper.id ? "Zatvori" : "Otvori"}</Button>}
-          {selected === paper.id && <PaperEditor paperId={paper.id} courseId={courseId} onChanged={refresh} onDeleted={(title) => { setSelected(null); refresh(`Obrisano: ${title}.`); }} />}
-        </li>)}
-      </ul>
-    </div>)}
+    {list && list.papers.length > 0 && rows.length === 0 && <p className="border-y border-line py-4 text-sm text-muted">Nema ispita ove vrste.</p>}
+    {rows.length > 0 && <div className="overflow-x-auto"><table className="w-full min-w-[46rem] border-t-2 border-line text-left text-sm">
+      <caption className="sr-only">Prošli ispiti</caption>
+      <thead><tr className="label-caps">
+        <th scope="col" className="py-3 pr-4 font-medium">Rok</th>
+        <th scope="col" className="py-3 pr-4 font-medium">Vrsta</th>
+        <th scope="col" className="py-3 pr-4 font-medium">Datum</th>
+        <th scope="col" className="py-3 pr-4 font-medium">Trajanje</th>
+        <th scope="col" className="py-3 pr-4 font-medium">Bodovi</th>
+        <th scope="col" className="py-3 pr-4 font-medium">Zadataka</th>
+        <th scope="col" className="py-3 pr-4 font-medium">Vaš najbolji</th>
+        <th scope="col" className="py-3"><span className="sr-only">Radnja</span></th>
+      </tr></thead>
+      <tbody>{rows.map((paper) => {
+        const mine = best[paper.id];
+        return <Fragment key={paper.id}><tr className="border-t border-line align-middle">
+          <th scope="row" className="py-4 pr-4 text-base font-extrabold break-words [overflow-wrap:anywhere]">{paper.title}
+            {(list?.canManage || paper.term_label) && <span className="mt-1 flex flex-wrap gap-2 text-xs font-normal text-muted">
+              {paper.term_label && <span>{paper.term_label}</span>}
+              {list?.canManage && <Badge tone={paper.status === "PUBLISHED" ? "success" : "neutral"}>{paper.status === "PUBLISHED" ? "Objavljeno" : "Nacrt"}</Badge>}
+            </span>}</th>
+          <td className="py-4 pr-4 text-soft">{kindLabels[paper.kind]}</td>
+          <td className="py-4 pr-4 tabular-nums">{paper.exam_date ? shortDate(paper.exam_date) : paper.academic_year}</td>
+          <td className="py-4 pr-4 tabular-nums">{paper.duration_minutes ? `${paper.duration_minutes} min` : "—"}</td>
+          <td className="py-4 pr-4 tabular-nums">{formatPoints(paper.total_points)}</td>
+          <td className="py-4 pr-4 tabular-nums">{paper.item_count}</td>
+          <td className="py-4 pr-4 font-extrabold tabular-nums">{mine ? `${formatPoints(mine.earned)} / ${formatPoints(mine.max)}` : "—"}</td>
+          <td className="py-4 text-right"><div className="flex flex-wrap justify-end gap-2">
+            {onStartAttempt && paper.status === "PUBLISHED" && <Button variant={mine ? "secondary" : "primary"} aria-label={`${mine ? "Ponovi" : "Riješi"} ${paper.title}`} onClick={() => { setStartError(""); setViewing(paper.id); }}>{mine ? "Ponovi" : "Riješi"}</Button>}
+            {list?.canManage && <Button variant="secondary" aria-label={`Otvori ${paper.title}`} aria-expanded={selected === paper.id} onClick={() => { setNotice(""); setSelected(selected === paper.id ? null : paper.id); }}>{selected === paper.id ? "Zatvori" : "Uredi"}</Button>}
+          </div></td>
+        </tr>
+        {selected === paper.id && <tr><td colSpan={8} className="pb-4"><PaperEditor paperId={paper.id} courseId={courseId} onChanged={refresh} onDeleted={(title) => { setSelected(null); refresh(`Obrisano: ${title}.`); }} /></td></tr>}
+        </Fragment>;
+      })}</tbody>
+    </table></div>}
     {list?.canManage && <Surface className="min-w-0 space-y-4">
       {selected === "new"
         ? <PaperForm courseId={courseId} onCancel={() => setSelected(null)} onSave={async (body) => {
@@ -95,7 +209,7 @@ export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onS
           setSelected(created.id); refresh(`Dodano: ${created.title}. Sada odaberite pitanja.`);
         }} />
         : <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h4 className="text-lg font-semibold">Dodaj prošli ispit</h4><p className="mt-1 text-sm text-muted">Počnite s podacima o ispitu, zatim odaberite odobrena pitanja iz baze.</p></div>
+          <div><h3 className="text-lg font-semibold">Dodaj prošli ispit</h3><p className="mt-1 text-sm text-muted">Počnite s podacima o ispitu, zatim odaberite odobrena pitanja iz baze.</p></div>
           <Button variant="secondary" onClick={() => { setNotice(""); setSelected("new"); }}>Dodaj prošli ispit</Button>
         </div>}
     </Surface>}

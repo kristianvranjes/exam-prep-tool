@@ -8,8 +8,9 @@ import { cn } from "../lib/utils";
 import { Button } from "./ui";
 import { AppearanceSettings, ThemeSelect } from "./theme";
 
-export function Brand() {
-  return <span className="font-display text-xl font-extrabold tracking-tight" translate="no">ExamPrep<span aria-hidden="true" className="text-accent">.</span></span>;
+export function Brand({ suffix }: { suffix?: string }) {
+  return <span className="font-display text-xl font-extrabold tracking-tight" translate="no">ExamPrep<span aria-hidden="true" className="text-accent">.</span>
+    {suffix && <span className="ml-2 text-sm font-semibold text-soft"> {suffix}</span>}</span>;
 }
 
 /** A destination in the main navigation. `badge` is a count shown next to the label, for example questions due for review. */
@@ -65,9 +66,9 @@ export function ApplicationFrame({ user, logout, busy, nav, onNavigate, settings
     active ? "border-accent text-accent" : "border-transparent text-foreground");
   return <div className="min-h-dvh" onKeyDown={escape}>
     <a href="#main-content" className="skip-link">Preskoči na sadržaj</a>
-    <header className="border-b-2 border-line">
+    <header className="sticky top-0 z-40 border-b-2 border-line bg-background">
       <div className={cn("relative mx-auto flex items-center gap-x-4 px-4 py-4 sm:px-8", width)}>
-        {focusedPractice ? <Brand /> : <Link prefetch={false} href="/" aria-label="ExamPrep, početna" onClick={event => follow(event, "/")}><Brand /></Link>}
+        {focusedPractice ? <Brand /> : <Link prefetch={false} href="/" aria-label="ExamPrep, početna" onClick={event => follow(event, "/")}><Brand suffix={wide ? "Moderator" : undefined} /></Link>}
         {!focusedPractice && <nav aria-label="Glavna navigacija" className="fixed inset-x-0 bottom-0 z-30 flex border-t-2 border-line bg-background pb-[env(safe-area-inset-bottom)] md:static md:z-auto md:ml-auto md:items-center md:gap-1 md:border-t-0 md:bg-transparent md:pb-0">
           {nav.map(item => <Link prefetch={false} key={item.href} href={item.href} className={tab(item.active)} aria-current={item.active ? "page" : undefined}
             aria-label={item.badge ? `${item.label}, ${item.badge} ${item.badgeLabel ?? ""}`.trim() : undefined} onClick={event => follow(event, item.href)}>

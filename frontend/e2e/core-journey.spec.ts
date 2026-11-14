@@ -361,9 +361,11 @@ test("moderator and student complete the core exam-preparation journey", async (
       await expect.poll(() => student.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await student.screenshot({ path: test.info().outputPath(`results-self-review-${viewport.width}.png`), fullPage: true });
       await results.getByRole("button", { name: "Svi odgovori", exact: true }).click();
-      await expect(results.getByRole("article")).toHaveCount(2);
+      // One result is shown at a time; the index lists both.
+      await expect(results.getByRole("navigation", { name: "Popis pitanja u pregledu" }).getByRole("button")).toHaveCount(2);
     }
     // Self-assessment is saved apart from the grade: the item stays ungraded and the counts say so.
+    await results.getByRole("button", { name: "Skoči na pitanje 2", exact: true }).click();
     const hadIt = results.getByRole("article").filter({ hasText: "Referentni odgovor" }).getByRole("button", { name: "Znao sam", exact: true });
     await hadIt.click();
     await expect(hadIt).toHaveAttribute("aria-pressed", "true");

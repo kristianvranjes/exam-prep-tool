@@ -67,7 +67,7 @@ export function SettingsPage() {
     <PageHeader title="Postavke" headingId="settings-heading" />
     <div className="mt-8 grid min-w-0 gap-10 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:gap-14">
       <div className="space-y-8"><PaletteTiles /><AppearanceSettings /></div>
-      <div className="lg:sticky lg:top-6 lg:self-start"><Preview /></div>
+      <div className="lg:sticky lg:top-24 lg:self-start"><Preview /></div>
     </div>
   </section>;
 }

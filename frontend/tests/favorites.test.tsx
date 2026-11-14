@@ -95,7 +95,9 @@ it("stars submitted results by question number and keeps the choice across resul
   expect(mock.favorite).toHaveBeenCalledExactlyOnceWith("course", "source-a");
 
   fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
+  // One result is shown at a time: each question's star is on its own result.
   expect(screen.getByRole("button", { name: "Favorit: pitanje 1" })).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(screen.getByRole("button", { name: "Skoči na pitanje 2" }));
   expect(screen.getByRole("button", { name: "Favorit: pitanje 2" })).toHaveAttribute("aria-pressed", "true");
   expect(screen.queryByRole("button", { name: "Favorit: pitanje 3" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Favorit: pitanje 2" }));

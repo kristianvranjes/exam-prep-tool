@@ -68,7 +68,7 @@ export function CourseUnits({ courseId, isOwner }: { courseId: string; isOwner: 
 
   return <section aria-labelledby="course-units-heading" className="mt-8 min-w-0 space-y-5 border-t border-line pt-6">
     <div className="max-w-prose">
-      <h3 id="course-units-heading" className="text-xl font-semibold">Cjeline kolegija</h3>
+      <h3 id="course-units-heading" className="text-2xl font-extrabold tracking-tight">Cjeline kolegija</h3>
       <p className="mt-2 text-sm text-muted">{isOwner
         ? "Organizirajte kolegij u poredane cjeline, npr. poglavlja koja pokriva pojedini ispit. Pitanja se zatim mogu grupirati i filtrirati po cjelinama."
         : "Kolegij je organiziran u ove cjeline. Brojevi pokazuju koliko odobrenih pitanja ima svaka cjelina."}</p>
@@ -79,8 +79,8 @@ export function CourseUnits({ courseId, isOwner }: { courseId: string; isOwner: 
     {notice && <Alert tone="info">{notice}</Alert>}
 
     {!loading && !loadError && activeUnits.length === 0 && <EmptyState title="Još nema cjelina kolegija.">{isOwner ? "Dodajte prvu cjelinu u nastavku." : "Vlasnik kolegija još nije dodao cjeline."}</EmptyState>}
-    {!loading && !loadError && activeUnits.length > 0 && <ol aria-label="Popis cjelina kolegija" className="space-y-2">
-      {activeUnits.map((unit, index) => <li key={unit.id} className="min-w-0 rounded-control border border-line bg-surface p-4">
+    {!loading && !loadError && activeUnits.length > 0 && <ol aria-label="Popis cjelina kolegija" className="border-t-2 border-line">
+      {activeUnits.map((unit, index) => <li key={unit.id} className="min-w-0 border-b border-line py-4">
         {editing === unit.id
           ? <UnitEditForm unit={unit} busy={busy} cancel={() => setEditing(null)} save={async (body) => {
             if (await run(async () => replace(await api.updateUnit(unit.id, body)), `Spremljena cjelina ${body.title}.`)) setEditing(null);
@@ -88,7 +88,7 @@ export function CourseUnits({ courseId, isOwner }: { courseId: string; isOwner: 
           : <>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="break-words font-medium [overflow-wrap:anywhere]"><span className="text-muted">{index + 1}.</span> {unit.title}</p>
+                <p className="break-words text-lg font-extrabold [overflow-wrap:anywhere]"><span className="text-soft">{index + 1}.</span> {unit.title}</p>
                 {unit.description && <p className="mt-1 max-w-prose break-words text-sm text-muted [overflow-wrap:anywhere]">{unit.description}</p>}
               </div>
               <Badge>{questionCount(unit.approved_question_count)}</Badge>
