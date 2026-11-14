@@ -352,7 +352,7 @@ export function ActiveQuiz({ attempt, experience, update: onUpdate, back: onBack
           </div>
         </details>}
       </main>
-      {!focusMode && <aside aria-label="Bočna ploča pitanja" className="hidden border-l-2 border-line lg:sticky lg:top-0 lg:block lg:max-h-dvh lg:overflow-y-auto lg:px-5 lg:py-5">
+      {!focusMode && <aside aria-label="Bočna ploča pitanja" className="hidden border-l-2 border-line lg:sticky lg:top-20 lg:block lg:max-h-[calc(100dvh-5rem)] lg:overflow-y-auto lg:px-5 lg:py-5">
         <div className="flex items-baseline justify-between gap-2">
           <h2 className="label-caps">Pitanja</h2>
           <p className="text-sm tabular-nums">{answered} / {attempt.questions.length} odgovoreno</p>

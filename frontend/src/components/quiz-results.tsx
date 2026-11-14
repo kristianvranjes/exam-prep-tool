@@ -236,7 +236,7 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
       <div><h3 ref={reviewHeading} tabIndex={-1} className="text-lg font-semibold">{viewLabels[view]}</h3><p role="status" className="mt-1 text-sm text-muted">{plural(visibleQuestions.length, ANSWERS)}</p></div>
       <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
       <nav aria-label="Popis pitanja u pregledu" className="hidden lg:block">
-        <ol className="sticky top-4 max-h-[calc(100dvh-2rem)] overflow-y-auto border-2 border-line">{visibleQuestions.map(({ question, number }) =>
+        <ol className="sticky top-24 max-h-[calc(100dvh-7rem)] overflow-y-auto border-2 border-line">{visibleQuestions.map(({ question, number }) =>
           <li key={question.id} className="border-b border-line last:border-b-0">
             <button type="button" aria-label={`Skoči na pitanje ${number}`} onClick={() => jumpTo(question.id)}
               className="grid min-h-14 w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-3 px-4 py-3 text-left hover:bg-subtle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent">
@@ -251,7 +251,7 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
         const header = <div className="space-y-2"><h4 className="text-lg font-semibold">{number}. <RichText text={question.stem} /></h4><QuestionUnits units={question.units} />
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"><p className={cn("text-sm", statusTone(question))}>{[paperItemLabel(number, question.label), statusLabel(question), itemPoints(question), question.confidence && confidenceNotes[question.confidence]].filter(Boolean).join(" · ")}</p>
             <FavoriteToggle favorites={favorites} question={question} label={`Favorit: pitanje ${number}`} /></div></div>;
-        return <article key={question.id} id={`result-${question.id}`} tabIndex={-1} aria-label={`Rezultat pitanja ${number}`} className="min-w-0 scroll-mt-4 outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent">
+        return <article key={question.id} id={`result-${question.id}`} tabIndex={-1} aria-label={`Rezultat pitanja ${number}`} className="min-w-0 scroll-mt-24 outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent">
           {correct ? <div className="space-y-3 border-b border-line py-4">
             {header}
             <details><summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">Pogledaj odgovor{question.explanation ? " i objašnjenje" : ""}</summary><div className="mt-3 max-w-prose"><ResultAnswers question={question} /></div></details>

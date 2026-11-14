@@ -65,7 +65,7 @@ export function ApplicationFrame({ user, logout, busy, nav, onNavigate, settings
     active ? "border-accent text-accent" : "border-transparent text-foreground");
   return <div className="min-h-dvh" onKeyDown={escape}>
     <a href="#main-content" className="skip-link">Preskoči na sadržaj</a>
-    <header className="border-b-2 border-line">
+    <header className="sticky top-0 z-40 border-b-2 border-line bg-background">
       <div className={cn("relative mx-auto flex items-center gap-x-4 px-4 py-4 sm:px-8", width)}>
         {focusedPractice ? <Brand /> : <Link prefetch={false} href="/" aria-label="ExamPrep, početna" onClick={event => follow(event, "/")}><Brand /></Link>}
         {!focusedPractice && <nav aria-label="Glavna navigacija" className="fixed inset-x-0 bottom-0 z-30 flex border-t-2 border-line bg-background pb-[env(safe-area-inset-bottom)] md:static md:z-auto md:ml-auto md:items-center md:gap-1 md:border-t-0 md:bg-transparent md:pb-0">
