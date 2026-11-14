@@ -11,7 +11,7 @@ const password = "ExamPrepE2E!2026";
 const primaryFill = /(?:^|\s)bg-accent(?:\s|$)/;
 
 /** The handoff has no course tabs: the course page links to its other screens and a breadcrumb leads back. */
-async function openScreen(page: Page, name: "Pregled" | "Vježba" | "Prošli ispiti" | "Napredak" | "Materijali" | "Više") {
+async function openScreen(page: Page, name: "Pregled" | "Vježba" | "Prošli ispiti" | "Napredak" | "Materijali" | "Više", settled = true) {
   const nav = page.getByRole("navigation", { name: "Navigacija kolegija" });
   await nav.waitFor();
   const crumbs = nav.getByRole("button");
@@ -20,7 +20,8 @@ async function openScreen(page: Page, name: "Pregled" | "Vježba" | "Prošli isp
   if (control) await page.getByRole("button", { name: control, exact: true }).first().click();
   // The screen is open once the address says so; the previous one is still visible until then.
   const suffix = { "Pregled": "", "Vježba": "/practice", "Prošli ispiti": "/papers", "Napredak": "/progress", "Materijali": "/materials", "Više": "/more" }[name];
-  await expect(page).toHaveURL(new RegExp(`/courses/[^/]+${suffix}$`));
+  // Practice shows the finished review again when one is still open, so that address is left to the caller.
+  if (settled) await expect(page).toHaveURL(new RegExp(`/courses/[^/]+${suffix}$`));
 }
 
 async function login(page: Page, email: string) {
@@ -380,7 +381,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(results.getByRole("button", { name: "Pogreške", exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(results.getByLabel("Sažetak rezultata")).toContainText("po samoprocjeni točno: 1");
     await results.getByRole("button", { name: "Natrag na kolegij" }).click();
-    await openScreen(student, "Vježba");
+    await openScreen(student, "Vježba", false);
     await results.getByRole("button", { name: "Otvori napredak" }).click();
     await expect(progress).toBeVisible();
     await expect(progress.getByText("Točno: 1 od 2 automatski ocijenjenih odgovora")).toBeVisible();
