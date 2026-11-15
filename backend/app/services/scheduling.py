@@ -20,6 +20,8 @@ class Schedule:
 
 SRS_VERSION = "srs-v2"
 Rating = Literal["AGAIN", "HARD", "GOOD", "EASY"]
+# A card whose gap has reached this is mature; before that it is still being learned.
+MATURE_AFTER = timedelta(days=21)
 AGAIN_DELAY = timedelta(minutes=10)
 MIN_INTERVAL = timedelta(days=1)
 MAX_INTERVAL = timedelta(days=365)

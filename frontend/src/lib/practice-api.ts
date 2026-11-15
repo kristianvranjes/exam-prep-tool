@@ -1,4 +1,4 @@
-import { request, type QuestionType } from "./api";
+import { request, type QuestionType, type ReviewRating } from "./api";
 
 /** MISTAKES and DUE use your review progress, FAVORITES your favorites; MOCK needs an exam scope and spreads it across its units. */
 export type SelectionMode = "STANDARD" | "ADAPTIVE" | "MISTAKES" | "DUE" | "FAVORITES" | "MOCK";
@@ -62,6 +62,8 @@ export type ActiveQuestion = {
   source_question_id?: string;
   /** Whether you favorited the source question; read from your favorites only, so bank changes never alter it. */
   favorite?: boolean;
+  /** Your rating of the card, given after the answer was checked; the card is rescheduled from it when the session is submitted. */
+  rating?: ReviewRating | null;
   /** Paper sessions only. */
   points?: number | null; label?: string | null;
   /** NUMERIC only: the unit the answer is expected in. */
@@ -153,6 +155,8 @@ export const practiceApi = {
   startPaper: (paperId: string, feedback_mode: FeedbackMode = "END", timed = true) => request<Attempt>(`/exam-papers/${paperId}/attempts`, { method: "POST", body: JSON.stringify({ feedback_mode, timed }) }),
   /** A scored exam simulation over an exam cycle: one point per question and an optional time limit. */
   startMock: (course: string, body: { exam_scope_id: string; count?: number; duration_minutes?: number | null; question_types?: QuestionType[]; feedback_mode?: FeedbackMode }) => request<Attempt>(`/courses/${course}/mock-exams`, { method: "POST", body: JSON.stringify(body) }),
+  /** Rates a checked answer's card inside the session, so submission schedules it once; null takes the rating back. */
+  rateAnswer: (course: string, attemptId: string, questionId: string, rating: ReviewRating | null) => request<Attempt>(`${path(course)}/${attemptId}/answers/${questionId}/rating`, { method: "PUT", body: JSON.stringify({ rating }) }),
   abandon: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/abandon`, { method: "POST" }),
   submit: (course: string, id: string) => request<Attempt>(`${path(course)}/${id}/submit`, { method: "POST" }),
 };

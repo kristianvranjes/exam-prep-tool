@@ -185,10 +185,18 @@ def test_0030_roundtrip_keeps_a_scored_mock_exam_and_forgets_only_its_recorded_m
                 assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0029"
             # The strict rule is back, so the session keeps its scoring but loses its mode.
             assert recorded(exam) is None
-            assert unchanged(member, course, exam)
+            # Read in SQL: the models already know the column this downgrade removed.
+            with engine.connect() as conn:
+                assert conn.scalar(
+                    text(
+                        "SELECT q.scoring IS NOT NULL FROM quizzes q"
+                        " JOIN quiz_attempts a ON a.quiz_id = q.id WHERE a.id = :id"
+                    ),
+                    {"id": exam["id"]},
+                )
             command.upgrade(config, "head")
             with engine.connect() as conn:
-                assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0030"
+                assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0031"
             assert unchanged(member, course, exam)
             # Submitted again after the roundtrip, a new exam records its mode as before.
             assert member.post(f"/courses/{course}/attempts/{exam['id']}/submit").status_code == 200

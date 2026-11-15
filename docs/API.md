@@ -212,6 +212,24 @@ counts, `review_stage` and `last_result` stay as grading left them. A graded ans
 already on `srs-v2` counts as `GOOD` or `AGAIN` with the same rules; cards no rating has
 touched stay on `leitner-v1`.
 
+`PUT /courses/{course_id}/attempts/{attempt_id}/answers/{question_id}/rating` with `{rating}` (the
+four ratings above, or null to take it back) keeps the student's rating of a card from inside a
+session, so the card is rescheduled once. It needs an answer that was already checked (409
+otherwise, also once the session is submitted, abandoned or past its deadline) and returns the
+attempt, whose questions carry `rating`. Nothing is scheduled by the call: submitting the
+session reschedules each rated card from its rating alone, instead of from the graded answer, and
+appends the `review_rating_events` row at submission time. A rating on a short answer that is
+still pending is dropped with its result, as no card exists for it. Rating through
+`/review-progress/ratings` after submission still applies on top of the schedule grading left.
+
+`GET /courses/{course_id}/review-progress/decks` returns `{as_of, mature_after_days, total, decks}`:
+one deck per active unit in unit order with `unit_id`, `title`, `position` and counts of the
+caller's practice-eligible questions. `new` have no card yet (a card exists only after a graded
+answer), `learning` have a card whose gap is under `mature_after_days` (21), `mature` one of 21
+days or more, and `due` is the part of learning and mature that is due now. A card no rating has
+touched uses the delay of its stage as its gap. A question in several units counts in each deck,
+and once in `total`.
+
 `GET /courses/{course_id}/dashboard` returns the caller's results in submitted sessions for
 the course page: `{as_of, units_total, units_attempted, average_percent, units}`. Each unit
 (active ones only, in unit order) has `unit_id`, `title`, `position`, `attempts`,

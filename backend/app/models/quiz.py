@@ -150,6 +150,11 @@ class Answer(Base):
             "self_review IS NULL OR grading_method = 'PENDING_SEMANTIC'",
             name="ck_answer_self_review_pending",
         ),
+        CheckConstraint(
+            "rating IS NULL OR "
+            "(rating IN ('AGAIN','HARD','GOOD','EASY') AND checked_at IS NOT NULL)",
+            name="ck_answer_rating",
+        ),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     attempt_id: Mapped[UUID] = mapped_column(ForeignKey("quiz_attempts.id", ondelete="CASCADE"))
@@ -163,6 +168,9 @@ class Answer(Base):
     # Set once an IMMEDIATE answer is checked; the answer and its grade are then final.
     checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     confidence: Mapped[str | None] = mapped_column(String(10))
+    # The student's own rating of the card (srs-v2), given after the answer was checked; the card
+    # is rescheduled from it when the session is submitted, not before.
+    rating: Mapped[str | None] = mapped_column(String(10))
     # The student's own verdict on a short answer awaiting review. Never a grade: it does
     # not change grading_status, scores, scheduling, readiness or item analysis.
     self_review: Mapped[str | None] = mapped_column(String(10))

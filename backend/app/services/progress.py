@@ -10,9 +10,12 @@ from app.models.course_unit import CourseUnit, QuestionUnit
 from app.models.question import Question
 from app.models.user_question_progress import ReviewRatingEvent, UserQuestionProgress
 from app.schemas.progress import (
+    Deck,
+    DeckCounts,
     ForecastDay,
     ProgressResponse,
     ProgressSummary,
+    ReviewDecks,
     ReviewForecast,
     ReviewRatingResult,
     StageCount,
@@ -23,6 +26,8 @@ from app.schemas.quiz import Grade
 from app.services.courses import get_member_course
 from app.services.practice_eligibility import practice_eligible
 from app.services.scheduling import (
+    DELAYS,
+    MATURE_AFTER,
     SRS_VERSION,
     Rating,
     rating_for_result,
@@ -32,9 +37,17 @@ from app.services.scheduling import (
 
 
 def apply_reviews(
-    db: Session, user_id: UUID, results: dict[UUID, Grade], submitted_at: datetime
+    db: Session,
+    user_id: UUID,
+    results: dict[UUID, Grade],
+    submitted_at: datetime,
+    ratings: dict[UUID, Rating] | None = None,
 ) -> None:
     """Mutate inside submit's transaction, after it has locked the user row.
+
+    `ratings` are the student's own verdicts given during the session. A rated card is
+    rescheduled by its rating alone, once; without one, a card already on srs-v2 counts the graded
+    answer as GOOD or AGAIN. A rating on a still pending short answer is dropped with its result.
 
     Source key locks protect against deletion, without reading live grading data.
     Deleted sources are skipped: their snapshots still grade and remain historical.
@@ -81,15 +94,18 @@ def apply_reviews(
         row.review_stage = transition.review_stage
         row.due_at = transition.due_at
         row.scheduling_version = transition.scheduling_version
-        if previous_version == SRS_VERSION:
+        explicit = (ratings or {}).get(question_id)
+        rating: Rating | None = explicit
+        if rating is None and previous_version == SRS_VERSION:
             # A card already on rating-based scheduling stays on it: a graded answer counts as
             # GOOD or AGAIN, with the same intervals and exam-day cap as an explicit rating.
             rating = rating_for_result(result)
             assert rating is not None
+        if rating is not None:
             rated = schedule_rating(
                 row.interval_minutes,
-                row.repetitions,
-                row.lapses,
+                row.repetitions or 0,
+                row.lapses or 0,
                 rating,
                 submitted_at,
                 exams.get(question_id),
@@ -100,6 +116,18 @@ def apply_reviews(
             row.lapses = rated.lapses
             row.last_rating = rating
             row.scheduling_version = rated.scheduling_version
+            if explicit is not None:
+                db.add(
+                    ReviewRatingEvent(
+                        user_id=user_id,
+                        question_id=question_id,
+                        rating=explicit,
+                        rated_at=submitted_at,
+                        interval_minutes=rated.interval_minutes,
+                        due_at=rated.due_at,
+                        scheduling_version=rated.scheduling_version,
+                    )
+                )
         row.resolved_review_count += 1
         row.correct_review_count += int(result == "CORRECT")
         row.incorrect_review_count += int(result == "INCORRECT")
@@ -309,6 +337,77 @@ def summarize_unit_progress(db: Session, user: User, course_id: UUID) -> UnitPro
                 due_now=row[8],
             )
             for row in rows
+        ],
+    )
+
+
+def review_decks(db: Session, user: User, course_id: UUID) -> ReviewDecks:
+    """Per active unit, how many practice-eligible questions are new, being learned or mature.
+
+    A card's gap is its stored interval, or the delay of its stage for a card no rating has
+    touched. New questions have no card at all: a card appears only once an answer was graded.
+    """
+    get_member_course(db, user, course_id)
+    as_of = datetime.now(UTC)
+    progress = UserQuestionProgress
+    interval = func.coalesce(
+        progress.interval_minutes,
+        case(
+            {stage: int(delay.total_seconds() // 60) for stage, delay in enumerate(DELAYS)},
+            value=progress.review_stage,
+        ),
+    )
+    rows = db.execute(
+        select(
+            CourseUnit.id,
+            CourseUnit.title,
+            CourseUnit.position,
+            Question.id,
+            progress.id,
+            interval,
+            progress.due_at,
+        )
+        .select_from(CourseUnit)
+        .outerjoin(QuestionUnit, QuestionUnit.unit_id == CourseUnit.id)
+        .outerjoin(
+            Question,
+            and_(Question.id == QuestionUnit.question_id, practice_eligible(user.id)),
+        )
+        .outerjoin(progress, and_(progress.question_id == Question.id, progress.user_id == user.id))
+        .where(CourseUnit.course_id == course_id, CourseUnit.is_archived.is_(False))
+        .order_by(CourseUnit.position, CourseUnit.id)
+    ).all()
+    mature_after = MATURE_AFTER.total_seconds() / 60
+    units: dict[UUID, tuple[str, int, list[int]]] = {}
+    total = [0, 0, 0, 0]
+    counted: set[UUID] = set()
+    for unit_id, title, position, question_id, card_id, minutes, due_at in rows:
+        counts = units.setdefault(unit_id, (title, position, [0, 0, 0, 0]))[2]
+        if question_id is None:
+            continue
+        slot = 0 if card_id is None else 2 if minutes >= mature_after else 1
+        due = card_id is not None and due_at <= as_of
+        counts[slot] += 1
+        counts[3] += int(due)
+        if question_id not in counted:
+            counted.add(question_id)
+            total[slot] += 1
+            total[3] += int(due)
+    return ReviewDecks(
+        as_of=as_of,
+        mature_after_days=MATURE_AFTER.days,
+        total=DeckCounts(new=total[0], learning=total[1], mature=total[2], due=total[3]),
+        decks=[
+            Deck(
+                unit_id=unit_id,
+                title=title,
+                position=position,
+                new=counts[0],
+                learning=counts[1],
+                mature=counts[2],
+                due=counts[3],
+            )
+            for unit_id, (title, position, counts) in units.items()
         ],
     )
 

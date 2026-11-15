@@ -184,6 +184,8 @@ AnswerPayload = Annotated[
     Field(discriminator="type"),
 ]
 Grade = Literal["PENDING", "CORRECT", "INCORRECT"]
+# The student's own verdict on a card: AGAIN (Ponovno), HARD (Teško), GOOD (Dobro), EASY (Lako).
+ReviewRating = Literal["AGAIN", "HARD", "GOOD", "EASY"]
 # A student's own verdict on a short answer; never a grade. See docs/PRACTICE.md.
 SelfReview = Literal["CORRECT", "INCORRECT"]
 # Results also mark questions left blank in a paper session.
@@ -223,6 +225,11 @@ class PaperScore(BaseModel):
 
 class CheckAnswer(StrictModel):
     confidence: Confidence | None = None
+
+
+class RateAnswer(StrictModel):
+    # Null takes a rating back.
+    rating: ReviewRating | None
 
 
 class SelfReviewRequest(StrictModel):
@@ -295,6 +302,8 @@ class ActiveQuestion(BaseModel):
     # Live too, but read only from the student's own favorites: bank edits and archiving
     # never change it.
     favorite: bool = False
+    # The card rating given after the answer was checked; applied when the session is submitted.
+    rating: ReviewRating | None = None
     # Only for IMMEDIATE answers that were checked; unchecked questions never carry keys.
     feedback: QuestionFeedback | None = None
     # Paper sessions only: the item's frozen points and original label.
