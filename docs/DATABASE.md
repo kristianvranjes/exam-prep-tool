@@ -225,6 +225,14 @@ mock exam; plain mock practice has none). No column or row changes. Downgrade fi
 `selection_mode` to NULL for the scored `MOCK` quizzes, which only forgets their recorded mode, and
 then restores the stricter constraint; sessions, answers and scores are untouched.
 
+## Answer rating migration 0031
+
+Revision **0031** (`down_revision = 0030`) adds nullable `answers.rating`
+(`AGAIN`/`HARD`/`GOOD`/`EASY`), allowed only on a checked answer (`ck_answer_rating`): the student's
+own rating of the card, given during the session and applied once when it is submitted (see
+[API.md](API.md)). Nothing is backfilled. Downgrade drops the column; ratings already applied stay
+in `review_rating_events` and on the cards, only those of unfinished sessions are lost.
+
 ## Faculty catalog migration 0010
 
 Revision 0010 follows 0009. `faculties` stores UUID id, name (1-150 characters,

@@ -13,6 +13,7 @@ from app.schemas.quiz import (
     CheckAnswer,
     PracticeAvailability,
     PracticeFilters,
+    RateAnswer,
     SelfReviewRequest,
     StartMock,
     StartQuiz,
@@ -111,6 +112,18 @@ def check(
     db: Session = Depends(get_db),
 ) -> AttemptResponse:
     return quizzes.check_answer(db, user, course_id, attempt_id, question_id, data)
+
+
+@router.put("/{attempt_id}/answers/{question_id}/rating", response_model=AttemptResponse)
+def rate(
+    course_id: UUID,
+    attempt_id: UUID,
+    question_id: UUID,
+    data: RateAnswer,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AttemptResponse:
+    return quizzes.rate_answer(db, user, course_id, attempt_id, question_id, data)
 
 
 @router.patch("/{attempt_id}/answers/{question_id}/self-review", response_model=AttemptResponse)

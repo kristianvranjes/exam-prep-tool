@@ -33,7 +33,9 @@ from app.schemas.quiz import (
     PracticeFilters,
     QuestionFeedback,
     QuestionUnitLabel,
+    RateAnswer,
     ResultQuestion,
+    ReviewRating,
     SelfReview,
     SelfReviewRequest,
     SelfReviewSummary,
@@ -190,6 +192,7 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
             answer=answer_adapter.validate_python(answer.payload) if answer else None,
             units=units.get(row.source_question_id, []),
             favorite=row.source_question_id in favorites,
+            rating=cast(ReviewRating | None, answer.rating) if answer else None,
             points=None if row.points is None else float(row.points),
             label=row.label,
             unit=content.unit,
@@ -603,6 +606,36 @@ def clear_answer(
         raise
 
 
+def rate_answer(
+    db: Session,
+    user: User,
+    course_id: UUID,
+    attempt_id: UUID,
+    question_id: UUID,
+    data: RateAnswer,
+) -> AttemptResponse:
+    """Keep the student's rating of a checked answer; submission reschedules the card from it.
+
+    Rating here instead of after submission means the card is scheduled once, not first by the
+    graded result and again by the rating.
+    """
+    attempt = load_attempt(db, user, course_id, attempt_id)
+    require_writable(attempt)
+    question = attempt_question(db, attempt, question_id)
+    try:
+        answer = saved_answer(db, attempt, question)
+        if answer is None or answer.checked_at is None:
+            raise HTTPException(409, "Check the answer before rating it")
+        answer.rating = data.rating
+        db.flush()
+        result = representation(db, attempt, course_id)
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
+
+
 def check_answer(
     db: Session,
     user: User,
@@ -732,7 +765,12 @@ def submit(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> Attemp
             review_results[question.source_question_id] = cast(Grade, answer.grading_status)
         attempt.status = "SUBMITTED"
         attempt.submitted_at = submitted_at
-        apply_reviews(db, user.id, review_results, submitted_at)
+        ratings = {
+            question.source_question_id: cast(ReviewRating, answers[question.id].rating)
+            for question in questions
+            if question.id in answers and answers[question.id].rating is not None
+        }
+        apply_reviews(db, user.id, review_results, submitted_at, ratings)
         db.flush()
         result = representation(db, attempt, course_id)
         db.commit()

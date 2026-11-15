@@ -117,6 +117,8 @@ export const api = {
   reviewProgressSummary: (courseId: string) => request<ReviewProgressSummary>(`/courses/${courseId}/review-progress/summary`),
   unitProgress: (courseId: string) => request<UnitProgressSummary>(`/courses/${courseId}/review-progress/units`),
   /** Cards coming due per Zagreb day for the review outlook; overdue cards count on the first day. */
+  /** Decks per unit with how mature your cards are (new, learning, mature, due). */
+  reviewDecks: (courseId: string) => request<ReviewDecks>(`/courses/${courseId}/review-progress/decks`),
   reviewForecast: (courseId: string, days = 14) => request<ReviewForecast>(`/courses/${courseId}/review-progress/forecast?days=${days}`),
   /** The student's own rating of a question they answered; it only reschedules the review card. */
   rateReview: (courseId: string, questionId: string, rating: ReviewRating) => request<ReviewRatingResult>(`/courses/${courseId}/review-progress/ratings`, { method: "POST", body: JSON.stringify({ question_id: questionId, rating }) }),
@@ -335,6 +337,10 @@ export type ReviewProgress = {
 export type ReviewStageCount = { review_stage: number; question_count: number };
 export type ForecastDay = { date: string; count: number };
 export type ReviewForecast = { as_of: string; days: ForecastDay[] };
+/** How a deck's questions stand for you: new (no card yet), learning (gap under `mature_after_days`), mature; `due` is part of the last two. */
+export type DeckCounts = { new: number; learning: number; mature: number; due: number };
+export type Deck = DeckCounts & { unit_id: string; title: string; position: number };
+export type ReviewDecks = { as_of: string; mature_after_days: number; total: DeckCounts; decks: Deck[] };
 export type ReviewRating ="AGAIN" | "HARD" | "GOOD" | "EASY";
 export type ReviewRatingResult = {
   question_id: string; rating: ReviewRating; interval_minutes: number; due_at: string;

@@ -80,6 +80,35 @@ class UnitProgressSummary(BaseModel):
     units: list[UnitProgress]
 
 
+class DeckCounts(BaseModel):
+    """How the questions of a deck stand for the caller: `new` have no card yet, `learning` have a
+    card whose gap is under 21 days, `mature` one of 21 days or more. `due` cards, a subset of
+    learning and mature, wait for review now."""
+
+    new: int
+    learning: int
+    mature: int
+    due: int
+
+
+class Deck(DeckCounts):
+    """The questions of one active unit; a question in several units counts in each."""
+
+    unit_id: UUID
+    title: str
+    position: int
+
+
+class ReviewDecks(BaseModel):
+    """Decks per unit with how mature the caller's cards are. `total` counts each question once,
+    however many units it is in."""
+
+    as_of: datetime
+    mature_after_days: int
+    total: DeckCounts
+    decks: list[Deck]
+
+
 class ForecastDay(BaseModel):
     date: date
     count: int
