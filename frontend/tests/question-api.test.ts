@@ -59,6 +59,8 @@ it("uses course-unit paths and sends unit filters and selections", async () => {
   await api.questions("course", { unassigned: true });
   await api.importQuestions("course", "{}", ["u1", "u2"]);
   await api.importQuestions("course", "{}");
+  await api.importQuestions("course", "{}", [], { duplicates: "SKIP", importAs: "PENDING_REVIEW", skipInvalid: true });
+  await api.checkImport("course", "{\"a\":1}");
   const calls = fetchMock.mock.calls;
   expect(calls[0][0]).toMatch(/\/courses\/course\/units$/);
   expect(calls[1][0]).toContain("/courses/course/units?include_archived=true");
@@ -75,6 +77,9 @@ it("uses course-unit paths and sends unit filters and selections", async () => {
   expect(calls[9][0]).toContain("/courses/course/questions?unassigned=true");
   expect(calls[10][0]).toContain("/courses/course/questions/import?unit_ids=u1&unit_ids=u2");
   expect(calls[11][0]).toMatch(/\/courses\/course\/questions\/import$/);
+  expect(calls[12][0]).toContain("/questions/import?duplicates=SKIP&import_as=PENDING_REVIEW&skip_invalid=true");
+  expect(calls[13][0]).toMatch(/\/courses\/course\/questions\/import\/check$/);
+  expect(calls[13][1]).toMatchObject({ method: "POST", body: "{\"a\":1}" });
 });
 
 it("uses exam-scope paths for listing, saving, deleting and copying", async () => {

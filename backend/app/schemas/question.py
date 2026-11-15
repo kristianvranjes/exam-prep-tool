@@ -386,10 +386,59 @@ class VersionResponse(BaseModel):
     created_at: datetime
 
 
+ImportUnitTitle = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=150)
+]
+
+
+class ImportUnit(StrictModel):
+    """Optional title of the course unit (quiz) an imported question belongs to."""
+
+    unit: ImportUnitTitle | None = None
+
+
+class ImportMCQ(MCQ, ImportUnit):
+    pass
+
+
+class ImportTrueFalse(TrueFalse, ImportUnit):
+    pass
+
+
+class ImportShortAnswer(ShortAnswer, ImportUnit):
+    pass
+
+
+class ImportNumeric(Numeric, ImportUnit):
+    pass
+
+
+class ImportMultipleSelect(MultipleSelect, ImportUnit):
+    pass
+
+
+class ImportMatch(Match, ImportUnit):
+    pass
+
+
+ImportContent = Annotated[
+    ImportMCQ
+    | ImportTrueFalse
+    | ImportShortAnswer
+    | ImportNumeric
+    | ImportMultipleSelect
+    | ImportMatch,
+    Field(discriminator="type"),
+]
+import_content_adapter: TypeAdapter[ImportContent] = TypeAdapter(ImportContent)
+
+
 class QuizImport(StrictModel):
     # v2 adds NUMERIC, MULTIPLE_SELECT and MATCH; v1 documents stay valid as they were.
+    # `unit` (v2 only, optional) names the unit all questions without their own `unit` belong to.
     version: Literal["quiz-import-v1", "quiz-import-v2"]
-    questions: list[QuestionContent] = Field(min_length=1, max_length=MAX_IMPORT_QUESTIONS)
+    unit: ImportUnitTitle | None = None
+    questions: list[ImportContent] = Field(min_length=1, max_length=MAX_IMPORT_QUESTIONS)
 
     @model_validator(mode="after")
     def unique_stems(self) -> Self:
@@ -397,6 +446,10 @@ class QuizImport(StrictModel):
             q.type not in CLASSIC_TYPES for q in self.questions
         ):
             raise ValueError("Use quiz-import-v2 for numeric, multiple-select and match questions")
+        if self.version == "quiz-import-v1" and (
+            self.unit is not None or any(q.unit is not None for q in self.questions)
+        ):
+            raise ValueError("Use quiz-import-v2 to name units")
         stems = [normalize(q.stem) for q in self.questions]
         if len(set(stems)) != len(stems):
             raise ValueError("Duplicate question stems in import")
