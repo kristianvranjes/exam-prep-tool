@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from random import SystemRandom
 from typing import Literal, cast
 from uuid import UUID
 
@@ -25,6 +26,7 @@ from app.schemas.quiz import (
     Confidence,
     FeedbackMode,
     Grade,
+    MatchAnswer,
     MCQAnswer,
     MultipleSelectAnswer,
     PaperScore,
@@ -50,7 +52,7 @@ from app.services.courses import get_member_course
 from app.services.exam_papers import load_paper
 from app.services.exam_scopes import resolve_focus
 from app.services.favorites import favorited
-from app.services.grading import grade
+from app.services.grading import correct_slots, grade
 from app.services.paper_scoring import SCORING_VERSION, ItemResult, item_points, score
 from app.services.progress import apply_reviews
 from app.services.questions.service import owner_view
@@ -157,6 +159,7 @@ def feedback(content: OwnerQuestion, answer: Answer | None) -> QuestionFeedback:
         absolute_tolerance=content.absolute_tolerance,
         relative_tolerance=content.relative_tolerance,
         grading_status=cast(Grade, answer.grading_status) if answer else "PENDING",
+        correct_matches=correct_slots(content) if content.type == "MATCH" else None,
         score_fraction=None
         if answer is None or answer.score_fraction is None
         else float(answer.score_fraction),
@@ -192,6 +195,9 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
             stem=content.stem,
             difficulty=content.difficulty,
             options=[PublicOption(position=o.position, text=o.text) for o in content.options],
+            choices=shown_choices(content),
+            hint=content.hint,
+            expr=content.expr,
             answer=answer_adapter.validate_python(answer.payload) if answer else None,
             units=units.get(row.source_question_id, []),
             favorite=row.source_question_id in favorites,
@@ -402,6 +408,32 @@ def start_generated(
         raise
 
 
+def shown_choices(content: OwnerQuestion) -> list[PublicOption] | None:
+    """The right-hand column of a MATCH question as this session shows it."""
+    if content.type != "MATCH":
+        return None
+    return [
+        PublicOption(position=slot, text=content.options[left].match_text or "")
+        for slot, left in enumerate(content.right_order)
+    ]
+
+
+def shuffled_order(count: int) -> list[int]:
+    """A random order of `count` items that never leaves them in place."""
+    order = list(range(count))
+    while order == list(range(count)):
+        SystemRandom().shuffle(order)
+    return order
+
+
+def question_snapshot(db: Session, question: Question) -> dict[str, object]:
+    data = owner_view(db, question).model_dump(mode="json")
+    if question.type == "MATCH":
+        # Fixed for the session, so a reload shows the same order and grading can rely on it.
+        data["right_order"] = shuffled_order(len(data["options"]))
+    return data
+
+
 def snapshot_row(
     db: Session,
     quiz: Quiz,
@@ -422,7 +454,7 @@ def snapshot_row(
         position=position,
         source_question_id=question.id,
         source_version=version,
-        snapshot=owner_view(db, question).model_dump(mode="json"),
+        snapshot=question_snapshot(db, question),
         points=points,
         label=label,
     )
@@ -570,6 +602,7 @@ def save_answer(
             isinstance(data, MultipleSelectAnswer)
             and not set(data.option_positions) <= {o.position for o in content.options}
         )
+        or (isinstance(data, MatchAnswer) and len(data.matches) != len(content.options))
     ):
         raise HTTPException(422, "Answer must match the question type and available options")
     try:

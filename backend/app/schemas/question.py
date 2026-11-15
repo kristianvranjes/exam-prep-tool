@@ -16,7 +16,7 @@ from pydantic import (
 from app.services.numbers import parse_number
 
 QuestionType = Literal[
-    "MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"
+    "MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"
 ]
 # AI generation and quiz-import-v1 keep the original three types.
 ClassicType = Literal["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]
@@ -25,6 +25,8 @@ QuestionStatus = Literal["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED", "ARC
 Stem = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=400)]
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 Difficulty = Annotated[int, Field(ge=1, le=5)]
+Hint = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=400)]
+Expression = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 MAX_QUESTION_UNITS = 5
 # One bank page is 20 rows; the cap leaves room without unbounded row locks.
 MAX_BULK_QUESTIONS = 50
@@ -67,6 +69,8 @@ class Content(StrictModel):
     stem: Stem
     explanation: Text | None = None
     difficulty: Difficulty | None = None
+    hint: Hint | None = None
+    expr: Expression | None = None
 
 
 class MCQ(Content):
@@ -97,6 +101,26 @@ class MultipleSelect(Content):
         return self
 
 
+class Pair(StrictModel):
+    left: Stem
+    right: Stem
+
+
+class Match(Content):
+    """Connect each left item with its partner; the right column is shuffled for every session."""
+
+    type: Literal["MATCH"]
+    pairs: list[Pair] = Field(min_length=2, max_length=6)
+
+    @model_validator(mode="after")
+    def distinct_items(self) -> Self:
+        for side in ("left", "right"):
+            texts = {normalize(getattr(pair, side)) for pair in self.pairs}
+            if len(texts) != len(self.pairs):
+                raise ValueError(f"Duplicate {side} item")
+        return self
+
+
 class Numeric(Content):
     type: Literal["NUMERIC"]
     correct_value: Number
@@ -117,7 +141,7 @@ class ShortAnswer(Content):
 
 
 QuestionContent = Annotated[
-    MCQ | TrueFalse | ShortAnswer | Numeric | MultipleSelect, Field(discriminator="type")
+    MCQ | TrueFalse | ShortAnswer | Numeric | MultipleSelect | Match, Field(discriminator="type")
 ]
 content_adapter: TypeAdapter[QuestionContent] = TypeAdapter(QuestionContent)
 
@@ -171,8 +195,17 @@ class CreateMultipleSelect(MultipleSelect, ManualConcepts, ManualUnits):
     pass
 
 
+class CreateMatch(Match, ManualConcepts, ManualUnits):
+    pass
+
+
 QuestionCreate = Annotated[
-    CreateMCQ | CreateTrueFalse | CreateShortAnswer | CreateNumeric | CreateMultipleSelect,
+    CreateMCQ
+    | CreateTrueFalse
+    | CreateShortAnswer
+    | CreateNumeric
+    | CreateMultipleSelect
+    | CreateMatch,
     Field(discriminator="type"),
 ]
 
@@ -226,6 +259,11 @@ class QuestionPatch(BaseModel):
     options: list[Option] | None = None
     correct_answer: bool | None = Field(default=None, strict=True)
     reference_answer: Text | None = None
+    # MATCH: the complete list of pairs.
+    pairs: list[Pair] | None = None
+    # Any type; null clears them.
+    hint: Hint | None = None
+    expr: Expression | None = None
     # NUMERIC fields; null clears an optional tolerance or unit.
     correct_value: Number | None = None
     absolute_tolerance: Tolerance | None = None
@@ -270,6 +308,8 @@ class PublicOption(BaseModel):
 
 class OwnerOption(PublicOption):
     is_correct: bool
+    # MATCH only: the partner of the left item in `text`.
+    match_text: str | None = None
 
 
 class PublicQuestion(BaseModel):
@@ -281,6 +321,10 @@ class PublicQuestion(BaseModel):
     stem: str
     difficulty: int | None
     options: list[PublicOption]
+    # MATCH: the right-hand items, in an order that does not follow the pairs.
+    choices: list[PublicOption] = []
+    hint: str | None = None
+    expr: str | None = None
     unit_ids: list[UUID] = []
     # Public for NUMERIC: students see the unit their answer is in.
     unit: str | None = None
@@ -307,6 +351,13 @@ class OwnerQuestion(BaseModel):
     difficulty: int | None
     correct_boolean: bool | None
     reference_answer: str | None
+    # Defaults keep snapshots from before hints and matching readable too.
+    hint: str | None = None
+    expr: str | None = None
+    # Session snapshots of a MATCH question only: the order the right-hand items are shown in,
+    # fixed when the session starts. Item k of the shown column is the partner of left item
+    # right_order[k].
+    right_order: list[int] = []
     # Defaults keep snapshots from before NUMERIC readable.
     correct_value: Decimal | None = None
     absolute_tolerance: Decimal | None = None
@@ -336,7 +387,7 @@ class VersionResponse(BaseModel):
 
 
 class QuizImport(StrictModel):
-    # v2 adds NUMERIC and MULTIPLE_SELECT; v1 documents stay valid as they were.
+    # v2 adds NUMERIC, MULTIPLE_SELECT and MATCH; v1 documents stay valid as they were.
     version: Literal["quiz-import-v1", "quiz-import-v2"]
     questions: list[QuestionContent] = Field(min_length=1, max_length=MAX_IMPORT_QUESTIONS)
 
@@ -345,7 +396,7 @@ class QuizImport(StrictModel):
         if self.version == "quiz-import-v1" and any(
             q.type not in CLASSIC_TYPES for q in self.questions
         ):
-            raise ValueError("Use quiz-import-v2 for numeric and multiple-select questions")
+            raise ValueError("Use quiz-import-v2 for numeric, multiple-select and match questions")
         stems = [normalize(q.stem) for q in self.questions]
         if len(set(stems)) != len(stems):
             raise ValueError("Duplicate question stems in import")

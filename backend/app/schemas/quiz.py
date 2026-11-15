@@ -12,7 +12,7 @@ from app.services.numbers import MAX_ANSWER_LENGTH, parse_number
 
 
 def default_types() -> list[QuestionType]:
-    return ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"]
+    return ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"]
 
 
 # MISTAKES and DUE narrow selection to the student's review progress, FAVORITES to their
@@ -28,7 +28,7 @@ class FocusFilters(StrictModel):
     question_types: list[QuestionType] = Field(
         default_factory=default_types,
         min_length=1,
-        max_length=5,
+        max_length=6,
     )
     # Optional focus: selected units, or an exam scope that expands to its units.
     unit_ids: list[UnitId] = Field(default_factory=list, max_length=MAX_COURSE_UNITS)
@@ -93,7 +93,7 @@ class StartMock(StrictModel):
     count: int = Field(default=20, ge=1, le=MAX_MOCK_QUESTIONS)
     duration_minutes: int | None = Field(default=None, ge=1, le=MAX_MOCK_MINUTES)
     question_types: list[QuestionType] = Field(
-        default_factory=default_types, min_length=1, max_length=5
+        default_factory=default_types, min_length=1, max_length=6
     )
     feedback_mode: FeedbackMode = "END"
 
@@ -179,8 +179,27 @@ class MultipleSelectAnswer(StrictModel):
         return sorted(value)
 
 
+class MatchAnswer(StrictModel):
+    """`matches[i]` is the item of the shown right-hand column chosen for left item i, or null
+    while it is still unmatched; each right-hand item can be used once."""
+
+    type: Literal["MATCH"]
+    matches: list[Annotated[int, Field(ge=0, le=5)] | None] = Field(min_length=2, max_length=6)
+
+    @model_validator(mode="after")
+    def valid_matches(self) -> Self:
+        chosen = [match for match in self.matches if match is not None]
+        if not chosen:
+            raise ValueError("Match at least one pair")
+        if len(set(chosen)) != len(chosen):
+            raise ValueError("Use each item at most once")
+        if max(chosen) >= len(self.matches):
+            raise ValueError("Match to an item that exists")
+        return self
+
+
 AnswerPayload = Annotated[
-    MCQAnswer | BooleanAnswer | TextAnswer | NumericAnswer | MultipleSelectAnswer,
+    MCQAnswer | BooleanAnswer | TextAnswer | NumericAnswer | MultipleSelectAnswer | MatchAnswer,
     Field(discriminator="type"),
 ]
 Grade = Literal["PENDING", "CORRECT", "INCORRECT"]
@@ -278,7 +297,10 @@ class QuestionFeedback(BaseModel):
     correct_boolean: bool | None
     reference_answer: str | None
     grading_status: Grade
-    # Multiple select: the share of the item's points earned (1, 0.5 or 0); null for other types
+    # MATCH: for each left item, the shown right-hand item that is its partner.
+    correct_matches: list[int] | None = None
+    # Multiple select and matching: the share of the item's points earned (1, 0.5 or 0); null
+    # for other types
     # and for answers graded before partial credit, which are all or nothing.
     score_fraction: float | None = None
     confidence: Confidence | None = None
@@ -299,6 +321,11 @@ class ActiveQuestion(BaseModel):
     stem: str
     difficulty: int | None
     options: Sequence[PublicOption]
+    # MATCH: the right-hand column in the order shown for this session; `options` are the left
+    # items.
+    choices: list[PublicOption] | None = None
+    hint: str | None = None
+    expr: str | None = None
     answer: AnswerPayload | None
     # Live organization, not part of the snapshot: current active units in course order.
     units: list[QuestionUnitLabel] = []
@@ -322,6 +349,7 @@ class ResultQuestion(ActiveQuestion):
     correct_boolean: bool | None
     reference_answer: str | None
     grading_status: ResultGrade
+    correct_matches: list[int] | None = None
     score_fraction: float | None = None
     confidence: Confidence | None = None
     self_review: SelfReview | None = None
