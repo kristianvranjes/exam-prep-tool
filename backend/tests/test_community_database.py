@@ -8,7 +8,7 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from community_helpers import provision
 from fastapi.testclient import TestClient
-from migration_helpers import legacy_question_columns
+from migration_helpers import legacy_question_columns, legacy_rows
 from sqlalchemy import delete, text
 from sqlalchemy.exc import IntegrityError
 from test_materials import clients as clients
@@ -256,8 +256,7 @@ def history():
     with engine.connect() as conn:
         questions = text(f"SELECT {legacy_question_columns(conn)} FROM questions ORDER BY id")
         return [conn.execute(questions).all()] + [
-            conn.execute(text(f"SELECT * FROM {table} ORDER BY id")).all()
-            for table in ("question_versions", "question_options")
+            legacy_rows(conn, table) for table in ("question_versions", "question_options")
         ]
 
 

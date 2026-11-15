@@ -35,21 +35,24 @@ or use this repository file. It contains all five supported types. The earlier
 ## Format versions 1 and 2
 
 Top level: `{"version":"quiz-import-v2","questions":[...]}`. Version 2 adds
-`NUMERIC` and `MULTIPLE_SELECT` (R4); `quiz-import-v1` documents stay valid exactly as
+`NUMERIC`, `MULTIPLE_SELECT` (R4) and `MATCH`; `quiz-import-v1` documents stay valid exactly as
 before, and a v1 document containing a new type is rejected with a hint to use v2.
 Unknown fields and versions are rejected, including status, creator IDs, course IDs and
 approval claims. The existing strict question-content schemas validate each item:
 
 | Field | Rule |
 | --- | --- |
-| `type` | `MULTIPLE_CHOICE`, `SHORT_ANSWER` or `TRUE_FALSE`; v2 also `NUMERIC` and `MULTIPLE_SELECT` |
+| `type` | `MULTIPLE_CHOICE`, `SHORT_ANSWER` or `TRUE_FALSE`; v2 also `NUMERIC`, `MULTIPLE_SELECT` and `MATCH` |
 | `stem` | Required nonblank text, up to 400 characters |
 | `explanation` | Optional null or nonblank text, up to 2000 characters |
 | `difficulty` | Optional null or integer 1–5, never a boolean/string |
+| `hint` | Optional nonblank text, up to 400 characters: a nudge the student may open before answering |
+| `expr` | Optional nonblank text, up to 200 characters: a Boolean or algebraic expression shown apart from the stem |
 | MCQ `options` | 2–6 objects with `text` (1–400 characters) and boolean `is_correct`; distinct normalized text and exactly one correct answer |
 | Short answer `reference_answer` | Required nonblank text, up to 2000 characters |
 | True/false `correct_answer` | Required JSON boolean |
 | Multiple-select `options` | As for MCQ, but one or more options are correct; students must choose exactly that set |
+| Match `pairs` | 2–6 objects `{"left":"...","right":"..."}` (1–400 characters each); left items distinct and right items distinct after normalizing; students connect each left item with its partner |
 | Numeric `correct_value` | Required number, written as a string (`"9.81"`, `"9,81"`, `"1.5e-3"`) or a JSON number |
 | Numeric `absolute_tolerance` | Optional number ≥ 0 in the answer's unit |
 | Numeric `relative_tolerance` | Optional share of the key's magnitude, 0–1 (`"0.01"` allows 1 %) |

@@ -244,6 +244,17 @@ practice, and record their own `grading_version`, so earlier provenance is uncha
   and pays no wrong-answer penalty, while a set with any wrong option pays it as before.
   Results mark it **Djelomično točno** (the grade stays Netočno); answers graded before
   migration 0032 have no fraction and keep scoring all or nothing.
+- **`match-v1`:** a `MATCH` question holds 2–6 pairs. When a session starts the snapshot fixes a
+  random order of the right-hand column (never the authored order), so a reload shows the same
+  order and the stored answer, `matches[i]` = the shown right-hand item chosen for left item
+  i (null while open), stays valid. All pairs right is `CORRECT` (fraction 1). At least one pair
+  right and none wrong, the rest left open, is `INCORRECT` with fraction **0.5**; any wrong pair
+  or no right one is 0. Scoring, results, the review card and item analysis treat it exactly as
+  a multiple-select answer. The key (`correct_matches`, and each pair's partner in `options`) is
+  revealed only after checking or submission, and students reading the bank see the right-hand
+  items alphabetically.
+- **Hint and expression:** any question may carry an optional `hint` (up to 400 characters) and
+  `expr` (up to 200). Sessions return both with the question, the hint to be opened on request.
 
 Results and checked feedback show the numeric key with its tolerance (for example
 `9.81 m/s² (± 0.05)`) or every correct option. Scheduling, mistakes, due review,

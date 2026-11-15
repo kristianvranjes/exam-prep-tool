@@ -269,7 +269,7 @@ export type Concept = { id: string; course_id: string; name: string; normalized_
 export type ConceptDetail = Concept & { source_chunks: { id: string; material_id: string; ordinal: number; content: string }[] };
 export type AIJob = { id: string; status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'; model: string; error_message: string | null; error_code: string | null };
 
-export type QuestionType = "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER" | "NUMERIC" | "MULTIPLE_SELECT";
+export type QuestionType = "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER" | "NUMERIC" | "MULTIPLE_SELECT" | "MATCH";
 export type QuestionStatus = "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED";
 export type QuestionAction = "submit" | "approve" | "reject" | "archive";
 export type ReportReason = "INCORRECT_ANSWER" | "MULTIPLE_CORRECT" | "UNCLEAR" | "TYPO" | "OUTDATED" | "DUPLICATE" | "OTHER";
@@ -277,7 +277,7 @@ export type ReportStatus = "OPEN" | "RESOLVED";
 export type ReportReceipt = { id: string; question_id: string; reason: ReportReason; details: string | null; status: ReportStatus; created_at: string };
 export type ModeratorReport = ReportReceipt & { resolution: "DISMISSED" | "QUESTION_ARCHIVED" | null; resolved_by_user_id: string | null; resolved_at: string | null; question: OwnerQuestion };
 type QuestionBase = { id: string; course_id: string; type: QuestionType; stem: string; difficulty: number | null };
-export type PublicQuestion = QuestionBase & { visibility: "MEMBER"; status: "APPROVED"; options: { position: number; text: string }[]; unit_ids?: string[]; unit?: string | null };
+export type PublicQuestion = QuestionBase & { visibility: "MEMBER"; status: "APPROVED"; options: { position: number; text: string }[]; choices?: { position: number; text: string }[]; hint?: string | null; expr?: string | null; unit_ids?: string[]; unit?: string | null };
 export type OwnerQuestion = QuestionBase & {
   visibility: "OWNER"; status: QuestionStatus; source: "AI" | "USER"; ai_job_id: string | null;
   created_by_user_id: string; created_at: string; updated_at: string;
@@ -285,17 +285,21 @@ export type OwnerQuestion = QuestionBase & {
   /** NUMERIC keys come back as exact decimal strings. */
   correct_value?: string | null; absolute_tolerance?: string | null; relative_tolerance?: string | null; unit?: string | null;
   reviewed_by_user_id: string | null; reviewed_at: string | null; rejection_reason: string | null;
-  options: { position: number; text: string; is_correct: boolean }[];
+  /** MATCH keeps one row per pair: `text` is the left item and `match_text` its partner. */
+  options: { position: number; text: string; is_correct: boolean; match_text?: string | null }[];
+  hint?: string | null; expr?: string | null;
   concept_ids: string[]; unit_ids?: string[]; source_chunks: { chunk_id: string; material_id: string; ordinal: number }[];
 };
 export type Question = PublicQuestion | OwnerQuestion;
 export type QuestionGeneration = { concept_ids: string[]; question_types: QuestionType[]; count: number; retrieval_top_k: number };
-type QuestionCreateBase = { stem: string; explanation: string | null; difficulty: number | null; concept_ids: string[] };
+type QuestionCreateBase = { stem: string; explanation: string | null; difficulty: number | null; concept_ids: string[]; hint?: string | null; expr?: string | null };
 export type QuestionContent = Omit<QuestionCreateBase, "concept_ids"> & (
   | { type: "MULTIPLE_CHOICE"; options: { text: string; is_correct: boolean }[] }
   | { type: "TRUE_FALSE"; correct_answer: boolean }
   | { type: "SHORT_ANSWER"; reference_answer: string }
   | { type: "MULTIPLE_SELECT"; options: { text: string; is_correct: boolean }[] }
+  /** Pairs to connect; the right column is shuffled for every session. */
+  | { type: "MATCH"; pairs: { left: string; right: string }[] }
   | { type: "NUMERIC"; correct_value: string; absolute_tolerance: string | null; relative_tolerance: string | null; unit: string | null }
 );
 export type QuestionCreate = QuestionContent & { concept_ids: string[]; unit_ids?: string[] };

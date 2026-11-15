@@ -16,7 +16,7 @@ export function AbandonedQuiz({ attempt }: { attempt: Extract<Attempt, { status:
     </div>
     {attempt.questions.map((question, index) => {
       const answer = question.answer;
-      const savedAnswer = answerText(answer, question.options, question.unit);
+      const savedAnswer = answerText(answer, question.options, question.unit, question.choices);
       return <article key={question.id} aria-label={`Spremljeni odgovor na pitanje ${index + 1}`}><Surface className="flex flex-col gap-3">
         <h3 className="text-lg font-semibold">{index + 1}. <RichText text={question.stem} /></h3>
         <QuestionUnits units={question.units} />

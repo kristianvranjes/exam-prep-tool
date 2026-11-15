@@ -4,6 +4,9 @@ from sqlalchemy import Connection, text
 
 # Added by 0024 (R4) and tested with the new question types, not by older roundtrips.
 NUMERIC_QUESTION_COLUMNS = ("correct_value", "absolute_tolerance", "relative_tolerance", "unit")
+# Added by 0033 and tested with the matching questions, not by older roundtrips.
+HINT_QUESTION_COLUMNS = ("hint", "expr")
+MATCH_OPTION_COLUMNS = ("match_text",)
 # Added by 0026 and tested by its own roundtrip: older downgrades drop the recorded mode.
 RECORDED_QUIZ_COLUMNS = ("selection_mode",)
 # Added by 0028 and tested by its own roundtrip: older downgrades drop the student's list status.
@@ -26,7 +29,11 @@ def legacy_columns(conn: Connection, table: str, newer: tuple[str, ...]) -> str:
 
 
 def legacy_question_columns(conn: Connection) -> str:
-    return legacy_columns(conn, "questions", NUMERIC_QUESTION_COLUMNS)
+    return legacy_columns(conn, "questions", NUMERIC_QUESTION_COLUMNS + HINT_QUESTION_COLUMNS)
+
+
+def legacy_option_columns(conn: Connection) -> str:
+    return legacy_columns(conn, "question_options", MATCH_OPTION_COLUMNS)
 
 
 def legacy_quiz_columns(conn: Connection) -> str:
@@ -45,6 +52,7 @@ def legacy_rows(conn: Connection, table: str) -> list[object]:
     """Every row of `table` ordered by id, without columns newer revisions add."""
     columns = {
         "questions": legacy_question_columns,
+        "question_options": legacy_option_columns,
         "quizzes": legacy_quiz_columns,
         "course_memberships": legacy_membership_columns,
         "question_review_progress": legacy_review_columns,

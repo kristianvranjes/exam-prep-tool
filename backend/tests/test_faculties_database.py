@@ -12,6 +12,7 @@ from migration_helpers import (
     legacy_membership_columns,
     legacy_question_columns,
     legacy_review_columns,
+    legacy_rows,
 )
 from sqlalchemy import delete, select, text
 from sqlalchemy.exc import DataError, IntegrityError
@@ -227,9 +228,7 @@ def historical_rows():
         "question_versions",
     ]
     with engine.connect() as conn:
-        result = {
-            name: conn.execute(text(f"SELECT * FROM {name} ORDER BY id")).all() for name in tables
-        }
+        result = {name: legacy_rows(conn, name) for name in tables}
         # The rating schedule is new in 0029 and tested by its own roundtrip.
         result["question_review_progress"] = conn.execute(
             text(f"SELECT {legacy_review_columns(conn)} FROM question_review_progress ORDER BY id")

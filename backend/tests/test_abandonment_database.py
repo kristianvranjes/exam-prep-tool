@@ -133,6 +133,9 @@ def test_abandon_authorization_and_detail_privacy(bank):
             "stem",
             "difficulty",
             "options",
+            "choices",
+            "hint",
+            "expr",
             "answer",
             "units",
             "favorite",
@@ -351,6 +354,6 @@ def test_0015_downgrade_refuses_to_erase_abandoned_history(bank):
     with pytest.raises(RuntimeError, match="abandoned attempts exist"):
         command.downgrade(Config("alembic.ini"), "0014")
     with engine.connect() as conn:
-        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0032"
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0033"
     assert member.get(path).json() == abandoned
     assert retained_rows() == before

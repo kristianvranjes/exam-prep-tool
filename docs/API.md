@@ -397,6 +397,22 @@ OWNER rules as units.
 | DELETE `/exam-scopes/{scope_id}` | OWNER, 204. Past practice keeps its frozen focus label. |
 | POST `/courses/{course_id}/exam-scopes/copy` | OWNER, `{from_year, to_year}`. 201 with the created scopes, undated; 404 when the source year is empty; 409 on a name conflict (nothing saved). |
 
+### Matching questions, hints and expressions
+
+`type: "MATCH"` questions are created like any other (`POST /courses/{id}/questions`) with `pairs`, 2–6
+objects `{left, right}`; `PATCH /questions/{id}` replaces the whole list. Every question type also
+accepts optional `hint` and `expr` (null clears them). Owners and moderators read a matching question's
+pairs as `options` with `text` (left) and `match_text` (right); members reading the bank see `options`
+(left items only) and `choices` (right items, alphabetical), plus `hint` and `expr`.
+
+A session returns, per `MATCH` question, `options` (left items), `choices` (right items in the order
+fixed for that session, `position` = shown place), `hint` and `expr`. The answer is
+`{"type":"MATCH","matches":[2,null,0]}`: `matches[i]` is the `position` chosen for left item i or null;
+at least one entry is set, none repeats and the length equals the number of pairs (422 otherwise). After
+checking or submission the question carries `correct_matches` (the right `position` of every left item)
+and `score_fraction`: 1, 0.5 (some pairs right, none wrong, the rest open) or 0. Imports of `MATCH`
+need `quiz-import-v2`. See [grading](PRACTICE.md).
+
 ### Practice availability (R2)
 
 GET `/courses/{course_id}/practice-availability` — members. Query parameters match
