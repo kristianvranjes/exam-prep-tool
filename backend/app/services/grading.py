@@ -2,6 +2,7 @@
 
 import unicodedata
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Literal
 
 from app.schemas.question import OwnerQuestion
@@ -19,6 +20,9 @@ ALGORITHM_VERSION = "deterministic-v1"
 # New types record their own rule, leaving earlier provenance untouched.
 NUMERIC_VERSION = "numeric-tolerance-v1"
 EXACT_SET_VERSION = "exact-set-v1"
+# Multiple select with partial credit: half the points for a correct but incomplete selection.
+PARTIAL_SET_VERSION = "partial-set-v1"
+HALF = Decimal("0.5")
 GradingMethod = Literal["DETERMINISTIC", "PENDING_SEMANTIC"]
 
 
@@ -27,6 +31,9 @@ class GradingResult:
     status: Grade
     method: GradingMethod
     version: str = ALGORITHM_VERSION
+    # The share of the item's points earned, for types that can score partially; the grade
+    # stays CORRECT or INCORRECT. None means all or nothing by the grade.
+    fraction: Decimal | None = None
 
 
 def normalize(text: str) -> str:
@@ -66,9 +73,13 @@ def grade(snapshot: OwnerQuestion, answer: AnswerPayload) -> GradingResult:
         if not set(answer.option_positions) <= positions:
             raise ValueError("Answer option does not exist in snapshot")
         key = {o.position for o in snapshot.options if o.is_correct}
-        correct = set(answer.option_positions) == key
+        chosen = set(answer.option_positions)
+        if chosen == key:
+            return GradingResult("CORRECT", "DETERMINISTIC", PARTIAL_SET_VERSION, Decimal(1))
+        # Some correct options marked, none wrong, some correct ones missing: half the points.
+        partial = bool(chosen) and chosen < key
         return GradingResult(
-            "CORRECT" if correct else "INCORRECT", "DETERMINISTIC", EXACT_SET_VERSION
+            "INCORRECT", "DETERMINISTIC", PARTIAL_SET_VERSION, HALF if partial else Decimal(0)
         )
     else:
         return GradingResult("PENDING", "PENDING_SEMANTIC")

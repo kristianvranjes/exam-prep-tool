@@ -5,7 +5,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from app.schemas.question import GenerationRequest, OwnerQuestion, QuizImport, content_adapter
 from app.schemas.quiz import AnswerPayload
-from app.services.grading import EXACT_SET_VERSION, NUMERIC_VERSION, grade
+from app.services.grading import NUMERIC_VERSION, PARTIAL_SET_VERSION, grade
 
 answers: TypeAdapter[AnswerPayload] = TypeAdapter(AnswerPayload)
 NUMERIC = {"type": "NUMERIC", "stem": "Gravity at sea level?", "correct_value": "9,81"}
@@ -122,13 +122,29 @@ def test_numeric_grading_is_inclusive_at_the_tolerance_boundary():
     )
 
 
-def test_multiple_select_grading_needs_the_exact_set():
-    key = snapshot(SELECT)
-    for positions, status in (([0, 1], "CORRECT"), ([0], "INCORRECT"), ([0, 1, 2], "INCORRECT")):
+def test_multiple_select_grade_needs_the_exact_set_and_scores_half_for_an_incomplete_one():
+    key = snapshot(SELECT)  # the correct options are 0 and 1
+    cases = (
+        ([0, 1], "CORRECT", 1),
+        ([0], "INCORRECT", 0.5),  # right but incomplete
+        ([1], "INCORRECT", 0.5),
+        ([0, 1, 2], "INCORRECT", 0),  # everything right plus a wrong one
+        ([0, 2], "INCORRECT", 0),
+        ([2], "INCORRECT", 0),
+    )
+    for positions, status, fraction in cases:
         result = grade(
             key, answers.validate_python({"type": "MULTIPLE_SELECT", "option_positions": positions})
         )
-        assert (result.status, result.version) == (status, EXACT_SET_VERSION)
+        assert (result.status, result.version) == (status, PARTIAL_SET_VERSION)
+        assert result.fraction == fraction, positions
+    # Other types are all or nothing: no fraction.
+    assert (
+        grade(
+            snapshot(NUMERIC), answers.validate_python({"type": "NUMERIC", "value": "9.81"})
+        ).fraction
+        is None
+    )
     with pytest.raises(ValueError):
         grade(key, answers.validate_python({"type": "MULTIPLE_SELECT", "option_positions": [5]}))
 

@@ -56,7 +56,7 @@ paper is published (members get 404 for other papers; managers get 409 for draft
 faculty moderators who are not enrolled get 404, because practice belongs to members).
 The session contains exactly the paper's questions in its order. Each question is
 snapshotted as in other practice, together with its points and label, and the quiz
-freezes the scoring rule: version `paper-scoring-v1`, title, total points, wrong-answer
+freezes the scoring rule: version `paper-scoring-v2` (v1 sessions score as before; v2 adds half points for a partly right multiple-select answer, see [grading](PRACTICE.md)), title, total points, wrong-answer
 penalty, pass threshold and time limit. Unpublishing, editing or deleting the paper,
 or editing its questions, never changes a started session. Feedback is `END` by
 default; `{"feedback_mode": "IMMEDIATE"}` turns the paper into guided practice.

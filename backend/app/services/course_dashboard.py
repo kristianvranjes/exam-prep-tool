@@ -170,7 +170,7 @@ def last_mock(db: Session, user: User, course_id: UUID) -> LastMock | None:
     attempt_id, submitted_at, scoring = latest
     assert scoring is not None and submitted_at is not None
     rows = db.execute(
-        select(QuizQuestion.points, Answer.grading_status)
+        select(QuizQuestion.points, Answer.grading_status, Answer.score_fraction)
         .select_from(QuizQuestion)
         .join(QuizAttempt, QuizAttempt.quiz_id == QuizQuestion.quiz_id)
         .outerjoin(
@@ -181,8 +181,8 @@ def last_mock(db: Session, user: User, course_id: UUID) -> LastMock | None:
     ).all()
     result = score(
         [
-            ItemResult(points, cast(Grade | None, grade))
-            for points, grade in rows
+            ItemResult(points, cast(Grade | None, grade), fraction)
+            for points, grade, fraction in rows
             if points is not None
         ],
         Decimal(str(scoring["wrong_answer_penalty"])),

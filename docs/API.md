@@ -592,7 +592,8 @@ with complete rollback. Existing archive atomically closes OPEN reports and sugg
 as QUESTION_ARCHIVED with the same actor/time and one ARCHIVED version.
 
 Supported types: MULTIPLE_CHOICE (2–6 options, one correct), MULTIPLE_SELECT (2–6
-options, at least one correct, graded as an exact set), TRUE_FALSE (strict boolean
+options, at least one correct, graded as an exact set with half the points for a right
+but incomplete selection, see [grading](PRACTICE.md)), TRUE_FALSE (strict boolean
 `correct_answer` in write payloads), SHORT_ANSWER (nonblank reference), NUMERIC
 (`correct_value` plus optional `absolute_tolerance` ≥ 0, `relative_tolerance` 0–1 and a
 display `unit` of up to 20 characters; numbers may be sent as JSON numbers or strings

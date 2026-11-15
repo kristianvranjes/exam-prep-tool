@@ -176,8 +176,27 @@ def test_papers_score_new_types_and_downgrade_guard(bank):
         f"{session}/answers/{question['id']}",
         json={"type": "MULTIPLE_SELECT", "option_positions": [0]},
     )
-    score = member.post(session + "/submit").json()["score"]
-    assert (score["earned"], score["penalty_points"]) == (-1, 1)
+    submitted = member.post(session + "/submit").json()
+    # Right but incomplete: half the item's 2 points and no penalty.
+    assert submitted["questions"][0]["score_fraction"] == 0.5
+    assert submitted["questions"][0]["earned_points"] == 1
+    score = submitted["score"]
+    assert score["version"] == "paper-scoring-v2"
+    assert (score["earned"], score["penalty_points"]) == (1, 0)
+
+    # A wrong option marked is wrong, even beside a right one: it pays the penalty.
+    wrong = member.post(path + "/attempts", json={}).json()
+    wrong_session = f"/courses/{course}/attempts/{wrong['id']}"
+    member.patch(
+        f"{wrong_session}/answers/{wrong['questions'][0]['id']}",
+        json={"type": "MULTIPLE_SELECT", "option_positions": [0, 2]},
+    )
+    result = member.post(wrong_session + "/submit").json()
+    assert result["questions"][0]["score_fraction"] == 0
+    assert (result["score"]["earned"], result["score"]["penalty_points"]) == (-1, 1)
+    # The list's best result is the better of the two attempts.
+    papers = member.get(f"/courses/{course}/exam-papers").json()["papers"]
+    assert papers[0]["best"] == {"earned": 1, "max_points": 2}
     config = Config("alembic.ini")
     try:
         with pytest.raises(RuntimeError, match="numeric or multiple-select"):

@@ -51,6 +51,8 @@ export type QuestionFeedback = {
   reference_answer: string | null; grading_status: Grade; confidence?: Confidence | null;
   /** SHORT_ANSWER only: your self-assessment, kept apart from `grading_status`. */
   self_review?: SelfReview | null;
+  /** Multiple select: the share of the item's points earned (1, 0.5 or 0); the grade stays CORRECT or INCORRECT. */
+  score_fraction?: number | null;
   /** NUMERIC keys as exact decimal strings. */
   correct_value?: string | null; absolute_tolerance?: string | null; relative_tolerance?: string | null;
 };
@@ -75,6 +77,8 @@ export type ResultQuestion = Omit<ActiveQuestion, "options"> & {
   /** UNANSWERED marks a question left blank in a paper session. */
   grading_status: Grade | "UNANSWERED"; confidence?: Confidence | null;
   self_review?: SelfReview | null;
+  /** Multiple select: the share of the item's points earned (1, 0.5 or 0). */
+  score_fraction?: number | null;
   correct_value?: string | null; absolute_tolerance?: string | null; relative_tolerance?: string | null;
   /** Paper sessions only; null while a short answer awaits self-review. */
   earned_points?: number | null;

@@ -278,6 +278,9 @@ class QuestionFeedback(BaseModel):
     correct_boolean: bool | None
     reference_answer: str | None
     grading_status: Grade
+    # Multiple select: the share of the item's points earned (1, 0.5 or 0); null for other types
+    # and for answers graded before partial credit, which are all or nothing.
+    score_fraction: float | None = None
     confidence: Confidence | None = None
     # SHORT_ANSWER only: the student's self-assessment, separate from grading_status.
     self_review: SelfReview | None = None
@@ -319,6 +322,7 @@ class ResultQuestion(ActiveQuestion):
     correct_boolean: bool | None
     reference_answer: str | None
     grading_status: ResultGrade
+    score_fraction: float | None = None
     confidence: Confidence | None = None
     self_review: SelfReview | None = None
     correct_value: Decimal | None = None

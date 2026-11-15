@@ -101,7 +101,7 @@ def test_blanks_negative_marking_and_scheduling(bank):
         assert Decimal(str(graded["earned_points"])) == delta
         expected += delta
     score = result["score"]
-    assert score["version"] == "paper-scoring-v1"
+    assert score["version"] == "paper-scoring-v2"
     assert Decimal(str(score["earned"])) == expected
     assert (score["max_points"], score["pending_points"], score["unanswered_count"]) == (6, 0, 1)
     assert score["passed"] is (expected >= 4)

@@ -151,6 +151,11 @@ class Answer(Base):
             name="ck_answer_self_review_pending",
         ),
         CheckConstraint(
+            "score_fraction IS NULL OR (score_fraction BETWEEN 0 AND 1 "
+            "AND (grading_status = 'CORRECT') = (score_fraction = 1))",
+            name="ck_answer_score_fraction",
+        ),
+        CheckConstraint(
             "rating IS NULL OR "
             "(rating IN ('AGAIN','HARD','GOOD','EASY') AND checked_at IS NOT NULL)",
             name="ck_answer_rating",
@@ -171,6 +176,9 @@ class Answer(Base):
     # The student's own rating of the card (srs-v2), given after the answer was checked; the card
     # is rescheduled from it when the session is submitted, not before.
     rating: Mapped[str | None] = mapped_column(String(10))
+    # Multiple-select only: the share of the item's points the answer earned (1, 0.5 or 0). The
+    # grade stays binary; NULL means all or nothing by that grade, as for every earlier answer.
+    score_fraction: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
     # The student's own verdict on a short answer awaiting review. Never a grade: it does
     # not change grading_status, scores, scheduling, readiness or item analysis.
     self_review: Mapped[str | None] = mapped_column(String(10))
