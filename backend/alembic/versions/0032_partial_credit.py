@@ -16,7 +16,8 @@ ALTER TABLE answers
     ADD COLUMN score_fraction NUMERIC(3, 2),
     ADD CONSTRAINT ck_answer_score_fraction CHECK (
         score_fraction IS NULL
-        OR (score_fraction BETWEEN 0 AND 1 AND (grading_status = 'CORRECT') = (score_fraction = 1)));
+        OR (score_fraction BETWEEN 0 AND 1
+            AND (grading_status = 'CORRECT') = (score_fraction = 1)));
 """)
 
 
