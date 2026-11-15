@@ -162,6 +162,7 @@ def best_scores(db: Session, user_id: UUID, paper_ids: list[UUID]) -> dict[UUID,
             Quiz.scoring,
             QuizQuestion.points,
             Answer.grading_status,
+            Answer.score_fraction,
         )
         .select_from(QuizAttempt)
         .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
@@ -178,11 +179,11 @@ def best_scores(db: Session, user_id: UUID, paper_ids: list[UUID]) -> dict[UUID,
         )
     ).all()
     attempts: dict[UUID, tuple[UUID, dict[str, object], list[ItemResult]]] = {}
-    for attempt_id, paper_id, scoring, points, grade in rows:
+    for attempt_id, paper_id, scoring, points, grade, fraction in rows:
         if scoring is None or paper_id is None or points is None:
             continue
         _, _, items = attempts.setdefault(attempt_id, (paper_id, scoring, []))
-        items.append(ItemResult(points, cast(Grade | None, grade)))
+        items.append(ItemResult(points, cast(Grade | None, grade), fraction))
     best: dict[UUID, PaperBest] = {}
     for paper_id, scoring, items in attempts.values():
         threshold = scoring["pass_threshold"]

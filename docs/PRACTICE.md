@@ -234,9 +234,16 @@ practice, and record their own `grading_version`, so earlier provenance is uncha
   relative_tolerance × |key|)`, inclusive at the boundary. Without tolerances only the
   exact value matches (`9,81` equals `9.810`). The optional unit is shown next to the
   field; answers never carry a unit and nothing is converted.
-- **`exact-set-v1`:** correct only when the chosen options are exactly the frozen set of
-  correct options. There is no partial credit; a past paper's wrong-answer penalty
-  applies to any other set, as for a wrong multiple-choice answer.
+- **`partial-set-v1`** (earlier answers: `exact-set-v1`, all or nothing): correct only when
+  the chosen options are exactly the frozen set of correct options. The grade is always
+  `CORRECT` or `INCORRECT`, so progress, mistakes, review scheduling and item analysis see
+  only that. In addition the answer stores a `score_fraction`: 1 for the exact set, **0.5**
+  when at least one correct option is marked, no wrong one is, and some correct ones are
+  missing, and 0 otherwise (nothing marked is a blank, not an answer). Only point scoring
+  reads it: on a past paper or mock exam a half-right answer earns half the item's points
+  and pays no wrong-answer penalty, while a set with any wrong option pays it as before.
+  Results mark it **Djelomično točno** (the grade stays Netočno); answers graded before
+  migration 0032 have no fraction and keep scoring all or nothing.
 
 Results and checked feedback show the numeric key with its tolerance (for example
 `9.81 m/s² (± 0.05)`) or every correct option. Scheduling, mistakes, due review,
@@ -471,7 +478,7 @@ Questions outside the scope's units are never selected.
 
 **Scored mock exams.** `POST /courses/{course_id}/mock-exams` ([API](API.md#mock-exams)) runs the
 same selection but makes the session an exam simulation: each question is worth one point, the
-`paper-scoring-v1` rule is frozen with no negative marking and no pass mark, and an optional
+`paper-scoring-v2` rule is frozen with no negative marking and no pass mark, and an optional
 `duration_minutes` becomes the server-enforced deadline of a past-paper session. It is recorded as
 `MOCK` like the practice variant; the presence of a frozen rule tells them apart (migration 0030).
 The course dashboard's `last_mock` is the latest submitted one. Short answers awaiting self-review

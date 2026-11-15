@@ -130,7 +130,7 @@ def test_0026_roundtrip_keeps_sessions_and_leaves_older_ones_unrecorded(bank):
             assert history() == before
             command.upgrade(config, "head")
             with engine.connect() as conn:
-                assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0031"
+                assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0032"
             assert history() == before
             # No backfill: sessions that outlived the downgrade read as historic.
             assert recorded(paper) is recorded(practice) is None

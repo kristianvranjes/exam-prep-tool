@@ -16,6 +16,26 @@ def test_correct_wrong_blank_and_pending_items():
     assert item_points(ItemResult(D(2), "INCORRECT"), D(0)) == 0
 
 
+def test_a_partly_right_answer_earns_its_share_and_costs_nothing():
+    half = ItemResult(D(2), "INCORRECT", D("0.5"))
+    assert item_points(half, QUARTER) == D(1)
+    assert item_points(ItemResult(D(1), "INCORRECT", D("0.5")), QUARTER) == D("0.50")
+    # Fully wrong (fraction 0) and graded before partial credit (None) still pay the penalty.
+    assert item_points(ItemResult(D(2), "INCORRECT", D(0)), QUARTER) == D("-0.50")
+    assert item_points(ItemResult(D(2), "INCORRECT", None), QUARTER) == D("-0.50")
+    result = score(
+        [half, ItemResult(D(2), "CORRECT", D(1)), ItemResult(D(2), "INCORRECT", D(0))],
+        QUARTER,
+        None,
+    )
+    assert (result.earned, result.correct_points, result.penalty_points) == (
+        D("2.50"),
+        D(3),
+        D("0.50"),
+    )
+    assert result.max_points == 6
+
+
 def test_deductions_round_half_up_to_hundredths():
     # 1.5 * 0.333 = 0.4995 -> 0.50
     assert item_points(ItemResult(D("1.5"), "INCORRECT"), D("0.333")) == D("-0.50")

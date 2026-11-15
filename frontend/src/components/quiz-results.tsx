@@ -20,11 +20,16 @@ const statusLabels: Record<ResultQuestion["grading_status"], string> = { CORRECT
 const countTones: Record<string, string> = { "Točno": "text-success", "Netočno": "text-danger" };
 const statusTones: Record<ResultQuestion["grading_status"], string> = { CORRECT: "text-success", INCORRECT: "text-danger", PENDING: "text-pending", UNANSWERED: "text-muted" };
 
+/** A multiple-select answer that was right but incomplete: the grade stays Netočno, half the points count. */
+const isPartial = (question: Pick<ResultQuestion, "grading_status" | "score_fraction">) => question.grading_status === "INCORRECT" && question.score_fraction === 0.5;
+
 /** A short answer's self-assessment never replaces its grade; it is labelled as the student's own. */
 function statusLabel(question: ResultQuestion) {
+  if (isPartial(question)) return "Djelomično točno";
   return question.grading_status === "PENDING" && question.self_review ? selfReviewLabels[question.self_review] : statusLabels[question.grading_status];
 }
 function statusTone(question: ResultQuestion) {
+  if (isPartial(question)) return "text-pending";
   if (question.grading_status === "PENDING" && question.self_review) return question.self_review === "CORRECT" ? "text-success" : "text-danger";
   return statusTones[question.grading_status];
 }

@@ -184,6 +184,13 @@ it("adds no guess note when confidence was not recorded", () => {
   expect(screen.queryByText(/marked as a guess/)).not.toBeInTheDocument();
 });
 
+it("names a right but incomplete multiple-select answer Djelomično točno beside its half points", () => {
+  const partial: ResultQuestion = { ...mistake, id: "ms", type: "MULTIPLE_SELECT", stem: "Which are prime?", grading_status: "INCORRECT", score_fraction: 0.5, points: 2, label: "Zadatak 1", earned_points: 1 };
+  open([partial]);
+  expect(screen.getAllByText("Djelomično točno").length).toBeGreaterThan(0);
+  expect(screen.queryByText("Netočno", { selector: "p, span, dd, h3" })).toBeNull();
+});
+
 it("scores a past paper with negative marking, pending self-review and blanks", () => {
   const paper = { exam_paper_id: "p1", title: "MI 2025/26", total_points: 6, wrong_answer_penalty: 0.25, pass_threshold: 4, duration_minutes: 90 };
   const questions: ResultQuestion[] = [

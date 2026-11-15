@@ -75,7 +75,10 @@ export function CheckedFeedback({ question, feedback, headingRef, onSelfReview }
   /** Saves the student's self-assessment of a short answer awaiting review. */
   onSelfReview?: SaveSelfReview;
 }) {
-  const verdict = verdicts[feedback.grading_status];
+  // Right but incomplete (multiple select): still graded Netočno, but half the points count.
+  const verdict = feedback.grading_status === "INCORRECT" && feedback.score_fraction === 0.5
+    ? { title: "Djelomično točno", tone: "border-pending/40 bg-pending-surface", text: "text-pending", Icon: CircleDashed }
+    : verdicts[feedback.grading_status];
   const typed = question.type === "NUMERIC" || question.type === "SHORT_ANSWER";
   const yours = typed ? answerText(question.answer, feedback.options, question.unit) : undefined;
   const key = typed ? keyText({ ...question, ...feedback }) : null;

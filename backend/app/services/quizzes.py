@@ -157,6 +157,9 @@ def feedback(content: OwnerQuestion, answer: Answer | None) -> QuestionFeedback:
         absolute_tolerance=content.absolute_tolerance,
         relative_tolerance=content.relative_tolerance,
         grading_status=cast(Grade, answer.grading_status) if answer else "PENDING",
+        score_fraction=None
+        if answer is None or answer.score_fraction is None
+        else float(answer.score_fraction),
         confidence=cast(Confidence | None, answer.confidence) if answer else None,
         self_review=cast(SelfReview | None, answer.self_review) if answer else None,
     )
@@ -204,7 +207,9 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
             )
             if penalty is not None and row.points is not None:
                 item = ItemResult(
-                    row.points, cast(Grade, answer.grading_status) if answer else None
+                    row.points,
+                    cast(Grade, answer.grading_status) if answer else None,
+                    answer.score_fraction if answer else None,
                 )
                 items.append(item)
                 earned = item_points(item, penalty)
@@ -665,6 +670,7 @@ def check_answer(
             answer.grading_status = result.status
             answer.grading_method = result.method
             answer.grading_version = result.version
+            answer.score_fraction = result.fraction
             answer.checked_at = datetime.now(UTC)
             answer.confidence = data.confidence
             db.flush()
@@ -762,6 +768,7 @@ def submit(db: Session, user: User, course_id: UUID, attempt_id: UUID) -> Attemp
                 answer.grading_status = grading_result.status
                 answer.grading_method = grading_result.method
                 answer.grading_version = grading_result.version
+                answer.score_fraction = grading_result.fraction
             review_results[question.source_question_id] = cast(Grade, answer.grading_status)
         attempt.status = "SUBMITTED"
         attempt.submitted_at = submitted_at

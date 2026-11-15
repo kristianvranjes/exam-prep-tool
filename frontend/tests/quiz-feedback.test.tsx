@@ -13,6 +13,14 @@ const pending: QuestionFeedback = {
   reference_answer: "Masses attract each other", grading_status: "PENDING", self_review: null,
 };
 
+it("calls a right but incomplete multiple-select answer Djelomično točno, not Netočno", () => {
+  const select: ActiveQuestion = { id: "ms", position: 0, type: "MULTIPLE_SELECT", stem: "Primes?", difficulty: null, options: [{ position: 0, text: "2" }, { position: 1, text: "3" }], answer: { type: "MULTIPLE_SELECT", option_positions: [0] } };
+  const feedback: QuestionFeedback = { options: [{ position: 0, text: "2", is_correct: true }, { position: 1, text: "3", is_correct: true }], explanation: null, correct_boolean: null, reference_answer: null, grading_status: "INCORRECT", score_fraction: 0.5 };
+  render(<CheckedFeedback question={select} feedback={feedback} />);
+  expect(screen.getByRole("heading", { name: "Djelomično točno" })).toBeVisible();
+  expect(screen.queryByRole("heading", { name: "Netočno" })).toBeNull();
+});
+
 function Guided({ save }: { save: (verdict: SelfReview | null) => Promise<void> }) {
   const [feedback, setFeedback] = useState(pending);
   return <CheckedFeedback question={question} feedback={feedback} onSelfReview={async verdict => {

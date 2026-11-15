@@ -233,6 +233,15 @@ own rating of the card, given during the session and applied once when it is sub
 [API.md](API.md)). Nothing is backfilled. Downgrade drops the column; ratings already applied stay
 in `review_rating_events` and on the cards, only those of unfinished sessions are lost.
 
+## Partial credit migration 0032
+
+Revision **0032** (`down_revision = 0031`) adds nullable `answers.score_fraction` (NUMERIC(3,2)):
+the share of an item's points a multiple-select answer earned (1, 0.5 or 0). `ck_answer_score_fraction`
+keeps it between 0 and 1 and equal to 1 exactly for `CORRECT` answers, so the binary grade is
+untouched. Nothing is backfilled: NULL means all or nothing by the grade, which keeps every earlier
+score unchanged. Downgrade drops the column; grades, review progress and sessions stay as they are
+and half-right answers score 0 again.
+
 ## Faculty catalog migration 0010
 
 Revision 0010 follows 0009. `faculties` stores UUID id, name (1-150 characters,
