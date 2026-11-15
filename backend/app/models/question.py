@@ -26,7 +26,8 @@ class Question(Base):
     __tablename__ = "questions"
     __table_args__ = (
         CheckConstraint(
-            "type IN ('MULTIPLE_CHOICE','TRUE_FALSE','SHORT_ANSWER','NUMERIC','MULTIPLE_SELECT')",
+            "type IN ('MULTIPLE_CHOICE','TRUE_FALSE','SHORT_ANSWER','NUMERIC','MULTIPLE_SELECT',"
+            "'MATCH')",
             name="ck_question_type",
         ),
         CheckConstraint(
@@ -41,7 +42,7 @@ class Question(Base):
             "length(btrim(stem)) > 0 AND char_length(stem) <= 400", name="ck_question_stem"
         ),
         CheckConstraint(
-            "(type IN ('MULTIPLE_CHOICE','MULTIPLE_SELECT') AND correct_boolean IS NULL "
+            "(type IN ('MULTIPLE_CHOICE','MULTIPLE_SELECT','MATCH') AND correct_boolean IS NULL "
             "AND reference_answer IS NULL AND correct_value IS NULL) OR "
             "(type = 'TRUE_FALSE' AND correct_boolean IS NOT NULL AND reference_answer IS NULL "
             "AND correct_value IS NULL) OR "
@@ -58,6 +59,11 @@ class Question(Base):
             "AND (relative_tolerance IS NULL OR relative_tolerance BETWEEN 0 AND 1) "
             "AND (unit IS NULL OR (length(btrim(unit)) > 0 AND char_length(unit) <= 20))",
             name="ck_question_numeric",
+        ),
+        CheckConstraint(
+            "(hint IS NULL OR (length(btrim(hint)) > 0 AND char_length(hint) <= 400)) "
+            "AND (expr IS NULL OR (length(btrim(expr)) > 0 AND char_length(expr) <= 200))",
+            name="ck_question_hint_expr",
         ),
         Index("ix_question_course_status", "course_id", "status"),
         Index("ix_question_course_type", "course_id", "type"),
@@ -89,6 +95,10 @@ class Question(Base):
     stem: Mapped[str] = mapped_column(Text)
     normalized_stem: Mapped[str] = mapped_column(Text)
     explanation: Mapped[str | None] = mapped_column(Text)
+    # Optional aids shown with the question: a nudge the student may open before answering, and a
+    # Boolean or algebraic expression set apart from the stem.
+    hint: Mapped[str | None] = mapped_column(Text)
+    expr: Mapped[str | None] = mapped_column(Text)
     difficulty: Mapped[int | None] = mapped_column(SmallInteger)
     correct_boolean: Mapped[bool | None] = mapped_column(Boolean)
     reference_answer: Mapped[str | None] = mapped_column(Text)
@@ -119,6 +129,8 @@ class QuestionOption(Base):
     position: Mapped[int]
     text: Mapped[str] = mapped_column(Text)
     is_correct: Mapped[bool]
+    # MATCH only: the partner of the left item in `text`.
+    match_text: Mapped[str | None] = mapped_column(Text)
 
 
 class QuestionConcept(Base):

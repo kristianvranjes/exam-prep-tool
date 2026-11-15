@@ -242,6 +242,16 @@ untouched. Nothing is backfilled: NULL means all or nothing by the grade, which 
 score unchanged. Downgrade drops the column; grades, review progress and sessions stay as they are
 and half-right answers score 0 again.
 
+## Matching questions, hint and expression migration 0033
+
+Revision **0033** (`down_revision = 0032`) adds `MATCH` to `ck_question_type` and `ck_question_answer`
+(the key lives in the options, as for multiple choice), nullable `questions.hint` and `questions.expr`
+(`ck_question_hint_expr`: nonblank, at most 400 and 200 characters) and nullable
+`question_options.match_text`: a matching question keeps one option row per pair, `text` being the left
+item and `match_text` its partner. Nothing is backfilled. Downgrade refuses while any `MATCH` question
+exists (delete them first), otherwise drops the columns and restores the earlier constraints; a hint or
+expression written meanwhile is lost.
+
 ## Faculty catalog migration 0010
 
 Revision 0010 follows 0009. `faculties` stores UUID id, name (1-150 characters,

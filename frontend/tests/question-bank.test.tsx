@@ -498,7 +498,7 @@ it("creates an MCQ with shared native bounds and exactly one correct option", as
   expect(mock.createQuestion).not.toHaveBeenCalled();
   fireEvent.click(within(form).getByRole("button", { name: "Spremi nacrt" }));
   await waitFor(() => expect(mock.createQuestion).toHaveBeenCalledWith("course", {
-    type: "MULTIPLE_CHOICE", stem: "New question?", explanation: "A useful explanation", difficulty: 3,
+    type: "MULTIPLE_CHOICE", stem: "New question?", explanation: "A useful explanation", difficulty: 3, hint: null, expr: null,
     concept_ids: [], options: [{ text: "A", is_correct: false }, { text: "B", is_correct: true }],
   }));
 });
@@ -520,8 +520,8 @@ it.each([
   }
   fireEvent.click(within(form).getByRole("button", { name: "Spremi nacrt" }));
   await waitFor(() => expect(mock.createQuestion).toHaveBeenCalledWith("course", type === "TRUE_FALSE"
-    ? { type, stem: "New question?", explanation: null, difficulty: null, concept_ids: [], correct_answer: false }
-    : { type, stem: "New question?", explanation: null, difficulty: null, concept_ids: [], reference_answer: "A reference" }));
+    ? { type, stem: "New question?", explanation: null, difficulty: null, hint: null, expr: null, concept_ids: [], correct_answer: false }
+    : { type, stem: "New question?", explanation: null, difficulty: null, hint: null, expr: null, concept_ids: [], reference_answer: "A reference" }));
 });
 
 it("offers only approved concepts and limits selection to five", async () => {
@@ -957,7 +957,7 @@ it("creates a numeric question with tolerances, a percentage and a unit, and ref
   fireEvent.change(within(form).getByLabelText("Jedinica (neobavezno)"), { target: { value: "m/s²" } });
   fireEvent.click(within(form).getByRole("button", { name: "Spremi nacrt" }));
   await waitFor(() => expect(mock.createQuestion).toHaveBeenCalledWith("course", {
-    type: "NUMERIC", stem: "g at sea level?", explanation: null, difficulty: null, concept_ids: [],
+    type: "NUMERIC", stem: "g at sea level?", explanation: null, difficulty: null, hint: null, expr: null, concept_ids: [],
     correct_value: "9,81", absolute_tolerance: "0,05", relative_tolerance: "0.011", unit: "m/s²",
   }));
 });
@@ -979,7 +979,7 @@ it("creates a multiple-select question with several correct options and keeps on
   fireEvent.click(within(form).getByLabelText("Točna opcija 2"));
   fireEvent.click(within(form).getByRole("button", { name: "Spremi nacrt" }));
   await waitFor(() => expect(mock.createQuestion).toHaveBeenCalledWith("course", {
-    type: "MULTIPLE_SELECT", stem: "Which are prime?", explanation: null, difficulty: null, concept_ids: [],
+    type: "MULTIPLE_SELECT", stem: "Which are prime?", explanation: null, difficulty: null, hint: null, expr: null, concept_ids: [],
     options: [{ text: "2", is_correct: true }, { text: "3", is_correct: true }],
   }));
 });
@@ -991,4 +991,29 @@ it("offers AI generation only for the types it supports", async () => {
     const group = legend.closest("fieldset")!;
     expect(within(group).queryByLabelText(/numeric/i)).not.toBeInTheDocument();
   }
+});
+
+
+it("creates a matching question from its pairs with a hint and an expression", async () => {
+  const form = await openCreate();
+  fireEvent.change(within(form).getByLabelText("Vrsta pitanja"), { target: { value: "MATCH" } });
+  expect(within(form).getByText("Parovi (od 2 do 6)")).toBeInTheDocument();
+  fireEvent.change(within(form).getByLabelText("Tekst pitanja"), { target: { value: "Connect the gates" } });
+  fireEvent.change(within(form).getByLabelText(/^Nagovještaj/), { target: { value: "Truth tables" } });
+  fireEvent.change(within(form).getByLabelText("Izraz (neobavezno)"), { target: { value: "A·B" } });
+  fireEvent.change(within(form).getByLabelText("Lijeva stavka 1"), { target: { value: "AND" } });
+  fireEvent.change(within(form).getByLabelText("Desna stavka 1"), { target: { value: "Both inputs 1" } });
+  fireEvent.change(within(form).getByLabelText("Lijeva stavka 2"), { target: { value: "OR" } });
+  // A pair with an empty side is not sent (the field is required).
+  fireEvent.click(within(form).getByRole("button", { name: "Spremi nacrt" }));
+  expect(mock.createQuestion).not.toHaveBeenCalled();
+  fireEvent.change(within(form).getByLabelText("Desna stavka 2"), { target: { value: "At least one input 1" } });
+  fireEvent.click(within(form).getByRole("button", { name: "Dodaj par" }));
+  expect(within(form).getByLabelText("Lijeva stavka 3")).toBeInTheDocument();
+  fireEvent.click(within(form).getByRole("button", { name: "Ukloni par 3" }));
+  fireEvent.click(within(form).getByRole("button", { name: "Spremi nacrt" }));
+  await waitFor(() => expect(mock.createQuestion).toHaveBeenCalledWith("course", {
+    type: "MATCH", stem: "Connect the gates", explanation: null, difficulty: null, hint: "Truth tables", expr: "A·B", concept_ids: [],
+    pairs: [{ left: "AND", right: "Both inputs 1" }, { left: "OR", right: "At least one input 1" }],
+  }));
 });

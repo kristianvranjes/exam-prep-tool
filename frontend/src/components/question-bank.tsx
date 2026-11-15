@@ -412,7 +412,7 @@ function OwnerReview({ question: q, creator, moderator, owner, concepts, units, 
   return <div className="min-w-0 space-y-5 text-sm">
     <div className="space-y-2 break-words [overflow-wrap:anywhere]">
       {q.type === "TRUE_FALSE" && <p>Točan odgovor: {q.correct_boolean ? "Točno" : "Netočno"}</p>}
-      {(q.type === "NUMERIC" || q.type === "MULTIPLE_SELECT") && <p>Točan odgovor: <RichText text={keyText(q) ?? ""} /></p>}
+      {(q.type === "NUMERIC" || q.type === "MULTIPLE_SELECT" || q.type === "MATCH") && <p>Točan odgovor: <RichText text={keyText(q) ?? ""} /></p>}
       {q.reference_answer && <p>Referentni odgovor: <RichText text={q.reference_answer} /></p>}
       {q.explanation && <p>Objašnjenje: <RichText text={q.explanation} /></p>}
       {q.rejection_reason && <p className="rounded-control border border-danger/30 bg-danger-surface p-3 text-danger">Razlog odbijanja: {q.rejection_reason}</p>}
@@ -479,6 +479,7 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
   const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>(q?.unit_ids ?? []);
   const [questionType, setQuestionType] = useState<QuestionType>(q?.type ?? "MULTIPLE_CHOICE");
   const [options, setOptions] = useState(q?.options.map((o) => ({ text: o.text, is_correct: o.is_correct })) ?? [{ text: "", is_correct: true }, { text: "", is_correct: false }]);
+  const [pairs, setPairs] = useState(q?.type === "MATCH" ? q.options.map((o) => ({ left: o.text, right: o.match_text ?? "" })) : [{ left: "", right: "" }, { left: "", right: "" }]);
   const [selectedConceptIds, setSelectedConceptIds] = useState<string[]>(q?.concept_ids ?? []);
   const [stem, setStem] = useState(q?.stem ?? "");
   const formattingHelp = useId();
@@ -503,6 +504,8 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
       stem: String(data.get("stem")),
       explanation: String(data.get("explanation") || "") || null,
       difficulty: data.get("difficulty") ? Number(data.get("difficulty")) : null,
+      hint: String(data.get("hint") ?? "").trim() || null,
+      expr: String(data.get("expr") ?? "").trim() || null,
       concept_ids: [...retained, ...chosen],
       // Omitted when units are unavailable, so an edit keeps existing links.
       ...(units.length ? { unit_ids: selectedUnitIds } : {}),
@@ -518,6 +521,13 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
       const relative = percent ? String(Number((Number(percent.replace(",", ".")) / 100).toPrecision(12))) : null;
       setFormError("");
       body = { ...common, type: questionType, correct_value: text("correctValue"), absolute_tolerance: text("absoluteTolerance") || null, relative_tolerance: relative, unit: text("unit") || null };
+      void save(body);
+      return;
+    }
+    if (questionType === "MATCH") {
+      if (pairs.some((pair) => !pair.left.trim() || !pair.right.trim())) { setFormError("Svaki par mora imati lijevu i desnu stavku."); return; }
+      setFormError("");
+      body = { ...common, type: questionType, pairs: pairs.map((pair) => ({ left: pair.left.trim(), right: pair.right.trim() })) };
       void save(body);
       return;
     }
@@ -553,6 +563,24 @@ function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { qu
       <label className="block font-medium">Težina (neobavezno)
         <Input className="mt-1 sm:w-24" name="difficulty" type="number" min={1} max={5} defaultValue={q?.difficulty || ""} />
       </label>
+      <label className="block font-medium">Nagovještaj (neobavezno)
+        <Input className="mt-1" name="hint" maxLength={400} defaultValue={q?.hint ?? ""} aria-describedby={`${formattingHelp}-hint`} />
+        <span id={`${formattingHelp}-hint`} className="mt-1 block text-sm font-normal text-muted">Student ga može otvoriti prije odgovora.</span>
+      </label>
+      <label className="block font-medium">Izraz (neobavezno)
+        <Input className="mt-1 font-mono" name="expr" maxLength={200} defaultValue={q?.expr ?? ""} placeholder="npr. A·B + C" />
+      </label>
+      {questionType === "MATCH" && <fieldset className="space-y-2">
+        <legend className="font-medium">Parovi (od 2 do 6)</legend>
+        {pairs.map((pair, index) => <div key={index} className="flex min-w-0 flex-wrap items-center gap-2">
+          <Input aria-label={"Lijeva stavka " + (index + 1)} className="min-w-32 flex-1" value={pair.left} required maxLength={400} onChange={(e) => setPairs(pairs.map((item, position) => position === index ? { ...item, left: e.target.value } : item))} />
+          <span aria-hidden="true">→</span>
+          <Input aria-label={"Desna stavka " + (index + 1)} className="min-w-32 flex-1" value={pair.right} required maxLength={400} onChange={(e) => setPairs(pairs.map((item, position) => position === index ? { ...item, right: e.target.value } : item))} />
+          <Button type="button" variant="secondary" aria-label={"Ukloni par " + (index + 1)} disabled={pairs.length <= 2} onClick={() => setPairs(pairs.filter((_, position) => position !== index))}>Ukloni</Button>
+        </div>)}
+        <Button type="button" variant="secondary" disabled={pairs.length >= 6} onClick={() => setPairs([...pairs, { left: "", right: "" }])}>Dodaj par</Button>
+        <p className="text-sm text-muted">Studentima se desni stupac prikazuje u nasumičnom redoslijedu za svaku sesiju. Pola bodova nosi odgovor u kojem su neki parovi točni, a ostali ostavljeni prazni.</p>
+      </fieldset>}
 
       {(questionType === "MULTIPLE_CHOICE" || multiple) && <fieldset className="space-y-2">
         <legend className="font-medium">{multiple ? "Opcije (označite svaki točan odgovor)" : "Opcije (odaberite jedan točan odgovor)"}</legend>

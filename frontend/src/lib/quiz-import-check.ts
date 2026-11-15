@@ -25,6 +25,12 @@ function inspectQuestion(raw: unknown, index: number, seen: Set<string>): Import
     if (type === "MULTIPLE_CHOICE" && correct !== 1) return row("ERROR", "Točno jedan odgovor mora biti označen kao točan.");
     if (type === "MULTIPLE_SELECT" && correct < 1) return row("ERROR", "Barem jedan odgovor mora biti označen kao točan.");
   }
+  if (type === "MATCH") {
+    const pairs = Array.isArray(question.pairs) ? question.pairs as { left?: unknown; right?: unknown }[] : null;
+    if (!pairs || pairs.length < 2 || pairs.length > 6) return row("ERROR", "Potrebno je od 2 do 6 parova.");
+    const filled = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+    if (pairs.some((pair) => !filled(pair?.left) || !filled(pair?.right))) return row("ERROR", "Svaki par mora imati lijevu i desnu stavku.");
+  }
   if (type === "TRUE_FALSE" && typeof question.correct_answer !== "boolean") return row("ERROR", "Nedostaje točan odgovor (true ili false).");
   if (type === "SHORT_ANSWER" && !(typeof question.reference_answer === "string" && question.reference_answer.trim())) return row("ERROR", "Nedostaje referentni odgovor.");
   if (type === "NUMERIC" && (question.correct_value === undefined || question.correct_value === null || question.correct_value === "")) return row("ERROR", "Nedostaje točna vrijednost.");

@@ -51,6 +51,7 @@ def proposed_content(
         "SHORT_ANSWER": {"reference_answer"},
         "MULTIPLE_SELECT": {"options", "correct_option_positions"},
         "NUMERIC": {"correct_value", "absolute_tolerance", "relative_tolerance", "unit"},
+        "MATCH": set(),
     }[question.type]
     if supplied.keys() - applicable:
         raise HTTPException(422, "Proposed fields do not apply to this question type")

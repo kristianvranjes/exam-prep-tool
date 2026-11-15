@@ -3,7 +3,7 @@ import type { OwnerQuestion, QuestionStatus, QuestionType, ReportReason } from "
 type QuestionSource = OwnerQuestion["source"];
 import type { PracticeAnswer } from "./practice-api";
 
-export const QUESTION_TYPES: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"];
+export const QUESTION_TYPES: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"];
 /** AI generation and quiz-import-v1 support only these. */
 export const CLASSIC_TYPES: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
 
@@ -13,6 +13,7 @@ export const typeLabels: Record<QuestionType, string> = {
   TRUE_FALSE: "Točno / netočno",
   NUMERIC: "Brojčani odgovor",
   SHORT_ANSWER: "Kratki odgovor",
+  MATCH: "Povezivanje parova",
 };
 
 export const statusLabels: Record<QuestionStatus, string> = {
@@ -72,10 +73,10 @@ export function numericKey(value: string | number | null | undefined, absolute?:
   return `${value}${unit ? ` ${unit}` : ""}${allowances.length ? ` (${allowances.join(" ili ")})` : ""}`;
 }
 
-type ChoiceOption = { position: number; text: string; is_correct?: boolean };
+type ChoiceOption = { position: number; text: string; is_correct?: boolean; match_text?: string | null };
 
 /** A saved answer as students read it back; undefined when nothing was saved. */
-export function answerText(answer: PracticeAnswer | null | undefined, options: ChoiceOption[], unit?: string | null) {
+export function answerText(answer: PracticeAnswer | null | undefined, options: ChoiceOption[], unit?: string | null, choices?: { position: number; text: string }[] | null) {
   if (!answer) return undefined;
   switch (answer.type) {
     case "SHORT_ANSWER": return answer.text;
@@ -83,6 +84,10 @@ export function answerText(answer: PracticeAnswer | null | undefined, options: C
     case "NUMERIC": return unit ? `${answer.value} ${unit}` : answer.value;
     case "MULTIPLE_CHOICE": return options.find(option => option.position === answer.option_position)?.text;
     case "MULTIPLE_SELECT": return options.filter(option => answer.option_positions.includes(option.position)).map(option => option.text).join("; ");
+    case "MATCH": return options.map((option, index) => {
+      const slot = answer.matches[index];
+      return `${option.text} → ${slot == null ? "—" : choices?.find(choice => choice.position === slot)?.text ?? "—"}`;
+    }).join("; ");
   }
 }
 
@@ -97,6 +102,7 @@ export function keyText(question: Keyed) {
     case "SHORT_ANSWER": return question.reference_answer;
     case "TRUE_FALSE": return question.correct_boolean === null ? null : question.correct_boolean ? "Točno" : "Netočno";
     case "NUMERIC": return numericKey(question.correct_value, question.absolute_tolerance, question.relative_tolerance, question.unit);
+    case "MATCH": return question.options.map(option => `${option.text} → ${option.match_text ?? "—"}`).join("; ") || null;
     default: return question.options.filter(option => option.is_correct).map(option => option.text).join("; ") || null;
   }
 }

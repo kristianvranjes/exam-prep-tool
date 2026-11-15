@@ -143,7 +143,7 @@ function PaperScoreSummary({ score, paper, tally }: { score: PaperScore; paper: 
 }
 
 export function ResultAnswers({ question, onSelfReview }: { question: ResultQuestion; onSelfReview?: SaveSelfReview }) {
-  const studentAnswer = answerText(question.answer, question.options, question.unit);
+  const studentAnswer = answerText(question.answer, question.options, question.unit, question.choices);
   const correctAnswer = keyText(question);
   const selfReviewable = question.type === "SHORT_ANSWER" && question.grading_status === "PENDING";
   return <div className="space-y-4">

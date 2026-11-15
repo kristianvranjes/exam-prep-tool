@@ -15,7 +15,9 @@ export type PracticeAnswer =
   | { type: "SHORT_ANSWER"; text: string }
   /** Kept as typed, e.g. "9,81"; the server parses it. */
   | { type: "NUMERIC"; value: string }
-  | { type: "MULTIPLE_SELECT"; option_positions: number[] };
+  | { type: "MULTIPLE_SELECT"; option_positions: number[] }
+  /** `matches[i]` is the shown right-hand item chosen for left item i, or null while unmatched. */
+  | { type: "MATCH"; matches: (number | null)[] };
 export type AttemptSummary = {
   id: string; course_id: string; status: "ACTIVE" | "SUBMITTED" | "ABANDONED";
   started_at: string; submitted_at: string | null;
@@ -44,21 +46,27 @@ export type SelfReviewSummary = {
 export type PracticeFocus = { unit_ids: string[] } | { exam_scope_id: string };
 /** A course unit the source question belongs to now; read live, not frozen with the attempt. */
 export type QuestionUnitLabel = { id: string; title: string };
-export type ResultOption = { position: number; text: string; is_correct: boolean };
+export type ResultOption = { position: number; text: string; is_correct: boolean; match_text?: string | null };
 /** Key and explanation of one checked answer; unchecked questions never carry it. */
 export type QuestionFeedback = {
   options: ResultOption[]; explanation: string | null; correct_boolean: boolean | null;
   reference_answer: string | null; grading_status: Grade; confidence?: Confidence | null;
   /** SHORT_ANSWER only: your self-assessment, kept apart from `grading_status`. */
   self_review?: SelfReview | null;
-  /** Multiple select: the share of the item's points earned (1, 0.5 or 0); the grade stays CORRECT or INCORRECT. */
+  /** Multiple select and matching: the share of the item's points earned (1, 0.5 or 0); the grade stays CORRECT or INCORRECT. */
   score_fraction?: number | null;
+  /** MATCH: for each left item, the shown right-hand item that is its partner. */
+  correct_matches?: number[] | null;
   /** NUMERIC keys as exact decimal strings. */
   correct_value?: string | null; absolute_tolerance?: string | null; relative_tolerance?: string | null;
 };
 export type ActiveQuestion = {
   id: string; position: number; type: QuestionType; stem: string; difficulty: number | null;
   options: { position: number; text: string }[]; answer: PracticeAnswer | null;
+  /** MATCH: the right-hand column in the order shown for this session; `options` are the left items. */
+  choices?: { position: number; text: string }[] | null;
+  /** A nudge the student may open before answering, and an expression set apart from the stem. */
+  hint?: string | null; expr?: string | null;
   units?: QuestionUnitLabel[]; feedback?: QuestionFeedback | null;
   /** The bank question behind this snapshot; favorites refer to it. */
   source_question_id?: string;
@@ -77,8 +85,9 @@ export type ResultQuestion = Omit<ActiveQuestion, "options"> & {
   /** UNANSWERED marks a question left blank in a paper session. */
   grading_status: Grade | "UNANSWERED"; confidence?: Confidence | null;
   self_review?: SelfReview | null;
-  /** Multiple select: the share of the item's points earned (1, 0.5 or 0). */
+  /** Multiple select and matching: the share of the item's points earned (1, 0.5 or 0). */
   score_fraction?: number | null;
+  correct_matches?: number[] | null;
   correct_value?: string | null; absolute_tolerance?: string | null; relative_tolerance?: string | null;
   /** Paper sessions only; null while a short answer awaits self-review. */
   earned_points?: number | null;
@@ -108,7 +117,7 @@ export type FavoriteQuestion = {
   question_id: string; favorited_at: string; type: QuestionType; stem: string; difficulty: number | null; available: boolean;
 };
 const path = (course: string) => `/courses/${course}/attempts`;
-const allTypes: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT"];
+const allTypes: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"];
 /** The most questions a generated session may hold. */
 const MAX_SESSION_QUESTIONS = 20;
 /** A quick quiz is this many questions, or fewer when fewer are available. */

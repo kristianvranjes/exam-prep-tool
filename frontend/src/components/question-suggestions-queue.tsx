@@ -12,6 +12,7 @@ function baseContent(question: OwnerQuestion): QuestionContent {
   if (question.type === "MULTIPLE_CHOICE") return { ...common, type: question.type, options: question.options };
   if (question.type === "TRUE_FALSE") return { ...common, type: question.type, correct_answer: question.correct_boolean === true };
   if (question.type === "MULTIPLE_SELECT") return { ...common, type: question.type, options: question.options };
+  if (question.type === "MATCH") return { ...common, type: question.type, pairs: question.options.map((option) => ({ left: option.text, right: option.match_text ?? "" })) };
   if (question.type === "NUMERIC") return { ...common, type: question.type, correct_value: question.correct_value ?? "", absolute_tolerance: question.absolute_tolerance ?? null, relative_tolerance: question.relative_tolerance ?? null, unit: question.unit ?? null };
   return { ...common, type: question.type, reference_answer: question.reference_answer ?? "" };
 }
@@ -34,7 +35,8 @@ function contentFields(content: QuestionContent): [string, string][] {
     fields.push(["Apsolutna tolerancija", content.absolute_tolerance == null ? "Nema" : String(content.absolute_tolerance)]);
     fields.push(["Relativna tolerancija", content.relative_tolerance == null ? "Nema" : percentText(content.relative_tolerance)]);
     fields.push(["Jedinica", content.unit ?? "Nema"]);
-  } else if (content.type === "TRUE_FALSE") fields.push(["Točan odgovor", content.correct_answer ? "Točno" : "Netočno"]);
+  } else if (content.type === "MATCH") content.pairs.forEach((pair, position) => fields.push([`Par ${position + 1}`, `${pair.left} → ${pair.right}`]));
+  else if (content.type === "TRUE_FALSE") fields.push(["Točan odgovor", content.correct_answer ? "Točno" : "Netočno"]);
   else fields.push(["Referentni odgovor", content.reference_answer]);
   return fields;
 }

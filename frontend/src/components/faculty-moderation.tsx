@@ -66,7 +66,7 @@ function QuestionReviewCard({
       {question.type === "MULTIPLE_CHOICE" && <p className="text-sm text-muted">Točan odgovor: <RichText text={question.options.find(option => option.is_correct)?.text ?? "Nepoznato"} /></p>}
       {question.type === "TRUE_FALSE" && <p className="text-sm text-muted">Odgovor: {question.correct_boolean === null ? "Nepoznato" : question.correct_boolean ? "Točno" : "Netočno"}</p>}
       {question.type === "SHORT_ANSWER" && <p className="text-sm text-muted">Referentni odgovor: <RichText text={question.reference_answer || "Nema referentnog odgovora"} /></p>}
-      {(question.type === "NUMERIC" || question.type === "MULTIPLE_SELECT") && <p className="text-sm text-muted">Točan odgovor: <RichText text={keyText(question) ?? "Nepoznato"} /></p>}
+      {(question.type === "NUMERIC" || question.type === "MULTIPLE_SELECT" || question.type === "MATCH") && <p className="text-sm text-muted">Točan odgovor: <RichText text={keyText(question) ?? "Nepoznato"} /></p>}
     </div>
     {question.explanation && <p className="text-sm text-muted">Objašnjenje: <RichText text={question.explanation} /></p>}
     {/* Only concept and chunk IDs reach the queue, so say how much grounds the question instead of printing IDs. */}

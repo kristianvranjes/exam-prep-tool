@@ -29,6 +29,7 @@ from app.schemas.question import (
     MCQ,
     BulkQuestionTransition,
     BulkQuestionTransitionResult,
+    Match,
     MultipleSelect,
     Numeric,
     OwnerOption,
@@ -98,7 +99,9 @@ def options(db: Session, question: Question) -> list[QuestionOption]:
 def owner_view(db: Session, question: Question) -> OwnerQuestion:
     result = OwnerQuestion.model_validate(question)
     result.options = [
-        OwnerOption(position=o.position, text=o.text, is_correct=o.is_correct)
+        OwnerOption(
+            position=o.position, text=o.text, is_correct=o.is_correct, match_text=o.match_text
+        )
         for o in options(db, question)
     ]
     result.concept_ids = list(
@@ -125,13 +128,23 @@ def representation(db: Session, question: Question, owner: bool) -> QuestionResp
     if owner:
         return owner_view(db, question)
     # Explicit allowlist: explanations can reveal answers and are intentionally absent too.
+    rows = options(db, question)
     return PublicQuestion(
         id=question.id,
         course_id=question.course_id,
         type=cast(QuestionType, question.type),
         stem=question.stem,
         difficulty=question.difficulty,
-        options=[PublicOption(position=o.position, text=o.text) for o in options(db, question)],
+        options=[PublicOption(position=o.position, text=o.text) for o in rows],
+        # Alphabetical, so the order says nothing about which item each belongs to.
+        choices=[
+            PublicOption(position=slot, text=text)
+            for slot, text in enumerate(
+                sorted((o.match_text for o in rows if o.match_text), key=normalize)
+            )
+        ],
+        hint=question.hint,
+        expr=question.expr,
         unit_ids=question_unit_ids(db, question.id),
         unit=question.unit,
     )
@@ -228,8 +241,14 @@ def current_content(db: Session, question: Question) -> dict[str, object]:
         "stem": question.stem,
         "explanation": question.explanation,
         "difficulty": question.difficulty,
+        "hint": question.hint,
+        "expr": question.expr,
     }
-    if question.type in ("MULTIPLE_CHOICE", "MULTIPLE_SELECT"):
+    if question.type == "MATCH":
+        result["pairs"] = [
+            {"left": o.text, "right": o.match_text or ""} for o in options(db, question)
+        ]
+    elif question.type in ("MULTIPLE_CHOICE", "MULTIPLE_SELECT"):
         result["options"] = [
             {"text": o.text, "is_correct": o.is_correct} for o in options(db, question)
         ]
@@ -250,6 +269,8 @@ def save_content(db: Session, question: Question, content: QuestionContent) -> N
     question.normalized_stem = normalize(content.stem)
     question.explanation = content.explanation
     question.difficulty = content.difficulty
+    question.hint = content.hint
+    question.expr = content.expr
     question.correct_boolean = content.correct_answer if isinstance(content, TrueFalse) else None
     question.reference_answer = (
         content.reference_answer if isinstance(content, ShortAnswer) else None
@@ -269,6 +290,17 @@ def save_content(db: Session, question: Question, content: QuestionContent) -> N
                     position=index,
                     text=option.text,
                     is_correct=option.is_correct,
+                )
+            )
+    elif isinstance(content, Match):
+        for index, pair in enumerate(content.pairs):
+            db.add(
+                QuestionOption(
+                    question_id=question.id,
+                    position=index,
+                    text=pair.left,
+                    is_correct=True,
+                    match_text=pair.right,
                 )
             )
 
