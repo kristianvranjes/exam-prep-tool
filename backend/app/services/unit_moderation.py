@@ -1,8 +1,10 @@
+from collections.abc import Iterable
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import Result, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Course, User
@@ -28,8 +30,9 @@ from app.services.courses import get_member_course
 from app.services.moderation import course_moderator, require_moderator
 
 
-def pairs(result: Result[tuple[UUID, int]]) -> dict[UUID, int]:
-    return {key: count for key, count in result}
+def pairs(result: Iterable[Any]) -> dict[UUID, int]:
+    """Rows of (id, count) as a mapping."""
+    return {row[0]: row[1] for row in result}
 
 
 def access(db: Session, user: User, course_id: UUID) -> tuple[bool, bool]:
@@ -49,9 +52,9 @@ def moderation_rows(
 ) -> list[UnitModerationRow]:
     """Counters per unit over its questions that are not archived."""
     unit_ids = [row.id for row in base]
-    stats = {
-        unit_id: row
-        for unit_id, *row in db.execute(
+    stats: dict[UUID, tuple[Any, ...]] = {
+        row[0]: tuple(row[1:])
+        for row in db.execute(
             select(
                 QuestionUnit.unit_id,
                 func.count(),
@@ -102,7 +105,7 @@ def moderation_rows(
     result = []
     for unit in base:
         total, draft, rejected, pending, bare, latest = stats.get(
-            unit.id, [0, 0, 0, 0, 0, unit.updated_at]
+            unit.id, (0, 0, 0, 0, 0, unit.updated_at)
         )
         result.append(
             UnitModerationRow.model_validate(
