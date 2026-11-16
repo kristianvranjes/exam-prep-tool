@@ -43,8 +43,8 @@ def test_check_reports_every_question_without_saving(clients):
         short("No explanation here"),
         {"type": "TRUE_FALSE", "stem": "Broken", "correct_answer": "yes"},
         short("Fine one", explanation="Why again"),
-        short("Elsewhere", explanation="Why", unit="Nepostojeća"),
-        short("Placed", explanation="Why", unit=" logika "),
+        short("Elsewhere", explanation="Why", course_unit="Nepostojeća"),
+        short("Placed", explanation="Why", course_unit=" logika "),
     )
     with TestClient(app) as anonymous:
         assert post(anonymous, course, "import/check", document).status_code == 401
@@ -63,7 +63,7 @@ def test_check_reports_every_question_without_saving(clients):
     assert [i["code"] for i in by_position[4]["issues"]] == ["DUPLICATE_IN_FILE"]
     assert "question 1" in by_position[4]["issues"][0]["message"]
     assert [i["code"] for i in by_position[5]["issues"]] == ["UNKNOWN_UNIT"]
-    assert by_position[6]["status"] == "OK" and by_position[6]["unit"] == "logika"
+    assert by_position[6]["status"] == "OK" and by_position[6]["course_unit"] == "logika"
     # Lines point at each question's opening brace in the indented file.
     lines = [item["line"] for item in report["items"]]
     assert lines == sorted(lines) and len(set(lines)) == 6 and lines[0] == 4
@@ -82,7 +82,7 @@ def test_check_flags_existing_and_unreadable_files(clients):
     for bad in ("{", "[]", json.dumps({"version": "quiz-import-v3", "questions": [1]})):
         result = post(owner, course, "import/check", bad).json()
         assert result["readable"] is False and result["message"] and result["items"] == []
-    v1 = {"version": "quiz-import-v1", "questions": [short("Old", unit="Logika")]}
+    v1 = {"version": "quiz-import-v1", "questions": [short("Old", course_unit="Logika")]}
     first = post(owner, course, "import/check", v1).json()["items"][0]
     assert first["issues"][0]["code"] == "NEEDS_V2"
     wrong_type = owner.post(
@@ -98,30 +98,48 @@ def test_import_places_questions_in_named_units(clients):
     sets = unit(owner, course, "Skupovi")
     document = file(
         short("In file unit", explanation="Why"),
-        short("Own unit", explanation="Why", unit="Skupovi"),
-        unit="Logika",
+        short("Own unit", explanation="Why", course_unit="Skupovi"),
+        course_unit="Logika",
     )
     rows = post(owner, course, "import", document).json()
     assert [row["unit_ids"] for row in rows] == [[logic], [sets]]
     # A file naming no unit still takes the unit chosen in the request.
     fallback = post(owner, course, "import", file(short("Loose")), unit_ids=sets).json()
     assert fallback[0]["unit_ids"] == [sets]
-    unknown = post(owner, course, "import", file(short("Lost", unit="Nema")))
+    unknown = post(owner, course, "import", file(short("Lost", course_unit="Nema")))
     assert unknown.status_code == 422 and "Nema" in unknown.json()["detail"]
     owner.post(f"/units/{sets}/archive")
-    archived = post(owner, course, "import", file(short("Gone", unit="Skupovi")))
+    archived = post(owner, course, "import", file(short("Gone", course_unit="Skupovi")))
     assert archived.status_code == 422
-    v1 = {"version": "quiz-import-v1", "questions": [short("Old", unit="Logika")]}
+    v1 = {"version": "quiz-import-v1", "questions": [short("Old", course_unit="Logika")]}
     assert post(owner, course, "import", v1).status_code == 422
+
+
+def test_numeric_unit_and_course_unit_do_not_clash(clients):
+    owner, _, _, course = clients
+    unit(owner, course, "Fizika")
+    numeric = {
+        "type": "NUMERIC",
+        "stem": "Gravity?",
+        "correct_value": "9.81",
+        "unit": "m/s²",
+        "course_unit": "Fizika",
+    }
+    report = post(owner, course, "import/check", file(numeric)).json()
+    assert (
+        report["items"][0]["status"] == "WARNING" and report["items"][0]["course_unit"] == "Fizika"
+    )
+    rows = post(owner, course, "import", file(numeric)).json()
+    assert rows[0]["unit"] == "m/s²" and len(rows[0]["unit_ids"]) == 1
 
 
 def test_skip_invalid_imports_only_the_good_questions(clients):
     owner, _, _, course = clients
     unit(owner, course, "Logika")
     document = file(
-        short("Good one", explanation="Why", unit="Logika"),
+        short("Good one", explanation="Why", course_unit="Logika"),
         {"type": "TRUE_FALSE", "stem": "Broken", "correct_answer": "yes"},
-        short("Wrong unit", unit="Nema"),
+        short("Wrong unit", course_unit="Nema"),
         short("Good two"),
     )
     assert post(owner, course, "import", document).status_code == 422

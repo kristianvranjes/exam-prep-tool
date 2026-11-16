@@ -287,7 +287,7 @@ export type PublicQuestion = QuestionBase & { visibility: "MEMBER"; status: "APP
 export type ImportOptions = { duplicates?: "REJECT" | "SKIP" | "REPLACE"; importAs?: "DRAFT" | "PENDING_REVIEW"; skipInvalid?: boolean };
 export type ImportIssueCode = "INVALID_CONTENT" | "NEEDS_V2" | "DUPLICATE_IN_FILE" | "UNKNOWN_UNIT" | "ARCHIVED_UNIT" | "DUPLICATE_OWN" | "DUPLICATE_APPROVED" | "NO_EXPLANATION";
 export type ImportItemReport = {
-  position: number; line: number | null; type: string | null; stem: string | null; unit: string | null;
+  position: number; line: number | null; type: string | null; stem: string | null; course_unit: string | null;
   status: "OK" | "WARNING" | "ERROR"; issues: { code: ImportIssueCode; severity: "WARNING" | "ERROR"; message: string }[];
 };
 export type ImportReport = { readable: boolean; message: string | null; version: string | null; total: number; ok: number; warnings: number; errors: number; items: ImportItemReport[] };

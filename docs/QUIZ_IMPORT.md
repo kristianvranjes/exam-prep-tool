@@ -58,11 +58,12 @@ approval claims. The existing strict question-content schemas validate each item
 | Numeric `relative_tolerance` | Optional share of the key's magnitude, 0–1 (`"0.01"` allows 1 %) |
 | Numeric `unit` | Optional display unit, 1–20 characters; never converted |
 
-`quiz-import-v2` also accepts an optional `unit`: the title of an existing unit of the course
-(a quiz), at the top level for the whole file and/or on a question, which wins. Titles are matched
+`quiz-import-v2` also accepts an optional `course_unit`: the title of an existing unit of the course
+(a quiz), at the top level for the whole file and/or on a question, which wins. (It is not `unit`:
+a numeric question uses that for its measurement unit.) Titles are matched
 ignoring case and extra spaces. An unknown or archived unit is an error for that question (the
 whole import fails unless `skip_invalid` is used). A question without a unit takes the unit
-chosen in the request, if any. `quiz-import-v1` rejects `unit`.
+chosen in the request, if any. `quiz-import-v1` rejects `course_unit`.
 
 Text fields may use the [formula and code syntax](QUESTIONS.md#formulas-and-code)
 (`$…$`, `$$…$$`, backticks and code fences). It is plain text to the importer; in JSON,

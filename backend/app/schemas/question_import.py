@@ -29,7 +29,7 @@ class ImportItemReport(BaseModel):
     line: int | None
     type: str | None
     stem: str | None
-    unit: str | None
+    course_unit: str | None
     status: Literal["OK", "WARNING", "ERROR"]
     issues: list[ImportIssue]
 

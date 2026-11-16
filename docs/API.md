@@ -392,7 +392,7 @@ no unit in the file), and these options, all optional:
 `POST /courses/{course_id}/questions/import/check` takes the same body and saves nothing. It
 answers 200 with a report: `readable`/`message` (the file as a whole cannot be read), counts
 `total`/`ok`/`warnings`/`errors` and, for every question, `position`, `line`, `type`, `stem`,
-`unit`, `status` (`OK`, `WARNING`, `ERROR`) and `issues[]` (`code`, `severity`, `message`).
+`course_unit`, `status` (`OK`, `WARNING`, `ERROR`) and `issues[]` (`code`, `severity`, `message`).
 Codes: `INVALID_CONTENT`, `NEEDS_V2`, `DUPLICATE_IN_FILE`, `UNKNOWN_UNIT`, `ARCHIVED_UNIT`
 (errors) and `DUPLICATE_OWN`, `DUPLICATE_APPROVED`, `NO_EXPLANATION` (warnings). Members only;
 415 and 413 as for the import.

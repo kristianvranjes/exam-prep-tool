@@ -40,7 +40,7 @@ from app.services.questions.service import (
 )
 
 VERSIONS = ("quiz-import-v1", "quiz-import-v2")
-DOCUMENT_FIELDS = {"version", "unit", "questions"}
+DOCUMENT_FIELDS = {"version", "course_unit", "questions"}
 unit_title_adapter: TypeAdapter[ImportUnitTitle | None] = TypeAdapter(ImportUnitTitle | None)
 
 
@@ -78,7 +78,7 @@ async def read_import(request: Request, skip_invalid: bool = False) -> QuizImpor
         if not valid:
             raise HTTPException(422, "No question in the file can be imported")
         return QuizImport.model_validate(
-            {"version": parsed.version, "unit": parsed.unit, "questions": valid}
+            {"version": parsed.version, "course_unit": parsed.course_unit, "questions": valid}
         )
     try:
         document = QuizImport.model_validate_json(body)
@@ -111,7 +111,7 @@ class Item:
 @dataclass
 class Parsed:
     version: str
-    unit: str | None
+    course_unit: str | None
     items: list[Item]
 
 
@@ -160,11 +160,11 @@ def parse_document(body: bytes, max_count: int) -> Parsed:
     if version not in VERSIONS:
         raise Unreadable("version: use quiz-import-v1 or quiz-import-v2")
     try:
-        unit = unit_title_adapter.validate_python(data.get("unit"))
+        course_unit = unit_title_adapter.validate_python(data.get("course_unit"))
     except ValidationError:
-        raise Unreadable("unit: expected a title of 1 to 150 characters") from None
-    if unit is not None and version == "quiz-import-v1":
-        raise Unreadable("unit: use quiz-import-v2 to name units")
+        raise Unreadable("course_unit: expected a title of 1 to 150 characters") from None
+    if course_unit is not None and version == "quiz-import-v1":
+        raise Unreadable("course_unit: use quiz-import-v2 to name units")
     questions = data.get("questions")
     if not isinstance(questions, list) or not questions:
         raise Unreadable("questions: provide at least one question")
@@ -184,7 +184,7 @@ def parse_document(body: bytes, max_count: int) -> Parsed:
             item.add("INVALID_CONTENT", "ERROR", format_errors(exc))
             continue
         if version == "quiz-import-v1" and (
-            item.content.type not in CLASSIC_TYPES or item.content.unit is not None
+            item.content.type not in CLASSIC_TYPES or item.content.course_unit is not None
         ):
             item.add("NEEDS_V2", "ERROR", "Use quiz-import-v2 for this type or for naming a unit")
         stem = normalize(item.content.stem)
@@ -192,7 +192,7 @@ def parse_document(body: bytes, max_count: int) -> Parsed:
             item.add("DUPLICATE_IN_FILE", "ERROR", f"Same text as question {first[stem]}")
         else:
             first[stem] = item.position
-    return Parsed(version, unit, items)
+    return Parsed(version, course_unit, items)
 
 
 def units_by_title(db: Session, course_id: UUID) -> dict[str, CourseUnit]:
@@ -232,7 +232,7 @@ def check_import(db: Session, user: User, course_id: UUID, body: bytes) -> Impor
         raw = item.raw if isinstance(item.raw, dict) else {}
         title = None
         if content:
-            title = content.unit or parsed.unit
+            title = content.course_unit or parsed.course_unit
             if title is not None:
                 unit = units.get(normalize(title))
                 if unit is None:
@@ -247,7 +247,7 @@ def check_import(db: Session, user: User, course_id: UUID, body: bytes) -> Impor
             if content.explanation is None:
                 item.add("NO_EXPLANATION", "WARNING", "The question has no explanation")
         else:
-            title = raw.get("unit") if isinstance(raw.get("unit"), str) else None
+            title = raw.get("course_unit") if isinstance(raw.get("course_unit"), str) else None
         status = "OK"
         if any(issue.severity == "WARNING" for issue in item.issues):
             status = "WARNING"
@@ -261,7 +261,7 @@ def check_import(db: Session, user: User, course_id: UUID, body: bytes) -> Impor
                 line=item.line,
                 type=question_type if isinstance(question_type, str) else None,
                 stem=stem_text[:400] if isinstance(stem_text, str) else None,
-                unit=title,
+                course_unit=title,
                 status=status,  # type: ignore[arg-type]
                 issues=item.issues,
             )
@@ -298,7 +298,7 @@ def import_questions(
     try:
         # The `unit_ids` selection is the default for questions that do not name a unit.
         default_units = validate_unit_links(db, course_id, unit_ids or [])
-        titles = {c.unit or document.unit for c in document.questions} - {None}
+        titles = {c.course_unit or document.course_unit for c in document.questions} - {None}
         by_title = units_by_title(db, course_id) if titles else {}
         existing: dict[str, Question] = {}
         if duplicates != "REJECT":
@@ -318,7 +318,7 @@ def import_questions(
             }
         rows = []
         for content in document.questions:
-            title = content.unit or document.unit
+            title = content.course_unit or document.course_unit
             units: list[UUID] | None = default_units
             if title is not None:
                 unit = by_title.get(normalize(title))

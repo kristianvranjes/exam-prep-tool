@@ -392,9 +392,12 @@ ImportUnitTitle = Annotated[
 
 
 class ImportUnit(StrictModel):
-    """Optional title of the course unit (quiz) an imported question belongs to."""
+    """Optional title of the course unit (quiz) an imported question belongs to.
 
-    unit: ImportUnitTitle | None = None
+    Not `unit`: a numeric question already uses that for its measurement unit.
+    """
+
+    course_unit: ImportUnitTitle | None = None
 
 
 class ImportMCQ(MCQ, ImportUnit):
@@ -435,9 +438,9 @@ import_content_adapter: TypeAdapter[ImportContent] = TypeAdapter(ImportContent)
 
 class QuizImport(StrictModel):
     # v2 adds NUMERIC, MULTIPLE_SELECT and MATCH; v1 documents stay valid as they were.
-    # `unit` (v2 only, optional) names the unit all questions without their own `unit` belong to.
+    # `course_unit` (v2 only, optional) names the unit all questions without their own belong to.
     version: Literal["quiz-import-v1", "quiz-import-v2"]
-    unit: ImportUnitTitle | None = None
+    course_unit: ImportUnitTitle | None = None
     questions: list[ImportContent] = Field(min_length=1, max_length=MAX_IMPORT_QUESTIONS)
 
     @model_validator(mode="after")
@@ -447,7 +450,7 @@ class QuizImport(StrictModel):
         ):
             raise ValueError("Use quiz-import-v2 for numeric, multiple-select and match questions")
         if self.version == "quiz-import-v1" and (
-            self.unit is not None or any(q.unit is not None for q in self.questions)
+            self.course_unit is not None or any(q.course_unit is not None for q in self.questions)
         ):
             raise ValueError("Use quiz-import-v2 to name units")
         stems = [normalize(q.stem) for q in self.questions]
