@@ -8,6 +8,7 @@ import { CourseMaterials, type MaterialsSummary } from "./course-materials";
 import { CourseOverview } from "./course-overview";
 import { CourseSettings } from "./course-settings";
 import { CourseUnits } from "./course-units";
+import { ExamEstimateView } from "./exam-estimate";
 import { ExamPapers } from "./exam-papers";
 import { ItemAnalysisView } from "./item-analysis";
 import { PracticeQuiz, type PracticeSetupRequest } from "./practice-quiz";
@@ -69,7 +70,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         onRecommendedPractice={() => openPractice("ADAPTIVE")}
         onStartAttempt={onOpenAttempt}
         onOpenPractice={request => openPractice(request.mode, request)}
-        onPapers={() => navigate("papers")} onProgress={() => navigate("progress")} onMaterials={manager ? () => navigate("materials") : undefined}
+        onPapers={() => navigate("papers")} onProgress={() => navigate("progress")} onEstimate={() => navigate("estimate")} onMaterials={manager ? () => navigate("materials") : undefined}
         onQuestions={() => { setMoreDestination("questions"); navigate("more"); }} />
     </section>
     <div id="course-practice" hidden={destination !== "practice"}>
@@ -83,6 +84,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
     {destination === "papers" && <div id="course-papers"><ExamPapers courseId={course.id} onStartAttempt={onOpenAttempt} /></div>}
     <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} onStartAttempt={onOpenAttempt}
       onPracticeMistakes={() => openPractice("MISTAKES")} onPracticeFavorites={() => openPractice("FAVORITES")} /></div>
+    {destination === "estimate" && <div id="course-estimate"><ExamEstimateView courseId={course.id} active={visible}
+      onPracticeUnit={(unitId, scopeId) => openPractice("ADAPTIVE", { scopeId, unitIds: [unitId] })} /></div>}
     {manager ? <div id="course-materials" hidden={destination !== "materials"}><CourseMaterials courseId={course.id} currentUserId={currentUserId} onSummaryChange={setMaterials} /></div>
       // A student who follows an old link gets a way back instead of an empty page.
       : destination === "materials" && <div id="course-materials" className="mt-6 max-w-prose">

@@ -173,6 +173,7 @@ export const api = {
   deleteExamScope: (id: string) => request<void>(`/exam-scopes/${id}`, { method: "DELETE" }),
   examScopeCoverage: (id: string) => request<ExamScopeCoverage>(`/exam-scopes/${id}/coverage`),
   examScopeReadiness: (id: string) => request<ExamScopeReadiness>(`/exam-scopes/${id}/readiness`),
+  examScopeEstimate: (id: string) => request<ExamEstimate>(`/exam-scopes/${id}/estimate`),
   examPapers: (courseId: string) => request<ExamPaperList>(`/courses/${courseId}/exam-papers`),
   examPaper: (id: string) => request<ExamPaperDetail>(`/exam-papers/${id}`),
   createExamPaper: (courseId: string, body: ExamPaperBody) => request<ExamPaperDetail>(`/courses/${courseId}/exam-papers`, { method: "POST", body: JSON.stringify(body) }),
@@ -264,6 +265,20 @@ export type ExamScopeReadiness = {
   question_count: number; answered_count: number; retained_count: number; answer_count: number; correct_answer_count: number;
   /** Answered questions needed before `readiness` is given. */
   min_answered: number; readiness: ReadinessRange | null; units: UnitReadiness[]; weakest_unit_ids: string[];
+};
+
+/** Points, not shares: what the caller would expect on the exam today (`exam-estimate-v1`). */
+export type PointsRange = { low: number; expected: number; high: number };
+export type TopicEstimate = {
+  unit_id: string; title: string; position: number;
+  /** Average points the topic carried on the scope's published past papers. */
+  exam_points: number; answer_count: number; accuracy: number | null; expected_points: number | null; gain_points: number | null;
+};
+export type ExamEstimate = {
+  scope_id: string; rule: "exam-estimate-v1"; as_of: string; window_days: number; target_accuracy: number;
+  paper_count: number; answer_count: number;
+  /** Answers needed before `estimate` is given. */
+  min_answers: number; max_points: number | null; pass_threshold: number | null; estimate: PointsRange | null; topics: TopicEstimate[];
 };
 
 /** A past exam as it was set. Penalty is the fraction of an item's points lost for a wrong objective answer. */

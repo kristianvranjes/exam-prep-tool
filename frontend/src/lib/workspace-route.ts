@@ -1,4 +1,4 @@
-export type CourseDestination = "overview" | "practice" | "papers" | "progress" | "materials" | "more";
+export type CourseDestination = "overview" | "practice" | "papers" | "progress" | "estimate" | "materials" | "more";
 /** Pages outside a course: the course list, enrolment, the cross-course review and progress pages, settings and faculty tools. */
 export type GlobalView = "home" | "enrol" | "review" | "progress" | "settings" | "management";
 export type WorkspaceRoute =
@@ -18,7 +18,7 @@ export const attemptPath = (courseId: string, id: string, submitted = false) =>
   `${coursePath(courseId)}/attempts/${encodeURIComponent(id)}${submitted ? "/results" : ""}`;
 
 const destinationTitles: Record<CourseDestination, string | null> = {
-  overview: null, practice: "Vježba", papers: "Prošli ispiti", progress: "Napredak", materials: "Materijali", more: "Više",
+  overview: null, practice: "Vježba", papers: "Prošli ispiti", progress: "Napredak", estimate: "Procjena za ispit", materials: "Materijali", more: "Više",
 };
 
 /**
@@ -35,7 +35,7 @@ export function documentTitle(route: WorkspaceRoute | null, courseName?: string 
 export function parseWorkspaceRoute(pathname: string): WorkspaceRoute | null {
   const path = pathname.replace(/\/$/, "") || "/";
   if (Object.hasOwn(globalPaths, path)) return { view: globalPaths[path] };
-  const match = /^\/courses\/([^/]+)(?:\/(practice|papers|progress|materials|more)|\/attempts\/([^/]+)(\/results)?)?$/.exec(path);
+  const match = /^\/courses\/([^/]+)(?:\/(practice|papers|progress|estimate|materials|more)|\/attempts\/([^/]+)(\/results)?)?$/.exec(path);
   if (!match) return null;
   try {
     const courseId = decodeURIComponent(match[1]);
