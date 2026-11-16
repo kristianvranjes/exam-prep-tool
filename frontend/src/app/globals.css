@@ -1,52 +1,132 @@
 @import "tailwindcss";
 
+/* Palette, type and spacing are specified in DESIGN.md; keep both in sync. */
+:root, [data-theme="dark"] {
+  /* Dizajn "Kviz": default dark palette, see the design handoff README (dizajn/ folder). Seven base values per palette;
+     everything else is derived below so palettes and the custom picker stay small. */
+  --background: #171b1e;
+  --surface: #1e2327;
+  --foreground: #d5dad6;
+  --accent: #afc96e;
+  --line: #2e353a;
+  --success: #86c09a;
+  --danger: #dc9f8c;
+  --pending: #d9bf7a;
+  color-scheme: dark;
+}
+[data-theme="light"] { /* Papir */
+  --background: #f4efe6; --surface: #ebe4d7; --foreground: #2a2622; --accent: #3f6b4a; --line: #d4cbbb;
+  --success: #2f7a4c; --danger: #b04a35; --pending: #8a6a1c; color-scheme: light;
+}
+[data-theme="night"] { /* Noćno plava */
+  --background: #141b26; --surface: #1b2432; --foreground: #d3dbe6; --accent: #7fb6d6; --line: #2a3546;
+  --success: #7cc2a0; --danger: #e3a08f; --pending: #dec27f; color-scheme: dark;
+}
+[data-theme="contrast"] { /* Visoki kontrast */
+  --background: #000000; --surface: #111111; --foreground: #ffffff; --accent: #ffe14d; --line: #5a5a5a;
+  --success: #5ef08a; --danger: #ff7a66; --pending: #ffd23f; color-scheme: dark;
+}
+/* "Vlastita": --background, --foreground and --accent are written inline by theme.tsx. */
+[data-theme="custom"] { --surface: color-mix(in srgb, var(--foreground) 6%, var(--background)); --line: color-mix(in srgb, var(--foreground) 22%, var(--background)); }
 :root {
-  --background: #f6f7f9;
-  --foreground: #20242d;
-  --surface: #ffffff;
-  --subtle: #eceef2;
-  --muted: #596273;
-  --line: #ccd1db;
-  --accent: #414eae;
-  --accent-hover: #333f95;
-  --accent-foreground: #ffffff;
-  --accent-surface: #eef0ff;
-  --danger: #b42336;
-  --danger-surface: #fff1f2;
+  --muted: color-mix(in srgb, var(--foreground) 62%, var(--background));
+  /* Lighter than muted so an example in a field never reads as an entered value. */
+  --placeholder: color-mix(in srgb, var(--foreground) 52%, var(--surface));
+  --line-strong: color-mix(in srgb, var(--foreground) 36%, var(--background));
+  --subtle: color-mix(in srgb, var(--foreground) 7%, var(--surface));
+  /* The handoff's neutral steps, named by role. In the dark palette they land on its neutral-300/400/500/800. */
+  --track: color-mix(in srgb, var(--foreground) 8%, var(--background));
+  --quiet: color-mix(in srgb, var(--foreground) 17%, var(--background));
+  --faint: color-mix(in srgb, var(--foreground) 31%, var(--background));
+  --soft: color-mix(in srgb, var(--foreground) 83%, var(--background));
+  --accent-hover: color-mix(in srgb, var(--accent) 82%, var(--foreground));
+  --accent-foreground: var(--background);
+  --accent-surface: color-mix(in srgb, var(--accent) 16%, var(--background));
+  --success-surface: color-mix(in srgb, var(--success) 16%, var(--background));
+  --danger-foreground: var(--background);
+  --danger-surface: color-mix(in srgb, var(--danger) 16%, var(--background));
+  --pending-surface: color-mix(in srgb, var(--pending) 16%, var(--background));
+  --info: var(--accent);
+  --info-surface: var(--accent-surface);
+  --highlight: color-mix(in srgb, var(--pending) 35%, var(--background));
+  --focus: var(--accent);
 }
-[data-theme="dark"] {
-  --background: #181b22;
-  --foreground: #e9ecf3;
-  --surface: #212630;
-  --subtle: #2c3340;
-  --muted: #b0b9c9;
-  --line: #4a5568;
-  --accent: #a6b2ff;
-  --accent-hover: #c3cbff;
-  --accent-foreground: #1d2556;
-  --accent-surface: #2b3456;
-  --danger: #ffacb6;
-  --danger-surface: #422630;
-}
+html[data-font-scale="0.9"] { font-size: 90%; }
+html[data-font-scale="1.15"] { font-size: 115%; }
+html[data-font-scale="1.3"] { font-size: 130%; }
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
   --color-subtle: var(--subtle);
   --color-muted: var(--muted);
+  --color-track: var(--track);
+  --color-quiet: var(--quiet);
+  --color-faint: var(--faint);
+  --color-soft: var(--soft);
+  --color-placeholder: var(--placeholder);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent-surface: var(--accent-surface);
   --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
   --color-danger-surface: var(--danger-surface);
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-pending: var(--pending);
+  --color-pending-surface: var(--pending-surface);
+  --color-info: var(--info);
+  --color-info-surface: var(--info-surface);
+  --font-sans: var(--font-text), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, Menlo, "Cascadia Mono", Consolas, monospace;
+  --font-display: var(--font-text), ui-sans-serif, system-ui, sans-serif;
+}
+@theme {
+  /* Type scale (~1.2 ratio). Line heights tighten as size grows. */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.375rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.625rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.625rem;
+  --text-xl: 1.3125rem;
+  --text-xl--line-height: 1.875rem;
+  --text-2xl: 1.625rem;
+  --text-2xl--line-height: 2.125rem;
+  --text-3xl: 2rem;
+  --text-3xl--line-height: 2.5rem;
+  --text-4xl: 2.5rem;
+  --text-4xl--line-height: 2.875rem;
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 3.375rem;
+  /* Spacing roles on the 4 px grid. */
+  --spacing-stack: 0.75rem;
+  --spacing-card: 1.25rem;
+  --spacing-card-lg: 1.5rem;
+  --spacing-group: 1.5rem;
+  --spacing-section: 2.5rem;
+  /* Oštri kutovi svugdje (radius 0). Pills (rounded-full) stay for dots and avatars only. */
+  --radius-tag: 0; --radius-control: 0; --radius-card: 0;
+  --radius-xs: 0; --radius-sm: 0; --radius-md: 0; --radius-lg: 0; --radius-xl: 0; --radius-2xl: 0; --radius-3xl: 0;
 }
 @layer base {
   * { border-color: var(--line); }
-  body { background: var(--background); color: var(--foreground); font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; line-height: 1.6; overflow-wrap: anywhere; }
-  h1, h2, h3, h4 { text-wrap: balance; line-height: 1.25; }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  html { scrollbar-color: var(--line-strong) transparent; }
+  body { background-color: var(--background); color: var(--foreground); font-family: var(--font-text), ui-sans-serif, system-ui, sans-serif; font-size: 1rem; line-height: 1.625; font-optical-sizing: auto; overflow-wrap: anywhere; -webkit-font-smoothing: antialiased; }
+  /* Heavy Archivo headings, set tight as in the handoff. */
+  h1, h2, h3, h4 { font-family: var(--font-text), ui-sans-serif, system-ui, sans-serif; font-weight: 800; text-wrap: balance; line-height: 1.12; letter-spacing: -0.015em; }
+  p, li, dd { text-wrap: pretty; }
+  code, kbd, samp, pre { font-family: ui-monospace, Menlo, "Cascadia Mono", Consolas, monospace; font-size: 0.9375em; }
+  a { text-underline-offset: 0.2em; }
+  hr { border-color: var(--line); }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  /* Headings receive focus after navigation; mark them with an ink underline, not a box. */
+  :where(h1, h2, h3, h4)[tabindex="-1"]:focus-visible { outline: none; text-decoration: underline 2px var(--focus); text-underline-offset: 0.3em; }
   [id] { scroll-margin-top: 1.5rem; }
   button, a, input, select, textarea, summary { touch-action: manipulation; }
   button, summary { cursor: pointer; }
@@ -54,16 +134,19 @@
   button, select, summary { min-height: 2.75rem; }
   input:not([type="checkbox"]):not([type="radio"]), select, textarea { min-height: 2.75rem; max-width: 100%; background-color: var(--surface); color: var(--foreground); }
   input, textarea { caret-color: var(--accent); }
-  input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
-  label:has(input[type="checkbox"], input[type="radio"]) { display: inline-flex; align-items: center; gap: .5rem; min-height: 2.75rem; }
-  ::placeholder { color: var(--muted); opacity: 1; }
-  ::selection { background: var(--accent); color: var(--accent-foreground); }
+  input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width: 1.125rem; height: 1.125rem; flex-shrink: 0; }
+  label:has(input[type="checkbox"], input[type="radio"]) { display: inline-flex; align-items: center; gap: .625rem; min-height: 2.75rem; cursor: pointer; }
+  ::placeholder { color: var(--placeholder); opacity: 1; }
+  ::selection { background: var(--highlight); color: var(--foreground); }
   pre { max-width: 100%; overflow-x: auto; }
+  .tabular-nums, dd { font-variant-numeric: tabular-nums; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 }
 @layer components {
-  .nav-link { display: flex; align-items: center; gap: .75rem; min-height: 2.75rem; padding: .65rem .75rem; border-radius: .5rem; font-size: .875rem; font-weight: 500; }
-  .nav-link:hover { background: var(--subtle); }
-  .skip-link { position: absolute; left: 1rem; top: 1rem; z-index: 50; transform: translateY(-200%); padding: .75rem 1rem; background: var(--surface); border: 1px solid var(--line); }
+  .skip-link { position: absolute; left: 1rem; top: 1rem; z-index: 50; transform: translateY(-200%); padding: .75rem 1rem; background: var(--surface); border: 2px solid var(--line); }
   .skip-link:focus { transform: translateY(0); }
+}
+@layer components {
+  .label-caps { font-size: .6875rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .hero-number { font-weight: 800; letter-spacing: -.035em; line-height: .85; font-variant-numeric: tabular-nums; }
 }

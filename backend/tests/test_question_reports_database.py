@@ -9,6 +9,7 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from community_helpers import provision
 from fastapi.testclient import TestClient
+from migration_helpers import legacy_question_columns
 from sqlalchemy import delete, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as OrmSession
@@ -55,7 +56,8 @@ def register():
 def question_history(question_id):
     with engine.connect() as conn:
         question = conn.execute(
-            text("SELECT * FROM questions WHERE id = :id"), {"id": question_id}
+            text(f"SELECT {legacy_question_columns(conn)} FROM questions WHERE id = :id"),
+            {"id": question_id},
         ).one()
         versions = conn.execute(
             text("SELECT * FROM question_versions WHERE question_id = :id ORDER BY version_number"),

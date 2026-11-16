@@ -1,21 +1,21 @@
 # Engineering rules
 
-- Implement only the scope of the active issue. Phase 1 is infrastructure only.
+- Implement only the scope of the active issue; `docs/ROADMAP.md` lists the planned milestones, not the scope of any single change.
 - AI is a supporting component, not the core product.
 - Prefer deterministic code instead of LLM calls whenever possible.
 - Application business logic must never depend directly on one AI provider.
 - Local-first, cloud-optional; keep student infrastructure costs near zero.
-- AI-generated content will require validation and human review in later phases.
+- AI-generated content requires validation and human review before students see it.
 - Do not send entire documents repeatedly to LLMs.
 - Do not introduce microservices unless there is a demonstrated need.
 - Keep routes thin and business logic in services.
 - Never commit secrets.
 - Work incrementally and test each coherent change; fix failures, never disable checks.
-- During feature development, run targeted tests for the behavior and files changed by the active issue.
-- Do not duplicate the repository-wide GitHub Actions regression suite locally merely for completeness.
-- Before opening a PR, run the relevant targeted tests plus practical lint/type checks for changed code.
-- Expand local verification only when a targeted failure suggests a wider regression or when the active issue explicitly requires it.
-- GitHub Actions is the authoritative full regression gate for backend, PostgreSQL/migrations, frontend build/tests, and Compose health.
-- When CI fails, inspect the exact failing job and reproduce only the relevant check locally while fixing it.
 - Backend: FastAPI, Pydantic, SQLAlchemy 2, Alembic, PostgreSQL/pgvector.
 - Frontend: Next.js, TypeScript, Tailwind CSS, shadcn/ui-ready.
+- During feature development:
+- run targeted tests for changed behavior
+- run relevant lint/type checks
+- do not duplicate repository-wide CI locally
+- GitHub Actions is the authoritative full regression gate
+- broaden local verification only when investigating a failure

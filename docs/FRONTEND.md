@@ -1,20 +1,47 @@
 # Frontend foundation
 
-ExamPrep uses a compact header, desktop sidebar and a single main study area.
-On mobile, the labeled navigation button expands an inline menu; Escape closes it
-and restores button focus. A skip link reaches the main content. Course selection
-keeps the existing materials, practice, learning progress and question-bank components
-mounted together. Navigation uses section anchors, so moving between tools does not
-discard an in-progress answer or form. Selecting another course retains the existing
-remount behavior. Faculty moderators also have a separate Moderation anchor that
-works without selecting or joining a course.
+The interface is Croatian only and its text is written directly in the components
+(`DESIGN.md` records the decision). This document names controls in English for
+readability, so match them to the Croatian labels in the code ("Your courses" is
+"Vaši kolegiji", "Course enrolment" is "Upis kolegija", "Faculty tools" is "Alati
+fakulteta"). The visual system is described in [DESIGN.md](../DESIGN.md).
 
-## My courses and Browse courses
+ExamPrep uses a top navigation bar with a single main study area; below the `md`
+breakpoint the same `nav` becomes a fixed bottom tab bar (`ApplicationFrame`). It holds
+Kolegiji (home), Ponavljanje (`/review`, with a badge counting the questions due now across
+the active courses), Napredak (`/progress`), Alati fakulteta (faculty moderators only) and,
+on mobile, Postavke; a settings link (`/settings`) and an account menu sit at the right of
+the bar. The destinations are links, so they also open in a new tab. Appearance
+preferences (palette, custom colours, font size, answer markers) are saved per user through
+`/users/me/preferences` once signed in, with `localStorage` as the fallback.
+Escape closes the account menu and restores focus to its button. A skip link reaches the main
+content. During an active practice session the bar is replaced by a focus mode with only
+the brand and the settings button.
 
-My courses shows joined courses and opens the existing study tools. Its empty state
-links to Browse courses, available in both desktop and mobile navigation.
-`CourseBrowser` owns faculty/catalog interaction and reuses the existing API client
-and Faculty/Course types. Faculties appear in backend order with optional university
+Navigation uses real routes, so reload and Back/Forward work: `/` (Vaši kolegiji),
+`/enrol`, `/faculty`, `/courses/[id]` (overview) with `/practice`, `/papers`, `/progress`,
+`/materials` and `/more`, and `/courses/[id]/attempts/[attemptId]` with `/results`
+(`lib/workspace-route.ts` parses them and sets the tab title). Browser tests in
+`e2e/url-routing.spec.ts` cover deep links and history.
+
+## Your courses and course enrolment
+
+Your courses (`/`, "Vaši kolegiji") shows joined courses as cards in the course's own
+colour; the ⋯ menu can mark a course finished or remove it, and finished courses move to
+a "Završeni" section. These choices are the membership status (`ACTIVE`, `DONE`, `HIDDEN`)
+that `GET /courses` returns and `PATCH /courses/{id}/membership` saves; the app shell applies a
+change at once and puts it back if saving fails. A hidden course keeps its access and counts as
+not enrolled on the enrolment page, where enrolling again shows it again. Before the status
+existed these choices were kept in the browser (`localStorage` key
+`examprep-course-prefs:<userId>`); the app shell sends what is left there to the backend once
+and then forgets it (`migrateLocalCoursePrefs` in `lib/course-prefs.ts`). A card with a dated
+next exam (`next_exam`) shows its name and date, and the readiness estimate from
+`GET /exam-scopes/{id}/readiness` as a progress bar ("oko 70 %", or a hint when there are too
+few answers). Its empty state links to Course enrolment (`/enrol`,
+"Upis kolegija"), where `CourseBrowser` owns faculty/catalog interaction and reuses the
+existing API client and Faculty/Course types. Each row shows the year of study, whether the
+faculty has moderators and the number of approved questions; a year filter appears when any
+course of the faculty has a year. Faculties appear in backend order with optional university
 names; Legacy / Unassigned receives the same neutral treatment as every faculty.
 
 Faculty courses load only after selection, never across the whole catalog in advance.
@@ -27,8 +54,8 @@ Membership comes from the shell's joined-course list. Join course is disabled wh
 that list loads or the specific join is pending. The join endpoint returns membership
 metadata, not a course. After success, the selected catalog course updates My courses
 with ID-based deduplication, without an extra fetch; joins announce success without
-changing selection, theme or navigation. Open course selects the joined course and
-links to its study tools. Failed joins keep existing courses/selection and offer retry.
+changing selection, theme or navigation. Enrolled rows read "Upisano ✓" and open the
+course. Failed joins keep existing courses/selection and offer retry.
 Responses arriving after logout/unmount do not update the next session.
 
 ## Course settings
@@ -147,6 +174,38 @@ selected question unchanged and announces “Suggestion submitted for faculty re
 Success clears the form; failure (including duplicate 409) keeps input for retry.
 Pending submits deduplicate; selecting another question/course ignores late results.
 
+## Course overview and practice setup
+
+Both screens aim to shorten the path to the next useful question, so each offers one
+primary action.
+
+`CourseOverview` is a column of ruled sections (hairline `border-t border-line`, no
+sheets):
+
+1. **Continue studying**, when a session is open. It shows the same line as Home (mode,
+   focus, "n of N answered"), reading the session once if only its id is known.
+   **Resume session** is then the only primary action, and starting actions are hidden
+   while the session is mounted.
+2. **The next exam**, as a header section. The heading carries the countdown
+   ("Međuispit in 20 days"), the date is a `<time>`, and the readiness range is the one
+   figure (Literata, tabular), with coverage in counts under it. The actions are
+   **Practice for …** (primary), the past-exams link and the weakest units'
+   **Practice this** shortcuts.
+3. **What to study next**, or **Other ways to study** when the exam leads. It holds
+   **Review due questions** (primary when due questions lead), **Start recommended
+   practice** and a compact quick quiz row.
+4. **Progress summary** (a reviewed count; accuracy lives in Progress) and
+   **Materials**.
+
+`PracticeSetup` asks **What to practice** (whole course, exam cycle or units) first.
+**How to practice** follows, with Recommended practice, Mistakes and Mock exam. Mock
+exam is listed only once an exam cycle is chosen; until then a line says how to get
+it. Course questions, Due for review, Favorites, question types and Guided/Exam
+practice sit under **More options**, which opens by itself when one of its modes is
+selected, for example from a shortcut. Review choices with nothing to select are left
+out rather than shown disabled, unless already selected. The server's availability
+counts and its 409 on start stay authoritative.
+
 ## Study and Exam quizzes
 
 Quiz experience is a frontend presentation choice, separate from the server's
@@ -172,22 +231,29 @@ Flags are local to the mounted active attempt, never sent to the server. They su
 question navigation and presentation switches, but may reset after returning to
 history, changing course or refreshing/resuming. Saved answers remain server-owned.
 
-Final submission uses an inline named confirmation region with predictable heading
-focus, answered/unanswered/flagged counts and an explicit irreversible warning.
-Confirmation is disabled until every answer is saved. Submission failure preserves
+Finishing takes one deliberate step. A guided (IMMEDIATE) session whose questions are
+all answered and none marked to revisit ends from its last checked answer: the primary
+button reads **Završi vježbu** and hands the session in, because checked answers are
+already final. Otherwise the **Pregled vježbe** step is the confirmation: it shows the
+answered count, names blank questions ("neodgovorena pitanja se ne ocjenjuju i ne ulaze
+u napredak") and marked ones, and **Završi vježbu** submits from there. Practice can be
+finished with blanks once one answer is saved; with none, the step points to
+**Odustani od pokušaja**. Only a past paper keeps the separate **Potvrda predaje**
+region, since handing it in ends a timed exam. Submission failure preserves
 the attempt and permits retry or return to editing. No correctness appears before
 submission. Active history entries resume; submitted entries open the same Results
 experience as a newly finished session; abandoned entries open read-only saved-answer history.
 
 ### Submitted Results / Review
 
-**Practice complete** shows compact Correct / Incorrect / Self-review required
-counts from the frozen grading statuses, without percentages. Client-side review
+**Practice complete** shows compact Correct / Incorrect / Short answers counts from
+the frozen grading statuses, without percentages; under Short answers a note such as
+"1 self-assessed correct · 1 to self-review" tracks self-assessment. Client-side review
 defaults to Mistakes when incorrect answers exist, otherwise Self-review when
 PENDING answers exist, otherwise All answers. Empty categories are disabled.
 
-The primary action is **Review mistakes**, **Review short answers**, or **Practice
-again**, respectively. Review actions select and focus the relevant review heading;
+The primary action is **Review mistakes**, **Review short answers** (while any short
+answer is not yet self-assessed), or **Practice again**, respectively. Review actions select and focus the relevant review heading;
 filter buttons retain keyboard focus and expose `aria-pressed` state. Mistakes show
 question text, Your answer, Correct answer and any existing Explanation together.
 Correct answers have quieter headers and native answer disclosures under All answers.
@@ -196,7 +262,19 @@ True/false answers display readable True / False labels. Missing explanations ar
 SHORT_ANSWER remains **Self-review required**, with the original submitted text,
 Reference answer and comparison guidance. Even exact text equality is not graded;
 PENDING is never counted as incorrect. These answers do not affect Progress or scheduling.
-There is no student self-score, AI grading or generated explanation.
+The student can record a self-assessment with **I had it** / **I missed it**
+(`aria-pressed` toggles in success/danger tones with icons; pressing the chosen one again
+clears it), saved on its own with an inline Saving / Saved / error line. The same
+control follows the reference answer in guided practice's checked feedback. The item
+then reads "Self-assessed correct" or "Self-assessed incorrect", never Correct or
+Incorrect; on a paper its points read "+3 of 3 points, not in the objective score" and
+the score adds "Objective score X of Y · self-assessed +Z of W points". There is no AI
+grading or generated explanation.
+
+Each result has a **Favorite question N** star toggle (`aria-pressed`); the active
+question has the same
+**Favorite** toggle next to **Mark to revisit**. See
+[favorites](PRACTICE.md#favorites-and-the-quick-quiz-r5).
 
 **Practice again** refreshes history and returns to the existing setup with the
 mounted course's count, types, selection mode and presentation preferences intact.
@@ -232,8 +310,11 @@ not initiate progress reads. There is no polling or realtime update.
 The default hierarchy is **What needs attention**, **Your practice**, then a
 collapsed **Scheduling details** disclosure. Attention uses only `due_now`,
 `upcoming` and `next_due_at`, which describe currently practice-eligible questions.
-Due reviews have the primary Start recommended practice action. When nothing is
-due, the next review date is shown and the practice action is secondary. Retained
+Due reviews have the primary **Review due questions** action, which starts a guided
+due-only session in one click (see
+[due review](PRACTICE.md#mistakes-due-review-and-mock-exams-r5-r3)); Start
+recommended practice is then secondary. When nothing is due, the next review date is
+shown and the practice action is secondary. Retained
 history with no actionable schedule is explicitly described as having no reviews
 currently available for practice, rather than having no history.
 
@@ -262,10 +343,20 @@ setup handoff with ADAPTIVE selected. It creates no attempt and preserves count,
 question types and Guided/Exam practice settings. A completed or abandoned view
 returns to setup through the existing history refresh; an active session and its
 unsaved answer remain mounted. Recommended practice is due-first, not due-only,
-and may include other eligible questions. The backend remains authoritative for
-membership, grading, scheduling and eligibility.
+and may include other eligible questions. The practice setup also offers Mistakes and,
+for an exam cycle, Mock exam, with Course questions, Due for review and Favorites under
+More options (see [course overview and practice setup](#course-overview-and-practice-setup)).
+The backend remains authoritative for membership, grading, scheduling and eligibility.
+Graded accuracy is shown here, not on the course overview.
 
 ## Materials upload and browsing
+
+Materials are a tool for the people who run a course. Only a course OWNER or a
+moderator of its faculty sees the **Materijali** tab, the overview's materials summary
+and the links to it; for everyone else the tab is absent and `CourseMaterials` is not
+mounted, so students never see uploads, extracted text or the AI source and concept
+controls. An old `/materials` link shows a student a short notice with a way back to
+the overview. The upload endpoint enforces the same rule (see [materials](MATERIALS.md)).
 
 `CourseMaterials` owns list/detail reads and upload integration. `MaterialUpload`
 provides a labeled native file picker and drop area, with an explicit Upload PDF
@@ -321,27 +412,69 @@ The backend remains authoritative for permissions, extraction and review.
 
 ## Theme and tokens
 
-`ThemeProvider` wraps the application through `next-themes`. System is the default;
-Light/Dark/System is available on both auth and signed-in screens. Preferences live
-in localStorage under `examprep-theme`, with no account or backend change. System
-follows OS changes. The bootstrap script sets `data-theme` before hydration, and the
-selector renders a stable disabled System option until mounted. Only the root HTML
-element suppresses the expected theme-attribute hydration difference.
+`ThemeProvider` (`components/theme.tsx`) wraps the application through `next-themes`.
+The default is the dark palette; the selector offers the five palettes (dark, Papir,
+Noćno plava, Visoki kontrast, Vlastita/custom colours) and "Sustav", which follows the OS
+light/dark preference. Preferences live in localStorage under `examprep-theme`, with no
+account or backend change; the font-size multiplier (90–130 %) is stored as
+`examprep-font-scale`. The bootstrap script sets `data-theme` before hydration, and the
+selector renders a stable disabled option until mounted. Only the root HTML element
+suppresses the expected theme-attribute hydration difference. The theme selector and the
+appearance settings are available on both the auth and signed-in screens.
 
-`frontend/src/app/globals.css` owns semantic light/dark tokens: background,
-foreground, surface, subtle, muted, line, accent (plus hover/foreground/surface), and
-danger (plus surface). Use token classes instead of fixed white/black/gray colors.
-Native controls and existing study components also use these tokens. Error states
-include text and an alert role; status must not rely on color alone.
+`frontend/src/app/globals.css` owns the semantic tokens per palette: background,
+foreground, surface, subtle, muted, line, accent (plus hover/foreground/surface), the
+correct, incorrect and pending colours (plus surfaces) and the focus ring. Use token
+classes instead of fixed white/black/gray colors. Native controls and study components
+also use these tokens. Error states include text and an alert role; status must not rely
+on color alone. [DESIGN.md](../DESIGN.md) lists every token and its use.
 
 ## Shared components
 
 `components/ui.tsx` provides small native-element primitives: Button (CVA primary,
-secondary, ghost variants), Input, Select, Surface, Badge, Alert, LoadingState and
+secondary, ghost and danger variants; `aria-pressed` turns a row of secondary buttons
+into a segmented filter), Input, Select, Surface, Badge, Alert, LoadingState and
 EmptyState. They use the existing `cn` helper (clsx/tailwind-merge), accept native
 props and leave behavior with feature components. No Radix/Base UI runtime or
 large shadcn collection is needed for these controls. Lucide supplies decorative
 icons, hidden from assistive technology. Reuse these primitives in later work.
+
+### Question text formatting
+
+`components/rich-text.tsx` exports `RichText`, which renders question content with the
+[formula and code syntax](QUESTIONS.md#formulas-and-code); the tokenizer and the
+keyword highlighter live in `lib/rich-text.ts`. Use `<RichText text={…} />` wherever a
+stem, option, explanation or reference answer is shown. It is used in the answer editor
+(stem and options), checked feedback, results and abandoned attempts, the question bank
+(list, detail, owner review and versions), faculty moderation (questions, reports and
+suggestion comparisons) and the past-paper editor and question picker. "Your answer" in
+results goes through it too, so a chosen option or a typed formula reads the same as the
+key. Accessible names
+(`aria-label`), `<option>` texts and placeholders keep the source text.
+
+- It renders phrasing content only (spans and `<code>`), so it fits in a `legend`,
+  heading, `label`, button or paragraph. Plain one-line text stays a bare text node;
+  otherwise a `whitespace-pre-wrap` span keeps line breaks. Pass `className` when the
+  text is a flex item (`min-w-0`), as in answer slips.
+- KaTeX is pinned (`katex@0.19.0`). Its stylesheet is imported once by the component;
+  the script (~75 kB gzipped) is loaded with a dynamic `import()` only when a text on
+  screen contains a formula, and the TeX source is shown until it arrives. Rendering
+  uses `output: "htmlAndMathml"`, `trust: false`, `strict: "ignore"`,
+  `throwOnError: false`, `maxSize: 20` and `maxExpand: 1000`. The only
+  `dangerouslySetInnerHTML` is KaTeX's own output; author text never becomes HTML.
+- Displayed formulas and code blocks scroll horizontally inside their own box, so a wide
+  formula or long code line never widens the page at 375 px. Inline code wraps.
+- Code blocks use the monospace face at 14–16 px whatever the surrounding size, with
+  semibold keywords and muted comments for known languages (no colours, no library).
+- Component tests: KaTeX arrives asynchronously, so wait for `.katex` markup. jsdom cannot
+  compute styles for MathML elements, so role queries whose match or accessible name
+  includes a formula throw; use `getByLabelText` or markup queries there.
+
+Authors get `FormattingHelp` (syntax line plus a table of examples rendered by
+`RichText`) under the question text in the question form, linked with
+`aria-describedby`, and `RichTextPreview`, which shows the stem as students will see it
+once the stem uses formatting. The JSON import help shows the same `FormattingHelp`
+with the JSON escaping note, and the external AI prompt asks for the same syntax.
 
 `ApplicationFrame` owns responsive layout and account/navigation controls;
 `AuthScreen` is presentational. `AppShell` keeps the existing API orchestration and
@@ -349,9 +482,11 @@ permission-derived faculty list. API contracts and backend authority are unchang
 
 ## Visual and accessibility conventions
 
-- Neutral surfaces and a restrained indigo accent; no gradients or decorative motion.
-- Local system sans-serif stack, clear heading hierarchy, left-aligned study content.
-- 4px spacing scale; 8px control and 12px surface corners; borders instead of shadows.
+- A calm, muted palette with one accent; no gradients, glass or decorative motion.
+- Archivo for headings and text, a monospace face for expressions and code, tabular
+  numbers, left-aligned study content.
+- Sharp corners (radius 0) and 2px borders instead of shadows; sizes are set in `rem` so
+  the font-size multiplier scales everything.
 - At least 44px control height, visible keyboard outlines, explicit labels and native
   validation. Password fields expose the appropriate autocomplete hints.
 - Break long course/account text; grid children use `min-width: 0`. Mobile navigation

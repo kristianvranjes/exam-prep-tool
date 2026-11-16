@@ -1,3 +1,4 @@
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -5,10 +6,45 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_db
 from app.models import User
-from app.schemas.quiz import AnswerPayload, AttemptResponse, AttemptSummary, StartQuiz
+from app.schemas.quiz import (
+    AnswerPayload,
+    AttemptResponse,
+    AttemptSummary,
+    CheckAnswer,
+    PracticeAvailability,
+    PracticeFilters,
+    RateAnswer,
+    SelfReviewRequest,
+    StartMock,
+    StartQuiz,
+)
 from app.services import quizzes
 
 router = APIRouter(prefix="/courses/{course_id}/attempts", tags=["practice"])
+availability_router = APIRouter(tags=["practice"])
+mock_router = APIRouter(prefix="/courses/{course_id}/mock-exams", tags=["practice"])
+
+
+@availability_router.get(
+    "/courses/{course_id}/practice-availability", response_model=PracticeAvailability
+)
+def availability(
+    course_id: UUID,
+    filters: Annotated[PracticeFilters, Query()],
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PracticeAvailability:
+    return quizzes.availability(db, user, course_id, filters)
+
+
+@mock_router.post("", response_model=AttemptResponse, status_code=201)
+def start_mock(
+    course_id: UUID,
+    data: StartMock,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AttemptResponse:
+    return quizzes.start_mock(db, user, course_id, data)
 
 
 @router.post("", response_model=AttemptResponse, status_code=201)
@@ -53,6 +89,53 @@ def answer(
     db: Session = Depends(get_db),
 ) -> AttemptResponse:
     return quizzes.save_answer(db, user, course_id, attempt_id, question_id, data)
+
+
+@router.delete("/{attempt_id}/answers/{question_id}", response_model=AttemptResponse)
+def clear(
+    course_id: UUID,
+    attempt_id: UUID,
+    question_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AttemptResponse:
+    return quizzes.clear_answer(db, user, course_id, attempt_id, question_id)
+
+
+@router.post("/{attempt_id}/answers/{question_id}/check", response_model=AttemptResponse)
+def check(
+    course_id: UUID,
+    attempt_id: UUID,
+    question_id: UUID,
+    data: CheckAnswer,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AttemptResponse:
+    return quizzes.check_answer(db, user, course_id, attempt_id, question_id, data)
+
+
+@router.put("/{attempt_id}/answers/{question_id}/rating", response_model=AttemptResponse)
+def rate(
+    course_id: UUID,
+    attempt_id: UUID,
+    question_id: UUID,
+    data: RateAnswer,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AttemptResponse:
+    return quizzes.rate_answer(db, user, course_id, attempt_id, question_id, data)
+
+
+@router.patch("/{attempt_id}/answers/{question_id}/self-review", response_model=AttemptResponse)
+def self_review(
+    course_id: UUID,
+    attempt_id: UUID,
+    question_id: UUID,
+    data: SelfReviewRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AttemptResponse:
+    return quizzes.self_review_answer(db, user, course_id, attempt_id, question_id, data)
 
 
 @router.post("/{attempt_id}/submit", response_model=AttemptResponse)

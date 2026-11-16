@@ -77,12 +77,12 @@ describe("FacultyModeration", () => {
     apiMock.facultyCourses.mockResolvedValue([makeCourse("course-1")]);
     apiMock.questionReview.mockResolvedValue([makeQuestion()]);
     render(<UnsavedChangesProvider onDirtyChange={dirty}><FacultyModeration moderatedFaculties={faculties} currentUserId="user-1" /></UnsavedChangesProvider>);
-    fireEvent.change(await screen.findByLabelText("Rejection reason"), { target: { value: "Please check this answer" } });
+    fireEvent.change(await screen.findByLabelText("Razlog odbijanja"), { target: { value: "Please check this answer" } });
     await waitFor(() => expect(dirty).toHaveBeenLastCalledWith(true));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh queue" }));
-    expect(await screen.findByLabelText("Rejection reason")).toHaveValue("Please check this answer");
+    fireEvent.click(screen.getByRole("button", { name: "Osvježi red" }));
+    expect(await screen.findByLabelText("Razlog odbijanja")).toHaveValue("Please check this answer");
     expect(dirty).toHaveBeenLastCalledWith(true);
-    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    fireEvent.click(screen.getByRole("button", { name: "Odbij" }));
     await waitFor(() => expect(dirty).toHaveBeenLastCalledWith(false));
   });
 
@@ -91,18 +91,18 @@ describe("FacultyModeration", () => {
     const report: ModeratorReport = { id: "report-1", question_id: question.id, reason: "UNCLEAR", details: "Wording needs review", status: "OPEN", created_at: "2026-01-01T00:00:00Z", resolution: null, resolved_by_user_id: null, resolved_at: null, question };
     apiMock.questionReports.mockResolvedValue([report]);
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties.slice(0, 1)} />);
-    fireEvent.click(screen.getByRole("button", { name: /^Reports$/ }));
-    const card = await screen.findByRole("article", { name: "Report: What is 2 + 2?" });
-    expect(card).toHaveTextContent("Correct answer: 4");
+    fireEvent.click(screen.getByRole("button", { name: /^Prijave grešaka$/ }));
+    const card = await screen.findByRole("article", { name: "Prijava: What is 2 + 2?" });
+    expect(card).toHaveTextContent("Točan odgovor: 4");
     expect(card).toHaveTextContent("3");
-    expect(card).toHaveTextContent("4 (correct)");
-    expect(card).toHaveTextContent("Reason: UNCLEAR");
+    expect(card).toHaveTextContent("4 (točno)");
+    expect(card).toHaveTextContent("Razlog: Nejasno");
     expect(card).toHaveTextContent("Wording needs review");
-    fireEvent.click(within(card).getByRole("button", { name: "Dismiss report" }));
+    fireEvent.click(within(card).getByRole("button", { name: "Odbaci prijavu" }));
     await waitFor(() => expect(apiMock.dismissQuestionReport).toHaveBeenCalledWith("report-1"));
     await waitFor(() => expect(card).not.toBeInTheDocument());
-    expect(screen.getByText("Report dismissed.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Question review" }));
+    expect(screen.getByText("Prijava je odbačena.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pregled pitanja" }));
     await waitFor(() => expect(apiMock.questionReview).toHaveBeenCalled());
   });
 
@@ -111,11 +111,11 @@ describe("FacultyModeration", () => {
     const report = (id: string): ModeratorReport => ({ id, question_id: question.id, reason: "TYPO", details: null, status: "OPEN", created_at: "2026-01-01T00:00:00Z", resolution: null, resolved_by_user_id: null, resolved_at: null, question });
     apiMock.questionReports.mockResolvedValue([report("a"), report("b")]);
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties.slice(0, 1)} />);
-    fireEvent.click(screen.getByRole("button", { name: /^Reports$/ }));
-    const cards = await screen.findAllByRole("article", { name: "Report: What is 2 + 2?" });
-    fireEvent.click(within(cards[0]).getByRole("button", { name: "Archive question" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Prijave grešaka$/ }));
+    const cards = await screen.findAllByRole("article", { name: "Prijava: What is 2 + 2?" });
+    fireEvent.click(within(cards[0]).getByRole("button", { name: "Arhiviraj pitanje" }));
     await waitFor(() => expect(apiMock.transitionQuestion).toHaveBeenCalledWith(question.id, "archive"));
-    await waitFor(() => expect(screen.queryAllByRole("article", { name: "Report: What is 2 + 2?" })).toHaveLength(0));
+    await waitFor(() => expect(screen.queryAllByRole("article", { name: "Prijava: What is 2 + 2?" })).toHaveLength(0));
   });
 
   it("loads pending review automatically for a moderated faculty", async () => {
@@ -125,7 +125,7 @@ describe("FacultyModeration", () => {
 
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties.slice(0, 1)} />);
 
-    expect(await screen.findByRole("heading", { name: "Moderation queue" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Red za moderiranje" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.questionReview).toHaveBeenCalledWith("faculty-1", { status: "PENDING_REVIEW", course_id: undefined, limit: 20, offset: 0 }));
     expect(await screen.findByText("Compute the sum")).toBeInTheDocument();
   });
@@ -142,7 +142,7 @@ describe("FacultyModeration", () => {
     fireEvent.change(facultySelect, { target: { value: "faculty-2" } });
 
     await waitFor(() => expect(apiMock.questionReview).toHaveBeenLastCalledWith("faculty-2", expect.objectContaining({ status: "PENDING_REVIEW", course_id: undefined, limit: 20, offset: 0 })));
-    const courseSelect = screen.getByLabelText("Course filter");
+    const courseSelect = screen.getByLabelText("Filtar kolegija");
     expect((courseSelect as HTMLSelectElement).value).toBe("all");
   });
 
@@ -198,17 +198,17 @@ describe("FacultyModeration", () => {
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties} />);
 
     await screen.findByText("Question 1");
-    const nextButton = screen.getByRole("button", { name: "Next" });
+    const nextButton = screen.getByRole("button", { name: "Sljedeća" });
     fireEvent.click(nextButton);
     await waitFor(() => expect(apiMock.questionReview).toHaveBeenLastCalledWith("faculty-1", expect.objectContaining({ course_id: undefined, offset: 20 })));
     await screen.findByText("Question 1");
 
-    fireEvent.change(screen.getByLabelText("Course filter"), { target: { value: "course-2" } });
+    fireEvent.change(screen.getByLabelText("Filtar kolegija"), { target: { value: "course-2" } });
     await waitFor(() => expect(apiMock.questionReview).toHaveBeenLastCalledWith("faculty-1", expect.objectContaining({ course_id: "course-2", offset: 0 })));
 
     fireEvent.change(screen.getByDisplayValue("Engineering"), { target: { value: "faculty-2" } });
     await waitFor(() => expect(apiMock.questionReview).toHaveBeenLastCalledWith("faculty-2", expect.objectContaining({ course_id: undefined, offset: 0 })));
-    expect((screen.getByLabelText("Course filter") as HTMLSelectElement).value).toBe("all");
+    expect((screen.getByLabelText("Filtar kolegija") as HTMLSelectElement).value).toBe("all");
   });
 
   it("renders queue items with course_id fallback and shows loading, empty, and failure states", async () => {
@@ -220,19 +220,19 @@ describe("FacultyModeration", () => {
     expect(screen.getAllByText("course-missing").length).toBeGreaterThan(0);
 
     apiMock.questionReview.mockResolvedValueOnce([]);
-    fireEvent.click(screen.getByRole("button", { name: "Refresh queue" }));
-    expect(await screen.findByText("No questions awaiting faculty review")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Osvježi red" }));
+    expect(await screen.findByText("Nema pitanja na pregledu fakulteta")).toBeInTheDocument();
 
     apiMock.questionReview.mockRejectedValueOnce(new Error("Queue unavailable"));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh queue" }));
-    await waitFor(() => expect(screen.getByText("Could not load the moderation queue. Try again.")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Osvježi red" }));
+    await waitFor(() => expect(screen.getByText("Red za moderiranje nije moguće učitati. Pokušajte ponovno.")).toBeInTheDocument());
   });
 
   it("shows loading until the queue resolves", async () => {
     const pending = deferred<OwnerQuestion[]>();
     apiMock.questionReview.mockReturnValue(pending.promise);
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties.slice(0, 1)} />);
-    expect(screen.getByText("Loading moderation queue…")).toBeInTheDocument();
+    expect(screen.getByText("Učitavanje reda za moderiranje…")).toBeInTheDocument();
     await act(async () => pending.resolve([makeQuestion({ stem: "Pending result" })]));
     expect(screen.getByRole("article", { name: "Pending result" })).toBeInTheDocument();
   });
@@ -241,8 +241,8 @@ describe("FacultyModeration", () => {
     apiMock.questionReview.mockRejectedValueOnce(new Error("Unavailable"))
       .mockResolvedValueOnce([makeQuestion({ stem: "Recovered result" })]);
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties.slice(0, 1)} />);
-    expect(await screen.findByText("Could not load the moderation queue. Try again.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Refresh queue" }));
+    expect(await screen.findByText("Red za moderiranje nije moguće učitati. Pokušajte ponovno.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Osvježi red" }));
     expect(await screen.findByRole("article", { name: "Recovered result" })).toBeInTheDocument();
     expect(apiMock.questionReview).toHaveBeenCalledTimes(2);
     expect(apiMock.questionReview).toHaveBeenLastCalledWith("faculty-1", { status: "PENDING_REVIEW", course_id: undefined, limit: 20, offset: 0 });
@@ -254,10 +254,10 @@ describe("FacultyModeration", () => {
     apiMock.questionReview.mockResolvedValue([makeQuestion({ stem: "Catalog-independent item" })]);
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties.slice(0, 1)} />);
     expect(await screen.findByRole("article", { name: "Catalog-independent item" })).toBeInTheDocument();
-    expect(screen.getByText("Could not load the faculty courses. Try again.")).toBeInTheDocument();
-    expect(screen.getByText("Course: course-1")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Retry courses" }));
-    expect(await screen.findByText("Course: Algorithms")).toBeInTheDocument();
+    expect(screen.getByText("Kolegije fakulteta nije moguće učitati. Pokušajte ponovno.")).toBeInTheDocument();
+    expect(screen.getByText("Kolegij: course-1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ponovno učitajte kolegije" }));
+    expect(await screen.findByText("Kolegij: Algorithms")).toBeInTheDocument();
     expect(apiMock.questionReview).toHaveBeenCalledTimes(1);
   });
 
@@ -294,26 +294,26 @@ describe("FacultyModeration", () => {
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties} />);
 
     const mcq = await screen.findByRole("article", { name: "What is 2 + 2?" });
-    expect(within(mcq).getByText("Course: Algorithms")).toBeInTheDocument();
-    expect(within(mcq).getByText("MULTIPLE_CHOICE")).toBeInTheDocument();
-    expect(within(mcq).getByText("USER")).toBeInTheDocument();
-    expect(within(mcq).getByText("Difficulty: 2")).toBeInTheDocument();
-    expect(within(mcq).getByText("Correct answer: 4")).toBeInTheDocument();
-    expect(within(mcq).getByText("Explanation: Because four is correct.")).toBeInTheDocument();
-    expect(within(mcq).getByText("Concepts: concept-a, concept-b")).toBeInTheDocument();
-    expect(within(mcq).getByText("Sources: material-7 / chunk-7 (chunk 3)")).toBeInTheDocument();
-    expect(within(mcq).getByText("Sources: material-7 / chunk-7 (chunk 3)")).not.toBeVisible();
-    fireEvent.click(within(mcq).getByText("Source details"));
-    expect(within(mcq).getByText("Sources: material-7 / chunk-7 (chunk 3)")).toBeVisible();
+    expect(within(mcq).getByText("Kolegij: Algorithms")).toBeInTheDocument();
+    expect(within(mcq).getByText("Jedan točan odgovor")).toBeInTheDocument();
+    expect(within(mcq).getByText("Napisano ili uvezeno")).toBeInTheDocument();
+    expect(within(mcq).getByText("Na pregledu")).toBeInTheDocument();
+    expect(within(mcq).queryByText(/MULTIPLE_CHOICE|USER/)).not.toBeInTheDocument();
+    expect(within(mcq).getByText("Težina: 2")).toBeInTheDocument();
+    expect(within(mcq).getByText("Točan odgovor: 4")).toBeInTheDocument();
+    expect(within(mcq).getByText("Objašnjenje: Because four is correct.")).toBeInTheDocument();
+    // Only IDs reach the queue, so the card says how much grounds the question instead of printing them.
+    expect(within(mcq).getByText("Povezano s 2 pojma i 1 odlomak iz materijala.")).toBeVisible();
+    expect(within(mcq).queryByText(/concept-a|material-7|chunk-7/)).not.toBeInTheDocument();
     const self = screen.getByRole("article", { name: "The answer is true" });
-    expect(within(self).getByText("Answer: True")).toBeInTheDocument();
-    expect(within(self).getByText("Another faculty moderator must review this question.")).toBeInTheDocument();
-    expect(within(self).queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
-    expect(within(self).queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+    expect(within(self).getByText("Odgovor: Točno")).toBeInTheDocument();
+    expect(within(self).getByText("Pitanje mora pregledati drugi moderator fakulteta.")).toBeInTheDocument();
+    expect(within(self).queryByRole("button", { name: "Odobri" })).not.toBeInTheDocument();
+    expect(within(self).queryByRole("button", { name: "Odbij" })).not.toBeInTheDocument();
     const short = screen.getByRole("article", { name: "Describe the result" });
-    expect(within(short).getByText("SHORT_ANSWER")).toBeInTheDocument();
-    expect(within(short).getByText("AI")).toBeInTheDocument();
-    expect(within(short).getByText("Reference answer: Four")).toBeInTheDocument();
+    expect(within(short).getByText("Kratki odgovor")).toBeInTheDocument();
+    expect(within(short).getByText("Generirao AI")).toBeInTheDocument();
+    expect(within(short).getByText("Referentni odgovor: Four")).toBeInTheDocument();
   });
 
   it("approves, prevents duplicates, and removes only the approved item on success", async () => {
@@ -326,15 +326,15 @@ describe("FacultyModeration", () => {
     apiMock.transitionQuestion.mockReturnValue(pending.promise);
 
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties} />);
-    const approveButtons = await screen.findAllByRole("button", { name: "Approve" });
+    const approveButtons = await screen.findAllByRole("button", { name: "Odobri" });
     fireEvent.click(approveButtons[0]);
     fireEvent.click(approveButtons[0]);
 
     expect(apiMock.transitionQuestion).toHaveBeenCalledExactlyOnceWith("q-approve-a", "approve");
     expect(screen.getByText("First item")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Approving…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Odobravanje…" })).toBeDisabled();
     await act(async () => pending.resolve(makeQuestion({ id: "q-approve-a" })));
-    expect(await screen.findByText("Question approved.")).toBeInTheDocument();
+    expect(await screen.findByText("Pitanje je odobreno.")).toBeInTheDocument();
     expect(screen.queryByText("First item")).not.toBeInTheDocument();
     expect(screen.getByText("Second item")).toBeInTheDocument();
   });
@@ -345,15 +345,15 @@ describe("FacultyModeration", () => {
     apiMock.transitionQuestion.mockRejectedValueOnce(new Error("Failed approve")).mockResolvedValueOnce(makeQuestion({ id: "q-fail-approve" }));
 
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties} />);
-    const approve = await screen.findByRole("button", { name: "Approve" });
+    const approve = await screen.findByRole("button", { name: "Odobri" });
     fireEvent.click(approve);
 
     await waitFor(() => expect(screen.getByText("Failed approve")).toBeInTheDocument());
     expect(screen.getByText("Retry approve")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    fireEvent.click(screen.getByRole("button", { name: "Odobri" }));
     await waitFor(() => expect(apiMock.transitionQuestion).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText("Question approved.")).toBeInTheDocument();
+    expect(await screen.findByText("Pitanje je odobreno.")).toBeInTheDocument();
     expect(screen.queryByText("Retry approve")).not.toBeInTheDocument();
   });
 
@@ -363,21 +363,21 @@ describe("FacultyModeration", () => {
     apiMock.transitionQuestion.mockRejectedValueOnce(new Error("Rejected")).mockResolvedValueOnce(makeQuestion({ id: "q-fail-reject" }));
 
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties} />);
-    const input = await screen.findByPlaceholderText("Reason for rejection");
+    const input = await screen.findByLabelText("Razlog odbijanja");
     expect(input).toHaveAttribute("maxlength", "1000");
     expect(input).toBeRequired();
     fireEvent.change(input, { target: { value: "   " } });
-    fireEvent.submit(screen.getByRole("button", { name: "Reject" }).closest("form")!);
-    expect(screen.getByText("Rejection reason is required.")).toBeInTheDocument();
+    fireEvent.submit(screen.getByRole("button", { name: "Odbij" }).closest("form")!);
+    expect(screen.getByText("Razlog odbijanja je obavezan.")).toBeInTheDocument();
 
     fireEvent.change(input, { target: { value: "Needs rework" } });
-    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    fireEvent.click(screen.getByRole("button", { name: "Odbij" }));
     expect(await screen.findByText("Rejected")).toBeInTheDocument();
     expect(input).toHaveValue("Needs rework");
     expect(screen.getByText("Retry reject")).toBeInTheDocument();
     expect(apiMock.transitionQuestion).toHaveBeenCalledWith("q-fail-reject", "reject", "Needs rework");
-    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
-    expect(await screen.findByText("Question rejected.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Odbij" }));
+    expect(await screen.findByText("Pitanje je odbijeno.")).toBeInTheDocument();
     expect(screen.queryByText("Retry reject")).not.toBeInTheDocument();
   });
 
@@ -391,16 +391,16 @@ describe("FacultyModeration", () => {
     const pending = deferred<OwnerQuestion>();
     apiMock.transitionQuestion.mockReturnValue(pending.promise);
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties} />);
-    const input = await screen.findAllByPlaceholderText("Reason for rejection");
+    const input = await screen.findAllByLabelText("Razlog odbijanja");
     fireEvent.change(input[0], { target: { value: "Wrong answer" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "Reject" })[0]);
-    fireEvent.submit(screen.getByRole("button", { name: "Rejecting…" }).closest("form")!);
+    fireEvent.click(screen.getAllByRole("button", { name: "Odbij" })[0]);
+    fireEvent.submit(screen.getByRole("button", { name: "Odbijanje…" }).closest("form")!);
     expect(apiMock.transitionQuestion).toHaveBeenCalledExactlyOnceWith("q-reject-a", "reject", "Wrong answer");
     expect(screen.getByText("Reject first")).toBeInTheDocument();
     await act(async () => pending.resolve(makeQuestion({ id: "q-reject-a" })));
     expect(screen.queryByText("Reject first")).not.toBeInTheDocument();
     expect(screen.getByText("Reject second")).toBeInTheDocument();
-    expect(screen.getByText("Question rejected.")).toBeInTheDocument();
+    expect(screen.getByText("Pitanje je odbijeno.")).toBeInTheDocument();
   });
 
   it("respects pagination state for previous/next controls", async () => {
@@ -411,22 +411,22 @@ describe("FacultyModeration", () => {
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties} />);
 
     await screen.findByText("Page item 1");
-    const prev = screen.getByRole("button", { name: "Previous" });
+    const prev = screen.getByRole("button", { name: "Prethodna" });
     expect(prev).toBeDisabled();
 
-    const next = screen.getByRole("button", { name: "Next" });
+    const next = screen.getByRole("button", { name: "Sljedeća" });
     expect(next).toBeEnabled();
     fireEvent.click(next);
     await waitFor(() => expect(apiMock.questionReview).toHaveBeenLastCalledWith("faculty-1", expect.objectContaining({ offset: 20 })));
     await screen.findByText("Small item 1");
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
-    expect(screen.getByText("Page 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sljedeća" })).toBeDisabled();
+    expect(screen.getByText("Stranica 2")).toBeInTheDocument();
 
-    const prevNow = screen.getByRole("button", { name: "Previous" });
+    const prevNow = screen.getByRole("button", { name: "Prethodna" });
     fireEvent.click(prevNow);
     await waitFor(() => expect(apiMock.questionReview).toHaveBeenLastCalledWith("faculty-1", expect.objectContaining({ offset: 0 })));
     await screen.findByText("Page item 1");
-    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Prethodna" })).toBeDisabled();
   });
 
   it("does not reinsert a decided question from an in-flight refresh", async () => {
@@ -436,12 +436,12 @@ describe("FacultyModeration", () => {
     apiMock.questionReview.mockResolvedValueOnce([item]).mockReturnValueOnce(refresh.promise);
     apiMock.transitionQuestion.mockReturnValue(decision.promise);
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties.slice(0, 1)} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh queue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Odobri" }));
+    fireEvent.click(screen.getByRole("button", { name: "Osvježi red" }));
     await act(async () => decision.resolve(item));
     await act(async () => refresh.resolve([item]));
     expect(screen.queryByRole("article", { name: "Review during refresh" })).not.toBeInTheDocument();
-    expect(screen.getByText("No questions awaiting faculty review")).toBeInTheDocument();
+    expect(screen.getByText("Nema pitanja na pregledu fakulteta")).toBeInTheDocument();
   });
 
   it("keeps Previous available when the last page is empty", async () => {
@@ -449,10 +449,10 @@ describe("FacultyModeration", () => {
     apiMock.questionReview.mockResolvedValueOnce(fullPage).mockResolvedValueOnce([]);
     render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties} />);
     await screen.findByText("Full 0");
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(await screen.findByText("No questions awaiting faculty review")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Sljedeća" }));
+    expect(await screen.findByText("Nema pitanja na pregledu fakulteta")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prethodna" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Sljedeća" })).toBeDisabled();
   });
 });
 
@@ -467,11 +467,11 @@ const makeSuggestion = (overrides: Partial<ModeratorSuggestion> = {}): Moderator
 
 async function openSuggestions() {
   render(<FacultyModeration currentUserId="user-1" moderatedFaculties={faculties} />);
-  fireEvent.click(screen.getByRole("button", { name: "Suggestions" }));
+  fireEvent.click(screen.getByRole("button", { name: "Prijedlozi pitanja" }));
   await waitFor(() => expect(apiMock.questionSuggestions).toHaveBeenCalled());
 }
 
-const suggestionCard = () => screen.getByRole("article", { name: "Suggestion: What is 2 + 2?" });
+const suggestionCard = () => screen.getByRole("article", { name: "Prijedlog: What is 2 + 2?" });
 
 describe("FacultyModeration suggestions", () => {
   beforeEach(() => {
@@ -486,21 +486,21 @@ describe("FacultyModeration suggestions", () => {
 
   it("shows full base/proposed comparisons and retains existing review and report modes", async () => {
     await openSuggestions();
-    const card = await screen.findByRole("article", { name: "Suggestion: What is 2 + 2?" });
+    const card = await screen.findByRole("article", { name: "Prijedlog: What is 2 + 2?" });
     expect(apiMock.questionSuggestions).toHaveBeenCalledWith("faculty-1", { course_id: undefined, status: "OPEN", limit: 20, offset: 0 });
-    expect(card).toHaveTextContent("Base version 3");
+    expect(card).toHaveTextContent("Osnovna verzija 3");
     expect(card).toHaveTextContent("Please review this difficulty");
-    const comparison = within(card).getByRole("group", { name: "Difficulty comparison" });
-    expect(comparison).toHaveTextContent("Before · version 33");
-    expect(comparison).toHaveTextContent("Proposed5");
-    expect(comparison).toHaveTextContent("Changed");
-    expect(within(card).getByRole("group", { name: "Explanation comparison" })).toHaveTextContent("Basic arithmetic.");
-    expect(within(card).getByRole("group", { name: "Explanation comparison" })).toHaveTextContent("Expanded explanation.");
-    expect(within(card).getByRole("group", { name: "Correct option comparison" })).toHaveTextContent("Proposed2");
-    fireEvent.click(screen.getByRole("button", { name: "Reports" }));
-    expect(await screen.findByText("No open reports")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Question review" }));
-    expect(await screen.findByText("No questions awaiting faculty review")).toBeInTheDocument();
+    const comparison = within(card).getByRole("group", { name: "Usporedba: Težina" });
+    expect(comparison).toHaveTextContent("Prije · verzija 33");
+    expect(comparison).toHaveTextContent("Predloženo5");
+    expect(comparison).toHaveTextContent("Promijenjeno");
+    expect(within(card).getByRole("group", { name: "Usporedba: Objašnjenje" })).toHaveTextContent("Basic arithmetic.");
+    expect(within(card).getByRole("group", { name: "Usporedba: Objašnjenje" })).toHaveTextContent("Expanded explanation.");
+    expect(within(card).getByRole("group", { name: "Usporedba: Točna opcija" })).toHaveTextContent("Predloženo2");
+    fireEvent.click(screen.getByRole("button", { name: "Prijave grešaka" }));
+    expect(await screen.findByText("Nema otvorenih prijava")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pregled pitanja" }));
+    expect(await screen.findByText("Nema pitanja na pregledu fakulteta")).toBeInTheDocument();
   });
 
   it.each(["TRUE_FALSE", "SHORT_ANSWER"] as const)("renders moderator-only %s answer changes", async type => {
@@ -509,17 +509,29 @@ describe("FacultyModeration suggestions", () => {
     const proposed = type === "TRUE_FALSE" ? { ...common, type, correct_answer: true } : { ...common, type, reference_answer: "Proposed reference" };
     apiMock.questionSuggestions.mockResolvedValue([makeSuggestion({ base_snapshot: base, question: base, proposed_content: proposed })]);
     await openSuggestions();
-    const comparison = within(suggestionCard()).getByRole("group", { name: type === "TRUE_FALSE" ? "Correct answer comparison" : "Reference answer comparison" });
-    expect(comparison).toHaveTextContent(type === "TRUE_FALSE" ? "False" : "Base reference");
-    expect(comparison).toHaveTextContent(type === "TRUE_FALSE" ? "True" : "Proposed reference");
+    const comparison = within(suggestionCard()).getByRole("group", { name: type === "TRUE_FALSE" ? "Usporedba: Točan odgovor" : "Usporedba: Referentni odgovor" });
+    expect(comparison).toHaveTextContent(type === "TRUE_FALSE" ? "Netočno" : "Base reference");
+    expect(comparison).toHaveTextContent(type === "TRUE_FALSE" ? "Točno" : "Proposed reference");
+  });
+
+  it("shows a proposed relative tolerance as the percentage the student entered", async () => {
+    const base = makeQuestion({ type: "NUMERIC", options: [], correct_value: "9.81", absolute_tolerance: null, relative_tolerance: null, unit: "m/s²" });
+    const proposed = { type: "NUMERIC" as const, stem: base.stem, explanation: base.explanation, difficulty: base.difficulty, correct_value: "9.81", absolute_tolerance: null, relative_tolerance: "0.025", unit: "m/s²" };
+    apiMock.questionSuggestions.mockResolvedValue([makeSuggestion({ base_snapshot: base, question: base, proposed_content: proposed })]);
+    await openSuggestions();
+    const comparison = within(suggestionCard()).getByRole("group", { name: "Usporedba: Relativna tolerancija" });
+    expect(comparison).toHaveTextContent("Prije · verzija 3Nema");
+    expect(comparison).toHaveTextContent("Predloženo2.5 %");
+    expect(comparison).not.toHaveTextContent("0.025");
+    expect(comparison).toHaveTextContent("Promijenjeno");
   });
 
   it("requires another moderator to review their own suggestion", async () => {
     apiMock.questionSuggestions.mockResolvedValue([makeSuggestion({ suggested_by_user_id: "user-1" })]);
     await openSuggestions();
-    expect(await screen.findByText("Another faculty moderator must review this suggestion.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Approve & apply" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Reject suggestion" })).not.toBeInTheDocument();
+    expect(await screen.findByText("Ovaj prijedlog mora pregledati drugi moderator fakulteta.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Odobri i primijeni" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Odbij prijedlog" })).not.toBeInTheDocument();
   });
 
   it("deduplicates approval, disables siblings and removes only that question's open suggestions", async () => {
@@ -529,25 +541,25 @@ describe("FacultyModeration suggestions", () => {
     const pending = deferred<ModeratorSuggestion>();
     apiMock.approveQuestionSuggestion.mockReturnValueOnce(pending.promise);
     await openSuggestions();
-    const cards = await screen.findAllByRole("article", { name: "Suggestion: What is 2 + 2?" });
-    fireEvent.click(within(cards[0]).getByRole("button", { name: "Approve & apply" }));
-    fireEvent.click(within(cards[0]).getByRole("button", { name: "Applying…" }));
-    expect(within(cards[1]).getByRole("button", { name: "Approve & apply" })).toBeDisabled();
+    const cards = await screen.findAllByRole("article", { name: "Prijedlog: What is 2 + 2?" });
+    fireEvent.click(within(cards[0]).getByRole("button", { name: "Odobri i primijeni" }));
+    fireEvent.click(within(cards[0]).getByRole("button", { name: "Primjenjivanje…" }));
+    expect(within(cards[1]).getByRole("button", { name: "Odobri i primijeni" })).toBeDisabled();
     expect(apiMock.approveQuestionSuggestion).toHaveBeenCalledExactlyOnceWith("suggestion-1");
     await act(async () => pending.resolve(makeSuggestion({ resolution: "APPLIED", applied_version_number: 4 })));
-    expect(screen.queryAllByRole("article", { name: "Suggestion: What is 2 + 2?" })).toHaveLength(0);
-    expect(screen.getByRole("article", { name: "Suggestion: Other question" })).toBeInTheDocument();
-    expect(screen.getByText("Suggestion applied. Other open suggestions for this question were superseded.")).toBeInTheDocument();
+    expect(screen.queryAllByRole("article", { name: "Prijedlog: What is 2 + 2?" })).toHaveLength(0);
+    expect(screen.getByRole("article", { name: "Prijedlog: Other question" })).toBeInTheDocument();
+    expect(screen.getByText("Prijedlog je primijenjen. Ostali otvoreni prijedlozi za ovo pitanje zamijenjeni su.")).toBeInTheDocument();
   });
 
   it("keeps failed approval available for retry", async () => {
     apiMock.approveQuestionSuggestion.mockRejectedValueOnce(new Error("Question changed since this suggestion"));
     await openSuggestions();
-    fireEvent.click(await screen.findByRole("button", { name: "Approve & apply" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Odobri i primijeni" }));
     expect(await screen.findByText("Question changed since this suggestion")).toBeInTheDocument();
     expect(suggestionCard()).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Approve & apply" }));
-    expect(await screen.findByText("No open suggestions")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Odobri i primijeni" }));
+    expect(await screen.findByText("Nema otvorenih prijedloga")).toBeInTheDocument();
     expect(apiMock.approveQuestionSuggestion).toHaveBeenCalledTimes(2);
   });
 
@@ -556,23 +568,23 @@ describe("FacultyModeration suggestions", () => {
     const pending = deferred<ModeratorSuggestion>();
     apiMock.rejectQuestionSuggestion.mockReturnValueOnce(pending.promise);
     await openSuggestions();
-    const cards = await screen.findAllByRole("article", { name: "Suggestion: What is 2 + 2?" });
+    const cards = await screen.findAllByRole("article", { name: "Prijedlog: What is 2 + 2?" });
     const card = cards[0];
-    const input = within(card).getByLabelText("Suggestion rejection reason");
-    const form = within(card).getByRole("button", { name: "Reject suggestion" }).closest("form")!;
+    const input = within(card).getByLabelText("Razlog odbijanja prijedloga");
+    const form = within(card).getByRole("button", { name: "Odbij prijedlog" }).closest("form")!;
     fireEvent.change(input, { target: { value: "   " } }); fireEvent.submit(form);
     expect(apiMock.rejectQuestionSuggestion).not.toHaveBeenCalled();
     expect(input).toHaveAttribute("maxlength", "1000");
     fireEvent.change(input, { target: { value: "  Needs rework  " } });
     fireEvent.submit(form); fireEvent.submit(form);
     expect(apiMock.rejectQuestionSuggestion).toHaveBeenCalledExactlyOnceWith("suggestion-1", "Needs rework");
-    expect(within(card).getByRole("button", { name: "Rejecting suggestion…" })).toBeDisabled();
+    expect(within(card).getByRole("button", { name: "Odbijanje prijedloga…" })).toBeDisabled();
     await act(async () => pending.reject(new Error("Temporary rejection failure")));
     expect(await screen.findByText("Temporary rejection failure")).toBeInTheDocument();
     expect(input).toHaveValue("  Needs rework  ");
     fireEvent.submit(form);
-    expect(await screen.findByText("Suggestion rejected.")).toBeInTheDocument();
-    expect(screen.getAllByRole("article", { name: "Suggestion: What is 2 + 2?" })).toHaveLength(1);
+    expect(await screen.findByText("Prijedlog je odbijen.")).toBeInTheDocument();
+    expect(screen.getAllByRole("article", { name: "Prijedlog: What is 2 + 2?" })).toHaveLength(1);
   });
 
   it("ignores stale queue and decision responses after changing faculty and course", async () => {
@@ -581,14 +593,14 @@ describe("FacultyModeration suggestions", () => {
     apiMock.questionSuggestions.mockResolvedValueOnce([makeSuggestion()]).mockReturnValueOnce(stale.promise).mockResolvedValue([]);
     apiMock.approveQuestionSuggestion.mockReturnValueOnce(decision.promise);
     await openSuggestions();
-    fireEvent.click(await screen.findByRole("button", { name: "Approve & apply" }));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh suggestions" }));
-    fireEvent.change(screen.getByLabelText("Faculty"), { target: { value: "faculty-2" } });
-    expect(await screen.findByText("No open suggestions")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Odobri i primijeni" }));
+    fireEvent.click(screen.getByRole("button", { name: "Osvježi prijedloge" }));
+    fireEvent.change(screen.getByLabelText("Fakultet"), { target: { value: "faculty-2" } });
+    expect(await screen.findByText("Nema otvorenih prijedloga")).toBeInTheDocument();
     await act(async () => { stale.resolve([makeSuggestion()]); decision.resolve(makeSuggestion({ applied_version_number: 4 })); });
-    expect(screen.queryByRole("article", { name: "Suggestion: What is 2 + 2?" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Suggestion applied. Other open suggestions for this question were superseded.")).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Course filter"), { target: { value: "course-1" } });
+    expect(screen.queryByRole("article", { name: "Prijedlog: What is 2 + 2?" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Prijedlog je primijenjen. Ostali otvoreni prijedlozi za ovo pitanje zamijenjeni su.")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Filtar kolegija"), { target: { value: "course-1" } });
     await waitFor(() => expect(apiMock.questionSuggestions).toHaveBeenLastCalledWith("faculty-2", expect.objectContaining({ course_id: "course-1", offset: 0 })));
   });
 
@@ -598,26 +610,26 @@ describe("FacultyModeration suggestions", () => {
     apiMock.questionSuggestions.mockResolvedValueOnce([makeSuggestion()]).mockReturnValueOnce(refresh.promise);
     apiMock.approveQuestionSuggestion.mockReturnValueOnce(decision.promise);
     await openSuggestions();
-    fireEvent.click(await screen.findByRole("button", { name: "Approve & apply" }));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh suggestions" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Odobri i primijeni" }));
+    fireEvent.click(screen.getByRole("button", { name: "Osvježi prijedloge" }));
     await act(async () => decision.resolve(makeSuggestion({ applied_version_number: 4 })));
     await act(async () => refresh.resolve([makeSuggestion(), makeSuggestion({ id: "old-sibling" }), makeSuggestion({ id: "new-base", base_version_number: 4 })]));
-    expect(screen.getAllByRole("article", { name: "Suggestion: What is 2 + 2?" })).toHaveLength(1);
+    expect(screen.getAllByRole("article", { name: "Prijedlog: What is 2 + 2?" })).toHaveLength(1);
   });
 
   it("retries list failures and keeps Previous available on an empty last page", async () => {
     const full = Array.from({ length: 20 }, (_, index) => makeSuggestion({ id: `s-${index}` }));
     apiMock.questionSuggestions.mockRejectedValueOnce(new Error("Network error")).mockResolvedValueOnce(full).mockResolvedValueOnce([]);
     await openSuggestions();
-    expect(await screen.findByText("Could not load suggestions. Try again.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Retry suggestions" }));
+    expect(await screen.findByText("Prijedloge nije moguće učitati. Pokušajte ponovno.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj prijedloge" }));
     await screen.findAllByRole("article");
-    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(await screen.findByText("No open suggestions")).toBeInTheDocument();
-    expect(screen.getByText("Page 2")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Prethodna" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Sljedeća" }));
+    expect(await screen.findByText("Nema otvorenih prijedloga")).toBeInTheDocument();
+    expect(screen.getByText("Stranica 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prethodna" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Sljedeća" })).toBeDisabled();
     expect(apiMock.questionSuggestions).toHaveBeenLastCalledWith("faculty-1", expect.objectContaining({ offset: 20 }));
   });
 });

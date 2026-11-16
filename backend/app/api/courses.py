@@ -7,13 +7,21 @@ from sqlalchemy.orm import Session
 from app.config import Settings
 from app.dependencies import get_current_user, get_db
 from app.models import Course, CourseMembership, User
-from app.schemas.course import CourseCreate, CourseResponse, CourseUpdate, MembershipResponse
+from app.schemas.course import (
+    CourseCreate,
+    CourseResponse,
+    CourseUpdate,
+    MemberCourseResponse,
+    MembershipResponse,
+    MembershipUpdate,
+)
+from app.services.course_summaries import list_member_courses
 from app.services.courses import (
     create_course,
     delete_course,
     get_member_course,
     join_course,
-    list_member_courses,
+    set_membership_status,
     update_course,
 )
 from app.services.materials.storage import LocalMaterialStorage
@@ -28,10 +36,10 @@ def create(
     return create_course(db, user, data)
 
 
-@router.get("", response_model=list[CourseResponse])
+@router.get("", response_model=list[MemberCourseResponse])
 def list_courses(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
-) -> list[Course]:
+) -> list[MemberCourseResponse]:
     return list_member_courses(db, user)
 
 
@@ -55,6 +63,16 @@ def membership(
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Membership not found")
     return result
+
+
+@router.patch("/{course_id}/membership", response_model=MembershipResponse)
+def update_membership(
+    course_id: UUID,
+    data: MembershipUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CourseMembership:
+    return set_membership_status(db, user, course_id, data.status)
 
 
 @router.patch("/{course_id}", response_model=CourseResponse)

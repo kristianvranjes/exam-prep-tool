@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -7,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Numeric,
     SmallInteger,
     String,
     Text,
@@ -24,7 +26,9 @@ class Question(Base):
     __tablename__ = "questions"
     __table_args__ = (
         CheckConstraint(
-            "type IN ('MULTIPLE_CHOICE','TRUE_FALSE','SHORT_ANSWER')", name="ck_question_type"
+            "type IN ('MULTIPLE_CHOICE','TRUE_FALSE','SHORT_ANSWER','NUMERIC','MULTIPLE_SELECT',"
+            "'MATCH')",
+            name="ck_question_type",
         ),
         CheckConstraint(
             "status IN ('DRAFT','PENDING_REVIEW','APPROVED','REJECTED','ARCHIVED')",
@@ -38,12 +42,28 @@ class Question(Base):
             "length(btrim(stem)) > 0 AND char_length(stem) <= 400", name="ck_question_stem"
         ),
         CheckConstraint(
-            "(type = 'MULTIPLE_CHOICE' AND correct_boolean IS NULL "
-            "AND reference_answer IS NULL) OR "
-            "(type = 'TRUE_FALSE' AND correct_boolean IS NOT NULL AND reference_answer IS NULL) OR "
+            "(type IN ('MULTIPLE_CHOICE','MULTIPLE_SELECT','MATCH') AND correct_boolean IS NULL "
+            "AND reference_answer IS NULL AND correct_value IS NULL) OR "
+            "(type = 'TRUE_FALSE' AND correct_boolean IS NOT NULL AND reference_answer IS NULL "
+            "AND correct_value IS NULL) OR "
             "(type = 'SHORT_ANSWER' AND correct_boolean IS NULL AND reference_answer IS NOT NULL "
-            "AND length(btrim(reference_answer)) > 0)",
+            "AND length(btrim(reference_answer)) > 0 AND correct_value IS NULL) OR "
+            "(type = 'NUMERIC' AND correct_boolean IS NULL AND reference_answer IS NULL "
+            "AND correct_value IS NOT NULL)",
             name="ck_question_answer",
+        ),
+        CheckConstraint(
+            "(type = 'NUMERIC' OR (absolute_tolerance IS NULL AND relative_tolerance IS NULL "
+            "AND unit IS NULL)) "
+            "AND (absolute_tolerance IS NULL OR absolute_tolerance >= 0) "
+            "AND (relative_tolerance IS NULL OR relative_tolerance BETWEEN 0 AND 1) "
+            "AND (unit IS NULL OR (length(btrim(unit)) > 0 AND char_length(unit) <= 20))",
+            name="ck_question_numeric",
+        ),
+        CheckConstraint(
+            "(hint IS NULL OR (length(btrim(hint)) > 0 AND char_length(hint) <= 400)) "
+            "AND (expr IS NULL OR (length(btrim(expr)) > 0 AND char_length(expr) <= 200))",
+            name="ck_question_hint_expr",
         ),
         Index("ix_question_course_status", "course_id", "status"),
         Index("ix_question_course_type", "course_id", "type"),
@@ -75,9 +95,18 @@ class Question(Base):
     stem: Mapped[str] = mapped_column(Text)
     normalized_stem: Mapped[str] = mapped_column(Text)
     explanation: Mapped[str | None] = mapped_column(Text)
+    # Optional aids shown with the question: a nudge the student may open before answering, and a
+    # Boolean or algebraic expression set apart from the stem.
+    hint: Mapped[str | None] = mapped_column(Text)
+    expr: Mapped[str | None] = mapped_column(Text)
     difficulty: Mapped[int | None] = mapped_column(SmallInteger)
     correct_boolean: Mapped[bool | None] = mapped_column(Boolean)
     reference_answer: Mapped[str | None] = mapped_column(Text)
+    # NUMERIC: the key and its allowed error; the larger allowance wins.
+    correct_value: Mapped[Decimal | None] = mapped_column(Numeric)
+    absolute_tolerance: Mapped[Decimal | None] = mapped_column(Numeric)
+    relative_tolerance: Mapped[Decimal | None] = mapped_column(Numeric)
+    unit: Mapped[str | None] = mapped_column(String(20))
     reviewed_by_user_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )
@@ -100,6 +129,8 @@ class QuestionOption(Base):
     position: Mapped[int]
     text: Mapped[str] = mapped_column(Text)
     is_correct: Mapped[bool]
+    # MATCH only: the partner of the left item in `text`.
+    match_text: Mapped[str | None] = mapped_column(Text)
 
 
 class QuestionConcept(Base):

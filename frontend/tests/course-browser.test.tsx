@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
-import type { Course, CourseMembership, Faculty } from "../src/lib/api";
+import type { Course, CourseMembership, Faculty, MemberCourse } from "../src/lib/api";
 
 const mock = vi.hoisted(() => ({ faculties: vi.fn(), facultyCourses: vi.fn(), joinCourse: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
@@ -14,8 +14,9 @@ const course: Course = { id: "c1", faculty_id: "f1", name: "Algorithms", code: "
 const onJoined = vi.fn();
 const membership: CourseMembership = { course_id: course.id, user_id: "user-1", role: "MEMBER" };
 const onOpen = vi.fn();
-function view(joinedCourses: Course[] = [], loadingMembership = false, refreshRevision = 0) {
-  return <CourseBrowser joinedCourses={joinedCourses} loadingMembership={loadingMembership} onJoined={onJoined} onOpen={onOpen} refreshRevision={refreshRevision} />;
+const onBack = vi.fn();
+function view(joinedCourses: MemberCourse[] = [], loadingMembership = false, refreshRevision = 0) {
+  return <CourseBrowser joinedCourses={joinedCourses} loadingMembership={loadingMembership} onJoined={onJoined} onOpen={onOpen} onBack={onBack} refreshRevision={refreshRevision} />;
 }
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -23,7 +24,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 async function selectFaculty(value = "f1") {
-  fireEvent.change(await screen.findByLabelText("Browse by faculty"), { target: { value } });
+  fireEvent.change(await screen.findByLabelText("Pretraži po fakultetu"), { target: { value } });
 }
 beforeEach(() => {
   vi.resetAllMocks();
@@ -36,19 +37,19 @@ it("loads faculties in backend order, then courses only on selection", async () 
   const pending = deferred<Faculty[]>();
   mock.faculties.mockReturnValue(pending.promise);
   render(view());
-  expect(screen.getByText("Loading faculties…")).toBeInTheDocument();
+  expect(screen.getByText("Učitavam fakultete…")).toBeInTheDocument();
   expect(mock.facultyCourses).not.toHaveBeenCalled();
   pending.resolve(faculties);
-  await screen.findByLabelText("Browse by faculty");
-  expect(screen.getAllByRole("option").map(option => option.textContent)).toEqual(["Select a faculty", "Engineering — University of Zagreb", "Legacy / Unassigned"]);
+  await screen.findByLabelText("Pretraži po fakultetu");
+  expect(screen.getAllByRole("option").map(option => option.textContent)).toEqual(["Odaberite fakultet", "Engineering — University of Zagreb", "Legacy / Unassigned"]);
   expect(mock.facultyCourses).not.toHaveBeenCalled();
   const loading = deferred<Course[]>();
   mock.facultyCourses.mockReturnValueOnce(loading.promise);
   await selectFaculty();
-  expect(screen.getByText("Loading faculty courses…")).toBeInTheDocument();
+  expect(screen.getByText("Učitavam kolegije fakulteta…")).toBeInTheDocument();
   loading.resolve([course]);
-  expect(await screen.findByRole("button", { name: "Join course: Algorithms" })).toBeEnabled();
-  expect(screen.getByText("Not joined")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms" })).toBeEnabled();
+  expect(screen.getByText("Upisano: 0")).toBeInTheDocument();
   await selectFaculty("f2");
   await waitFor(() => expect(mock.facultyCourses.mock.calls).toEqual([["f1"], ["f2"]]));
 });
@@ -59,15 +60,15 @@ it("ignores an old faculty response after a newer selection", async () => {
   render(view());
   await selectFaculty();
   await selectFaculty("f2");
-  expect(await screen.findByText("No courses available")).toBeInTheDocument();
+  expect(await screen.findByText("Nema dostupnih kolegija")).toBeInTheDocument();
   await act(async () => stale.resolve([course]));
   expect(screen.queryByText("Algorithms")).not.toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Legacy / Unassigned" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Legacy / Unassigned", level: 2 })).toBeInTheDocument();
 });
 
 it("does not fetch courses on an external revision until a faculty is selected", async () => {
   const rendered = render(view());
-  await screen.findByLabelText("Browse by faculty");
+  await screen.findByLabelText("Pretraži po fakultetu");
   rendered.rerender(view([], false, 1));
   expect(mock.facultyCourses).not.toHaveBeenCalled();
   await selectFaculty("f2");
@@ -83,16 +84,16 @@ it("refreshes only the selected faculty and ignores a stale pre-refresh response
   const rendered = render(view());
   await selectFaculty("f1");
   rendered.rerender(view([], false, 1));
-  expect(await screen.findByRole("button", { name: "Join course: Algorithms II" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms II" })).toBeInTheDocument();
   await act(async () => old.resolve([course]));
-  expect(screen.queryByRole("button", { name: "Join course: Algorithms" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Upiši kolegij: Algorithms" })).not.toBeInTheDocument();
   expect(mock.facultyCourses.mock.calls).toEqual([["f1"], ["f1"]]);
 });
 
 it("shows an empty faculty catalog", async () => {
   mock.faculties.mockResolvedValue([]);
   render(view());
-  expect(await screen.findByText("No faculties available")).toBeInTheDocument();
+  expect(await screen.findByText("Nema dostupnih fakulteta")).toBeInTheDocument();
   expect(mock.facultyCourses).not.toHaveBeenCalled();
 });
 
@@ -100,12 +101,12 @@ it("retries faculty and course errors without fetching unrelated faculties", asy
   mock.faculties.mockRejectedValueOnce(new Error("Unavailable")).mockResolvedValue(faculties);
   mock.facultyCourses.mockRejectedValueOnce(new Error("Unavailable")).mockResolvedValue([]);
   render(view());
-  expect(await screen.findByRole("alert")).toHaveTextContent("faculty catalog");
-  fireEvent.click(screen.getByRole("button", { name: "Retry faculties" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Popis fakulteta nije učitan");
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj fakultete" }));
   await selectFaculty();
-  expect(await screen.findByRole("alert")).toHaveTextContent("courses for this faculty");
-  fireEvent.click(screen.getByRole("button", { name: "Retry courses" }));
-  expect(await screen.findByText("No courses available")).toBeInTheDocument();
+  expect(await screen.findByRole("alert")).toHaveTextContent("Kolegiji ovog fakulteta nisu učitani");
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj kolegije" }));
+  expect(await screen.findByText("Nema dostupnih kolegija")).toBeInTheDocument();
   expect(mock.facultyCourses.mock.calls).toEqual([["f1"], ["f1"]]);
 });
 
@@ -113,8 +114,8 @@ it("opens the existing joined course without posting another join", async () => 
   const joined = { ...course, description: "Joined course details" };
   render(view([joined]));
   await selectFaculty();
-  fireEvent.click(await screen.findByRole("button", { name: "Open course: Algorithms" }));
-  expect(screen.getByText("Joined")).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Upisano, otvori kolegij: Algorithms" }));
+  expect(screen.getByRole("button", { name: "Upisano, otvori kolegij: Algorithms" })).toHaveTextContent("Upisano ✓");
   expect(onOpen).toHaveBeenCalledWith(joined);
   expect(mock.joinCourse).not.toHaveBeenCalled();
 });
@@ -124,29 +125,29 @@ it("disables joining while membership is loading and while that join is pending"
   mock.joinCourse.mockReturnValue(pending.promise);
   const rendered = render(view([], true));
   await selectFaculty();
-  expect(await screen.findByRole("button", { name: "Join course: Algorithms" })).toBeDisabled();
+  expect(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms" })).toBeDisabled();
   rendered.rerender(view());
-  fireEvent.click(screen.getByRole("button", { name: "Join course: Algorithms" }));
-  const joining = screen.getByRole("button", { name: "Joining course: Algorithms" });
+  fireEvent.click(screen.getByRole("button", { name: "Upiši kolegij: Algorithms" }));
+  const joining = screen.getByRole("button", { name: "Upisujem kolegij: Algorithms" });
   expect(joining).toBeDisabled();
   fireEvent.click(joining);
   pending.resolve(membership);
   await waitFor(() => expect(onJoined).toHaveBeenCalledWith(course));
-  expect(screen.getByRole("status")).toHaveTextContent("Algorithms added to Your courses.");
+  expect(screen.getByRole("status")).toHaveTextContent("Kolegij Algorithms dodan je u Vaše kolegije.");
   expect(mock.joinCourse).toHaveBeenCalledTimes(1);
   rendered.rerender(view([course]));
-  expect(screen.getByRole("button", { name: "Open course: Algorithms" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Upisano, otvori kolegij: Algorithms" })).toBeInTheDocument();
 });
 
 it("allows retrying a failed join and keeps the faculty selected", async () => {
   mock.joinCourse.mockRejectedValueOnce(new Error("Unavailable")).mockResolvedValue(membership);
   render(view());
   await selectFaculty();
-  fireEvent.click(await screen.findByRole("button", { name: "Join course: Algorithms" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Try again");
+  fireEvent.click(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Pokušajte ponovno");
   expect(onJoined).not.toHaveBeenCalled();
-  expect(screen.getByLabelText("Browse by faculty")).toHaveValue("f1");
-  fireEvent.click(screen.getByRole("button", { name: "Join course: Algorithms" }));
+  expect(screen.getByLabelText("Pretraži po fakultetu")).toHaveValue("f1");
+  fireEvent.click(screen.getByRole("button", { name: "Upiši kolegij: Algorithms" }));
   await waitFor(() => expect(onJoined).toHaveBeenCalledWith(course));
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
@@ -156,8 +157,91 @@ it("does not update a later session when a join finishes after unmount", async (
   mock.joinCourse.mockReturnValue(pending.promise);
   const rendered = render(view());
   await selectFaculty();
-  fireEvent.click(await screen.findByRole("button", { name: "Join course: Algorithms" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms" }));
   rendered.unmount();
   await act(async () => pending.resolve(membership));
   expect(onJoined).not.toHaveBeenCalled();
+});
+
+it("filters the faculty catalog by name or code and starts with an empty search when reopened", async () => {
+  const other: Course = { ...course, id: "c2", name: "Databases", code: "BP", description: null };
+  mock.facultyCourses.mockResolvedValue([course, other]);
+  const first = render(view());
+  await selectFaculty();
+  await screen.findByRole("button", { name: "Upiši kolegij: Databases" });
+  fireEvent.change(screen.getByLabelText("Pretraži kolegije"), { target: { value: "bp" } });
+  expect(screen.queryByRole("button", { name: "Upiši kolegij: Algorithms" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Upiši kolegij: Databases" })).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Pretraži kolegije"), { target: { value: "zzz" } });
+  expect(screen.getByText("Nema odgovarajućih kolegija")).toBeInTheDocument();
+  first.unmount();
+  render(view());
+  await selectFaculty();
+  expect(await screen.findByRole("button", { name: "Upiši kolegij: Algorithms" })).toBeInTheDocument();
+  expect(screen.getByLabelText("Pretraži kolegije")).toHaveValue("");
+});
+
+it("goes back to Your courses", async () => {
+  render(view());
+  await screen.findByLabelText("Pretraži po fakultetu");
+  fireEvent.click(screen.getByRole("button", { name: /Vaši kolegiji/ }));
+  expect(onBack).toHaveBeenCalledTimes(1);
+});
+
+const yearOne = { ...course, id: "y1", name: "Digital Logic", code: "DL", year_of_study: 1, approved_question_count: 412, has_moderators: true };
+const yearTwo = { ...course, id: "y2", name: "Signals", code: "SiS", year_of_study: 2, approved_question_count: 1, has_moderators: false };
+const noYear = { ...course, id: "y3", name: "Databases", code: "BP", approved_question_count: 0, has_moderators: true };
+
+it("shows the year, moderators and question count in each row", async () => {
+  mock.facultyCourses.mockResolvedValue([yearOne, yearTwo, noYear]);
+  render(view());
+  await selectFaculty();
+  const rows = (await screen.findAllByRole("listitem")).map(row => row.textContent ?? "");
+  expect(rows[0]).toContain("1. godina · moderatori aktivni");
+  expect(rows[0]).toContain("412 pitanja");
+  expect(rows[1]).toContain("2. godina · još nema moderatora");
+  expect(rows[1]).toContain("1 pitanje");
+  expect(rows[2]).toContain("moderatori aktivni");
+  expect(rows[2]).not.toContain("godina");
+  expect(rows[2]).toContain("nema pitanja");
+});
+
+it("filters by year and starts again from all years when the page is opened", async () => {
+  mock.facultyCourses.mockResolvedValue([yearOne, yearTwo, noYear]);
+  const first = render(view());
+  await selectFaculty();
+  await screen.findByRole("button", { name: "Upiši kolegij: Signals" });
+  const years = screen.getByRole("group", { name: "Godina studija" });
+  expect(Array.from(years.querySelectorAll("button")).map(button => button.textContent)).toEqual(["Sve", "1. godina", "2. godina"]);
+  expect(screen.getByRole("button", { name: "Sve" })).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(screen.getByRole("button", { name: "2. godina" }));
+  expect(screen.getByRole("button", { name: "2. godina" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "Upiši kolegij: Signals" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Upiši kolegij: Digital Logic" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Upiši kolegij: Databases" })).not.toBeInTheDocument();
+  first.unmount();
+  render(view());
+  await selectFaculty();
+  expect(await screen.findByRole("button", { name: "Upiši kolegij: Digital Logic" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Sve" })).toHaveAttribute("aria-pressed", "true");
+});
+
+it("has no year filter when no course in the faculty has a year", async () => {
+  mock.facultyCourses.mockResolvedValue([noYear]);
+  render(view());
+  await selectFaculty();
+  await screen.findByRole("button", { name: "Upiši kolegij: Databases" });
+  expect(screen.queryByRole("group", { name: "Godina studija" })).not.toBeInTheDocument();
+});
+
+it("treats a course hidden from the list as not enrolled, and enrolling again brings it back", async () => {
+  mock.facultyCourses.mockResolvedValue([yearOne, yearTwo]);
+  render(view([{ ...yearOne, membership_status: "HIDDEN" }, { ...yearTwo, membership_status: "DONE" }]));
+  await selectFaculty();
+  expect(screen.getByText("Upisano: 1")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Upiši kolegij: Digital Logic" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Upisano, otvori kolegij: Signals" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Upiši kolegij: Digital Logic" }));
+  await waitFor(() => expect(onJoined).toHaveBeenCalledWith(yearOne));
+  expect(mock.joinCourse).toHaveBeenCalledWith("y1");
 });

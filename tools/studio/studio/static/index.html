@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="hr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pregled pitanja · ExamPrep studio</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <p class="brand">ExamPrep studio</p>
+    <h1 id="course">Pregled pitanja</h1>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </header>
+  <div class="layout">
+    <nav class="units" aria-label="Jedinice">
+      <h2>Jedinice</h2>
+      <ol id="units"></ol>
+    </nav>
+    <section class="queue" aria-labelledby="queue-title">
+      <h2 id="queue-title">Pitanja</h2>
+      <div id="unit-summary" class="summary"></div>
+      <ol id="queue"></ol>
+    </section>
+    <main id="detail" class="detail" tabindex="-1">
+      <p class="empty">Odaberite jedinicu.</p>
+    </main>
+  </div>
+  <footer class="keys">
+    <kbd>j</kbd>/<kbd>k</kbd> sljedeće/prethodno · <kbd>a</kbd> prihvati ·
+    <kbd>r</kbd> odbij · <kbd>e</kbd> uredi · <kbd>u</kbd> poništi odluku ·
+    <kbd>Esc</kbd> odustani od uređivanja
+  </footer>
+  <script src="/app.js" defer></script>
+</body>
+</html>

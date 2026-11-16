@@ -1,5 +1,9 @@
 # Phase 6.5 staging deployment
 
+This guide targets Vercel (frontend) with a Railway backend and managed PostgreSQL. Its
+environment variable table applies to any host; for Azure Container Apps or a VM use
+[DEPLOY_CONTAINER_APPS.md](DEPLOY_CONTAINER_APPS.md) or [DEPLOY_VM.md](DEPLOY_VM.md).
+
 Phase 6.6 adds [external AI quiz import](QUIZ_IMPORT.md): import versioned JSON as drafts,
 then use human review. This temporary staging bypass needs no AI provider or embeddings.
 Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
@@ -11,6 +15,10 @@ provider terms, limits and costs before creating resources. The migration and
 practice checks below include the Phase 7–8 student practice flow.
 
 ## Architecture and deployment order
+
+> To run the backend on Azure Container Apps instead of Railway, follow
+> [DEPLOY_CONTAINER_APPS.md](DEPLOY_CONTAINER_APPS.md), or for any always-on Ubuntu VM
+> [DEPLOY_VM.md](DEPLOY_VM.md); the database and frontend setup below still apply.
 
 Use Vercel for the Next.js frontend, Railway for the FastAPI Docker service, and
 Neon PostgreSQL 17 with pgvector for a managed database. Railway fits the existing
@@ -94,7 +102,7 @@ Set these **backend-only** variables in the service dashboard:
 | SESSION_COOKIE_SECURE | `true` |
 | SESSION_COOKIE_SAMESITE | `none` for unrelated platform domains; `lax` for same-site HTTPS custom domains |
 | SESSION_COOKIE_NAME | `examprep_session` (default); do not share a name/domain with unrelated applications |
-| SESSION_MAX_AGE_SECONDS | `3600` (default) |
+| SESSION_MAX_AGE_SECONDS | `14400` (default, 4 h lifetime; renewed after 2 h, so idle gaps up to 2 h are safe) |
 | MATERIAL_STORAGE_DIR | `/data/materials` on the mounted volume |
 | AI_PROVIDER | `disabled` for external import; `openai_compatible` to enable internal generation |
 | OPENAI_COMPATIBLE_URL | Only for internal generation: explicit trusted public HTTPS origin + `/v1` |

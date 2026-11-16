@@ -5,8 +5,23 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_db
 from app.models import User
-from app.schemas.progress import ProgressResponse, ProgressSummary
-from app.services.progress import list_progress, summarize_progress
+from app.schemas.progress import (
+    ProgressResponse,
+    ProgressSummary,
+    ReviewDecks,
+    ReviewForecast,
+    ReviewRatingRequest,
+    ReviewRatingResult,
+    UnitProgressSummary,
+)
+from app.services.progress import (
+    apply_rating,
+    list_progress,
+    review_decks,
+    review_forecast,
+    summarize_progress,
+    summarize_unit_progress,
+)
 
 router = APIRouter(prefix="/courses/{course_id}/review-progress", tags=["progress"])
 
@@ -22,6 +37,16 @@ def get_course_progress(
     return list_progress(db, user, course_id, limit, offset)
 
 
+@router.post("/ratings", response_model=ReviewRatingResult)
+def rate_review_card(
+    course_id: UUID,
+    data: ReviewRatingRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ReviewRatingResult:
+    return apply_rating(db, user, course_id, data.question_id, data.rating)
+
+
 @router.get("/summary", response_model=ProgressSummary)
 def get_course_progress_summary(
     course_id: UUID,
@@ -29,3 +54,31 @@ def get_course_progress_summary(
     db: Session = Depends(get_db),
 ) -> ProgressSummary:
     return summarize_progress(db, user, course_id)
+
+
+@router.get("/units", response_model=UnitProgressSummary)
+def get_course_unit_progress(
+    course_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UnitProgressSummary:
+    return summarize_unit_progress(db, user, course_id)
+
+
+@router.get("/decks", response_model=ReviewDecks)
+def get_course_review_decks(
+    course_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ReviewDecks:
+    return review_decks(db, user, course_id)
+
+
+@router.get("/forecast", response_model=ReviewForecast)
+def get_course_review_forecast(
+    course_id: UUID,
+    days: int = Query(14, ge=1, le=60),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ReviewForecast:
+    return review_forecast(db, user, course_id, days)

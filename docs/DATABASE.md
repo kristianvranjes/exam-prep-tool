@@ -1,6 +1,11 @@
 # Database infrastructure
 
-Current Alembic head is **0015** (`down_revision = 0014`). It adds nullable
+The current Alembic head is **0027** (see [Faculty creators migration
+0027](#faculty-creators-migration-0027)); `backend/alembic/versions/` is authoritative.
+Older revisions are described first, newest first; revisions 0016 to 0027 have a section
+each at the end. CI checks `alembic upgrade head` and the base-to-head roundtrip.
+
+Revision **0015** (`down_revision = 0014`) adds nullable
 TIMESTAMPTZ `quiz_attempts.abandoned_at` and expands the status/timestamp constraints:
 ACTIVE has neither terminal timestamp, SUBMITTED has only submitted_at, and
 ABANDONED has only abandoned_at. Existing rows and saved answers/snapshots/progress
@@ -192,6 +197,70 @@ constraint, preserving answers/results but losing provenance. Re-upgrade marks
 submitted results legacy again. See [PRACTICE.md](PRACTICE.md) for grading and backfill.
 
 
+Revision **0009** (`down_revision = 0008`) creates `question_review_progress`, the
+question-first review state: one row per user and question with `review_stage` (0–5),
+resolved/correct/incorrect review counts that must add up, `last_result`
+(`CORRECT`/`INCORRECT`), `last_reviewed_at`, `due_at` and a nonempty `scheduling_version`
+(`leitner-v1`). `(user_id, question_id)` is unique and `(user_id, due_at, question_id)`
+is indexed for due selection. Both FKs cascade. There is no backfill of historical
+attempts; downgrade drops only this table. See [PRACTICE.md](PRACTICE.md) for scheduling.
+
+## Rating-based scheduling migration 0029
+
+Revision **0029** (`down_revision = 0028`) adds `interval_minutes` (null or positive),
+`repetitions` and `lapses` (not negative, default 0) and `last_rating`
+(`AGAIN`/`HARD`/`GOOD`/`EASY` or null) to `question_review_progress`, and creates
+`review_rating_events` (id, user, question, `rating`, `rated_at`, `interval_minutes`, `due_at`,
+`scheduling_version`; both FKs cascade; indexed by user, question and time). Existing rows keep
+`leitner-v1` and their due time; their interval comes from the stage (10 minutes, 1, 3, 7, 14
+and 30 days), `repetitions` from the stage, `lapses` from the incorrect count and `last_rating`
+from the last result (CORRECT → GOOD, INCORRECT → AGAIN). A rating moves a card to
+`srs-v2` (see [API.md](API.md)); downgrade drops the events and the new columns only.
+
+## Scored mock exam migration 0030
+
+Revision **0030** (`down_revision = 0029`) relaxes `ck_quiz_selection_mode_paper`: a quiz still has a
+frozen `scoring` rule exactly when it is `PAPER`, except that `MOCK` may have one too (a timed, scored
+mock exam; plain mock practice has none). No column or row changes. Downgrade first sets
+`selection_mode` to NULL for the scored `MOCK` quizzes, which only forgets their recorded mode, and
+then restores the stricter constraint; sessions, answers and scores are untouched.
+
+## Answer rating migration 0031
+
+Revision **0031** (`down_revision = 0030`) adds nullable `answers.rating`
+(`AGAIN`/`HARD`/`GOOD`/`EASY`), allowed only on a checked answer (`ck_answer_rating`): the student's
+own rating of the card, given during the session and applied once when it is submitted (see
+[API.md](API.md)). Nothing is backfilled. Downgrade drops the column; ratings already applied stay
+in `review_rating_events` and on the cards, only those of unfinished sessions are lost.
+
+## Partial credit migration 0032
+
+Revision **0032** (`down_revision = 0031`) adds nullable `answers.score_fraction` (NUMERIC(3,2)):
+the share of an item's points a multiple-select answer earned (1, 0.5 or 0). `ck_answer_score_fraction`
+keeps it between 0 and 1 and equal to 1 exactly for `CORRECT` answers, so the binary grade is
+untouched. Nothing is backfilled: NULL means all or nothing by the grade, which keeps every earlier
+score unchanged. Downgrade drops the column; grades, review progress and sessions stay as they are
+and half-right answers score 0 again.
+
+## Matching questions, hint and expression migration 0033
+
+Revision **0033** (`down_revision = 0032`) adds `MATCH` to `ck_question_type` and `ck_question_answer`
+(the key lives in the options, as for multiple choice), nullable `questions.hint` and `questions.expr`
+(`ck_question_hint_expr`: nonblank, at most 400 and 200 characters) and nullable
+`question_options.match_text`: a matching question keeps one option row per pair, `text` being the left
+item and `match_text` its partner. Nothing is backfilled. Downgrade refuses while any `MATCH` question
+exists (delete them first), otherwise drops the columns and restores the earlier constraints; a hint or
+expression written meanwhile is lost.
+
+## Unit review migration 0034
+
+Revision **0034** (`down_revision = 0033`) adds `course_units.status` (`DRAFT`, `PENDING_REVIEW` or
+`PUBLISHED`, `ck_course_unit_status`; units that exist are backfilled as `PUBLISHED`, new units start as
+`DRAFT`), nullable `reviewer_id` (FK users, `ON DELETE SET NULL`) and `reviewed_at`. `ck_course_unit_reviewed`
+allows a reviewer only on a published unit. The author is the existing `created_by_user_id`; no `quizzes`
+table exists. The status is a label for moderators: it never hides a unit's approved questions from
+students. Downgrade drops the three columns.
+
 ## Faculty catalog migration 0010
 
 Revision 0010 follows 0009. `faculties` stores UUID id, name (1-150 characters,
@@ -220,3 +289,172 @@ Use migration roundtrips only on disposable PostgreSQL. The faculty migration te
 cover 0009 -> 0010 -> 0009 -> 0010 with preservation checks; base -> head remains
 in CI. Membership/material/question/quiz/answer/progress records and course IDs
 survive the faculty migration roundtrip unchanged.
+
+## Course units migration 0016
+
+Revision 0016 follows 0015. `course_units` stores id, course_id (indexed, ON DELETE
+CASCADE), position, title (nonblank, at most 150 characters), normalized_title,
+optional description (nonblank, at most 2000 characters), is_archived (default
+false), created_by_user_id (ON DELETE RESTRICT) and timestamps. `(course_id, position)`
+is unique and DEFERRABLE INITIALLY DEFERRED so a reorder can swap positions in one
+transaction; `(course_id, normalized_title)` is unique. Unit mutations serialize on
+the course row.
+
+`question_units` links questions and units (composite primary key, both ON DELETE
+CASCADE, indexed unit_id). Same-course links are enforced by the service layer.
+
+`alembic downgrade 0015` drops both tables and with them all unit organization;
+questions, versions, attempts and progress are unchanged. Back up first if unit data
+matters.
+
+## Exam scopes migration 0017
+
+Revision 0017 follows 0016. `exam_scopes` stores id, course_id (indexed, ON DELETE
+CASCADE), academic_year (`YYYY/YY` checked by pattern; the API also requires
+consecutive years), kind (`MIDTERM`, `FINAL`, `FULL_EXAM`), name (nonblank, at most
+100 characters), normalized_name, created_by_user_id (ON DELETE RESTRICT) and
+timestamps; `(course_id, academic_year, normalized_name)` is unique.
+`exam_scope_units` links scopes and units (composite primary key, both ON DELETE
+CASCADE, indexed unit_id).
+
+`quizzes` gains nullable `exam_scope_id` (indexed, ON DELETE SET NULL),
+`focus_unit_ids` JSONB (default `[]`) and nullable `focus_label` (at most 300
+characters). Existing quizzes keep an empty, unlabeled focus.
+
+`alembic downgrade 0016` drops the scope tables and the quiz focus columns; quizzes,
+attempts, answers and progress otherwise survive unchanged. Back up first if scope
+data or focus labels matter.
+
+
+## Immediate feedback migration 0018
+
+Revision 0018 follows 0017. `quizzes` gains `feedback_mode` (`END` or `IMMEDIATE`,
+default `END`); existing quizzes keep showing results only after submission.
+`answers` gains nullable `checked_at` and nullable `confidence` (`SURE`, `UNSURE`,
+`GUESS`). A check constraint requires grading provenance on every checked answer;
+the existing provenance constraint is unchanged, so a checked ACTIVE answer stores the
+same deterministic grade, method and version that submission would.
+
+`alembic downgrade 0017` drops the three columns and their constraints. Attempts,
+answers and grades otherwise survive; checked ACTIVE answers keep their stored grade,
+which submission then recomputes from the same frozen snapshot. Back up first if
+confidence data matters.
+
+## Exam scope dates migration 0019
+
+Revision 0019 follows 0018. `exam_scopes` gains nullable `starts_on` and `ends_on`
+(`DATE`) with `ck_exam_scope_dates`: an end date requires a start date and cannot
+precede it. `ck_exam_scope_kind` now also allows `LAB` and `QUIZ`. Existing scopes
+stay undated.
+
+`alembic downgrade 0018` refuses while `LAB` or `QUIZ` scopes exist, because the old
+kind constraint cannot hold them; delete or re-kind them first. Otherwise it drops
+the date columns and restores the three-kind constraint. Back up first if dates
+matter.
+
+## Exam papers migration 0020
+
+Revision 0020 follows 0019. `exam_papers` stores id, course_id (indexed, ON DELETE
+CASCADE), academic_year (`YYYY/YY` pattern), kind (the five exam-cycle kinds), title and
+normalized_title (`(course_id, academic_year, normalized_title)` unique), optional
+term_label, exam_date, exam_scope_id (indexed, ON DELETE SET NULL),
+duration_minutes (1–600), wrong_answer_penalty (`NUMERIC(4,3)`, 0–1, default 0),
+pass_threshold (`NUMERIC(7,2)`, at least 0), status (`DRAFT`/`PUBLISHED`, default
+`DRAFT`) with a matching published_at, created_by_user_id (ON DELETE RESTRICT) and
+timestamps.
+
+`exam_paper_items` stores id, paper_id (ON DELETE CASCADE), position (at least 0,
+unique per paper), question_id (indexed, ON DELETE CASCADE, unique per paper), points
+(`NUMERIC(6,2)`, above 0) and an optional label of at most 40 characters.
+
+`alembic downgrade 0019` drops both tables and every paper. Back up first if papers
+matter.
+
+## Paper sessions migration 0021
+
+Revision 0021 follows 0020. `quizzes` gains nullable `exam_paper_id` (indexed, ON
+DELETE SET NULL) and nullable `scoring` JSONB holding the frozen rule (`version`,
+`title`, `total_points`, `wrong_answer_penalty`, `pass_threshold`, `duration_minutes`;
+decimals as strings). `quiz_questions` gains nullable `points` (`NUMERIC(6,2)`, above 0)
+and `label` (at most 40 characters). Existing sessions stay ordinary practice.
+
+`alembic downgrade 0020` drops these columns; paper sessions then read as ordinary
+practice without points or scores. Back up first if paper results matter.
+
+## Attempt deadlines migration 0022
+
+Revision 0022 follows 0021. `quiz_attempts` gains nullable `deadline_at` with
+`ck_attempt_deadline` (`deadline_at > started_at`). Only timed paper sessions set it;
+every other attempt stays untimed. `alembic downgrade 0021` drops the column, after
+which timed sessions accept answers again. Back up first if deadlines matter.
+
+## Question favorites migration 0023
+
+Revision 0023 follows 0022 and creates `question_favorites`: UUID `id`, `user_id`
+(users, ON DELETE CASCADE), `question_id` (questions, ON DELETE CASCADE, indexed) and
+`created_at` (TIMESTAMPTZ, default `now()`), with `uq_question_favorite_user_question`
+on `(user_id, question_id)`. Course scope comes from the question. No existing table
+changes and there is no backfill, so attempts, answers, snapshots and review progress
+are untouched. `alembic downgrade 0022` drops the table and every favorite; upgrading
+again starts empty. Back up first if favorites matter.
+
+## Numeric and multiple-select questions migration 0024
+
+Revision 0024 follows 0023 and extends `questions` for R4: nullable `correct_value`,
+`absolute_tolerance` and `relative_tolerance` (NUMERIC, exact decimals) and `unit`
+(VARCHAR(20)). `ck_question_type` adds `NUMERIC` and `MULTIPLE_SELECT`;
+`ck_question_answer` requires a `correct_value` exactly for NUMERIC and keeps the other
+key columns empty, with MULTIPLE_SELECT stored like MULTIPLE_CHOICE (its options in
+`question_options`, one or more correct); the new `ck_question_numeric` keeps the
+tolerances and unit NULL for other types, tolerances non-negative, the relative one at
+most 1, and the unit nonblank. Existing rows already satisfy the new checks, so nothing is
+backfilled, and snapshots, answers and attempts are unchanged. `alembic downgrade 0023`
+refuses while any NUMERIC or MULTIPLE_SELECT question exists (delete them first), then
+restores the earlier constraints and drops the four columns.
+
+## Short-answer self-assessment migration 0025
+
+Revision 0025 follows 0024 and adds nullable `answers.self_review` (VARCHAR(10)) and
+`answers.self_reviewed_at` (TIMESTAMPTZ). `ck_answer_self_review` allows only `CORRECT`
+or `INCORRECT`, `ck_answer_self_review_time` sets both columns together, and
+`ck_answer_self_review_pending` allows a self-assessment only on an answer graded
+`PENDING_SEMANTIC`, so it can never sit beside a deterministic grade. Additive only:
+existing rows stay NULL and nothing is backfilled. `alembic downgrade 0024` refuses while
+any self-assessment exists (clear them first), then drops the constraints and columns.
+See [self-assessment](PRACTICE.md#short-answer-self-assessment-r4).
+
+## Selection mode migration 0026
+
+Revision 0026 follows 0025 and adds nullable `quizzes.selection_mode` (VARCHAR(10)):
+how the session was started, recorded for aggregate pilot metrics.
+`ck_quiz_selection_mode` allows `STANDARD`, `ADAPTIVE`, `MISTAKES`, `DUE`, `FAVORITES`,
+`MOCK`, `QUICK` (the quick quiz, ADAPTIVE selection) and `PAPER` (a past-paper session);
+`ck_quiz_selection_mode_paper` records `PAPER` exactly when the quiz has a frozen
+paper `scoring` rule, so the value survives the paper's deletion while `exam_paper_id`
+is cleared. Additive only: existing quizzes stay NULL, meaning unknown, and nothing is
+backfilled. Nothing reads it back; see
+[recorded selection mode](PRACTICE.md#recorded-selection-mode-migration-0026) and
+[pilot metrics](PILOT_METRICS.md). `alembic downgrade 0025` drops the constraints and the
+column; sessions, answers and grades are unchanged, and upgrading again leaves every
+earlier session NULL. Run the pilot metrics before a downgrade if the recorded modes
+matter.
+
+## Faculty creators migration 0027
+
+Revision 0027 follows 0026 and adds `faculty_creators`: `faculty_id` (primary key,
+references faculties, ON DELETE CASCADE), nullable indexed `user_id` (references users,
+ON DELETE SET NULL) and `created_at`. A row exists for each faculty a moderator added
+through `POST /faculties`; seeded or operator-provisioned faculties have none. The
+creator lives in its own table rather than a column on `faculties` so that removing an
+account never touches the faculty. Downgrade drops the table and keeps every faculty.
+
+## Course summary migration 0028
+
+Revision 0028 follows 0027 and adds three things. `courses.year_of_study` is a nullable
+`SMALLINT` between 1 and 6, set by a faculty moderator; existing courses have none.
+`course_memberships.status` is `ACTIVE` (default), `DONE` or `HIDDEN`: the student's own
+view of the course list. The row stays whatever the status, so access to the student's
+attempts and progress does not change. `user_preferences` holds one JSONB document per
+user (`user_id` primary key, references users ON DELETE CASCADE, plus `updated_at`); the
+API validates the document, so a new setting needs no migration. Downgrade drops all
+three; courses and memberships stay, and years, statuses and preferences are not restored.

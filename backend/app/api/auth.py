@@ -4,10 +4,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import Settings
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_user, get_db, write_session_cookie
 from app.models import User
 from app.schemas.user import LoginRequest, UserCreate, UserResponse
-from app.services.auth import create_session, hash_password, normalize_email, verify_password
+from app.services.auth import hash_password, normalize_email, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -20,16 +20,7 @@ THROTTLED_RESPONSE: dict[int | str, dict[str, object]] = {
 
 
 def set_session_cookie(response: Response, user: User) -> None:
-    settings = Settings()
-    response.set_cookie(
-        settings.session_cookie_name,
-        create_session(user.id, settings),
-        max_age=settings.session_max_age_seconds,
-        httponly=True,
-        secure=settings.session_cookie_secure,
-        samesite=settings.session_cookie_samesite,
-        path="/",
-    )
+    write_session_cookie(response, user.id, Settings())
 
 
 @router.post(

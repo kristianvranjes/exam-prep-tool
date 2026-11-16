@@ -1,7 +1,7 @@
 import type { Material } from "../lib/api";
 
 export const materialStatus: Record<Material["status"], string> = {
-  UPLOADED: "Uploaded", PROCESSING: "Processing", READY: "Ready", FAILED: "Failed",
+  UPLOADED: "Učitano", PROCESSING: "U obradi", READY: "Spremno", FAILED: "Neuspjelo",
 };
 
 export function formatFileSize(bytes: number): string {

@@ -1,10 +1,11 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProgressPanel } from "../src/components/progress-panel";
-import type { ReviewProgress, ReviewProgressSummary } from "../src/lib/api";
+import type { ReviewProgress, ReviewProgressSummary, UnitProgress } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ reviewProgress: vi.fn(), reviewProgressSummary: vi.fn() }));
+const mock = vi.hoisted(() => ({ reviewProgress: vi.fn(), reviewProgressSummary: vi.fn(), unitProgress: vi.fn(), progressSeries: vi.fn(), reviewDue: vi.fn(), mistakes: vi.fn(), favorites: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
+vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 
 const asOf = "2030-01-02T12:00:00Z";
 const stages = (counts: number[] = [0, 0, 0, 0, 0, 0]) =>
@@ -19,6 +20,10 @@ const row = (changes: Partial<ReviewProgress> = {}): ReviewProgress => ({
   correct_review_count: 2, incorrect_review_count: 1, last_result: "INCORRECT",
   last_reviewed_at: "2030-01-01T10:00:00Z", due_at: "2030-01-01T11:00:00Z", ...changes,
 });
+const unit = (changes: Partial<UnitProgress> = {}): UnitProgress => ({
+  unit_id: "unit-1", title: "Unit 1", position: 0, is_archived: false, reviewed_questions: 0,
+  resolved_review_count: 0, correct_review_count: 0, incorrect_review_count: 0, due_now: 0, ...changes,
+});
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason: Error) => void;
@@ -29,16 +34,49 @@ function metric(name: string) {
   return screen.getByText(name, { selector: "dt" }).parentElement?.querySelector("dd");
 }
 async function open() {
-  await screen.findByRole("heading", { name: "What needs attention" });
+  await screen.findByRole("heading", { name: "Što treba pažnju" });
 }
 function details() {
-  fireEvent.click(screen.getByText("Scheduling details"));
+  fireEvent.click(screen.getByText("Detalji rasporeda"));
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
   mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 1 }));
   mock.reviewProgress.mockResolvedValue([]);
+  mock.unitProgress.mockResolvedValue({ as_of: asOf, units: [] });
+  // The review lists have their own tests in review-lists.test.tsx.
+  mock.mistakes.mockResolvedValue([]);
+  mock.favorites.mockResolvedValue([]);
+});
+
+it("shows the weekly results per unit as numbers, with a dash where nothing was answered", async () => {
+  mock.progressSeries.mockResolvedValue({ weeks: ["2030-01-07", "2030-01-14"], units: [
+    { unit_id: "u1", title: "Logika", position: 0, cells: [{ percent: 40, graded_count: 5 }, { percent: 90, graded_count: 10 }] },
+    { unit_id: "u2", title: "Skupovi", position: 1, cells: [{ percent: null, graded_count: 0 }, { percent: 75, graded_count: 4 }] },
+    { unit_id: "u3", title: "Nevježbano", position: 2, cells: [{ percent: null, graded_count: 0 }, { percent: null, graded_count: 0 }] },
+  ] });
+  render(<ProgressPanel courseId="course" />);
+  const grid = await screen.findByRole("table", { name: "Točnost po cjelinama i tjednima" });
+  expect(mock.progressSeries).toHaveBeenCalledWith("course", 8);
+  expect(within(grid).getByRole("row", { name: /Logika/ })).toHaveTextContent("40 posto, 5 odgovora");
+  expect(within(grid).getByRole("row", { name: /Logika/ })).toHaveTextContent("90 posto, 10 odgovora");
+  expect(within(grid).getByRole("row", { name: /Skupovi/ })).toHaveTextContent("Bez odgovora");
+  // A unit without any graded answer in the window is left out.
+  expect(within(grid).queryByText("Nevježbano")).not.toBeInTheDocument();
+});
+
+it("leaves the weekly grid out when nothing was answered or the series cannot be loaded", async () => {
+  mock.progressSeries.mockResolvedValue({ weeks: ["2030-01-07"], units: [{ unit_id: "u1", title: "Logika", position: 0, cells: [{ percent: null, graded_count: 0 }] }] });
+  const view = render(<ProgressPanel courseId="course" />);
+  await open();
+  await waitFor(() => expect(mock.progressSeries).toHaveBeenCalled());
+  expect(screen.queryByRole("table", { name: "Točnost po cjelinama i tjednima" })).not.toBeInTheDocument();
+  view.unmount();
+  mock.progressSeries.mockRejectedValue(new Error("Offline"));
+  render(<ProgressPanel courseId="course" />);
+  await open();
+  expect(screen.queryByRole("table", { name: "Točnost po cjelinama i tjednima" })).not.toBeInTheDocument();
 });
 
 it("loads only when Progress becomes active and does not flash empty metrics", async () => {
@@ -53,11 +91,11 @@ it("loads only when Progress becomes active and does not flash empty metrics", a
   await waitFor(() => expect(mock.reviewProgressSummary).toHaveBeenCalledWith("course"));
   expect(mock.reviewProgressSummary).toHaveBeenCalledWith("course");
   expect(mock.reviewProgress).toHaveBeenCalledWith("course", 0);
-  expect(screen.getByText("Loading progress…")).toBeInTheDocument();
-  expect(screen.queryByText(/Your progress will appear/)).not.toBeInTheDocument();
+  expect(screen.getByText("Učitavam napredak…")).toBeInTheDocument();
+  expect(screen.queryByText(/Napredak će se pojaviti/)).not.toBeInTheDocument();
   expect(screen.queryByRole("definition")).not.toBeInTheDocument();
   await act(async () => { pendingSummary.resolve(summary()); pendingPage.resolve([]); });
-  expect(screen.getByRole("heading", { name: "What needs attention" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Što treba pažnju" })).toBeInTheDocument();
   view.rerender(<ProgressPanel courseId="course" active={false} />);
   view.rerender(<ProgressPanel courseId="course" active />);
   await waitFor(() => expect(mock.reviewProgressSummary).toHaveBeenCalledTimes(2));
@@ -68,11 +106,11 @@ it("shows a first-practice empty state without zero metrics, stages or history r
   const start = vi.fn();
   render(<ProgressPanel courseId="course" onOpenAdaptiveReview={start} />);
   await open();
-  expect(screen.getByText("Your progress will appear after you complete automatically graded practice.")).toBeVisible();
-  expect(screen.queryByRole("region", { name: "Your practice" })).not.toBeInTheDocument();
-  expect(screen.queryByText("Scheduling details")).not.toBeInTheDocument();
+  expect(screen.getByText("Napredak će se pojaviti kad završite vježbu s automatski ocijenjenim pitanjima.")).toBeVisible();
+  expect(screen.queryByRole("region", { name: "Vaše vježbanje" })).not.toBeInTheDocument();
+  expect(screen.queryByText("Detalji rasporeda")).not.toBeInTheDocument();
   expect(screen.queryByText(/Stage 0|No graded accuracy yet/)).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   expect(start).toHaveBeenCalledOnce();
 });
 
@@ -86,40 +124,40 @@ it("prioritizes due reviews, shows historical accuracy with its denominator, and
   const start = vi.fn();
   render(<ProgressPanel courseId="course" onOpenAdaptiveReview={start} />);
   await open();
-  expect(screen.getByText("1 question is due for review")).toBeVisible();
-  expect(screen.getByText("1 question is scheduled for later.")).toBeVisible();
-  expect(metric("Questions reviewed")).toHaveTextContent("2");
-  expect(metric("Automatically graded accuracy")).toHaveTextContent("75.0%");
-  expect(screen.getByText("3 correct out of 4 automatically graded answers")).toBeVisible();
-  expect(metric("Last practiced")?.querySelector("time")).toHaveAttribute("datetime", "2030-01-01T10:00:00Z");
-  expect(screen.getByRole("button", { name: "Start recommended practice" })).toHaveClass("bg-accent");
-  expect(screen.getByText(/Prioritizes questions due for review and may include other available questions/)).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Start recommended practice" }));
+  expect(screen.getByText("Za ponavljanje: 1 pitanje")).toBeVisible();
+  expect(screen.getByText("Zakazano za kasnije: 1 pitanje.")).toBeVisible();
+  expect(metric("Ponovljena pitanja")).toHaveTextContent("2");
+  expect(metric("Točnost automatski ocijenjenih odgovora")).toHaveTextContent("75.0%");
+  expect(screen.getByText("Točno: 3 od 4 automatski ocijenjenih odgovora")).toBeVisible();
+  expect(metric("Zadnja vježba")?.querySelector("time")).toHaveAttribute("datetime", "2030-01-01T10:00:00Z");
+  expect(screen.getByRole("button", { name: "Započni preporučenu vježbu" })).toHaveClass("bg-accent");
+  expect(screen.getByText(/Prvo daje pitanja koja treba ponoviti i može uključiti druga dostupna pitanja/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Započni preporučenu vježbu" }));
   expect(start).toHaveBeenCalledOnce();
-  expect(screen.getByText("Scheduling details").closest("details")).not.toHaveAttribute("open");
-  expect(screen.getByText("Stage 5: 0")).not.toBeVisible();
+  expect(screen.getByText("Detalji rasporeda").closest("details")).not.toHaveAttribute("open");
+  expect(screen.getByText("Faza 5: 0")).not.toBeVisible();
   details();
-  const schedule = screen.getByRole("region", { name: "Question review schedule" });
+  const schedule = screen.getByRole("region", { name: "Raspored ponavljanja pitanja" });
   const rows = within(schedule).getAllByRole("listitem");
   expect(rows).toHaveLength(2);
-  expect(within(rows[0]).getByText("Due now")).toBeInTheDocument();
-  expect(within(rows[1]).getByText("Upcoming")).toBeInTheDocument();
-  expect(within(rows[0]).getByText("Graded answers 3 · Correct 2 · Incorrect 1")).toBeInTheDocument();
-  expect(within(rows[0]).getByText("Last result: Incorrect")).toBeInTheDocument();
-  expect(within(rows[1]).getByText("Last result: Correct")).toBeInTheDocument();
-  expect(within(rows[0]).getByText("Stage 0")).toBeInTheDocument();
-  expect(within(rows[1]).getByText("Stage 3")).toBeInTheDocument();
-  expect(within(rows[0]).getByText("Stage 0")).not.toBeVisible();
-  expect(within(rows[0]).getByText("Question ID: question-1")).not.toBeVisible();
-  expect(within(rows[0]).getByText("Reviewed question 1")).toBeVisible();
-  fireEvent.click(within(rows[0]).getByText("Technical details"));
-  expect(within(rows[0]).getByText("Stage 0")).toBeVisible();
-  expect(within(rows[0]).getByText("Question ID: question-1")).toBeVisible();
-  expect(within(rows[0]).getByText("Last reviewed:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-01T10:00:00Z");
-  expect(within(rows[0]).getByText("Next review:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-01T11:00:00Z");
-  expect(screen.getByText("Due status as of", { exact: false }).querySelector("time")).toHaveAttribute("datetime", asOf);
-  expect(screen.getByText("Stage 5: 0")).toBeInTheDocument();
-  expect(screen.getByText(/they are not measures of mastery/)).toBeVisible();
+  expect(within(rows[0]).getByText("Dospjelo")).toBeInTheDocument();
+  expect(within(rows[1]).getByText("Uskoro")).toBeInTheDocument();
+  expect(within(rows[0]).getByText("Ocijenjeni odgovori 3 · Točno 2 · Netočno 1")).toBeInTheDocument();
+  expect(within(rows[0]).getByText("Zadnji rezultat: Netočno")).toBeInTheDocument();
+  expect(within(rows[1]).getByText("Zadnji rezultat: Točno")).toBeInTheDocument();
+  expect(within(rows[0]).getByText("Faza 0")).toBeInTheDocument();
+  expect(within(rows[1]).getByText("Faza 3")).toBeInTheDocument();
+  expect(within(rows[0]).getByText("Faza 0")).not.toBeVisible();
+  expect(within(rows[0]).getByText("ID pitanja: question-1")).not.toBeVisible();
+  expect(within(rows[0]).getByText("Ponovljeno pitanje 1")).toBeVisible();
+  fireEvent.click(within(rows[0]).getByText("Tehnički detalji"));
+  expect(within(rows[0]).getByText("Faza 0")).toBeVisible();
+  expect(within(rows[0]).getByText("ID pitanja: question-1")).toBeVisible();
+  expect(within(rows[0]).getByText("Zadnje ponavljanje:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-01T10:00:00Z");
+  expect(within(rows[0]).getByText("Sljedeće ponavljanje:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-01T11:00:00Z");
+  expect(screen.getByText("Stanje dospijeća na dan", { exact: false }).querySelector("time")).toHaveAttribute("datetime", asOf);
+  expect(screen.getByText("Faza 5: 0")).toBeInTheDocument();
+  expect(screen.getByText(/nisu mjera znanja/)).toBeVisible();
 });
 
 it("shows past and future non-actionable rows as history while keeping cumulative metrics and adaptive review", async () => {
@@ -135,33 +173,33 @@ it("shows past and future non-actionable rows as history while keeping cumulativ
   ]);
   render(<ProgressPanel courseId="course" onOpenAdaptiveReview={openAdaptive} />);
   await open();
-  expect(metric("Questions reviewed")).toHaveTextContent("2");
-  expect(metric("Automatically graded accuracy")).toHaveTextContent("66.7%");
-  expect(screen.getByText("4 correct out of 6 automatically graded answers")).toBeVisible();
-  expect(screen.getByText("No scheduled reviews are currently available for practice.")).toBeVisible();
-  expect(screen.queryByText(/Your progress will appear/)).not.toBeInTheDocument();
-  expect(screen.getByText(/Your practice history includes previously reviewed questions/)).toBeVisible();
-  expect(screen.getByRole("button", { name: "Start recommended practice" })).not.toHaveClass("bg-accent");
+  expect(metric("Ponovljena pitanja")).toHaveTextContent("2");
+  expect(metric("Točnost automatski ocijenjenih odgovora")).toHaveTextContent("66.7%");
+  expect(screen.getByText("Točno: 4 od 6 automatski ocijenjenih odgovora")).toBeVisible();
+  expect(screen.getByText("Trenutno nema zakazanih ponavljanja dostupnih za vježbu.")).toBeVisible();
+  expect(screen.queryByText(/Napredak će se pojaviti/)).not.toBeInTheDocument();
+  expect(screen.getByText(/Povijest vježbi uključuje prije ponavljana pitanja/)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Započni preporučenu vježbu" })).not.toHaveClass("bg-accent");
   details();
-  expect(screen.getByText("Stage 0: 1")).toBeInTheDocument();
-  expect(screen.getByText("Stage 3: 1")).toBeInTheDocument();
-  const schedule = screen.getByRole("region", { name: "Question review schedule" });
+  expect(screen.getByText("Faza 0: 1")).toBeInTheDocument();
+  expect(screen.getByText("Faza 3: 1")).toBeInTheDocument();
+  const schedule = screen.getByRole("region", { name: "Raspored ponavljanja pitanja" });
   const historyRows = within(schedule).getAllByRole("listitem");
   expect(historyRows).toHaveLength(2);
   for (const historyRow of historyRows) {
-    expect(within(historyRow).getByText("History only")).toBeInTheDocument();
-    expect(within(historyRow).getByText("This question is no longer available for practice.")).toBeInTheDocument();
-    expect(within(historyRow).queryByText("Due now")).not.toBeInTheDocument();
-    expect(within(historyRow).queryByText("Upcoming")).not.toBeInTheDocument();
-    expect(within(historyRow).queryByText("Next review:", { exact: false })).not.toBeInTheDocument();
-    expect(within(historyRow).getByText("Graded answers 3 · Correct 2 · Incorrect 1")).toBeInTheDocument();
-    expect(within(historyRow).getByText("Last result: Incorrect")).toBeInTheDocument();
-    expect(within(historyRow).getByText("Last reviewed:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-01T10:00:00Z");
+    expect(within(historyRow).getByText("Samo povijest")).toBeInTheDocument();
+    expect(within(historyRow).getByText("Ovo pitanje više nije dostupno za vježbu.")).toBeInTheDocument();
+    expect(within(historyRow).queryByText("Dospjelo")).not.toBeInTheDocument();
+    expect(within(historyRow).queryByText("Uskoro")).not.toBeInTheDocument();
+    expect(within(historyRow).queryByText("Sljedeće ponavljanje:", { exact: false })).not.toBeInTheDocument();
+    expect(within(historyRow).getByText("Ocijenjeni odgovori 3 · Točno 2 · Netočno 1")).toBeInTheDocument();
+    expect(within(historyRow).getByText("Zadnji rezultat: Netočno")).toBeInTheDocument();
+    expect(within(historyRow).getByText("Zadnje ponavljanje:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-01T10:00:00Z");
   }
-  expect(within(historyRows[0]).getByText("Stage 0")).toBeInTheDocument();
-  expect(within(historyRows[1]).getByText("Stage 3")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Start recommended practice" })).toBeEnabled();
-  fireEvent.click(screen.getByRole("button", { name: "Start recommended practice" }));
+  expect(within(historyRows[0]).getByText("Faza 0")).toBeInTheDocument();
+  expect(within(historyRows[1]).getByText("Faza 3")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Započni preporučenu vježbu" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "Započni preporučenu vježbu" }));
   expect(openAdaptive).toHaveBeenCalledTimes(1);
 });
 
@@ -169,47 +207,47 @@ it("shows an upcoming review quietly when nothing is due, with a secondary pract
   mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 1, upcoming: 1, next_due_at: "2030-01-03T11:00:00Z" }));
   render(<ProgressPanel courseId="course" onOpenAdaptiveReview={vi.fn()} />);
   await open();
-  expect(screen.getByText("Nothing is due right now")).toBeVisible();
-  expect(screen.getByText("Next review:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-03T11:00:00Z");
-  expect(screen.getByRole("button", { name: "Start recommended practice" })).not.toHaveClass("bg-accent");
+  expect(screen.getByText("Trenutno ništa ne treba ponoviti")).toBeVisible();
+  expect(screen.getByText("Sljedeće ponavljanje:", { exact: false }).querySelector("time")).toHaveAttribute("datetime", "2030-01-03T11:00:00Z");
+  expect(screen.getByRole("button", { name: "Započni preporučenu vježbu" })).not.toHaveClass("bg-accent");
 });
 
 it("keeps the due workload independent of cumulative historical reviewed questions", async () => {
   mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 12, due_now: 4, resolved_review_count: 41, correct_review_count: 32, incorrect_review_count: 9 }));
   render(<ProgressPanel courseId="course" />);
   await open();
-  expect(screen.getByText("4 questions are due for review")).toBeVisible();
-  expect(metric("Questions reviewed")).toHaveTextContent("12");
-  expect(metric("Automatically graded accuracy")).toHaveTextContent("78.0%");
-  expect(screen.getByText("32 correct out of 41 automatically graded answers")).toBeVisible();
+  expect(screen.getByText("Za ponavljanje: 4 pitanja")).toBeVisible();
+  expect(metric("Ponovljena pitanja")).toHaveTextContent("12");
+  expect(metric("Točnost automatski ocijenjenih odgovora")).toHaveTextContent("78.0%");
+  expect(screen.getByText("Točno: 32 od 41 automatski ocijenjenih odgovora")).toBeVisible();
 });
 
 it("does not invent accuracy or treat short-answer self-review as incorrect when there are no graded answers", async () => {
   mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 1 }));
   render(<ProgressPanel courseId="course" />);
   await open();
-  expect(metric("Automatically graded accuracy")).toHaveTextContent("No graded accuracy yet");
-  expect(screen.getByText("Short-answer self-review does not contribute to graded accuracy.")).toBeVisible();
+  expect(metric("Točnost automatski ocijenjenih odgovora")).toHaveTextContent("Još nema ocijenjene točnosti");
+  expect(screen.getByText("Samoprocjena kratkih odgovora ne ulazi u ocijenjenu točnost.")).toBeVisible();
   expect(screen.queryByText(/\d+(\.\d+)?%/)).not.toBeInTheDocument();
-  expect(metric("Last practiced")).toHaveTextContent("No graded practice yet");
+  expect(metric("Zadnja vježba")).toHaveTextContent("Još nema ocijenjene vježbe");
 });
 
 it("explains that short answers do not contribute even when graded accuracy is available", async () => {
   mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 1, resolved_review_count: 2, correct_review_count: 1, incorrect_review_count: 1 }));
   render(<ProgressPanel courseId="course" />);
   await open();
-  expect(metric("Automatically graded accuracy")).toHaveTextContent("50.0%");
-  expect(screen.getByText("1 correct out of 2 automatically graded answers")).toBeVisible();
-  expect(screen.getByText(/Short answers require self-review and do not change accuracy or the review schedule/)).toBeVisible();
+  expect(metric("Točnost automatski ocijenjenih odgovora")).toHaveTextContent("50.0%");
+  expect(screen.getByText("Točno: 1 od 2 automatski ocijenjenih odgovora")).toBeVisible();
+  expect(screen.getByText(/Kratki odgovori zahtijevaju samoprocjenu i ne mijenjaju točnost ni raspored ponavljanja/)).toBeVisible();
 });
 
 it("retries an initial failure without showing an empty success state", async () => {
   mock.reviewProgressSummary.mockRejectedValueOnce(new Error("unavailable"));
   render(<ProgressPanel courseId="course" />);
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load progress");
-  expect(screen.queryByText(/Your progress will appear/)).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Retry progress" }));
-  await screen.findByRole("heading", { name: "What needs attention" });
+  expect(await screen.findByRole("alert")).toHaveTextContent("Napredak nije učitan");
+  expect(screen.queryByText(/Napredak će se pojaviti/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj napredak" }));
+  await screen.findByRole("heading", { name: "Što treba pažnju" });
   expect(mock.reviewProgressSummary).toHaveBeenCalledTimes(2);
   expect(mock.reviewProgress).toHaveBeenCalledTimes(2);
 });
@@ -219,12 +257,12 @@ it("preserves the last successful summary and page when refresh fails, then retr
   mock.reviewProgress.mockResolvedValueOnce([row()]).mockResolvedValueOnce([]).mockResolvedValueOnce([row({ question_id: "new" })]);
   render(<ProgressPanel courseId="course" />);
   await open();
-  fireEvent.click(screen.getByRole("button", { name: "Refresh progress" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load progress");
-  expect(metric("Questions reviewed")).toHaveTextContent("1");
-  expect(screen.getByText("Question ID: question-1")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Retry progress" }));
-  expect(await screen.findByText("Question ID: new")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Osvježi napredak" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Napredak nije učitan");
+  expect(metric("Ponovljena pitanja")).toHaveTextContent("1");
+  expect(screen.getByText("ID pitanja: question-1")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj napredak" }));
+  expect(await screen.findByText("ID pitanja: new")).toBeInTheDocument();
   expect(mock.reviewProgressSummary).toHaveBeenCalledTimes(3);
 });
 
@@ -233,9 +271,9 @@ it("blocks duplicate pending refresh requests", async () => {
   render(<ProgressPanel courseId="course" />);
   await open();
   mock.reviewProgressSummary.mockReturnValueOnce(pending.promise);
-  fireEvent.click(screen.getByRole("button", { name: "Refresh progress" }));
-  expect(screen.getByText("Refreshing progress…")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Refresh progress" }));
+  fireEvent.click(screen.getByRole("button", { name: "Osvježi napredak" }));
+  expect(screen.getByText("Osvježavam napredak…")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Osvježi napredak" }));
   expect(mock.reviewProgressSummary).toHaveBeenCalledTimes(2);
   expect(mock.reviewProgress).toHaveBeenCalledTimes(2);
   await act(async () => pending.resolve(summary()));
@@ -247,13 +285,13 @@ it("navigates 20-row pages without refetching summary and respects lower and sho
   render(<ProgressPanel courseId="course" />);
   await open();
   details();
-  expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "Next" }));
-  expect(await screen.findByText("Question ID: page-two")).toBeInTheDocument();
-  expect(screen.getByText("Page 2")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "Previous" }));
-  await screen.findByText("Page 1");
+  expect(screen.getByRole("button", { name: "Prethodno" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Sljedeće" }));
+  expect(await screen.findByText("ID pitanja: page-two")).toBeInTheDocument();
+  expect(screen.getByText("Stranica 2")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Sljedeće" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Prethodno" }));
+  await screen.findByText("Stranica 1");
   expect(mock.reviewProgress).toHaveBeenNthCalledWith(2, "course", 20);
   expect(mock.reviewProgress).toHaveBeenNthCalledWith(3, "course", 0);
   expect(mock.reviewProgressSummary).toHaveBeenCalledTimes(1);
@@ -265,10 +303,10 @@ it("refreshes summary and the current page", async () => {
   render(<ProgressPanel courseId="course" />);
   await open();
   details();
-  fireEvent.click(screen.getByRole("button", { name: "Next" }));
-  await screen.findByText("Question ID: page-two");
-  fireEvent.click(screen.getByRole("button", { name: "Refresh progress" }));
-  expect(await screen.findByText("Question ID: updated")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Sljedeće" }));
+  await screen.findByText("ID pitanja: page-two");
+  fireEvent.click(screen.getByRole("button", { name: "Osvježi napredak" }));
+  expect(await screen.findByText("ID pitanja: updated")).toBeInTheDocument();
   expect(mock.reviewProgress).toHaveBeenLastCalledWith("course", 20);
   expect(mock.reviewProgressSummary).toHaveBeenCalledTimes(2);
 });
@@ -279,12 +317,12 @@ it("preserves the current page when next-page loading fails and retries only tha
   render(<ProgressPanel courseId="course" />);
   await open();
   details();
-  fireEvent.click(screen.getByRole("button", { name: "Next" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load this progress page");
-  expect(screen.getByText("Page 1")).toBeInTheDocument();
-  expect(screen.getByText("Question ID: question-0")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Retry progress" }));
-  expect(await screen.findByText("Question ID: page-two")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Sljedeće" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Ova stranica napretka nije učitana");
+  expect(screen.getByText("Stranica 1")).toBeInTheDocument();
+  expect(screen.getByText("ID pitanja: question-0")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj napredak" }));
+  expect(await screen.findByText("ID pitanja: page-two")).toBeInTheDocument();
   expect(mock.reviewProgressSummary).toHaveBeenCalledTimes(1);
 });
 
@@ -298,13 +336,13 @@ it("stops at offset 10000", async () => {
     render(<ProgressPanel courseId="course" />);
     await open();
     details();
-    const next = screen.getByRole("button", { name: "Next" });
+    const next = screen.getByRole("button", { name: "Sljedeće" });
     for (let page = 1; page <= 500; page++) {
       await act(async () => { fireEvent.click(next); });
     }
     expect(mock.reviewProgress).toHaveBeenLastCalledWith("course", 10000);
-    expect(screen.getByText("Page 501")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    expect(screen.getByText("Stranica 501")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sljedeće" })).toBeDisabled();
   } finally {
     localeString.mockRestore();
   }
@@ -316,10 +354,10 @@ it("ignores a response from an old course after switching courses", async () => 
   const view = render(<ProgressPanel courseId="old" />);
   await waitFor(() => expect(mock.reviewProgressSummary).toHaveBeenCalledWith("old"));
   view.rerender(<ProgressPanel courseId="new" />);
-  expect(screen.getByText("Loading progress…")).toBeInTheDocument();
-  await screen.findByRole("heading", { name: "What needs attention" });
+  expect(screen.getByText("Učitavam napredak…")).toBeInTheDocument();
+  await screen.findByRole("heading", { name: "Što treba pažnju" });
   await act(async () => old.resolve(summary({ reviewed_questions: 99 })));
-  expect(metric("Questions reviewed")).toHaveTextContent("2");
+  expect(metric("Ponovljena pitanja")).toHaveTextContent("2");
   expect(mock.reviewProgressSummary).toHaveBeenLastCalledWith("new");
 });
 
@@ -328,6 +366,74 @@ it("wraps long question IDs without fixed legacy color classes", async () => {
   mock.reviewProgress.mockResolvedValueOnce([row({ question_id: longId })]);
   render(<ProgressPanel courseId="course" />);
   await open();
-  expect(screen.getByText(`Question ID: ${longId}`)).toHaveClass("break-words");
+  expect(screen.getByText(`ID pitanja: ${longId}`)).toHaveClass("break-words");
   expect(document.querySelector('[class*="text-red-"], [class*="text-neutral-"]')).toBeNull();
+});
+
+it("shows progress by unit in unit order with sample counts and an overlap note", async () => {
+  mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 3, resolved_review_count: 5, correct_review_count: 3, incorrect_review_count: 2 }));
+  mock.unitProgress.mockResolvedValue({ as_of: asOf, units: [
+    unit({ unit_id: "u2", title: "Sets", reviewed_questions: 2, resolved_review_count: 4, correct_review_count: 3, incorrect_review_count: 1, due_now: 1 }),
+    unit({ unit_id: "u1", title: "Logic", position: 1, reviewed_questions: 1, resolved_review_count: 1, correct_review_count: 0, incorrect_review_count: 1 }),
+    unit({ unit_id: "u3", title: "Graphs", position: 2 }),
+    unit({ unit_id: "u4", title: "Old unit", position: 3, is_archived: true }),
+    unit({ unit_id: "u5", title: "Retired unit", position: 4, is_archived: true, reviewed_questions: 1, resolved_review_count: 2, correct_review_count: 2 }),
+  ] });
+  render(<ProgressPanel courseId="course" />);
+  const section = await screen.findByRole("region", { name: "Po cjelinama" });
+  expect(mock.unitProgress).toHaveBeenCalledWith("course");
+  const items = within(section).getAllByRole("listitem");
+  expect(items.map(item => within(item).getByRole("heading").textContent)).toEqual(["Sets", "Logic", "Graphs", "Retired unit · Arhivirano"]);
+  expect(items[0]).toHaveTextContent("Ponovljeno: 2 pitanja · točno 75% (3 od 4 odgovora)");
+  expect(within(items[0]).getByText("Dospjelo: 1")).toBeInTheDocument();
+  expect(items[1]).toHaveTextContent("Ponovljeno: 1 pitanje · točno 0% (0 od 1 odgovor)");
+  expect(within(items[1]).queryByText(/Dospjelo/)).not.toBeInTheDocument();
+  expect(items[2]).toHaveTextContent("Još nije vježbano");
+  expect(within(section).getByText(/broji se u svakoj od njih/)).toBeVisible();
+  expect(within(section).getByText(/nije mjera znanja/)).toBeVisible();
+});
+
+it("hides progress by unit for a course without units or before any graded practice", async () => {
+  render(<ProgressPanel courseId="course" />);
+  await open();
+  expect(screen.queryByRole("region", { name: "Po cjelinama" })).not.toBeInTheDocument();
+  cleanup();
+  mock.reviewProgressSummary.mockResolvedValue(summary());
+  mock.unitProgress.mockResolvedValue({ as_of: asOf, units: [unit()] });
+  render(<ProgressPanel courseId="course" />);
+  await open();
+  expect(screen.getByText(/Napredak će se pojaviti/)).toBeVisible();
+  expect(screen.queryByRole("region", { name: "Po cjelinama" })).not.toBeInTheDocument();
+});
+
+it("starts a guided review of due questions in one click", async () => {
+  mock.reviewProgressSummary.mockResolvedValue(summary({
+    reviewed_questions: 3, due_now: 2, resolved_review_count: 3, correct_review_count: 1, incorrect_review_count: 2,
+    last_reviewed_at: "2030-01-01T10:00:00Z", next_due_at: "2030-01-01T11:00:00Z",
+  }));
+  mock.reviewProgress.mockResolvedValue([]);
+  mock.unitProgress.mockResolvedValue({ as_of: asOf, units: [] });
+  const attempt = { id: "review" };
+  mock.reviewDue.mockResolvedValueOnce(attempt).mockRejectedValueOnce(new Error("Trenutno ništa ne treba ponoviti."));
+  const onStartAttempt = vi.fn();
+  render(<ProgressPanel courseId="course" onOpenAdaptiveReview={vi.fn()} onStartAttempt={onStartAttempt} />);
+  await open();
+  const review = screen.getByRole("button", { name: "Ponovi dospjela pitanja" });
+  expect(review).toHaveClass("bg-accent");
+  expect(screen.getByRole("button", { name: "Započni preporučenu vježbu" })).not.toHaveClass("bg-accent");
+  fireEvent.click(review);
+  await waitFor(() => expect(onStartAttempt).toHaveBeenCalledExactlyOnceWith(attempt));
+  expect(mock.reviewDue).toHaveBeenCalledWith("course");
+  fireEvent.click(review);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Trenutno ništa ne treba ponoviti.");
+});
+
+it("offers due review only when questions are due", async () => {
+  mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 1, upcoming: 1, resolved_review_count: 1, correct_review_count: 1, next_due_at: "2030-01-03T11:00:00Z" }));
+  mock.reviewProgress.mockResolvedValue([]);
+  mock.unitProgress.mockResolvedValue({ as_of: asOf, units: [] });
+  render(<ProgressPanel courseId="course" onOpenAdaptiveReview={vi.fn()} onStartAttempt={vi.fn()} />);
+  await open();
+  expect(screen.getByText("Trenutno ništa ne treba ponoviti")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Ponovi dospjela pitanja" })).not.toBeInTheDocument();
 });

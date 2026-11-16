@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.models import Course, CourseMembership, MembershipRole, User
 from app.models.faculty import Faculty
 from app.models.material import Material
-from app.schemas.course import CourseCreate, CourseUpdate
+from app.schemas.course import (
+    CourseCreate,
+    CourseUpdate,
+    MembershipStatus,
+)
 from app.services.faculties import active_faculty
 from app.services.materials.cleanup import cleanup_sources, queue_sources
 from app.services.materials.storage import MaterialStorage
@@ -23,6 +27,7 @@ def create_course(db: Session, user: User, data: CourseCreate) -> Course:
         name=data.name.strip(),
         code=data.code.strip() if data.code else None,
         description=data.description.strip() if data.description else None,
+        year_of_study=data.year_of_study,
         created_by_user_id=user.id,
     )
     db.add(course)
@@ -45,12 +50,20 @@ def get_member_course(db: Session, user: User, course_id: UUID) -> Course:
     return course
 
 
-def list_member_courses(db: Session, user: User) -> list[Course]:
-    return list(
-        db.scalars(
-            select(Course).join(CourseMembership).where(CourseMembership.user_id == user.id)
-        ).all()
+def set_membership_status(
+    db: Session, user: User, course_id: UUID, membership_status: MembershipStatus
+) -> CourseMembership:
+    membership = db.scalar(
+        select(CourseMembership)
+        .where(CourseMembership.course_id == course_id, CourseMembership.user_id == user.id)
+        .with_for_update()
     )
+    if membership is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Membership not found")
+    membership.status = membership_status
+    db.commit()
+    db.refresh(membership)
+    return membership
 
 
 def get_owner_course(db: Session, user: User, course_id: UUID) -> Course:
@@ -66,8 +79,18 @@ def get_owner_course(db: Session, user: User, course_id: UUID) -> Course:
 
 
 def update_course(db: Session, user: User, course_id: UUID, data: CourseUpdate) -> Course:
-    course = get_owner_course(db, user, course_id)
-    for field, value in data.model_dump(exclude_unset=True).items():
+    changes = data.model_dump(exclude_unset=True)
+    if not changes or set(changes) - {"year_of_study"}:
+        course = get_owner_course(db, user, course_id)
+    else:
+        # The year is set by a faculty moderator, who need not own or even join the course.
+        found = db.get(Course, course_id)
+        if found is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+        course = found
+    if "year_of_study" in changes:
+        require_moderator(db, user, course.faculty_id)
+    for field, value in changes.items():
         setattr(course, field, value.strip() if isinstance(value, str) else value)
     db.commit()
     db.refresh(course)
@@ -117,10 +140,15 @@ def join_course(db: Session, user: User, course_id: UUID) -> CourseMembership:
         )
         if course is None:
             raise HTTPException(404, "Course not found")
+        # Enrolling again brings a hidden course back; an active or finished one is left as is.
         db.execute(
             insert(CourseMembership)
             .values(course_id=course_id, user_id=user.id, role=MembershipRole.MEMBER.value)
-            .on_conflict_do_nothing(constraint="uq_course_membership_course_user")
+            .on_conflict_do_update(
+                constraint="uq_course_membership_course_user",
+                set_={"status": "ACTIVE"},
+                where=CourseMembership.status == "HIDDEN",
+            )
         )
         membership = db.scalar(
             select(CourseMembership).where(

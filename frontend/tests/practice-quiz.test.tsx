@@ -1,12 +1,22 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { PracticeQuiz } from "../src/components/practice-quiz";
-import type { Attempt, PracticeAnswer } from "../src/lib/practice-api";
+import type { QuestionType } from "../src/lib/api";
+import type { Attempt, PracticeAnswer, PracticeAvailability, PracticeFocus } from "../src/lib/practice-api";
 
-const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), questions: vi.fn() }));
+const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), check: vi.fn(), selfReview: vi.fn(), clear: vi.fn(), submit: vi.fn(), availability: vi.fn(), units: vi.fn(), examScopes: vi.fn() }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 let current: Attempt;
+type Counts = Partial<Record<QuestionType, number>>;
+function reply(counts: Counts, types: QuestionType[], courseTotal: number): PracticeAvailability {
+  const by_type = types.map(type => ({ type, count: counts[type] ?? 0 }));
+  return { course_total: courseTotal, total: by_type.reduce((sum, row) => sum + row.count, 0), by_type, by_unit: [], mistakes_total: 0, due_total: 0 };
+}
+/** Serve server-side availability counts for whichever types the setup asks about. */
+function serve(counts: Counts, courseTotal = Object.values(counts).reduce((sum, count) => sum + count, 0)) {
+  mock.availability.mockImplementation(async (_course: string, types: QuestionType[]) => reply(counts, types, courseTotal));
+}
 beforeEach(() => {
   vi.resetAllMocks();
   current = {
@@ -17,7 +27,7 @@ beforeEach(() => {
       { id: "sa", position: 2, type: "SHORT_ANSWER", stem: "Explain gravity", difficulty: null, options: [], answer: null },
     ],
   };
-  mock.questions.mockResolvedValue(Array.from({ length: 30 }, (_, id) => ({ id: String(id), status: "APPROVED", type: ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"][id % 3] })));
+  serve({ MULTIPLE_CHOICE: 10, TRUE_FALSE: 10, SHORT_ANSWER: 10 });
   mock.history.mockResolvedValue([]);
   mock.start.mockImplementation(async () => structuredClone(current));
   mock.read.mockImplementation(async () => structuredClone(current));
@@ -32,105 +42,106 @@ beforeEach(() => {
 });
 
 async function open() {
-  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
-  fireEvent.click(screen.getByText("More options"));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled());
+  fireEvent.click(screen.getByText("Više mogućnosti"));
 }
 
 it("starts, saves all types, resumes after remount, and reviews a final result", async () => {
-  const view = render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  const view = render(<PracticeQuiz courseId="course" />);
   await open();
-  fireEvent.click(screen.getByLabelText("Course questions"));
-  fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
-  fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value: "3" } });
-  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  fireEvent.click(screen.getByLabelText("Pitanja kolegija"));
+  fireEvent.click(screen.getByRole("radio", { name: "Prilagođeno" }));
+  fireEvent.change(screen.getByLabelText("Vlastiti broj pitanja"), { target: { value: "3" } });
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 3, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "STANDARD");
+  expect(mock.start).toHaveBeenCalledWith("course", 3, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "STANDARD", undefined, "IMMEDIATE");
   expect(screen.queryByText(/Correct answer:|Reference answer:|Self-review required/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("One"));
-  fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
   await screen.findByText("The sky is green");
-  fireEvent.click(screen.getByRole("button", { name: "Review and finish" }));
-  expect(await screen.findByRole("button", { name: "Finish practice" })).toBeDisabled();
-  expect(screen.getByText("1 of 3 answered and saved")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj i završi" }));
+  expect(await screen.findByRole("button", { name: "Završi vježbu" })).toBeEnabled();
+  expect(screen.getByText("Odgovoreno i spremljeno 1 od 3")).toBeVisible();
+  expect(screen.getByText("Bez odgovora: 2 pitanja. Neodgovorena pitanja se ne ocjenjuju i ne ulaze u napredak.")).toBeVisible();
   view.unmount();
   mock.history.mockResolvedValue([current]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  fireEvent.click(await screen.findByText("Practice history"));
-  fireEvent.click(await screen.findByRole("button", { name: /Resume practice/ }));
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByText("Povijest vježbi"));
+  fireEvent.click(await screen.findByRole("button", { name: /Nastavi započetu vježbu/ }));
   expect(await screen.findByText("The sky is green")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+  fireEvent.click(screen.getByRole("button", { name: "Prethodno" }));
   expect(await screen.findByLabelText("One")).toBeChecked();
-  fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
-  fireEvent.click(await screen.findByLabelText("False"));
-  fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
-  fireEvent.change(await screen.findByLabelText("Your short answer"), { target: { value: "My explanation" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save and review" }));
-  expect(await screen.findByText("3 of 3 answered and saved")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
+  fireEvent.click(await screen.findByLabelText("Netočno"));
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
+  fireEvent.change(await screen.findByLabelText("Vaš kratki odgovor"), { target: { value: "My explanation" } });
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i pregledaj" }));
+  expect(await screen.findByText("Odgovoreno i spremljeno 3 od 3")).toBeVisible();
   expect(mock.submit).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Finish practice" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Confirm final submission" }));
-  await screen.findByText("Practice complete");
-  fireEvent.click(screen.getByRole("button", { name: "All answers" }));
-  expect(screen.getAllByRole("article").filter(article => within(article).queryByText("Correct"))).toHaveLength(2);
-  expect(within(screen.getByRole("article", { name: "Question 3 result" })).getByText("Self-review required")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Završi vježbu" }));
+  await screen.findByText("Vježba je završena");
+  expect(screen.queryByRole("button", { name: "Potvrdi konačnu predaju" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
+  fireEvent.click(screen.getByRole("button", { name: "Skoči na pitanje 3" }));
+  expect(within(screen.getByRole("article", { name: "Rezultat pitanja 3" })).getByText("Potrebna samoprocjena")).toBeInTheDocument();
   expect(screen.getByText("Mass attracts mass", { exact: true })).toBeInTheDocument();
 });
 
 it.each(["Only 0 eligible approved questions available", "Only 2 eligible approved questions available", "Course not found", "Network failed"])("shows start errors: %s", async error => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
   mock.start.mockRejectedValue(new Error(error));
-  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(error);
 });
 
 it("keeps failed saves unsaved and allows reloading an already submitted attempt", async () => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
-  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   fireEvent.click(await screen.findByLabelText("One"));
   mock.save.mockRejectedValue(new Error("Quiz already submitted; answers are frozen"));
-  fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("already submitted");
-  expect(screen.getByText(/This session can no longer be edited/)).toBeVisible();
-  expect(screen.getByText("Save failed")).toBeInTheDocument();
+  expect(screen.getByText(/Ova vježba se više ne može uređivati/)).toBeVisible();
+  expect(screen.getByText("Spremanje nije uspjelo")).toBeInTheDocument();
   await mock.submit();
-  expect(screen.getByRole("button", { name: "Reload saved answers" })).not.toBeVisible();
-  fireEvent.click(screen.getByText("Recovery options"));
+  expect(screen.getByRole("button", { name: "Ponovno učitaj spremljene odgovore" })).not.toBeVisible();
+  fireEvent.click(screen.getByText("Više", { selector: "summary" }));
   expect(mock.read).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Reload saved answers" }));
-  fireEvent.click(screen.getByRole("button", { name: "Discard changes and continue" }));
-  await screen.findByText("Practice complete");
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj spremljene odgovore" }));
+  fireEvent.click(screen.getByRole("button", { name: "Odbaci promjene i nastavi" }));
+  await screen.findByText("Vježba je završena");
 });
 
 it("supports type filters and refuses an empty selection", async () => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
-  for (const label of ["Multiple choice", "True / false", "Short answer"]) fireEvent.click(screen.getByLabelText(label));
-  expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
-  expect(screen.getByText("Choose at least one question type in More options.")).toBeVisible();
+  for (const label of ["Jedan točan odgovor", "Točno / netočno", "Kratki odgovor", "Brojčani odgovor", "Više točnih odgovora", "Povezivanje parova"]) fireEvent.click(screen.getByLabelText(label));
+  expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeDisabled();
+  expect(screen.getByText("Odaberite barem jednu vrstu pitanja pod Više mogućnosti.")).toBeVisible();
   expect(mock.start).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByLabelText("True / false"));
-  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
-  await waitFor(() => expect(mock.start).toHaveBeenCalledWith("course", 5, ["TRUE_FALSE"], "ADAPTIVE"));
+  fireEvent.click(screen.getByLabelText("Točno / netočno"));
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
+  await waitFor(() => expect(mock.start).toHaveBeenCalledWith("course", 5, ["TRUE_FALSE"], "ADAPTIVE", undefined, "IMMEDIATE"));
 });
 
 it("reloads the saved selection even when the current draft differs", async () => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
-  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   fireEvent.click(await screen.findByLabelText("One"));
-  fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
   await screen.findByText("The sky is green");
-  fireEvent.click(screen.getByRole("button", { name: "Previous" }));
-  await screen.findByText("Saved");
+  fireEvent.click(screen.getByRole("button", { name: "Prethodno" }));
+  await screen.findByText("Spremljeno");
   fireEvent.click(screen.getByLabelText("Two"));
-  fireEvent.click(screen.getByText("Recovery options"));
-  fireEvent.click(screen.getByRole("button", { name: "Reload saved answers" }));
-  expect(screen.getByRole("region", { name: "Unsaved answer" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Discard changes and continue" }));
+  fireEvent.click(screen.getByText("Više", { selector: "summary" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj spremljene odgovore" }));
+  expect(screen.getByRole("region", { name: "Nespremljen odgovor" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Odbaci promjene i nastavi" }));
   await waitFor(() => expect(screen.getByLabelText("One")).toBeChecked());
-  expect(screen.getByText("Saved")).toBeInTheDocument();
+  expect(screen.getByText("Spremljeno")).toBeInTheDocument();
 });
 
 it("preserves the original short answer after saving", async () => {
@@ -140,15 +151,15 @@ it("preserves the original short answer after saving", async () => {
     current.questions[0].answer = { ...answer, text: answer.text };
     return structuredClone(current);
   });
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
-  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
-  fireEvent.change(await screen.findByLabelText("Your short answer"), { target: { value: "  Saved text  " } });
-  fireEvent.click(screen.getByRole("button", { name: "Save and review" }));
-  await screen.findByRole("region", { name: "Review practice" });
-  fireEvent.click(screen.getByRole("button", { name: "Back to question" }));
-  await screen.findByText("Saved");
-  expect(screen.getByLabelText("Your short answer")).toHaveValue("  Saved text  ");
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
+  fireEvent.change(await screen.findByLabelText("Vaš kratki odgovor"), { target: { value: "  Saved text  " } });
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i pregledaj" }));
+  await screen.findByRole("region", { name: "Pregled vježbe" });
+  fireEvent.click(screen.getByRole("button", { name: "Natrag na pitanje" }));
+  await screen.findByText("Spremljeno");
+  expect(screen.getByLabelText("Vaš kratki odgovor")).toHaveValue("  Saved text  ");
 });
 
 it.each(["  MASS\n attracts  mass  ", "  My different\n explanation  "])("reviews a frozen ungraded short answer after refresh: %s", async raw => {
@@ -159,66 +170,89 @@ it.each(["  MASS\n attracts  mass  ", "  My different\n explanation  "])("review
       correct_boolean: null, explanation: null }],
   };
   mock.history.mockResolvedValue([current]);
-  const view = render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  fireEvent.click(await screen.findByText("Practice history"));
-  fireEvent.click(await screen.findByRole("button", { name: /Review practice/ }));
-  await screen.findByText("Practice complete");
+  const view = render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByText("Povijest vježbi"));
+  fireEvent.click(await screen.findByRole("button", { name: /Pregled vježbe/ }));
+  await screen.findByText("Vježba je završena");
   view.unmount();
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  fireEvent.click(await screen.findByText("Practice history"));
-  fireEvent.click(await screen.findByRole("button", { name: /Review practice/ }));
-  await screen.findByText("Practice complete");
-  const savedAnswer = screen.getByText("Your answer", { exact: true }).nextElementSibling;
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByText("Povijest vježbi"));
+  fireEvent.click(await screen.findByRole("button", { name: /Pregled vježbe/ }));
+  await screen.findByText("Vježba je završena");
+  const savedAnswer = screen.getByText("Vaš odgovor", { exact: true }).nextElementSibling;
   expect(savedAnswer?.textContent).toBe(raw);
   expect(savedAnswer).toHaveClass("whitespace-pre-wrap");
-  const result = screen.getByRole("article", { name: "Question 1 result" });
+  const result = screen.getByRole("article", { name: "Rezultat pitanja 1" });
   expect(within(result).getByText("Mass attracts mass", { exact: true })).toBeInTheDocument();
-  expect(within(result).getByText("Self-review required")).toBeInTheDocument();
-  expect(within(result).getByText("Short answers are not graded automatically. Compare your answer with the reference answer.")).toBeInTheDocument();
-  expect(within(result).queryByRole("button")).not.toBeInTheDocument();
+  expect(within(result).getByText("Potrebna samoprocjena")).toBeInTheDocument();
+  expect(within(result).getByText("Kratki odgovori se ne ocjenjuju automatski. Usporedite svoj odgovor s referentnim.")).toBeInTheDocument();
+  // The only actions on a frozen short answer are the student's own self-assessment.
+  expect(within(result).getAllByRole("button").map(button => button.textContent)).toEqual(["Znao sam", "Nisam znao"]);
   expect(within(result).queryByText(/moderator|semantic|AI grading|mark (correct|incorrect)/i)).not.toBeInTheDocument();
-  expect(screen.getByLabelText("Results summary")).toHaveTextContent("Self-review required1");
-  expect(screen.getByLabelText("Results summary")).not.toHaveTextContent("Pending");
+  expect(screen.getByLabelText("Sažetak rezultata")).toHaveTextContent("Kratki odgovori1čeka samoprocjenu: 1");
+  expect(screen.getByLabelText("Sažetak rezultata")).not.toHaveTextContent("Pending");
   expect(screen.queryByText(/score|%/i)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Save answer" })).not.toBeInTheDocument();
   expect(mock.submit).not.toHaveBeenCalled();
 });
 
+it("saves a short-answer self-assessment from results and keeps the grade pending", async () => {
+  const submitted = await mock.submit(); mock.submit.mockClear();
+  mock.history.mockResolvedValue([submitted]);
+  mock.selfReview.mockImplementation(async (_course, _id, question, verdict) => {
+    current = { ...current, questions: current.questions.map(q => q.id === question ? { ...q, self_review: verdict } : q) } as Attempt;
+    return structuredClone(current);
+  });
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByText("Povijest vježbi"));
+  fireEvent.click(await screen.findByRole("button", { name: /Pregled vježbe/ }));
+  await screen.findByText("Vježba je završena");
+  fireEvent.click(screen.getByRole("button", { name: "Samoprocjena" }));
+  const result = screen.getByRole("article", { name: "Rezultat pitanja 3" });
+  fireEvent.click(within(result).getByRole("button", { name: "Nisam znao" }));
+  await waitFor(() => expect(within(result).getByRole("button", { name: "Nisam znao" })).toHaveAttribute("aria-pressed", "true"));
+  expect(mock.selfReview).toHaveBeenCalledWith("course", "attempt", "sa", "INCORRECT");
+  expect(within(result).getByText("Po samoprocjeni netočno")).toBeVisible();
+  expect(screen.getByLabelText("Sažetak rezultata")).toHaveTextContent("Netočno0Kratki odgovori1po samoprocjeni netočno: 1");
+  expect(within(result).getByRole("status")).toHaveTextContent("Spremljeno: po samoprocjeni netočno.");
+});
+
 it("returns submitted history to setup with preferences intact, keeping results on failure and preventing duplicate requests", async () => {
   const result = await mock.submit(); mock.submit.mockClear();
   mock.history.mockResolvedValue([result]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
-  fireEvent.click(screen.getByLabelText("Course questions"));
-  fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
-  fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value: "3" } });
-  fireEvent.click(screen.getByLabelText("True / false"));
-  fireEvent.click(screen.getByLabelText("Exam practice"));
-  fireEvent.click(screen.getByText("Practice history"));
-  fireEvent.click(screen.getByRole("button", { name: /Review practice/ }));
-  await screen.findByRole("heading", { name: "Practice complete" });
+  fireEvent.click(screen.getByLabelText("Pitanja kolegija"));
+  fireEvent.click(screen.getByRole("radio", { name: "Prilagođeno" }));
+  fireEvent.change(screen.getByLabelText("Vlastiti broj pitanja"), { target: { value: "3" } });
+  fireEvent.click(screen.getByLabelText("Točno / netočno"));
+  fireEvent.click(screen.getByLabelText("Ispitna vježba"));
+  fireEvent.click(screen.getByText("Povijest vježbi"));
+  fireEvent.click(screen.getByRole("button", { name: /Pregled vježbe/ }));
+  await screen.findByRole("heading", { name: "Vježba je završena" });
   mock.history.mockRejectedValueOnce(new Error("History unavailable"));
-  fireEvent.click(screen.getByRole("button", { name: "Practice again" }));
+  fireEvent.click(screen.getByRole("button", { name: "Vježbaj ponovno" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("History unavailable");
-  expect(screen.getByRole("heading", { name: "Practice complete" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Vježba je završena" })).toBeVisible();
   let resolve!: (rows: Attempt[]) => void;
   mock.history.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
-  fireEvent.click(screen.getByRole("button", { name: "Practice again" }));
-  expect(screen.getByRole("button", { name: "Practice again" })).toBeDisabled();
-  expect(screen.getByText("Loading practice history…")).toHaveAttribute("role", "status");
-  fireEvent.click(screen.getByRole("button", { name: "Practice again" }));
+  fireEvent.click(screen.getByRole("button", { name: "Vježbaj ponovno" }));
+  expect(screen.getByRole("button", { name: "Vježbaj ponovno" })).toBeDisabled();
+  expect(screen.getByText("Učitavam povijest vježbi…")).toHaveAttribute("role", "status");
+  fireEvent.click(screen.getByRole("button", { name: "Vježbaj ponovno" }));
   expect(mock.history).toHaveBeenCalledTimes(3);
   await act(async () => resolve([result]));
-  expect(screen.getByRole("form", { name: "Practice setup" })).toBeVisible();
-  expect(screen.getByRole("heading", { name: "Practice" })).toHaveFocus();
-  expect(screen.getByLabelText("Custom question count")).toHaveValue(3);
-  expect(screen.getByLabelText("Course questions")).toBeChecked();
-  fireEvent.click(screen.getByText("More options"));
-  expect(screen.getByLabelText("Exam practice")).toBeChecked();
-  expect(screen.getByLabelText("True / false")).not.toBeChecked();
-  expect(screen.getByLabelText("Multiple choice")).toBeChecked();
-  expect(screen.getByLabelText("Short answer")).toBeChecked();
-  expect(screen.getByText("Practice history").closest("details")).not.toHaveAttribute("open");
+  expect(screen.getByRole("form", { name: "Postavke vježbe" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Vježba" })).toHaveFocus();
+  expect(screen.getByLabelText("Vlastiti broj pitanja")).toHaveValue(3);
+  expect(screen.getByLabelText("Pitanja kolegija")).toBeChecked();
+  // Course questions is kept under More options, so the setup opens it to show the choice.
+  expect(screen.getByText("Više mogućnosti").closest("details")).toHaveAttribute("open");
+  expect(screen.getByLabelText("Ispitna vježba")).toBeChecked();
+  expect(screen.getByLabelText("Točno / netočno")).not.toBeChecked();
+  expect(screen.getByLabelText("Jedan točan odgovor")).toBeChecked();
+  expect(screen.getByLabelText("Kratki odgovor")).toBeChecked();
+  expect(screen.getByText("Povijest vježbi").closest("details")).not.toHaveAttribute("open");
   expect(mock.start).not.toHaveBeenCalled(); expect(mock.submit).not.toHaveBeenCalled();
   expect(mock.history.mock.calls.every(([course]) => course === "course")).toBe(true);
 });
@@ -227,46 +261,45 @@ it("keeps historical results loading neutral and allows retrying a failed read w
   const result = await mock.submit(); mock.submit.mockClear();
   mock.history.mockResolvedValue([result]);
   mock.read.mockRejectedValueOnce(new Error("Result unavailable"));
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  fireEvent.click(await screen.findByText("Practice history"));
-  fireEvent.click(await screen.findByRole("button", { name: /Review practice/ }));
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByText("Povijest vježbi"));
+  fireEvent.click(await screen.findByRole("button", { name: /Pregled vježbe/ }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Result unavailable");
   let resolve!: (attempt: Attempt) => void;
   mock.read.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
-  fireEvent.click(screen.getByRole("button", { name: /Review practice/ }));
-  expect(screen.getByText("Loading session…").closest('[role="status"]')).toBeVisible();
-  expect(screen.queryByRole("heading", { name: "Practice complete" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("heading", { name: "Results unavailable" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Pregled vježbe/ }));
+  expect(screen.getByText("Učitavam vježbu…").closest('[role="status"]')).toBeVisible();
+  expect(screen.queryByRole("heading", { name: "Vježba je završena" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Rezultati nisu dostupni" })).not.toBeInTheDocument();
   await act(async () => resolve(result));
-  expect(screen.getByRole("heading", { name: "Practice complete" })).toBeVisible();
-  expect(screen.getByRole("button", { name: "Self-review" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("heading", { name: "Vježba je završena" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Samoprocjena" })).toHaveAttribute("aria-pressed", "true");
   expect(mock.read).toHaveBeenLastCalledWith("course", "attempt");
   expect(mock.start).not.toHaveBeenCalled(); expect(mock.submit).not.toHaveBeenCalled();
 });
 
 it("launches adaptive review with the existing count and type controls", async () => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
-  expect(screen.getByLabelText("Recommended practice")).toBeChecked();
-  fireEvent.click(screen.getByLabelText("Recommended practice"));
-  expect(screen.getByText(/Prioritizes questions due for review/)).toBeInTheDocument();
-  expect(screen.getByText(/then other useful course questions/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
-  fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value: "2" } });
+  expect(screen.getByLabelText("Preporučena vježba")).toBeChecked();
+  fireEvent.click(screen.getByLabelText("Preporučena vježba"));
+  expect(screen.getByText(/Prvo daje pitanja koja treba ponoviti/)).toBeInTheDocument();
+  expect(screen.getByText(/a zatim druga korisna pitanja kolegija/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("radio", { name: "Prilagođeno" }));
+  fireEvent.change(screen.getByLabelText("Vlastiti broj pitanja"), { target: { value: "2" } });
   mock.start.mockRejectedValue(new Error("Only 1 eligible approved questions available"));
-  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Only 1 eligible");
-  expect(mock.start).toHaveBeenCalledWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE");
+  expect(mock.start).toHaveBeenCalledWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
-async function start(experience: "Guided practice" | "Exam practice" = "Guided practice") {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+async function start(experience: "Vođena vježba" | "Ispitna vježba" = "Vođena vježba") {
+  render(<PracticeQuiz courseId="course" />);
   await open();
   fireEvent.click(screen.getByLabelText(experience));
-  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   await screen.findByText("Choose a number");
-  fireEvent.click(screen.getByText("Session options"));
-  if (experience === "Exam practice") fireEvent.click(screen.getByText("Question navigator", { selector: "summary" }));
+  fireEvent.click(screen.getByText("Više", { selector: "summary" }));
 }
 function allAnswered() {
   current.questions[0].answer = { type: "MULTIPLE_CHOICE", option_position: 1 };
@@ -275,28 +308,26 @@ function allAnswered() {
 }
 
 it("keeps Study/Exam separate from the selection strategy and saves before navigating", async () => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   await open();
-  expect(screen.getByLabelText("Guided practice")).toBeChecked();
-  expect(screen.getByLabelText("Recommended practice")).toBeChecked();
-  fireEvent.click(screen.getByLabelText("Exam practice"));
-  fireEvent.click(screen.getByLabelText("Recommended practice"));
-  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  expect(screen.getByLabelText("Vođena vježba")).toBeChecked();
+  expect(screen.getByLabelText("Preporučena vježba")).toBeChecked();
+  fireEvent.click(screen.getByLabelText("Ispitna vježba"));
+  fireEvent.click(screen.getByLabelText("Preporučena vježba"));
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 5, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE");
-  fireEvent.click(screen.getByText("Session options"));
-  fireEvent.click(screen.getByLabelText("Guided practice"));
-  expect(screen.queryByRole("navigation", { name: "Question navigator" })).not.toBeInTheDocument();
+  expect(mock.start).toHaveBeenCalledWith("course", 5, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "ADAPTIVE", undefined, "END");
+  expect(screen.getByRole("navigation", { name: "Popis pitanja" })).toBeInTheDocument();
   expect(screen.queryByText("The sky is green")).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("Two"));
-  expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
+  expect(screen.getByText("Nespremljene promjene")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
   await screen.findByText("The sky is green");
   expect(mock.save).toHaveBeenCalledWith("course", "attempt", "mcq", { type: "MULTIPLE_CHOICE", option_position: 1 });
-  expect(screen.getByText("Question 2 of 3")).toHaveFocus();
-  fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+  expect(screen.getByText("Pitanje 2 od 3")).toHaveFocus();
+  fireEvent.click(screen.getByRole("button", { name: "Prethodno" }));
   expect(await screen.findByLabelText("Two")).toBeChecked();
-  expect(screen.getByText("Saved")).toBeInTheDocument();
+  expect(screen.getByText("Spremljeno")).toBeInTheDocument();
 });
 
 it("keeps failed save-on-navigation editable and prevents duplicate pending saves", async () => {
@@ -304,41 +335,58 @@ it("keeps failed save-on-navigation editable and prevents duplicate pending save
   fireEvent.click(screen.getByLabelText("One"));
   let fail!: (error: Error) => void;
   mock.save.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
-  fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
-  expect(screen.getByText("Saving…", { selector: "p" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "Saving…" }));
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
+  expect(screen.getByText("Spremam…", { selector: "p" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Spremam…" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Spremam…" }));
   expect(mock.save).toHaveBeenCalledTimes(1);
   await act(async () => fail(new Error("Network failed")));
-  expect(screen.getByText("Save failed")).toBeInTheDocument();
+  expect(screen.getByText("Spremanje nije uspjelo")).toBeInTheDocument();
   expect(screen.getByLabelText("One")).toBeChecked();
-  expect(screen.getByRole("alert")).toHaveTextContent("Try again");
-  fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
+  expect(screen.getByRole("alert")).toHaveTextContent("Pokušajte ponovno");
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
   await screen.findByText("The sky is green");
   expect(mock.save).toHaveBeenCalledTimes(2);
 });
 
 it("supports direct jumps, answered states, local flags and revisit actions in Exam", async () => {
-  await start("Exam practice");
-  const nav = screen.getByRole("navigation", { name: "Question navigator" });
-  expect(within(nav).getAllByRole("button", { name: /Question [123]/ })).toHaveLength(3);
-  expect(within(nav).getByRole("button", { name: /Question 1/ })).toHaveAttribute("aria-current", "step");
-  fireEvent.click(screen.getByRole("button", { name: "Mark to revisit" }));
-  expect(within(nav).getByRole("button", { name: /Question 1.*Unanswered.*Marked/ })).toBeInTheDocument();
+  await start("Ispitna vježba");
+  const nav = screen.getByRole("navigation", { name: "Popis pitanja" });
+  expect(within(nav).getAllByRole("button", { name: /Pitanje [123]/ })).toHaveLength(3);
+  expect(within(nav).getByRole("button", { name: /Pitanje 1/ })).toHaveAttribute("aria-current", "step");
+  fireEvent.click(screen.getByRole("button", { name: "Vrati se" }));
+  expect(within(nav).getByRole("button", { name: /Pitanje 1.*Bez odgovora.*Označeno/ })).toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("One"));
-  fireEvent.click(within(nav).getByRole("button", { name: /Question 3/ }));
+  fireEvent.click(within(nav).getByRole("button", { name: /Pitanje 3/ }));
   await screen.findByText("Explain gravity");
-  expect(within(nav).getByRole("button", { name: /Question 1.*Saved.*Marked/ })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Next marked" }));
+  expect(within(nav).getByRole("button", { name: /Pitanje 1.*Spremljeno.*Označeno/ })).toBeInTheDocument();
+  // The side panel is only the grid; the jump buttons are in the question sheet.
+  fireEvent.click(screen.getByRole("button", { name: /Popis pitanja, pitanje/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Sljedeće označeno" }));
   await screen.findByText("Choose a number");
-  expect(screen.getByRole("button", { name: "Remove revisit mark" })).toHaveAttribute("aria-pressed", "true");
-  fireEvent.click(screen.getByLabelText("Guided practice"));
-  fireEvent.click(screen.getByLabelText("Exam practice"));
-  expect(screen.getByRole("button", { name: "Remove revisit mark" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Remove revisit mark" }));
-  expect(screen.getByRole("button", { name: "Next marked" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "Next unanswered" }));
+  expect(screen.getByRole("button", { name: "Vrati se" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "Vrati se" })).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(screen.getByRole("button", { name: "Vrati se" }));
+  fireEvent.click(screen.getByRole("button", { name: /Popis pitanja, pitanje/ }));
+  expect(screen.getByRole("button", { name: "Sljedeće označeno" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Sljedeće bez odgovora" }));
   await screen.findByText("The sky is green");
+});
+
+it("keeps question navigation available in guided practice, with focus and phone controls", async () => {
+  await start();
+  expect(screen.getByRole("navigation", { name: "Popis pitanja" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Sakrij bočnu ploču (fokus)" }));
+  expect(screen.queryByRole("navigation", { name: "Popis pitanja" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Prikaži bočnu ploču" }));
+  expect(screen.getByRole("navigation", { name: "Popis pitanja" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Popis pitanja, pitanje 1 od 3" }));
+  const sheet = screen.getByRole("dialog", { name: "Pitanja" });
+  fireEvent.click(within(sheet).getByRole("button", { name: /Pitanje 2/ }));
+  await screen.findByText("The sky is green");
+  expect(screen.queryByRole("dialog", { name: "Pitanja" })).not.toBeInTheDocument();
 });
 
 it("requires an explicit decision before leaving or reloading an edited answer", async () => {
@@ -347,47 +395,46 @@ it("requires an explicit decision before leaving or reloading an edited answer",
   const event = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(event);
   expect(event.defaultPrevented).toBe(true);
-  fireEvent.click(screen.getByText("Recovery options"));
-  fireEvent.click(screen.getByRole("button", { name: "Reload saved answers" }));
-  expect(screen.getByText("Keep your unsaved answer?")).toHaveFocus();
-  fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
-  expect(screen.getByText("Question 1 of 3")).toHaveFocus();
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj spremljene odgovore" }));
+  expect(screen.getByText("Zadržati nespremljen odgovor?")).toHaveFocus();
+  fireEvent.click(screen.getByRole("button", { name: "Nastavi uređivati" }));
+  expect(screen.getByText("Pitanje 1 od 3")).toHaveFocus();
   expect(screen.getByLabelText("One")).toBeChecked();
-  fireEvent.click(screen.getByRole("button", { name: "Save and leave" }));
-  await screen.findByRole("button", { name: "Start practice" });
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i izađi" }));
+  await screen.findByRole("button", { name: "Započni vježbu" });
   expect(current.questions[0].answer).toEqual({ type: "MULTIPLE_CHOICE", option_position: 0 });
 });
 
-it("shows incomplete readiness and reviews unanswered without calling submit", async () => {
+it("needs one answer before finishing and reviews unanswered without calling submit", async () => {
   await start();
-  fireEvent.click(screen.getByRole("button", { name: "Mark to revisit" }));
-  fireEvent.click(screen.getByRole("button", { name: "Review and finish" }));
-  const review = await screen.findByRole("region", { name: "Review practice" });
-  expect(within(review).getByText("Review practice")).toHaveFocus();
-  expect(review).toHaveTextContent("0 of 3 answered and saved");
-  expect(review).toHaveTextContent("3 questions still need an answer");
-  expect(within(review).getByRole("button", { name: "Finish practice" })).toBeDisabled();
-  expect(screen.queryByRole("button", { name: "Confirm final submission" })).not.toBeInTheDocument();
-  fireEvent.click(within(review).getByRole("button", { name: "Review unanswered" }));
-  expect(screen.getByText("Question 1 of 3")).toHaveFocus();
+  fireEvent.click(screen.getByRole("button", { name: "Vrati se" }));
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj i završi" }));
+  const review = await screen.findByRole("region", { name: "Pregled vježbe" });
+  await waitFor(() => expect(within(review).getByText("Pregled vježbe")).toHaveFocus());
+  expect(review).toHaveTextContent("Odgovoreno i spremljeno 0 od 3");
+  expect(review).toHaveTextContent("Za završetak odgovorite na barem jedno pitanje");
+  expect(within(review).getByRole("button", { name: "Završi vježbu" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Potvrdi konačnu predaju" })).not.toBeInTheDocument();
+  fireEvent.click(within(review).getByRole("button", { name: "Pregledaj neodgovorena" }));
+  expect(screen.getByText("Pitanje 1 od 3")).toHaveFocus();
   expect(mock.submit).not.toHaveBeenCalled();
 });
 
 it("preserves answers on submit failure, retries, and derives result counts from frozen data", async () => {
   allAnswered();
-  await start("Exam practice");
-  fireEvent.click(screen.getByRole("button", { name: "Mark to revisit" }));
-  fireEvent.click(screen.getByRole("button", { name: "Review and finish" }));
-  await screen.findByRole("region", { name: "Review practice" });
-  fireEvent.click(screen.getByRole("button", { name: "Finish practice" }));
-  await screen.findByRole("region", { name: "Confirm submission" });
+  await start("Ispitna vježba");
+  fireEvent.click(screen.getByRole("button", { name: "Vrati se" }));
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj i završi" }));
+  const review = await screen.findByRole("region", { name: "Pregled vježbe" });
   expect(mock.submit).not.toHaveBeenCalled();
-  expect(screen.getByText("3 of 3 answered and saved · 1 marked to revisit")).toBeInTheDocument();
+  expect(review).toHaveTextContent("Odgovoreno i spremljeno 3 od 3");
+  expect(review).toHaveTextContent("Označeno za povratak: 1");
   mock.submit.mockRejectedValueOnce(new Error("Submission unavailable"));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm final submission" }));
+  // The review step is the confirmation: finishing from it hands the session in.
+  fireEvent.click(screen.getByRole("button", { name: "Završi vježbu" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Submission unavailable");
-  fireEvent.click(screen.getByRole("button", { name: "Keep reviewing" }));
-  fireEvent.click(screen.getByRole("button", { name: "Back to question" }));
+  expect(screen.queryByRole("region", { name: "Potvrda predaje" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Natrag na pitanje" }));
   expect(screen.getByLabelText("Two")).toBeChecked();
   const submit = mock.submit.getMockImplementation()!;
   mock.submit.mockImplementationOnce(async () => {
@@ -395,67 +442,68 @@ it("preserves answers on submit failure, retries, and derives result counts from
     result.questions[0].grading_status = "INCORRECT";
     return result;
   });
-  fireEvent.click(screen.getByRole("button", { name: "Review and finish" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Finish practice" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Confirm final submission" }));
-  await screen.findByText("Practice complete");
-  const summary = screen.getByLabelText("Results summary");
-  expect(summary).toHaveTextContent("Correct1Incorrect1Self-review required1");
-  fireEvent.click(screen.getByRole("button", { name: "All answers" }));
-  const results = screen.getByRole("region", { name: "Practice results" });
-  expect(results).toHaveTextContent("Correct1");
-  expect(results).toHaveTextContent("Incorrect1");
-  expect(results).toHaveTextContent("Self-review required1");
-  expect(within(screen.getByRole("article", { name: "Question 1 result" })).getByText("Incorrect")).toBeInTheDocument();
-  expect(within(screen.getByRole("article", { name: "Question 2 result" })).getByText("Correct")).toBeInTheDocument();
-  expect(within(screen.getByRole("article", { name: "Question 3 result" })).getByText("Self-review required")).toBeInTheDocument();
-  expect(within(screen.getByRole("article", { name: "Question 1 result" })).getByText("Two", { exact: true })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj i završi" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Završi vježbu" }));
+  await screen.findByText("Vježba je završena");
+  const summary = screen.getByLabelText("Sažetak rezultata");
+  expect(summary).toHaveTextContent("Točno1Netočno1Kratki odgovori1čeka samoprocjenu: 1");
+  fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
+  const results = screen.getByRole("region", { name: "Rezultati vježbe" });
+  expect(results).toHaveTextContent("Točno1");
+  expect(results).toHaveTextContent("Netočno1");
+  expect(results).toHaveTextContent("Kratki odgovori1");
+  const show = (number: number) => fireEvent.click(screen.getByRole("button", { name: `Skoči na pitanje ${number}` }));
+  show(1);
+  expect(within(screen.getByRole("article", { name: "Rezultat pitanja 1" })).getByText("Netočno")).toBeInTheDocument();
+  expect(within(screen.getByRole("article", { name: "Rezultat pitanja 1" })).getByText("Two", { exact: true })).toBeInTheDocument();
   expect(screen.getByText("One", { exact: true })).toBeInTheDocument();
-  fireEvent.click(within(screen.getByRole("article", { name: "Question 2 result" })).getByText("View answer and explanation"));
-  expect(within(screen.getByRole("article", { name: "Question 2 result" })).getAllByText("False", { exact: true })).toHaveLength(2);
-  expect(screen.getAllByText("Reviewed explanation")).toHaveLength(3);
+  show(2);
+  expect(within(screen.getByRole("article", { name: "Rezultat pitanja 2" })).getByText("Točno")).toBeInTheDocument();
+  show(3);
+  expect(within(screen.getByRole("article", { name: "Rezultat pitanja 3" })).getByText("Potrebna samoprocjena")).toBeInTheDocument();
+  show(2);
+  fireEvent.click(within(screen.getByRole("article", { name: "Rezultat pitanja 2" })).getByText("Pogledaj odgovor i objašnjenje"));
+  expect(within(screen.getByRole("article", { name: "Rezultat pitanja 2" })).getAllByText("Netočno", { exact: true })).toHaveLength(2);
+  expect(screen.getAllByText("Reviewed explanation")).toHaveLength(1);
 });
 
-it("saves the current draft before opening final confirmation", async () => {
+it("saves the current draft before opening the review step", async () => {
   allAnswered();
   await start();
   fireEvent.click(screen.getByLabelText("One"));
-  fireEvent.click(screen.getByRole("button", { name: "Review and finish" }));
-  await screen.findByRole("region", { name: "Review practice" });
-  fireEvent.click(screen.getByRole("button", { name: "Finish practice" }));
-  await screen.findByRole("region", { name: "Confirm submission" });
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj i završi" }));
+  await screen.findByRole("region", { name: "Pregled vježbe" });
   expect(mock.save).toHaveBeenCalledWith("course", "attempt", "mcq", { type: "MULTIPLE_CHOICE", option_position: 0 });
   expect(mock.submit).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Keep reviewing" }));
-  fireEvent.click(screen.getByRole("button", { name: "Back to question" }));
+  fireEvent.click(screen.getByRole("button", { name: "Natrag na pitanje" }));
   expect(screen.getByLabelText("One")).toBeChecked();
-  expect(screen.getByText("Saved")).toBeInTheDocument();
+  expect(screen.getByText("Spremljeno")).toBeInTheDocument();
 });
 
 it("blocks navigation for an empty short-answer edit without losing the edit", async () => {
-  await start("Exam practice");
-  fireEvent.click(screen.getByRole("button", { name: /Question 3.*Unanswered/ }));
-  fireEvent.change(await screen.findByLabelText("Your short answer"), { target: { value: "   " } });
-  fireEvent.click(screen.getByRole("button", { name: "Previous" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Enter an answer");
-  expect(screen.getByLabelText("Your short answer")).toHaveValue("   ");
+  await start("Ispitna vježba");
+  fireEvent.click(screen.getByRole("button", { name: /Pitanje 3.*Bez odgovora/ }));
+  fireEvent.change(await screen.findByLabelText("Vaš kratki odgovor"), { target: { value: "   " } });
+  fireEvent.click(screen.getByRole("button", { name: "Prethodno" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Upišite odgovor");
+  expect(screen.getByLabelText("Vaš kratki odgovor")).toHaveValue("   ");
   expect(mock.save).not.toHaveBeenCalled();
 });
 
 it("preserves attempt history pagination and prevents duplicate starts", async () => {
   mock.history.mockResolvedValue(Array.from({ length: 20 }, (_, index) => ({ ...current, id: `attempt-${index}` })));
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  fireEvent.click(await screen.findByText("Practice history"));
-  await screen.findAllByRole("button", { name: /Resume practice/ });
-  fireEvent.click(screen.getByRole("button", { name: "Older sessions" }));
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByText("Povijest vježbi"));
+  await screen.findAllByRole("button", { name: /Nastavi započetu vježbu/ });
+  fireEvent.click(screen.getByRole("button", { name: "Starije vježbe" }));
   await waitFor(() => expect(mock.history).toHaveBeenLastCalledWith("course", 20));
-  await screen.findAllByRole("button", { name: /Resume practice/ });
-  fireEvent.click(screen.getByRole("button", { name: "Newer sessions" }));
+  await screen.findAllByRole("button", { name: /Nastavi započetu vježbu/ });
+  fireEvent.click(screen.getByRole("button", { name: "Novije vježbe" }));
   await waitFor(() => expect(mock.history).toHaveBeenLastCalledWith("course", 0));
-  await screen.findAllByRole("button", { name: /Resume practice/ });
+  await screen.findAllByRole("button", { name: /Nastavi započetu vježbu/ });
   let finish!: (value: Attempt) => void;
   mock.start.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
-  const startButton = screen.getByRole("button", { name: "Start practice" });
+  const startButton = screen.getByRole("button", { name: "Započni vježbu" });
   fireEvent.click(startButton);
   fireEvent.click(startButton);
   expect(mock.start).toHaveBeenCalledTimes(1);
@@ -464,84 +512,87 @@ it("preserves attempt history pagination and prevents duplicate starts", async (
 });
 
 it("opens adaptive review by handoff without starting and preserves setup controls", async () => {
-  const view = render(<PracticeQuiz currentUserId="student" courseId="course" adaptiveReviewRequest={0} />);
+  const view = render(<PracticeQuiz courseId="course" adaptiveReviewRequest={0} />);
   await open();
-  fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
-  fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value: "7" } });
-  fireEvent.click(screen.getByLabelText("Multiple choice"));
-  fireEvent.click(screen.getByLabelText("Exam practice"));
-  view.rerender(<PracticeQuiz currentUserId="student" courseId="course" adaptiveReviewRequest={1} />);
-  await waitFor(() => expect(screen.getByLabelText("Recommended practice")).toBeChecked());
-  expect(screen.getByLabelText("Custom question count")).toHaveValue(7);
-  expect(screen.getByLabelText("Multiple choice")).not.toBeChecked();
-  expect(screen.getByLabelText("True / false")).toBeChecked();
-  expect(screen.getByLabelText("Short answer")).toBeChecked();
-  expect(screen.getByLabelText("Exam practice")).toBeChecked();
-  expect(screen.getByLabelText("Guided practice")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("radio", { name: "Prilagođeno" }));
+  fireEvent.change(screen.getByLabelText("Vlastiti broj pitanja"), { target: { value: "7" } });
+  fireEvent.click(screen.getByLabelText("Jedan točan odgovor"));
+  fireEvent.click(screen.getByLabelText("Ispitna vježba"));
+  view.rerender(<PracticeQuiz courseId="course" adaptiveReviewRequest={1} />);
+  await waitFor(() => expect(screen.getByLabelText("Preporučena vježba")).toBeChecked());
+  expect(screen.getByLabelText("Vlastiti broj pitanja")).toHaveValue(7);
+  expect(screen.getByLabelText("Jedan točan odgovor")).not.toBeChecked();
+  expect(screen.getByLabelText("Točno / netočno")).toBeChecked();
+  expect(screen.getByLabelText("Kratki odgovor")).toBeChecked();
+  expect(screen.getByLabelText("Ispitna vježba")).toBeChecked();
+  expect(screen.getByLabelText("Vođena vježba")).toBeInTheDocument();
   expect(mock.start).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByLabelText("Course questions"));
-  view.rerender(<PracticeQuiz currentUserId="student" courseId="course" adaptiveReviewRequest={2} />);
-  await waitFor(() => expect(screen.getByLabelText("Recommended practice")).toBeChecked());
+  fireEvent.click(screen.getByLabelText("Pitanja kolegija"));
+  view.rerender(<PracticeQuiz courseId="course" adaptiveReviewRequest={2} />);
+  await waitFor(() => expect(screen.getByLabelText("Preporučena vježba")).toBeChecked());
   expect(mock.start).not.toHaveBeenCalled();
 });
 
 it("defers hidden setup loads and opens with Recommended practice by default", async () => {
-  const view = render(<PracticeQuiz currentUserId="student" courseId="course" active={false} />);
-  expect(mock.history).not.toHaveBeenCalled(); expect(mock.questions).not.toHaveBeenCalled();
-  view.rerender(<PracticeQuiz currentUserId="student" courseId="course" adaptiveReviewRequest={1} />);
-  expect(await screen.findByLabelText("Recommended practice")).toBeChecked();
+  const view = render(<PracticeQuiz courseId="course" active={false} />);
+  expect(mock.history).not.toHaveBeenCalled(); expect(mock.availability).not.toHaveBeenCalled();
+  view.rerender(<PracticeQuiz courseId="course" adaptiveReviewRequest={1} />);
+  expect(await screen.findByLabelText("Preporučena vježba")).toBeChecked();
   expect(mock.history).toHaveBeenCalledWith("course", 0);
   expect(mock.start).not.toHaveBeenCalled();
   view.unmount();
-  render(<PracticeQuiz currentUserId="student" courseId="another" />);
+  render(<PracticeQuiz courseId="another" />);
   await open();
-  expect(screen.getByLabelText("Recommended practice")).toBeChecked();
-  expect(screen.getByLabelText("Course questions")).not.toBeChecked();
+  expect(screen.getByLabelText("Preporučena vježba")).toBeChecked();
+  expect(screen.getByLabelText("Pitanja kolegija")).not.toBeChecked();
 });
 
 it("opens a simple Recommended setup with secondary options and history collapsed", async () => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
-  expect(screen.getByRole("radio", { name: "Recommended practice" })).toBeChecked();
-  expect(screen.getByRole("radio", { name: "5 questions" })).toBeChecked();
+  render(<PracticeQuiz courseId="course" />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled());
+  expect(screen.getByRole("radio", { name: "Preporučena vježba" })).toBeChecked();
+  expect(screen.getByRole("radio", { name: "5 pitanja" })).toBeChecked();
   expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
-  expect(screen.getByText("More options").closest("details")).not.toHaveAttribute("open");
-  expect(screen.getByText("Practice history").closest("details")).not.toHaveAttribute("open");
-  expect(screen.getByLabelText("Multiple choice")).not.toBeVisible();
-  expect(screen.getByLabelText("Guided practice")).not.toBeVisible();
-  expect(screen.getByRole("button", { name: "Start practice" })).toHaveClass("bg-accent");
-  fireEvent.click(screen.getByText("More options"));
-  expect(screen.getByLabelText("Multiple choice")).toBeVisible();
-  expect(screen.getByText(/Short answers require self-review after submission/)).toBeVisible();
+  expect(screen.getByText("Više mogućnosti").closest("details")).not.toHaveAttribute("open");
+  expect(screen.getByText("Povijest vježbi").closest("details")).not.toHaveAttribute("open");
+  expect(screen.getByLabelText("Jedan točan odgovor")).not.toBeVisible();
+  expect(screen.getByLabelText("Vođena vježba")).not.toBeVisible();
+  // Recommended practice and Mistakes are the visible ways; plain Course questions waits under More options.
+  expect(screen.getByLabelText("Pitanja kolegija")).not.toBeVisible();
+  expect(screen.getByRole("button", { name: "Započni vježbu" })).toHaveClass("bg-accent");
+  fireEvent.click(screen.getByText("Više mogućnosti"));
+  expect(screen.getByLabelText("Pitanja kolegija")).toBeVisible();
+  expect(screen.getByLabelText("Jedan točan odgovor")).toBeVisible();
+  expect(screen.getByText(/Kratki odgovori zahtijevaju samoprocjenu nakon predaje/)).toBeVisible();
 });
 
 it.each([5, 10, 20])("uses the %i question preset with the unchanged ADAPTIVE transport value", async count => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("radio", { name: `${count} questions` }));
-  expect(screen.getByRole("radio", { name: `${count} questions` })).toBeChecked();
-  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  render(<PracticeQuiz courseId="course" />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("radio", { name: `${count} pitanja` }));
+  expect(screen.getByRole("radio", { name: `${count} pitanja` })).toBeChecked();
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", count, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE");
+  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", count, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 it.each(["0", "21", "1.5", ""])("explains invalid Custom length %s and does not start", async value => {
-  render(<PracticeQuiz currentUserId="student" courseId="course" />); await open();
-  fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
-  fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value } });
-  const button = screen.getByRole("button", { name: "Start practice" });
-  expect(button).toBeDisabled(); expect(button).toHaveAccessibleDescription("Enter a whole number from 1 to 20.");
+  render(<PracticeQuiz courseId="course" />); await open();
+  fireEvent.click(screen.getByRole("radio", { name: "Prilagođeno" }));
+  fireEvent.change(screen.getByLabelText("Vlastiti broj pitanja"), { target: { value } });
+  const button = screen.getByRole("button", { name: "Započni vježbu" });
+  expect(button).toBeDisabled(); expect(button).toHaveAccessibleDescription("Upišite cijeli broj od 1 do 20.");
   expect(mock.start).not.toHaveBeenCalled();
 });
 
 it("prioritizes Resume over starting another session and explains the actual adaptive constraint", async () => {
   mock.history.mockResolvedValue([current]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  const resume = await screen.findByRole("button", { name: "Resume session" });
-  expect(screen.getByRole("heading", { name: "Continue studying" })).toBeVisible();
+  render(<PracticeQuiz courseId="course" />);
+  const resume = await screen.findByRole("button", { name: "Nastavi vježbu" });
+  expect(screen.getByRole("heading", { name: "Nastavite učiti" })).toBeVisible();
   expect(resume).toHaveClass("bg-accent");
-  expect(screen.getByRole("button", { name: "Start practice" })).not.toHaveClass("bg-accent");
-  expect(screen.getByText(/Recommended practice excludes questions in unfinished sessions/)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Započni vježbu" })).not.toHaveClass("bg-accent");
+  expect(screen.getByText(/Preporučena vježba izostavlja pitanja iz nedovršenih vježbi/)).toBeVisible();
   await waitFor(() => expect(resume).toBeEnabled()); fireEvent.click(resume);
   expect(await screen.findByText("Choose a number")).toBeVisible();
   expect(mock.read).toHaveBeenCalledExactlyOnceWith("course", "attempt"); expect(mock.start).not.toHaveBeenCalled();
@@ -549,175 +600,174 @@ it("prioritizes Resume over starting another session and explains the actual ada
 
 it("keeps submitted history available only through its secondary disclosure", async () => {
   mock.history.mockResolvedValue([{ ...current, status: "SUBMITTED" }]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
-  expect(screen.getByRole("button", { name: /Review practice/ })).not.toBeVisible();
-  fireEvent.click(screen.getByText("Practice history"));
-  expect(await screen.findByRole("button", { name: /Review practice/ })).not.toHaveClass("bg-accent");
+  render(<PracticeQuiz courseId="course" />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled());
+  expect(screen.getByRole("button", { name: /Pregled vježbe/ })).not.toBeVisible();
+  fireEvent.click(screen.getByText("Povijest vježbi"));
+  expect(await screen.findByRole("button", { name: /Pregled vježbe/ })).not.toHaveClass("bg-accent");
 });
 
 it("waits for eligibility, then replaces setup with an intentional empty state and existing navigation", async () => {
-  let resolve!: (rows: []) => void;
-  mock.questions.mockReturnValueOnce(new Promise<[]>(done => { resolve = done; }));
+  let resolve!: (value: PracticeAvailability) => void;
+  mock.availability.mockReturnValueOnce(new Promise<PracticeAvailability>(done => { resolve = done; }));
   const materials = vi.fn(), questions = vi.fn();
-  render(<PracticeQuiz currentUserId="student" courseId="course" onOpenMaterials={materials} onOpenQuestions={questions} />);
-  const start = await screen.findByRole("button", { name: "Start practice" });
+  render(<PracticeQuiz courseId="course" onOpenMaterials={materials} onOpenQuestions={questions} />);
+  const start = await screen.findByRole("button", { name: "Započni vježbu" });
   expect(start).toBeDisabled();
-  expect(screen.queryByText("No practice questions are available for this course yet.")).not.toBeInTheDocument();
-  expect(screen.getByText("Checking practice questions…")).toBeVisible();
-  await act(async () => resolve([]));
-  expect(await screen.findByText("No practice questions are available for this course yet.")).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Start practice" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "View materials" })); expect(materials).toHaveBeenCalledOnce();
-  fireEvent.click(screen.getByRole("button", { name: "Contribute a question" })); expect(questions).toHaveBeenCalledOnce();
+  expect(screen.queryByText("Ovaj kolegij još nema pitanja za vježbu.")).not.toBeInTheDocument();
+  expect(screen.getByText("Provjeravam pitanja za vježbu…")).toBeVisible();
+  await act(async () => resolve(reply({}, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], 0)));
+  expect(await screen.findByText("Ovaj kolegij još nema pitanja za vježbu.")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Započni vježbu" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Otvori materijale" })); expect(materials).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole("button", { name: "Predloži pitanje" })); expect(questions).toHaveBeenCalledOnce();
   expect(mock.start).not.toHaveBeenCalled();
 });
 
 it("keeps a failed eligibility load distinct from empty questions and supports retry", async () => {
-  mock.questions.mockRejectedValueOnce(new Error("Offline"));
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load practice questions");
-  expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
-  expect(screen.queryByText("No practice questions are available for this course yet.")).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Retry practice questions" }));
-  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
+  mock.availability.mockRejectedValueOnce(new Error("Offline"));
+  render(<PracticeQuiz courseId="course" />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Pitanja za vježbu nisu učitana");
+  expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeDisabled();
+  expect(screen.queryByText("Ovaj kolegij još nema pitanja za vježbu.")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj pitanja za vježbu" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled());
   expect(mock.start).not.toHaveBeenCalled();
 });
 
 it("blocks setup after a history load failure until the existing load is retried", async () => {
   mock.history.mockRejectedValueOnce(new Error("History unavailable"));
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
+  render(<PracticeQuiz courseId="course" />);
   expect(await screen.findByRole("alert")).toHaveTextContent("History unavailable");
-  expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "Retry practice setup" }));
-  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
+  expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj postavke vježbe" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled());
 });
 
 it("prevents a predictably oversized request and allows a valid Custom count", async () => {
-  mock.questions.mockResolvedValue([{ id: "source", status: "APPROVED", type: "TRUE_FALSE" }]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  expect(await screen.findByText(/Only 1 course question matches your options/)).toBeVisible();
-  expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
-  fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value: "1" } });
-  expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled();
-  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
+  serve({ TRUE_FALSE: 1 });
+  render(<PracticeQuiz courseId="course" />);
+  expect(await screen.findByText(/Uz vaše postavke ima samo pitanja kolegija: 1/)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("radio", { name: "Prilagođeno" }));
+  fireEvent.change(screen.getByLabelText("Vlastiti broj pitanja"), { target: { value: "1" } });
+  expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 1, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"], "ADAPTIVE");
+  expect(mock.start).toHaveBeenCalledWith("course", 1, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
-it("does not claim no practice questions from a full first page of ineligible questions", async () => {
-  mock.questions.mockResolvedValue(Array.from({ length: 50 }, (_, id) => ({ id: String(id), status: "ARCHIVED", type: "TRUE_FALSE", visibility: "OWNER", created_by_user_id: "student" })));
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
-  expect(screen.queryByText("No practice questions are available for this course yet.")).not.toBeInTheDocument();
-  expect(mock.questions).toHaveBeenCalledOnce();
-});
-
-it.each(["DRAFT", "PENDING_REVIEW"])("allows the student's own %s question without making another person's draft eligible", async status => {
-  mock.questions.mockResolvedValue([{ id: "own", status, type: "TRUE_FALSE", visibility: "OWNER", created_by_user_id: "student" }]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  await screen.findByText(/Only 1 course question matches/);
-  fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
-  fireEvent.change(screen.getByLabelText("Custom question count"), { target: { value: "1" } });
-  expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled();
-});
-
-it("excludes archived, rejected and other people's private questions from a complete availability read", async () => {
-  mock.questions.mockResolvedValue([
-    { id: "archived", status: "ARCHIVED", type: "TRUE_FALSE", visibility: "OWNER", created_by_user_id: "student" },
-    { id: "rejected", status: "REJECTED", type: "TRUE_FALSE", visibility: "OWNER", created_by_user_id: "student" },
-    { id: "private", status: "DRAFT", type: "TRUE_FALSE", visibility: "OWNER", created_by_user_id: "another-user" },
-  ]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  expect(await screen.findByText("No practice questions are available for this course yet.")).toBeVisible();
+it("asks the server again for the chosen mode and types and counts banks beyond one page", async () => {
+  serve({ MULTIPLE_CHOICE: 40, TRUE_FALSE: 25 }, 65);
+  render(<PracticeQuiz courseId="course" />);
+  await open();
+  expect(mock.availability).toHaveBeenLastCalledWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "ADAPTIVE", undefined);
+  fireEvent.click(screen.getByLabelText("Pitanja kolegija"));
+  await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "STANDARD", undefined));
+  fireEvent.click(screen.getByLabelText("Jedan točan odgovor"));
+  await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", ["TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "STANDARD", undefined));
+  fireEvent.click(screen.getByRole("radio", { name: "20 pitanja" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled());
+  fireEvent.click(screen.getByLabelText("Točno / netočno"));
+  expect(await screen.findByText(/Nema pitanja odabranih vrsta/)).toBeVisible();
+  expect(screen.queryByText("Ovaj kolegij još nema pitanja za vježbu.")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText("Kratki odgovor"));
+  fireEvent.click(screen.getByLabelText("Brojčani odgovor"));
+  await screen.findByText(/Nema pitanja odabranih vrsta/);
+  const calls = mock.availability.mock.calls.length;
+  fireEvent.click(screen.getByLabelText("Povezivanje parova"));
+  fireEvent.click(screen.getByLabelText("Više točnih odgovora"));
+  expect(await screen.findByText("Odaberite barem jednu vrstu pitanja pod Više mogućnosti.")).toBeVisible();
+  expect(mock.availability).toHaveBeenCalledTimes(calls);
   expect(mock.start).not.toHaveBeenCalled();
 });
 
 it("shows the explicit Course questions handoff while history is still loading", async () => {
   let resolve!: (rows: []) => void;
   mock.history.mockReturnValueOnce(new Promise<[]>(done => { resolve = done; }));
-  render(<PracticeQuiz currentUserId="student" courseId="course" setupRequest={{ id: 1, mode: "STANDARD" }} />);
-  await waitFor(() => expect(screen.getByRole("radio", { name: "Course questions" })).toBeChecked());
-  expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
+  render(<PracticeQuiz courseId="course" setupRequest={{ id: 1, mode: "STANDARD" }} />);
+  await waitFor(() => expect(screen.getByRole("radio", { name: "Pitanja kolegija" })).toBeChecked());
+  expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeDisabled();
   await act(async () => resolve([]));
-  await waitFor(() => expect(screen.getByRole("button", { name: "Start practice" })).toBeEnabled());
-  expect(screen.getByRole("radio", { name: "Course questions" })).toBeChecked();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled());
+  expect(screen.getByRole("radio", { name: "Pitanja kolegija" })).toBeChecked();
   expect(mock.start).not.toHaveBeenCalled();
 });
 
 it("waits for unfinished-session discovery before showing an empty setup", async () => {
   let resolve!: (rows: []) => void;
-  mock.history.mockReturnValueOnce(new Promise<[]>(done => { resolve = done; })); mock.questions.mockResolvedValue([]);
-  render(<PracticeQuiz currentUserId="student" courseId="course" />);
-  expect(await screen.findByText("Loading practice…")).toBeVisible();
-  expect(screen.queryByText("No practice questions are available for this course yet.")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Start practice" })).toBeDisabled();
+  mock.history.mockReturnValueOnce(new Promise<[]>(done => { resolve = done; })); serve({}, 0);
+  render(<PracticeQuiz courseId="course" />);
+  expect(await screen.findByText("Učitavam vježbu…")).toBeVisible();
+  expect(screen.queryByText("Ovaj kolegij još nema pitanja za vježbu.")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeDisabled();
   await act(async () => resolve([]));
-  expect(await screen.findByText("No practice questions are available for this course yet.")).toBeVisible();
+  expect(await screen.findByText("Ovaj kolegij još nema pitanja za vježbu.")).toBeVisible();
 });
 
 it("focuses the answering loop and keeps settings and recovery secondary", async () => {
   await start();
-  await waitFor(() => expect(screen.getByText("Question 1 of 3")).toHaveFocus());
-  fireEvent.click(screen.getByText("Session options"));
-  expect(screen.getByRole("radio", { name: "Guided practice" })).not.toBeVisible();
-  expect(screen.getByRole("button", { name: "Reload saved answers" })).not.toBeVisible();
+  await waitFor(() => expect(screen.getByText("Pitanje 1 od 3")).toHaveFocus());
+  fireEvent.click(screen.getByText("Više", { selector: "summary" }));
+  expect(screen.queryByRole("radio", { name: "Vođena vježba" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Ponovno učitaj spremljene odgovore" })).not.toBeVisible();
   expect(screen.queryByRole("button", { name: "Save answer" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Next question" })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Save and next" })).toBeDisabled();
-  expect(screen.getByText("Choose an answer to continue.")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Sljedeće pitanje" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Spremi i dalje" })).toBeDisabled();
+  expect(screen.getByText("Odaberite odgovor za nastavak.")).toBeVisible();
 });
 
 it("saves an edited answer before Previous and stays put when that save fails", async () => {
   await start();
   fireEvent.click(screen.getByLabelText("One"));
-  fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
-  fireEvent.click(await screen.findByLabelText("True"));
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
+  fireEvent.click(await screen.findByLabelText("Točno"));
   mock.save.mockRejectedValueOnce(new Error("Connection lost"));
-  fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+  fireEvent.click(screen.getByRole("button", { name: "Prethodno" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Connection lost");
-  expect(screen.getByText("Question 2 of 3")).toBeVisible();
-  expect(screen.getByLabelText("True")).toBeChecked();
-  fireEvent.click(screen.getByRole("button", { name: "Previous" }));
-  expect(await screen.findByText("Question 1 of 3")).toHaveFocus();
+  expect(screen.getByText("Pitanje 2 od 3")).toBeVisible();
+  expect(screen.getByLabelText("Točno")).toBeChecked();
+  fireEvent.click(screen.getByRole("button", { name: "Prethodno" }));
+  await waitFor(() => expect(screen.getByText("Pitanje 1 od 3")).toHaveFocus());
   expect(mock.save).toHaveBeenLastCalledWith("course", "attempt", "tf", { type: "TRUE_FALSE", value: true });
-  expect(screen.queryByRole("region", { name: "Unsaved answer" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Nespremljen odgovor" })).not.toBeInTheDocument();
 });
 
 it("advances a saved unchanged answer without another write", async () => {
   allAnswered(); await start();
-  fireEvent.click(screen.getByRole("button", { name: "Save and next" }));
-  expect(await screen.findByText("Question 2 of 3")).toHaveFocus();
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
+  await waitFor(() => expect(screen.getByText("Pitanje 2 od 3")).toHaveFocus());
   expect(mock.save).not.toHaveBeenCalled();
 });
 
 it("saves the final answer, reviews missing answers, and never submits implicitly", async () => {
-  await start("Exam practice");
-  fireEvent.click(screen.getByRole("button", { name: /Question 3.*Unanswered/ }));
-  fireEvent.change(await screen.findByLabelText("Your short answer"), { target: { value: "My explanation" } });
+  await start("Ispitna vježba");
+  fireEvent.click(screen.getByRole("button", { name: /Pitanje 3.*Bez odgovora/ }));
+  fireEvent.change(await screen.findByLabelText("Vaš kratki odgovor"), { target: { value: "My explanation" } });
   expect(screen.queryByText(/Reference answer:|Correct answer:|Mass attracts mass/)).not.toBeInTheDocument();
-  fireEvent.submit(screen.getByLabelText("Your short answer").closest("form")!);
-  const review = await screen.findByRole("region", { name: "Review practice" });
-  expect(review).toHaveTextContent("1 of 3 answered and saved");
-  expect(review).toHaveTextContent("2 questions still need an answer");
-  expect(screen.getByRole("button", { name: "Finish practice" })).toBeDisabled();
+  fireEvent.submit(screen.getByLabelText("Vaš kratki odgovor").closest("form")!);
+  const review = await screen.findByRole("region", { name: "Pregled vježbe" });
+  expect(review).toHaveTextContent("Odgovoreno i spremljeno 1 od 3");
+  expect(review).toHaveTextContent("Bez odgovora: 2 pitanja. Neodgovorena pitanja se ne ocjenjuju i ne ulaze u napredak.");
+  // Finishing with blanks is allowed but steps back behind reviewing them.
+  expect(screen.getByRole("button", { name: "Završi vježbu" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Završi vježbu" })).not.toHaveClass("bg-accent");
   expect(mock.save).toHaveBeenLastCalledWith("course", "attempt", "sa", { type: "SHORT_ANSWER", text: "My explanation" });
   expect(mock.submit).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Review unanswered" }));
-  expect(await screen.findByText("Question 1 of 3")).toHaveFocus();
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj neodgovorena" }));
+  await waitFor(() => expect(screen.getByText("Pitanje 1 od 3")).toHaveFocus());
 });
 
 it("does not enter review when the final answer fails to save", async () => {
   current.questions = [current.questions[2]];
-  render(<PracticeQuiz currentUserId="student" courseId="course" />); await open();
-  fireEvent.click(screen.getByRole("button", { name: "Start practice" }));
-  fireEvent.change(await screen.findByLabelText("Your short answer"), { target: { value: "Keep this draft" } });
+  render(<PracticeQuiz courseId="course" />); await open();
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
+  fireEvent.change(await screen.findByLabelText("Vaš kratki odgovor"), { target: { value: "Keep this draft" } });
   mock.save.mockRejectedValueOnce(new Error("Network failed"));
-  fireEvent.click(screen.getByRole("button", { name: "Save and review" }));
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i pregledaj" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Network failed");
-  expect(screen.getByLabelText("Your short answer")).toHaveValue("Keep this draft");
-  expect(screen.queryByRole("region", { name: "Review practice" })).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Vaš kratki odgovor")).toHaveValue("Keep this draft");
+  expect(screen.queryByRole("region", { name: "Pregled vježbe" })).not.toBeInTheDocument();
   expect(mock.submit).not.toHaveBeenCalled();
 });
 
@@ -725,58 +775,407 @@ it("saves before leaving, prevents duplicate saves, and preserves a failed draft
   await start(); fireEvent.click(screen.getByLabelText("Two"));
   let reject!: (cause: Error) => void;
   mock.save.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
-  fireEvent.click(screen.getByRole("button", { name: "Save and leave" }));
-  fireEvent.click(screen.getByRole("button", { name: "Save and leave" }));
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i izađi" }));
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i izađi" }));
   expect(mock.save).toHaveBeenCalledOnce();
   expect(mock.history).toHaveBeenCalledOnce();
   await act(async () => reject(new Error("Offline")));
   expect(screen.getByLabelText("Two")).toBeChecked();
-  expect(screen.getByText("Save failed")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Save and leave" }));
-  await screen.findByRole("button", { name: "Start practice" });
+  expect(screen.getByText("Spremanje nije uspjelo")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i izađi" }));
+  await screen.findByRole("button", { name: "Započni vježbu" });
   expect(current.questions[0].answer).toEqual({ type: "MULTIPLE_CHOICE", option_position: 1 });
   expect(mock.history).toHaveBeenCalledTimes(2);
 });
 
 it("requires an explicit decision before leaving an invalid edited short answer", async () => {
-  await start("Exam practice");
-  fireEvent.click(screen.getByRole("button", { name: /Question 3.*Unanswered/ }));
-  fireEvent.change(await screen.findByLabelText("Your short answer"), { target: { value: "   " } });
-  fireEvent.click(screen.getByRole("button", { name: "Save and leave" }));
-  expect(screen.getByText("Keep your unsaved answer?")).toHaveFocus();
-  expect(screen.getByRole("button", { name: "Save and continue" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
-  expect(screen.getByLabelText("Your short answer")).toHaveValue("   ");
+  await start("Ispitna vježba");
+  fireEvent.click(screen.getByRole("button", { name: /Pitanje 3.*Bez odgovora/ }));
+  fireEvent.change(await screen.findByLabelText("Vaš kratki odgovor"), { target: { value: "   " } });
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i izađi" }));
+  expect(screen.getByText("Zadržati nespremljen odgovor?")).toHaveFocus();
+  expect(screen.getByRole("button", { name: "Spremi i nastavi" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Nastavi uređivati" }));
+  expect(screen.getByLabelText("Vaš kratki odgovor")).toHaveValue("   ");
   expect(mock.save).not.toHaveBeenCalled();
 });
 
 it("keeps local edits visible when recovery cannot load the saved session", async () => {
   await start(); fireEvent.click(screen.getByLabelText("Two"));
   mock.read.mockRejectedValueOnce(new Error("Connection unavailable"));
-  fireEvent.click(screen.getByText("Recovery options"));
-  fireEvent.click(screen.getByRole("button", { name: "Reload saved answers" }));
-  fireEvent.click(screen.getByRole("button", { name: "Discard changes and continue" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj spremljene odgovore" }));
+  fireEvent.click(screen.getByRole("button", { name: "Odbaci promjene i nastavi" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Connection unavailable");
-  fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
+  fireEvent.click(screen.getByRole("button", { name: "Nastavi uređivati" }));
   expect(screen.getByLabelText("Two")).toBeChecked();
-  expect(screen.getByText("Question 1 of 3")).toHaveFocus();
+  expect(screen.getByText("Pitanje 1 od 3")).toHaveFocus();
   expect(mock.save).not.toHaveBeenCalled();
 });
 
 
 it('returns directly to marked questions from Guided review without changing experience', async () => {
-  render(<PracticeQuiz currentUserId='student' courseId='course' />);
+  render(<PracticeQuiz courseId='course' />);
   await open();
-  fireEvent.click(screen.getByRole('button', { name: 'Start practice' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Započni vježbu' }));
   fireEvent.click(await screen.findByLabelText('One'));
-  fireEvent.click(screen.getByRole('button', { name: 'Mark to revisit' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Save and next' }));
-  fireEvent.click(await screen.findByLabelText('False'));
-  fireEvent.click(screen.getByRole('button', { name: 'Save and next' }));
-  fireEvent.change(await screen.findByLabelText('Your short answer'), { target: { value: 'Explanation' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save and review' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Review marked' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Vrati se' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Spremi i dalje' }));
+  fireEvent.click(await screen.findByLabelText('Netočno'));
+  fireEvent.click(screen.getByRole('button', { name: 'Spremi i dalje' }));
+  fireEvent.change(await screen.findByLabelText('Vaš kratki odgovor'), { target: { value: 'Objašnjenje' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Spremi i pregledaj' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Pregledaj označena' }));
   expect(await screen.findByLabelText('One')).toBeChecked();
-  expect(screen.getByRole('radio', { name: 'Guided practice' })).toBeChecked();
   expect(mock.submit).not.toHaveBeenCalled();
+});
+
+const focusUnits = ["Unit 1", "Unit 2", "Unit 3"].map((title, position) => ({ id: `u${position + 1}`, course_id: "course", position, title, description: null, is_archived: false, approved_question_count: 10, created_at: "2026-10-01", updated_at: "2026-10-01" }));
+const midterm = { id: "mi", course_id: "course", academic_year: "2025/26", kind: "MIDTERM" as const, name: "MI", unit_ids: ["u1", "u2"], starts_on: null, ends_on: null, approved_question_count: 20, created_at: "2026-10-01", updated_at: "2026-10-01" };
+const allTypes = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"];
+
+function withUnits() {
+  mock.units.mockResolvedValue(focusUnits);
+  mock.examScopes.mockResolvedValue([midterm]);
+  // Ten questions per unit; the server expands an exam cycle to its units.
+  mock.availability.mockImplementation(async (_course: string, types: QuestionType[], _mode: string, focus?: PracticeFocus) => {
+    const units = !focus ? null : "exam_scope_id" in focus ? midterm.unit_ids : focus.unit_ids;
+    if (!units) return reply({ MULTIPLE_CHOICE: 10, TRUE_FALSE: 10, SHORT_ANSWER: 10 }, types, 30);
+    return { ...reply({ [types[0]]: units.length * 10 }, types, 30), by_unit: units.map(unit_id => ({ unit_id, count: 10 })) };
+  });
+}
+
+it("hides the practice focus when the course has no units", async () => {
+  render(<PracticeQuiz courseId="course" />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled());
+  expect(screen.queryByRole("group", { name: "Što vježbati" })).not.toBeInTheDocument();
+});
+
+it("starts practice for one exam cycle", async () => {
+  withUnits();
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByRole("radio", { name: "Ispitni rok" }));
+  expect(screen.getByLabelText("Ispitni rok", { selector: "select" })).toHaveValue("mi");
+  expect(screen.getByText("Obuhvaća: Unit 1, Unit 2")).toBeVisible();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
+  await screen.findByText("Choose a number");
+  expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE", { exam_scope_id: "mi" }, "IMMEDIATE");
+  expect(mock.availability).toHaveBeenCalledWith("course", allTypes, "ADAPTIVE", { exam_scope_id: "mi" });
+});
+
+it("requires chosen units and counts only their questions", async () => {
+  withUnits();
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByRole("radio", { name: "Odabrane cjeline" }));
+  expect(screen.getByText("Odaberite barem jednu cjelinu.")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Unit 3" }));
+  fireEvent.click(screen.getByRole("radio", { name: "20 pitanja" }));
+  expect(await screen.findByText(/Uz vaše postavke ima samo pitanja kolegija: 10\..*ili cjeline koje vježbate\./)).toBeVisible();
+  fireEvent.click(screen.getByRole("radio", { name: "10 pitanja" }));
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
+  await screen.findByText("Choose a number");
+  expect(mock.start).toHaveBeenCalledWith("course", 10, allTypes, "ADAPTIVE", { unit_ids: ["u3"] }, "IMMEDIATE");
+  expect(mock.availability).toHaveBeenLastCalledWith("course", allTypes, "ADAPTIVE", { unit_ids: ["u3"] });
+});
+
+it("keeps whole-course practice unfocused and labels focused history", async () => {
+  withUnits();
+  mock.history.mockResolvedValue([{ id: "past", course_id: "course", status: "SUBMITTED", started_at: "2026-10-01T10:00:00Z", submitted_at: "2026-10-01T10:10:00Z", focus_label: "MI 2025/26" }]);
+  render(<PracticeQuiz courseId="course" />);
+  expect(await screen.findByRole("radio", { name: "Cijeli kolegij" })).toBeChecked();
+  expect(screen.getByRole("button", { name: /Pregled vježbe .* · MI 2025\/26/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
+  await screen.findByText("Choose a number");
+  expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE", undefined, "IMMEDIATE");
+});
+
+it("shows the course units of the current question while practicing", async () => {
+  if (current.status !== "ACTIVE") throw new Error("expected an active attempt");
+  current.questions[0].units = [{ id: "unit-2", title: "Lexical analysis" }, { id: "unit-5", title: "LR parsing" }];
+  render(<PracticeQuiz courseId="course" />);
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
+  await screen.findByText("Choose a number");
+  const units = screen.getByRole("list", { name: "Cjeline kolegija" });
+  expect(within(units).getAllByRole("listitem").map(item => item.textContent)).toEqual(["Lexical analysis", "LR parsing"]);
+  fireEvent.click(screen.getByLabelText("One"));
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
+  await screen.findByText("The sky is green");
+  expect(screen.queryByRole("list", { name: "Cjeline kolegija" })).not.toBeInTheDocument();
+});
+
+it("checks a guided answer with confidence, reveals only its key, and moves on without re-saving", async () => {
+  current.feedback_mode = "IMMEDIATE";
+  mock.check.mockImplementation(async (_course, _id, question: string, confidence) => {
+    current = { ...current, questions: current.questions.map(q => q.id === question ? { ...q, feedback: { options: q.options.map(o => ({ ...o, is_correct: o.position === 1 })), explanation: "Two is the answer", correct_boolean: null, reference_answer: null, grading_status: "INCORRECT", confidence } } : q) } as Attempt;
+    return structuredClone(current);
+  });
+  render(<PracticeQuiz courseId="course" />);
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
+  await screen.findByText("Choose a number");
+  expect(screen.queryByText("Two is the answer")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText("One"));
+  fireEvent.click(screen.getByLabelText("Pogađao sam"));
+  fireEvent.click(screen.getByRole("button", { name: "Provjeri odgovor" }));
+  expect(await screen.findByRole("heading", { name: "Netočno" })).toBeVisible();
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Netočno" })).toHaveFocus());
+  expect(mock.save).toHaveBeenCalledWith("course", "attempt", "mcq", { type: "MULTIPLE_CHOICE", option_position: 0 });
+  expect(mock.check).toHaveBeenCalledWith("course", "attempt", "mcq", "GUESS");
+  expect(screen.getByText("Two is the answer")).toBeVisible();
+  expect(screen.getByText("Vaša procjena: pogađao sam.")).toBeVisible();
+  expect(screen.getByText("Točan odgovor", { selector: "span" })).toBeVisible();
+  // The slips mark the choice and the key, so the feedback leads with the explanation instead.
+  const feedback = screen.getByRole("region", { name: "Povratna informacija" });
+  expect(within(feedback).getByText("Two is the answer")).toBeVisible();
+  expect(within(feedback).queryByText(/Your answer|Correct answer|Explanation/)).not.toBeInTheDocument();
+  expect(screen.getByText("provjereno 1 od 3")).toBeVisible();
+  expect(screen.getByLabelText(/One/)).toBeDisabled();
+  expect(screen.queryByText("Koliko ste sigurni?", { exact: false })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Sljedeće pitanje" }));
+  await screen.findByText("The sky is green");
+  expect(mock.save).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("button", { name: "Provjeri odgovor" })).toBeDisabled();
+  expect(screen.queryByRole("heading", { name: /Correct|Incorrect/ })).not.toBeInTheDocument();
+});
+
+it("ends a guided session from its last checked answer without a review or confirmation step", async () => {
+  current.feedback_mode = "IMMEDIATE";
+  current.questions = [current.questions[0]];
+  mock.history.mockResolvedValue([current]);
+  mock.check.mockImplementation(async (_course, _id, question: string) => {
+    current = { ...current, questions: current.questions.map(q => q.id === question ? { ...q, feedback: { options: q.options.map(o => ({ ...o, is_correct: o.position === 0 })), explanation: null, correct_boolean: null, reference_answer: null, grading_status: "CORRECT" } } : q) } as Attempt;
+    return structuredClone(current);
+  });
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Nastavi vježbu" }));
+  await screen.findByText("Choose a number");
+  fireEvent.click(screen.getByLabelText("One"));
+  fireEvent.click(screen.getByRole("button", { name: "Provjeri odgovor" }));
+  // Every answer is checked and final, so the last question ends the session itself.
+  fireEvent.click(await screen.findByRole("button", { name: "Završi vježbu" }));
+  await screen.findByText("Vježba je završena");
+  expect(mock.submit).toHaveBeenCalledExactlyOnceWith("course", "attempt");
+  expect(screen.queryByRole("region", { name: "Pregled vježbe" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Potvrdi konačnu predaju" })).not.toBeInTheDocument();
+});
+
+it("finishes practice with blanks from the review step and reports them as left blank", async () => {
+  await start("Ispitna vježba");
+  fireEvent.click(screen.getByLabelText("One"));
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj i završi" }));
+  const review = await screen.findByRole("region", { name: "Pregled vježbe" });
+  expect(review).toHaveTextContent("Odgovoreno i spremljeno 1 od 3");
+  const submit = mock.submit.getMockImplementation()!;
+  mock.submit.mockImplementationOnce(async () => {
+    const result = await submit();
+    for (const question of result.questions) if (question.answer === null) question.grading_status = "UNANSWERED";
+    return result;
+  });
+  fireEvent.click(within(review).getByRole("button", { name: "Završi vježbu" }));
+  await screen.findByText("Vježba je završena");
+  expect(mock.submit).toHaveBeenCalledExactlyOnceWith("course", "attempt");
+  expect(screen.getByLabelText("Sažetak rezultata")).toHaveTextContent("Točno1Netočno0Kratki odgovori0Ostavljeno prazno2");
+});
+
+it("marks a missed multiple-select option on the slips and spells out only a typed key", async () => {
+  current.feedback_mode = "IMMEDIATE";
+  current.questions = [
+    { id: "multi", position: 0, type: "MULTIPLE_SELECT", stem: "Which are prime?", difficulty: null, options: [{ position: 0, text: "2" }, { position: 1, text: "3" }, { position: 2, text: "4" }], answer: null },
+    { id: "num", position: 1, type: "NUMERIC", stem: "Gravity?", difficulty: null, options: [], answer: null, unit: "m/s²" },
+  ];
+  mock.history.mockResolvedValue([current]);
+  mock.check.mockImplementation(async (_course, _id, question: string) => {
+    current = { ...current, questions: current.questions.map(q => q.id !== question ? q : { ...q, feedback: question === "multi"
+      ? { options: q.options.map(o => ({ ...o, is_correct: o.position < 2 })), explanation: "4 is even.", correct_boolean: null, reference_answer: null, grading_status: "INCORRECT" }
+      : { options: [], explanation: "Standard gravity.", correct_boolean: null, reference_answer: null, grading_status: "CORRECT", correct_value: "9.81", absolute_tolerance: "0.05", relative_tolerance: null } }) } as Attempt;
+    return structuredClone(current);
+  });
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Nastavi vježbu" }));
+  await screen.findByText("Which are prime?");
+  expect(screen.getByText("provjereno 0 od 2 · provjereni odgovor je konačan")).toBeVisible();
+  fireEvent.click(screen.getByLabelText("2"));
+  fireEvent.click(screen.getByRole("button", { name: "Provjeri odgovor" }));
+  let feedback = await screen.findByRole("region", { name: "Povratna informacija" });
+  expect(within(feedback).getByRole("heading", { name: "Netočno" })).toBeVisible();
+  expect(within(feedback).getByText("4 is even.")).toBeVisible();
+  expect(within(feedback).queryByText(/Your answer|Correct answer/)).not.toBeInTheDocument();
+  expect(screen.getByText("Vaš odgovor ✓")).toBeVisible();
+  expect(screen.getByText("Propušteno · Točan odgovor")).toBeVisible();
+  expect(screen.getByRole("checkbox", { name: /^3/ })).not.toBeChecked();
+  expect(screen.getByText("provjereno 1 od 2")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Sljedeće pitanje" }));
+  fireEvent.change(await screen.findByLabelText(/^Vaš odgovor/), { target: { value: "9,81" } });
+  fireEvent.click(screen.getByRole("button", { name: "Provjeri odgovor" }));
+  feedback = await screen.findByRole("region", { name: "Povratna informacija" });
+  expect(within(feedback).getByRole("heading", { name: "Točno" })).toBeVisible();
+  // A typed answer has no slip to mark, so the key is spelled out before the explanation.
+  expect(within(feedback).getByText("Vaš odgovor", { selector: "dt" }).nextElementSibling).toHaveTextContent("9,81 m/s²");
+  expect(within(feedback).getByText("Točan odgovor", { selector: "dt" }).nextElementSibling).toHaveTextContent("9.81 m/s² (± 0.05)");
+  expect(within(feedback).getByText("Standard gravity.")).toBeVisible();
+});
+
+it("keeps exam sessions free of checks and resumes a guided session in its own mode", async () => {
+  render(<PracticeQuiz courseId="course" />);
+  await open();
+  fireEvent.click(screen.getByLabelText("Ispitna vježba"));
+  expect(screen.getByText(/rezultate prikazuje tek na kraju/)).toBeInTheDocument();
+  current.feedback_mode = "END";
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
+  await screen.findByText("Choose a number");
+  expect(screen.queryByRole("button", { name: "Provjeri odgovor" })).not.toBeInTheDocument();
+  expect(screen.queryByText("Koliko ste sigurni?", { exact: false })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Spremi i dalje" })).toBeInTheDocument();
+});
+
+it("resumes a guided session with checking enabled", async () => {
+  current.feedback_mode = "IMMEDIATE";
+  mock.history.mockResolvedValue([current]);
+  render(<PracticeQuiz courseId="course" />);
+  await open();
+  fireEvent.click(screen.getByLabelText("Ispitna vježba"));
+  fireEvent.click(await screen.findByRole("button", { name: "Nastavi vježbu" }));
+  await screen.findByText("Choose a number");
+  expect(screen.getByRole("button", { name: "Provjeri odgovor" })).toBeInTheDocument();
+});
+
+it("opens setup focused on the exam cycle requested from the overview", async () => {
+  withUnits();
+  render(<PracticeQuiz courseId="course" setupRequest={{ id: 1, mode: "ADAPTIVE", scopeId: "mi" }} />);
+  expect(await screen.findByLabelText("Ispitni rok", { selector: "select" })).toHaveValue("mi");
+  expect(screen.getByRole("radio", { name: "Ispitni rok" })).toBeChecked();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
+  await screen.findByText("Choose a number");
+  expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE", { exam_scope_id: "mi" }, "IMMEDIATE");
+});
+
+it("opens setup focused on the unit requested from the readiness card", async () => {
+  withUnits();
+  render(<PracticeQuiz courseId="course" setupRequest={{ id: 1, mode: "ADAPTIVE", unitIds: ["u2"] }} />);
+  expect(await screen.findByRole("radio", { name: "Odabrane cjeline" })).toBeChecked();
+  expect(await screen.findByRole("checkbox", { name: "Unit 2" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Unit 1" })).not.toBeChecked();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
+  await screen.findByText("Choose a number");
+  expect(mock.start).toHaveBeenCalledWith("course", 5, allTypes, "ADAPTIVE", { unit_ids: ["u2"] }, "IMMEDIATE");
+});
+
+it("takes a past paper with points, skips and clears answers, and hands it in with blanks", async () => {
+  current.feedback_mode = "END";
+  current.paper = { exam_paper_id: "p1", title: "MI 2025/26", total_points: 6, wrong_answer_penalty: 0.25, pass_threshold: 4, duration_minutes: 90 };
+  current.questions = current.questions.map((q, index) => ({ ...q, points: [2, 1, 3][index], label: `Zadatak ${index + 1}` }));
+  mock.history.mockResolvedValue([current]);
+  mock.clear.mockImplementation(async (_course, _id, question: string) => {
+    current = { ...current, questions: current.questions.map(q => q.id === question ? { ...q, answer: null } : q) } as Attempt;
+    return structuredClone(current);
+  });
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Nastavi vježbu" }));
+  await screen.findByText("Choose a number");
+  expect(screen.getByText("Zadatak 1 · 2 boda")).toBeVisible();
+  expect(screen.queryByText(/Item 1/)).not.toBeInTheDocument();
+  // The session bar carries the title; the paper region carries its size, time limit and scoring rule.
+  const header = screen.getByRole("region", { name: "Ispitni list" });
+  expect(screen.getByRole("heading", { level: 1, name: "MI 2025/26" })).toBeVisible();
+  expect(within(header).getByText(/· 90 min$/)).toBeVisible();
+  expect(within(header).getByText("Netočan odgovor oduzima ¼ bodova zadatka; prazan nosi 0 bodova.")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Preskoči zasad" }));
+  await screen.findByText("The sky is green");
+  expect(mock.save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByLabelText("Netočno"));
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
+  await screen.findByText("Explain gravity");
+  fireEvent.click(screen.getByRole("button", { name: "Prethodno" }));
+  await screen.findByText("The sky is green");
+  fireEvent.click(screen.getByRole("button", { name: "Ostavi prazno" }));
+  await waitFor(() => expect(mock.clear).toHaveBeenCalledWith("course", "attempt", "tf"));
+  expect(screen.getByLabelText("Netočno")).not.toBeChecked();
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj i predaj ispit" }));
+  expect(await screen.findByText("Bez odgovora: 3 pitanja. Prazna pitanja nose 0 bodova.")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Predaj ispit" }));
+  fireEvent.click(screen.getByRole("button", { name: "Potvrdi konačnu predaju" }));
+  await waitFor(() => expect(mock.submit).toHaveBeenCalledWith("course", "attempt"));
+});
+
+it("renders formulas and code in the question and its options", async () => {
+  current.questions = [{ ...current.questions[0], stem: "Koliko je $\\frac{7}{2}$ u C-u?\n```c\nprintf(\"%d\", 7 / 2);\n```", options: [{ position: 0, text: "`3`" }, { position: 1, text: "$3{,}5$" }] }];
+  const view = render(<PracticeQuiz courseId="course" />);
+  await open();
+  fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
+  // KaTeX loads lazily on the first formula.
+  await waitFor(() => expect(view.container.querySelectorAll("fieldset .katex")).toHaveLength(2), { timeout: 5000 });
+  const legend = view.container.querySelector("legend");
+  expect(legend?.querySelector("annotation")).toHaveTextContent("\\frac{7}{2}");
+  expect(legend?.querySelector("code[data-language='c']")).toHaveTextContent("printf(\"%d\", 7 / 2);");
+  expect(legend).not.toHaveTextContent("$");
+  // jsdom cannot compute accessible names across MathML, so find options by label text.
+  fireEvent.click(screen.getByLabelText("3"));
+  expect(screen.getByLabelText("3")).toBeChecked();
+}, 10000);
+
+it("shows the exam timer and hands in saved answers when the server deadline passes", async () => {
+  const now = Date.now();
+  current.feedback_mode = "END";
+  current.paper = { exam_paper_id: "p1", title: "MI 2025/26", total_points: 6, wrong_answer_penalty: 0.25, pass_threshold: 4, duration_minutes: 90 };
+  current.questions = current.questions.map((q, index) => ({ ...q, points: [2, 1, 3][index], label: null }));
+  current.deadline_at = new Date(now + 2_000).toISOString();
+  current.server_time = new Date(now).toISOString();
+  mock.history.mockResolvedValue([current]);
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Nastavi vježbu" }));
+  await screen.findByText("Choose a number");
+  expect(await screen.findByRole("timer")).toHaveTextContent(/0:0[12]/);
+  await waitFor(() => expect(mock.submit).toHaveBeenCalledWith("course", "attempt"), { timeout: 4000 });
+  expect(await screen.findByRole("heading", { name: "Vježba je završena" })).toBeVisible();
+  expect(mock.submit).toHaveBeenCalledTimes(1);
+});
+
+it("answers numeric and multiple-select questions and shows their keys in results", async () => {
+  current.questions = [
+    { id: "num", position: 0, type: "NUMERIC", stem: "Gravity?", difficulty: null, options: [], answer: null, unit: "m/s²" },
+    { id: "multi", position: 1, type: "MULTIPLE_SELECT", stem: "Which are prime?", difficulty: null, options: [{ position: 0, text: "2" }, { position: 1, text: "3" }, { position: 2, text: "4" }], answer: null },
+  ];
+  current.feedback_mode = "END";
+  mock.history.mockResolvedValue([current]);
+  mock.submit.mockImplementation(async () => {
+    current = { ...current, status: "SUBMITTED", submitted_at: "2026-10-21T10:10:00Z", questions: [
+      { ...current.questions[0], options: [], grading_status: "CORRECT", explanation: null, reference_answer: null, correct_boolean: null, correct_value: "9.81", absolute_tolerance: "0.05", relative_tolerance: null },
+      { ...current.questions[1], options: [{ position: 0, text: "2", is_correct: true }, { position: 1, text: "3", is_correct: true }, { position: 2, text: "4", is_correct: false }], grading_status: "INCORRECT", explanation: null, reference_answer: null, correct_boolean: null },
+    ] } as Attempt;
+    return structuredClone(current);
+  });
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Nastavi vježbu" }));
+  const field = await screen.findByLabelText(/^Vaš odgovor/);
+  expect(screen.getByText("m/s²")).toBeVisible();
+  fireEvent.change(field, { target: { value: "9.81 m/s" } });
+  expect(screen.getByText(/bez mjerne jedinice i razmaka/)).toBeVisible();
+  expect(field).toHaveAttribute("aria-invalid", "true");
+  expect(screen.getByRole("button", { name: "Spremi i dalje" })).toBeDisabled();
+  fireEvent.change(field, { target: { value: "9,81" } });
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
+  await screen.findByText("Which are prime?");
+  expect(mock.save).toHaveBeenLastCalledWith("course", "attempt", "num", { type: "NUMERIC", value: "9,81" });
+  expect(screen.getByText(/Točan je samo potpuno točan skup/)).toBeVisible();
+  fireEvent.click(screen.getByLabelText("3"));
+  fireEvent.click(screen.getByLabelText("2"));
+  fireEvent.click(screen.getByLabelText("3"));
+  expect(screen.getByLabelText("3")).not.toBeChecked();
+  fireEvent.click(screen.getByLabelText("2"));
+  expect(screen.getByRole("button", { name: "Spremi i pregledaj" })).toBeDisabled();
+  fireEvent.click(screen.getByLabelText("3"));
+  fireEvent.click(screen.getByLabelText("2"));
+  fireEvent.click(screen.getByRole("button", { name: "Spremi i pregledaj" }));
+  await waitFor(() => expect(mock.save).toHaveBeenLastCalledWith("course", "attempt", "multi", { type: "MULTIPLE_SELECT", option_positions: [0, 1] }));
+  fireEvent.click(await screen.findByRole("button", { name: "Završi vježbu" }));
+  await screen.findByRole("heading", { name: "Vježba je završena" });
+  fireEvent.click(screen.getByRole("button", { name: "Svi odgovori" }));
+  expect(screen.getByText("9.81 m/s² (± 0.05)")).toBeInTheDocument();
+  // The saved selection and the key read the same here (the second question is shown on its own).
+  fireEvent.click(screen.getByRole("button", { name: "Skoči na pitanje 2" }));
+  expect(screen.getAllByText("2; 3", { selector: "dd" })).toHaveLength(2);
 });

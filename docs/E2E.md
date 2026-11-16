@@ -1,8 +1,14 @@
 # Browser acceptance test
 
-The Chromium suite proves one real, two-session journey: a seeded faculty moderator
-logs in and creates a course; a separate student joins it, uploads a tiny PDF,
-authors and submits an MCQ; the moderator approves it; the student reports the
+The interface is Croatian; this document names screens and buttons in English (for
+example Reports and Suggestions are the moderation tabs, Results is the submitted
+result), so match them to the labels in `frontend/e2e/core-journey.spec.ts`.
+
+Two Chromium specs run. `url-routing.spec.ts` checks deep links, refresh and
+Back/Forward on a protected route at 1280 px and 390 px. `core-journey.spec.ts` proves
+one real, two-session journey: a seeded faculty moderator
+logs in, creates a course and uploads a tiny PDF as its owner; a separate student
+joins it, is offered no materials, authors and submits an MCQ; the moderator approves it; the student reports the
 approved question as UNCLEAR with fixed details and the moderator dismisses it in
 Reports; the student proposes difficulty 3 with a fixed note; the moderator compares
 base version 3 and the proposed value in Suggestions and applies it; the student

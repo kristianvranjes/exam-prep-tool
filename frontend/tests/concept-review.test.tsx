@@ -38,8 +38,8 @@ async function ready(rows: Concept[] = [draft], role: "OWNER" | "MEMBER" = "MEMB
   mock.concepts.mockResolvedValueOnce(rows);
   mock.membership.mockResolvedValue({ role });
   render(<ConceptReview courseId="course1" materialId="m1" />);
-  fireEvent.click(screen.getByText("Advanced: concept extraction and review"));
-  await waitFor(() => expect(screen.queryByText("Loading concepts…")).not.toBeInTheDocument());
+  fireEvent.click(screen.getByText("Napredno: izdvajanje i pregled pojmova"));
+  await waitFor(() => expect(screen.queryByText("Učitavam pojmove…")).not.toBeInTheDocument());
 }
 
 function card(name: string) {
@@ -52,18 +52,18 @@ it("loads material-scoped concepts and membership with an explicit pending state
   const pending = deferred<Concept[]>();
   mock.concepts.mockReturnValueOnce(pending.promise);
   render(<ConceptReview courseId="course1" materialId="m1" />);
-  expect(screen.getByText("Loading concepts…")).not.toBeVisible();
-  fireEvent.click(screen.getByText("Advanced: concept extraction and review"));
-  expect(screen.getByText("Loading concepts…")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Extract concepts" })).toBeDisabled();
+  expect(screen.getByText("Učitavam pojmove…")).not.toBeVisible();
+  fireEvent.click(screen.getByText("Napredno: izdvajanje i pregled pojmova"));
+  expect(screen.getByText("Učitavam pojmove…")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Izdvoji pojmove" })).toBeDisabled();
   await act(async () => pending.resolve([draft]));
   expect(screen.getByRole("heading", { name: "Matrica" })).toBeInTheDocument();
-  expect(within(card("Matrica")).getByText("high importance")).toBeInTheDocument();
-  expect(within(card("Matrica")).getByText("Aliases: Matrix")).toBeInTheDocument();
+  expect(within(card("Matrica")).getByText("važnost: velika")).toBeInTheDocument();
+  expect(within(card("Matrica")).getByText("Drugi nazivi: Matrix")).toBeInTheDocument();
   expect(mock.concepts).toHaveBeenCalledWith("course1", "m1");
   expect(mock.membership).toHaveBeenCalledWith("course1");
-  fireEvent.click(screen.getByText("Advanced: concept extraction and review"));
-  fireEvent.click(screen.getByText("Advanced: concept extraction and review"));
+  fireEvent.click(screen.getByText("Napredno: izdvajanje i pregled pojmova"));
+  fireEvent.click(screen.getByText("Napredno: izdvajanje i pregled pojmova"));
   expect(mock.concepts).toHaveBeenCalledTimes(1);
   expect(mock.membership).toHaveBeenCalledTimes(1);
 });
@@ -71,11 +71,11 @@ it("loads material-scoped concepts and membership with an explicit pending state
 it("keeps initial failure local and retries the combined list and permission load", async () => {
   mock.concepts.mockRejectedValueOnce(new Error("list unavailable")).mockResolvedValueOnce([draft]);
   render(<ConceptReview courseId="course1" materialId="m1" />);
-  fireEvent.click(screen.getByText("Advanced: concept extraction and review"));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load concepts and review permissions.");
-  expect(screen.queryByText("No concept proposals yet.")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Extract concepts" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "Retry concepts" }));
+  fireEvent.click(screen.getByText("Napredno: izdvajanje i pregled pojmova"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Pojmovi i prava pregleda nisu učitani.");
+  expect(screen.queryByText("Još nema prijedloga pojmova.")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Izdvoji pojmove" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj pojmove" }));
   expect(await screen.findByRole("heading", { name: "Matrica" })).toBeInTheDocument();
   expect(mock.concepts).toHaveBeenCalledTimes(2);
   expect(mock.membership).toHaveBeenCalledTimes(2);
@@ -84,13 +84,13 @@ it("keeps initial failure local and retries the combined list and permission loa
 it("lets a MEMBER extract and inspect escaped source text without review controls", async () => {
   await ready();
   expect(screen.queryByRole("button", { name: /^(Approve|Reject)/ })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Extract concepts" }));
-  expect(await screen.findByText(/Extraction succeeded · model fake/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Izdvoji pojmove" }));
+  expect(await screen.findByText(/Izdvajanje uspjelo · model fake/)).toBeInTheDocument();
   expect(mock.extractConcepts).toHaveBeenCalledWith("m1");
   await waitFor(() => expect(mock.concepts).toHaveBeenCalledTimes(2));
-  fireEvent.click(screen.getByRole("button", { name: "Inspect sources for Matrica" }));
-  fireEvent.click(await screen.findByText("Source excerpt 1"));
-  const text = await screen.findByRole("region", { name: "Source text for chunk chunk1" });
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj izvore za Matrica" }));
+  fireEvent.click(await screen.findByText("Isječak izvora 1"));
+  const text = await screen.findByRole("region", { name: "Tekst izvora za isječak chunk1" });
   expect(text).toHaveTextContent("<script>source text</script>");
   expect(text.innerHTML).toContain("&lt;script&gt;");
   expect(text.querySelector("script")).toBeNull();
@@ -99,45 +99,45 @@ it("lets a MEMBER extract and inspect escaped source text without review control
 });
 
 it("shows OWNER review actions only on DRAFT concepts", async () => {
-  await ready([draft, { ...other, status: "APPROVED" }, { ...other, id: "c3", name: "Rejected", status: "REJECTED" }], "OWNER");
-  expect(within(card("Matrica")).getByRole("button", { name: "Approve Matrica" })).toBeInTheDocument();
-  expect(within(card("Matrica")).getByRole("button", { name: "Reject Matrica" })).toBeInTheDocument();
+  await ready([draft, { ...other, status: "APPROVED" }, { ...other, id: "c3", name: "Odbijeno", status: "REJECTED" }], "OWNER");
+  expect(within(card("Matrica")).getByRole("button", { name: "Odobri Matrica" })).toBeInTheDocument();
+  expect(within(card("Matrica")).getByRole("button", { name: "Odbij Matrica" })).toBeInTheDocument();
   expect(within(card("Vectors")).queryByRole("button", { name: /^(Approve|Reject)/ })).not.toBeInTheDocument();
-  expect(within(card("Rejected")).queryByRole("button", { name: /^(Approve|Reject)/ })).not.toBeInTheDocument();
+  expect(within(card("Odbijeno")).queryByRole("button", { name: /^(Approve|Reject)/ })).not.toBeInTheDocument();
 });
 
 it("approves only the returned concept and clears matching inspected sources", async () => {
   await ready([draft, other], "OWNER");
-  fireEvent.click(screen.getByRole("button", { name: "Inspect sources for Matrica" }));
-  expect(await screen.findByText("Sources for Matrica")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Approve Matrica" }));
-  await waitFor(() => expect(within(card("Matrica")).getByText("approved")).toBeInTheDocument());
-  expect(within(card("Matrica")).queryByRole("button", { name: "Approve Matrica" })).not.toBeInTheDocument();
-  expect(within(card("Vectors")).getByText("draft")).toBeInTheDocument();
-  expect(within(card("Vectors")).getByRole("button", { name: "Approve Vectors" })).toBeInTheDocument();
-  expect(screen.queryByRole("region", { name: "Source inspection" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj izvore za Matrica" }));
+  expect(await screen.findByText("Izvori za Matrica")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Odobri Matrica" }));
+  await waitFor(() => expect(within(card("Matrica")).getByText("odobreno")).toBeInTheDocument());
+  expect(within(card("Matrica")).queryByRole("button", { name: "Odobri Matrica" })).not.toBeInTheDocument();
+  expect(within(card("Vectors")).getByText("nacrt")).toBeInTheDocument();
+  expect(within(card("Vectors")).getByRole("button", { name: "Odobri Vectors" })).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Pregled izvora" })).not.toBeInTheDocument();
   expect(mock.reviewConcept).toHaveBeenCalledWith("c1", "APPROVED");
 });
 
 it("rejects only the returned concept and leaves another draft reviewable", async () => {
   mock.reviewConcept.mockResolvedValueOnce({ ...other, status: "REJECTED" });
   await ready([draft, other], "OWNER");
-  fireEvent.click(screen.getByRole("button", { name: "Reject Vectors" }));
-  await waitFor(() => expect(within(card("Vectors")).getByText("rejected")).toBeInTheDocument());
-  expect(within(card("Vectors")).queryByRole("button", { name: "Reject Vectors" })).not.toBeInTheDocument();
-  expect(within(card("Matrica")).getByText("draft")).toBeInTheDocument();
-  expect(within(card("Matrica")).getByRole("button", { name: "Reject Matrica" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Odbij Vectors" }));
+  await waitFor(() => expect(within(card("Vectors")).getByText("odbijeno")).toBeInTheDocument());
+  expect(within(card("Vectors")).queryByRole("button", { name: "Odbij Vectors" })).not.toBeInTheDocument();
+  expect(within(card("Matrica")).getByText("nacrt")).toBeInTheDocument();
+  expect(within(card("Matrica")).getByRole("button", { name: "Odbij Matrica" })).toBeInTheDocument();
   expect(mock.reviewConcept).toHaveBeenCalledWith("c2", "REJECTED");
 });
 
 it("keeps failed review actions visible and permits retry", async () => {
   mock.reviewConcept.mockRejectedValueOnce(new Error("Review conflict")).mockResolvedValueOnce({ ...draft, status: "APPROVED" });
   await ready([draft], "OWNER");
-  fireEvent.click(screen.getByRole("button", { name: "Approve Matrica" }));
+  fireEvent.click(screen.getByRole("button", { name: "Odobri Matrica" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Review conflict");
-  expect(within(card("Matrica")).getByText("draft")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Approve Matrica" }));
-  await waitFor(() => expect(within(card("Matrica")).getByText("approved")).toBeInTheDocument());
+  expect(within(card("Matrica")).getByText("nacrt")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Odobri Matrica" }));
+  await waitFor(() => expect(within(card("Matrica")).getByText("odobreno")).toBeInTheDocument());
   expect(mock.reviewConcept).toHaveBeenCalledTimes(2);
 });
 
@@ -145,34 +145,34 @@ it("blocks duplicate review submissions while pending", async () => {
   const pending = deferred<Concept>();
   mock.reviewConcept.mockReturnValueOnce(pending.promise);
   await ready([draft], "OWNER");
-  fireEvent.click(screen.getByRole("button", { name: "Approve Matrica" }));
-  const approve = screen.getByRole("button", { name: "Approve Matrica" });
+  fireEvent.click(screen.getByRole("button", { name: "Odobri Matrica" }));
+  const approve = screen.getByRole("button", { name: "Odobri Matrica" });
   expect(approve).toBeDisabled();
   fireEvent.click(approve);
   expect(mock.reviewConcept).toHaveBeenCalledTimes(1);
   await act(async () => pending.resolve({ ...draft, status: "APPROVED" }));
-  expect(within(card("Matrica")).getByText("approved")).toBeInTheDocument();
+  expect(within(card("Matrica")).getByText("odobreno")).toBeInTheDocument();
 });
 
 it("shows extraction pending state and blocks duplicate submissions", async () => {
   const pending = deferred<AIJob>();
   mock.extractConcepts.mockReturnValueOnce(pending.promise);
   await ready();
-  fireEvent.click(screen.getByRole("button", { name: "Extract concepts" }));
-  const extract = screen.getByRole("button", { name: "Extracting concepts…" });
+  fireEvent.click(screen.getByRole("button", { name: "Izdvoji pojmove" }));
+  const extract = screen.getByRole("button", { name: "Izdvajam pojmove…" });
   expect(extract).toBeDisabled();
-  expect(screen.getByText("AI-assisted extraction is running…")).toBeInTheDocument();
+  expect(screen.getByText("Izdvajanje uz pomoć AI-ja je u tijeku…")).toBeInTheDocument();
   fireEvent.click(extract);
   expect(mock.extractConcepts).toHaveBeenCalledTimes(1);
   await act(async () => pending.resolve(job));
-  expect(await screen.findByText(/Extraction succeeded · model fake/)).toBeInTheDocument();
+  expect(await screen.findByText(/Izdvajanje uspjelo · model fake/)).toBeInTheDocument();
 });
 
 it("refreshes material-scoped concepts after successful extraction", async () => {
   await ready();
   mock.concepts.mockResolvedValueOnce([draft, other]);
-  fireEvent.click(screen.getByRole("button", { name: "Extract concepts" }));
-  expect(await screen.findByText(/Extraction succeeded · model fake/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Izdvoji pojmove" }));
+  expect(await screen.findByText(/Izdvajanje uspjelo · model fake/)).toBeInTheDocument();
   expect(await screen.findByRole("heading", { name: "Vectors" })).toBeInTheDocument();
   expect(mock.concepts).toHaveBeenLastCalledWith("course1", "m1");
 });
@@ -180,31 +180,31 @@ it("refreshes material-scoped concepts after successful extraction", async () =>
 it("shows a FAILED job's safe error and allows an explicit extraction retry", async () => {
   mock.extractConcepts.mockResolvedValueOnce({ ...job, status: "FAILED", error_message: "Local AI unavailable." }).mockResolvedValueOnce(job);
   await ready();
-  fireEvent.click(screen.getByRole("button", { name: "Extract concepts" }));
+  fireEvent.click(screen.getByRole("button", { name: "Izdvoji pojmove" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Local AI unavailable.");
-  expect(screen.getByText(/Extraction failed · model fake/)).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Extract concepts" })).toBeEnabled();
-  fireEvent.click(screen.getByRole("button", { name: "Extract concepts" }));
-  expect(await screen.findByText(/Extraction succeeded · model fake/)).toBeInTheDocument();
+  expect(screen.getByText(/Izdvajanje nije uspjelo · model fake/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Izdvoji pojmove" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "Izdvoji pojmove" }));
+  expect(await screen.findByText(/Izdvajanje uspjelo · model fake/)).toBeInTheDocument();
   expect(mock.extractConcepts).toHaveBeenCalledTimes(2);
 });
 
 it("hides raw extraction request errors behind local retry feedback", async () => {
   mock.extractConcepts.mockRejectedValueOnce(new Error("raw provider traceback"));
   await ready();
-  fireEvent.click(screen.getByRole("button", { name: "Extract concepts" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not extract concepts. Try again.");
+  fireEvent.click(screen.getByRole("button", { name: "Izdvoji pojmove" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Pojmovi nisu izdvojeni. Pokušajte ponovno.");
   expect(screen.queryByText(/raw provider traceback/)).not.toBeInTheDocument();
 });
 
 it("preserves displayed rows when post-extraction refresh fails and retries the list", async () => {
   await ready();
   mock.concepts.mockRejectedValueOnce(new Error("refresh unavailable")).mockResolvedValueOnce([draft, other]);
-  fireEvent.click(screen.getByRole("button", { name: "Extract concepts" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not refresh concepts");
+  fireEvent.click(screen.getByRole("button", { name: "Izdvoji pojmove" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Pojmovi nisu osvježeni");
   expect(screen.getByRole("heading", { name: "Matrica" })).toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Vectors" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Retry concept list" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj popis pojmova" }));
   expect(await screen.findByRole("heading", { name: "Vectors" })).toBeInTheDocument();
   expect(mock.extractConcepts).toHaveBeenCalledTimes(1);
 });
@@ -213,21 +213,21 @@ it("shows a source inspection loading state", async () => {
   const pending = deferred<ConceptDetail>();
   mock.concept.mockReturnValueOnce(pending.promise);
   await ready();
-  fireEvent.click(screen.getByRole("button", { name: "Inspect sources for Matrica" }));
-  expect(within(screen.getByRole("region", { name: "Source inspection" })).getByText("Loading sources…")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj izvore za Matrica" }));
+  expect(within(screen.getByRole("region", { name: "Pregled izvora" })).getByText("Učitavam izvore…")).toBeInTheDocument();
   await act(async () => pending.resolve(detail));
-  expect(await screen.findByText("Sources for Matrica")).toBeInTheDocument();
+  expect(await screen.findByText("Izvori za Matrica")).toBeInTheDocument();
   expect(mock.concept).toHaveBeenCalledWith("c1");
 });
 
 it("keeps source failures local and retryable without clearing concepts", async () => {
   mock.concept.mockRejectedValueOnce(new Error("source unavailable")).mockResolvedValueOnce(detail);
   await ready();
-  fireEvent.click(screen.getByRole("button", { name: "Inspect sources for Matrica" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load sources");
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj izvore za Matrica" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Izvori nisu učitani");
   expect(screen.getByRole("heading", { name: "Matrica" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Retry sources" }));
-  expect(await screen.findByText("Sources for Matrica")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Ponovno učitaj izvore" }));
+  expect(await screen.findByText("Izvori za Matrica")).toBeInTheDocument();
   expect(mock.concept).toHaveBeenCalledTimes(2);
 });
 
@@ -235,18 +235,18 @@ it("clears the old source detail while inspecting another concept", async () => 
   const pending = deferred<ConceptDetail>();
   mock.concept.mockResolvedValueOnce(detail).mockReturnValueOnce(pending.promise);
   await ready([draft, other]);
-  fireEvent.click(screen.getByRole("button", { name: "Inspect sources for Matrica" }));
-  expect(await screen.findByText("Sources for Matrica")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Inspect sources for Vectors" }));
-  expect(screen.queryByText("Sources for Matrica")).not.toBeInTheDocument();
-  expect(screen.getByText("Loading sources…")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj izvore za Matrica" }));
+  expect(await screen.findByText("Izvori za Matrica")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj izvore za Vectors" }));
+  expect(screen.queryByText("Izvori za Matrica")).not.toBeInTheDocument();
+  expect(screen.getByText("Učitavam izvore…")).toBeInTheDocument();
   await act(async () => pending.resolve({ ...other, source_chunks: [] }));
-  expect(screen.getByText("Sources for Vectors")).toBeInTheDocument();
+  expect(screen.getByText("Izvori za Vectors")).toBeInTheDocument();
 });
 
 it("renders an explicit empty state without inventing concepts", async () => {
   await ready([]);
-  expect(screen.getByText("No concept proposals yet.")).toBeInTheDocument();
+  expect(screen.getByText("Još nema prijedloga pojmova.")).toBeInTheDocument();
   expect(screen.queryByRole("list")).not.toBeInTheDocument();
 });
 
@@ -258,12 +258,12 @@ it("keeps long concept and source content in flexible wrapping containers", asyn
   await ready([longConcept]);
   expect(card(longName)).toHaveClass("min-w-0");
   expect(screen.getByText(longConcept.aliases[0], { exact: false })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Inspect sources for " + longName }));
-  const summary = await screen.findByText("Source excerpt 13");
+  fireEvent.click(screen.getByRole("button", { name: "Pregledaj izvore za " + longName }));
+  const summary = await screen.findByText("Isječak izvora 13");
   expect(summary).toHaveClass("break-words");
   fireEvent.click(summary);
-  expect(screen.getByText("Material ID: " + longId)).toBeVisible();
-  const sourceText = screen.getByRole("region", { name: /Source text for chunk chunk-/ });
+  expect(screen.getByText("ID materijala: " + longId)).toBeVisible();
+  const sourceText = screen.getByRole("region", { name: /Tekst izvora za isječak chunk-/ });
   expect(sourceText).toHaveClass("max-w-full");
   expect(sourceText).toHaveTextContent("<b>plain text</b>");
 });

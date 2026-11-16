@@ -29,7 +29,7 @@ def test_supported_types(indices):
 @pytest.mark.parametrize(
     "change",
     [
-        {"version": "quiz-import-v2"},
+        {"version": "quiz-import-v3"},
         {"questions": []},
         {"status": "APPROVED"},
         {"questions": [{"type": "ESSAY", "stem": "No"}]},
@@ -66,7 +66,7 @@ def test_duplicate_stems_and_hard_count_limit():
     with pytest.raises(ValidationError):
         QuizImport.model_validate(body)
     body["questions"] = [
-        {"type": "SHORT_ANSWER", "stem": str(i), "reference_answer": "A"} for i in range(51)
+        {"type": "SHORT_ANSWER", "stem": str(i), "reference_answer": "A"} for i in range(501)
     ]
     with pytest.raises(ValidationError):
         QuizImport.model_validate(body)

@@ -10,7 +10,13 @@ from sqlalchemy.orm import Session
 from app.models import Course, User
 from app.models.question import Question, QuestionVersion
 from app.models.question_edit_suggestion import QuestionEditSuggestion
-from app.schemas.question import MCQ, OwnerQuestion, QuestionContent, content_adapter
+from app.schemas.question import (
+    MCQ,
+    MultipleSelect,
+    OwnerQuestion,
+    QuestionContent,
+    content_adapter,
+)
 from app.schemas.question_edit_suggestion import (
     ModeratorSuggestion,
     SuggestionChanges,
@@ -43,25 +49,34 @@ def proposed_content(
         "MULTIPLE_CHOICE": {"options", "correct_option_position"},
         "TRUE_FALSE": {"correct_answer"},
         "SHORT_ANSWER": {"reference_answer"},
+        "MULTIPLE_SELECT": {"options", "correct_option_positions"},
+        "NUMERIC": {"correct_value", "absolute_tolerance", "relative_tolerance", "unit"},
+        "MATCH": set(),
     }[question.type]
     if supplied.keys() - applicable:
         raise HTTPException(422, "Proposed fields do not apply to this question type")
     candidate = questions.current_content(db, question)
-    if question.type == "MULTIPLE_CHOICE":
+    if question.type in ("MULTIPLE_CHOICE", "MULTIPLE_SELECT"):
         current_options = questions.options(db, question)
         by_position = {option.position: option for option in current_options}
         text_changes = {option.position: option.text for option in changes.options or []}
+        key_positions = (
+            {changes.correct_option_position}
+            if changes.correct_option_position is not None
+            else set(changes.correct_option_positions)
+            if changes.correct_option_positions is not None
+            else None
+        )
         if text_changes.keys() - by_position.keys() or (
-            changes.correct_option_position is not None
-            and changes.correct_option_position not in by_position
+            key_positions is not None and key_positions - by_position.keys()
         ):
             raise HTTPException(422, "Propose changes to existing option positions only")
         candidate["options"] = [
             {
                 "text": text_changes.get(option.position, option.text),
                 "is_correct": (
-                    option.position == changes.correct_option_position
-                    if changes.correct_option_position is not None
+                    option.position in key_positions
+                    if key_positions is not None
                     else option.is_correct
                 ),
             }
@@ -71,7 +86,7 @@ def proposed_content(
         {
             key: value
             for key, value in supplied.items()
-            if key not in {"options", "correct_option_position"}
+            if key not in {"options", "correct_option_position", "correct_option_positions"}
         }
     )
     try:
@@ -237,7 +252,7 @@ def decide_suggestion(
             except ValidationError:
                 raise HTTPException(409, "Proposed content requires rework") from None
             if content.type != question.type or (
-                isinstance(content, MCQ)
+                isinstance(content, MCQ | MultipleSelect)
                 and len(content.options) != len(questions.options(db, question))
             ):
                 raise HTTPException(

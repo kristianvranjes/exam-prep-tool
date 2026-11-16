@@ -1,18 +1,59 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    TypeAdapter,
+    model_validator,
+)
 
-QuestionType = Literal["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]
+from app.services.numbers import parse_number
+
+QuestionType = Literal[
+    "MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"
+]
+# AI generation and quiz-import-v1 keep the original three types.
+ClassicType = Literal["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]
+CLASSIC_TYPES = frozenset({"MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"})
 QuestionStatus = Literal["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED", "ARCHIVED"]
 Stem = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=400)]
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 Difficulty = Annotated[int, Field(ge=1, le=5)]
+Hint = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=400)]
+Expression = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+MAX_QUESTION_UNITS = 5
+# One bank page is 20 rows; the cap leaves room without unbounded row locks.
+MAX_BULK_QUESTIONS = 50
+# A whole course unit fits in one file; the byte cap in settings still bounds the body.
+MAX_IMPORT_QUESTIONS = 500
 
 
 def normalize(text: str) -> str:
     return " ".join(text.split()).casefold()
+
+
+def to_decimal(value: object) -> object:
+    # Authors may write 9.81, "9.81" or "9,81"; floats go through str to avoid binary noise.
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return parse_number(str(value))
+    if isinstance(value, str):
+        return parse_number(value)
+    return value
+
+
+Number = Annotated[Decimal, BeforeValidator(to_decimal), Field(strict=False, allow_inf_nan=False)]
+Tolerance = Annotated[Number, Field(ge=0)]
+# A share of the key's magnitude: 0.01 allows a 1 % error.
+RelativeTolerance = Annotated[Number, Field(ge=0, le=1)]
+Unit = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
 
 
 class StrictModel(BaseModel):
@@ -28,6 +69,8 @@ class Content(StrictModel):
     stem: Stem
     explanation: Text | None = None
     difficulty: Difficulty | None = None
+    hint: Hint | None = None
+    expr: Expression | None = None
 
 
 class MCQ(Content):
@@ -43,6 +86,50 @@ class MCQ(Content):
         return self
 
 
+class MultipleSelect(Content):
+    """Graded as one exact set of options; partial credit is never implied."""
+
+    type: Literal["MULTIPLE_SELECT"]
+    options: list[Option] = Field(min_length=2, max_length=6)
+
+    @model_validator(mode="after")
+    def valid_options(self) -> Self:
+        if not any(option.is_correct for option in self.options):
+            raise ValueError("At least one correct option is required")
+        if len({normalize(option.text) for option in self.options}) != len(self.options):
+            raise ValueError("Duplicate option text")
+        return self
+
+
+class Pair(StrictModel):
+    left: Stem
+    right: Stem
+
+
+class Match(Content):
+    """Connect each left item with its partner; the right column is shuffled for every session."""
+
+    type: Literal["MATCH"]
+    pairs: list[Pair] = Field(min_length=2, max_length=6)
+
+    @model_validator(mode="after")
+    def distinct_items(self) -> Self:
+        for side in ("left", "right"):
+            texts = {normalize(getattr(pair, side)) for pair in self.pairs}
+            if len(texts) != len(self.pairs):
+                raise ValueError(f"Duplicate {side} item")
+        return self
+
+
+class Numeric(Content):
+    type: Literal["NUMERIC"]
+    correct_value: Number
+    absolute_tolerance: Tolerance | None = None
+    relative_tolerance: RelativeTolerance | None = None
+    # Shown next to the answer field; answers carry no unit and are never converted.
+    unit: Unit | None = None
+
+
 class TrueFalse(Content):
     type: Literal["TRUE_FALSE"]
     correct_answer: bool
@@ -53,7 +140,9 @@ class ShortAnswer(Content):
     reference_answer: Text
 
 
-QuestionContent = Annotated[MCQ | TrueFalse | ShortAnswer, Field(discriminator="type")]
+QuestionContent = Annotated[
+    MCQ | TrueFalse | ShortAnswer | Numeric | MultipleSelect | Match, Field(discriminator="type")
+]
 content_adapter: TypeAdapter[QuestionContent] = TypeAdapter(QuestionContent)
 
 
@@ -69,20 +158,55 @@ class ManualConcepts(StrictModel):
         return self
 
 
-class CreateMCQ(MCQ, ManualConcepts):
+def unique_ids(ids: list[UUID]) -> list[UUID]:
+    if len(set(ids)) != len(ids):
+        raise ValueError("Unit IDs must be unique")
+    return ids
+
+
+class ManualUnits(StrictModel):
+    unit_ids: list[Annotated[UUID, Field(strict=False)]] = Field(
+        default_factory=list, max_length=MAX_QUESTION_UNITS
+    )
+
+    @model_validator(mode="after")
+    def unique_units(self) -> Self:
+        unique_ids(self.unit_ids)
+        return self
+
+
+class CreateMCQ(MCQ, ManualConcepts, ManualUnits):
     pass
 
 
-class CreateTrueFalse(TrueFalse, ManualConcepts):
+class CreateTrueFalse(TrueFalse, ManualConcepts, ManualUnits):
     pass
 
 
-class CreateShortAnswer(ShortAnswer, ManualConcepts):
+class CreateShortAnswer(ShortAnswer, ManualConcepts, ManualUnits):
+    pass
+
+
+class CreateNumeric(Numeric, ManualConcepts, ManualUnits):
+    pass
+
+
+class CreateMultipleSelect(MultipleSelect, ManualConcepts, ManualUnits):
+    pass
+
+
+class CreateMatch(Match, ManualConcepts, ManualUnits):
     pass
 
 
 QuestionCreate = Annotated[
-    CreateMCQ | CreateTrueFalse | CreateShortAnswer, Field(discriminator="type")
+    CreateMCQ
+    | CreateTrueFalse
+    | CreateShortAnswer
+    | CreateNumeric
+    | CreateMultipleSelect
+    | CreateMatch,
+    Field(discriminator="type"),
 ]
 
 
@@ -114,7 +238,7 @@ class GeneratedQuestions(StrictModel):
 class GenerationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     concept_ids: list[UUID] = Field(min_length=1, max_length=5)
-    question_types: list[QuestionType] = Field(min_length=1, max_length=3)
+    question_types: list[ClassicType] = Field(min_length=1, max_length=3)
     count: int = Field(default=5, ge=1, le=10, strict=True)
     retrieval_top_k: int = Field(default=5, ge=1, le=10, strict=True)
 
@@ -135,11 +259,46 @@ class QuestionPatch(BaseModel):
     options: list[Option] | None = None
     correct_answer: bool | None = Field(default=None, strict=True)
     reference_answer: Text | None = None
+    # MATCH: the complete list of pairs.
+    pairs: list[Pair] | None = None
+    # Any type; null clears them.
+    hint: Hint | None = None
+    expr: Expression | None = None
+    # NUMERIC fields; null clears an optional tolerance or unit.
+    correct_value: Number | None = None
+    absolute_tolerance: Tolerance | None = None
+    relative_tolerance: RelativeTolerance | None = None
+    unit: Unit | None = None
     concept_ids: list[UUID] | None = Field(default=None, max_length=5)
+    unit_ids: list[UUID] | None = Field(default=None, max_length=MAX_QUESTION_UNITS)
+
+
+Reason = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
+QuestionAction = Literal["submit", "approve", "reject", "archive"]
 
 
 class RejectRequest(StrictModel):
-    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
+    reason: Reason
+
+
+class BulkQuestionTransition(StrictModel):
+    question_ids: list[Annotated[UUID, Field(strict=False)]] = Field(
+        min_length=1, max_length=MAX_BULK_QUESTIONS
+    )
+    action: QuestionAction
+    reason: Reason | None = None
+
+    @model_validator(mode="after")
+    def valid(self) -> Self:
+        if len(set(self.question_ids)) != len(self.question_ids):
+            raise ValueError("Question IDs must be unique")
+        if (self.action == "reject") != (self.reason is not None):
+            raise ValueError("A reason is required for reject and only for reject")
+        return self
+
+
+class BulkQuestionTransitionResult(BaseModel):
+    changed: int
 
 
 class PublicOption(BaseModel):
@@ -149,6 +308,8 @@ class PublicOption(BaseModel):
 
 class OwnerOption(PublicOption):
     is_correct: bool
+    # MATCH only: the partner of the left item in `text`.
+    match_text: str | None = None
 
 
 class PublicQuestion(BaseModel):
@@ -160,6 +321,13 @@ class PublicQuestion(BaseModel):
     stem: str
     difficulty: int | None
     options: list[PublicOption]
+    # MATCH: the right-hand items, in an order that does not follow the pairs.
+    choices: list[PublicOption] = []
+    hint: str | None = None
+    expr: str | None = None
+    unit_ids: list[UUID] = []
+    # Public for NUMERIC: students see the unit their answer is in.
+    unit: str | None = None
 
 
 class SourceReference(BaseModel):
@@ -183,6 +351,18 @@ class OwnerQuestion(BaseModel):
     difficulty: int | None
     correct_boolean: bool | None
     reference_answer: str | None
+    # Defaults keep snapshots from before hints and matching readable too.
+    hint: str | None = None
+    expr: str | None = None
+    # Session snapshots of a MATCH question only: the order the right-hand items are shown in,
+    # fixed when the session starts. Item k of the shown column is the partner of left item
+    # right_order[k].
+    right_order: list[int] = []
+    # Defaults keep snapshots from before NUMERIC readable.
+    correct_value: Decimal | None = None
+    absolute_tolerance: Decimal | None = None
+    relative_tolerance: Decimal | None = None
+    unit: str | None = None
     reviewed_by_user_id: UUID | None
     reviewed_at: datetime | None
     rejection_reason: str | None
@@ -190,6 +370,7 @@ class OwnerQuestion(BaseModel):
     updated_at: datetime
     options: list[OwnerOption] = []
     concept_ids: list[UUID] = []
+    unit_ids: list[UUID] = []
     source_chunks: list[SourceReference] = []
 
 
@@ -205,12 +386,73 @@ class VersionResponse(BaseModel):
     created_at: datetime
 
 
+ImportUnitTitle = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=150)
+]
+
+
+class ImportUnit(StrictModel):
+    """Optional title of the course unit (quiz) an imported question belongs to.
+
+    Not `unit`: a numeric question already uses that for its measurement unit.
+    """
+
+    course_unit: ImportUnitTitle | None = None
+
+
+class ImportMCQ(MCQ, ImportUnit):
+    pass
+
+
+class ImportTrueFalse(TrueFalse, ImportUnit):
+    pass
+
+
+class ImportShortAnswer(ShortAnswer, ImportUnit):
+    pass
+
+
+class ImportNumeric(Numeric, ImportUnit):
+    pass
+
+
+class ImportMultipleSelect(MultipleSelect, ImportUnit):
+    pass
+
+
+class ImportMatch(Match, ImportUnit):
+    pass
+
+
+ImportContent = Annotated[
+    ImportMCQ
+    | ImportTrueFalse
+    | ImportShortAnswer
+    | ImportNumeric
+    | ImportMultipleSelect
+    | ImportMatch,
+    Field(discriminator="type"),
+]
+import_content_adapter: TypeAdapter[ImportContent] = TypeAdapter(ImportContent)
+
+
 class QuizImport(StrictModel):
-    version: Literal["quiz-import-v1"]
-    questions: list[QuestionContent] = Field(min_length=1, max_length=50)
+    # v2 adds NUMERIC, MULTIPLE_SELECT and MATCH; v1 documents stay valid as they were.
+    # `course_unit` (v2 only, optional) names the unit all questions without their own belong to.
+    version: Literal["quiz-import-v1", "quiz-import-v2"]
+    course_unit: ImportUnitTitle | None = None
+    questions: list[ImportContent] = Field(min_length=1, max_length=MAX_IMPORT_QUESTIONS)
 
     @model_validator(mode="after")
     def unique_stems(self) -> Self:
+        if self.version == "quiz-import-v1" and any(
+            q.type not in CLASSIC_TYPES for q in self.questions
+        ):
+            raise ValueError("Use quiz-import-v2 for numeric, multiple-select and match questions")
+        if self.version == "quiz-import-v1" and (
+            self.course_unit is not None or any(q.course_unit is not None for q in self.questions)
+        ):
+            raise ValueError("Use quiz-import-v2 to name units")
         stems = [normalize(q.stem) for q in self.questions]
         if len(set(stems)) != len(stems):
             raise ValueError("Duplicate question stems in import")

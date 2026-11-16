@@ -6,6 +6,11 @@ PDF is the only accepted format: a .pdf filename, application/pdf MIME type and
 The ASGI upload guard additionally bounds total multipart request bytes to the file
 limit plus 64 KiB of overhead, including requests without Content-Length.
 
+Only the course OWNER or a moderator of the course's faculty may upload: another
+member gets 403 and a non-member 404. Members keep read access to the list, details
+and chunks through the API; the web interface shows materials to owners and
+moderators only.
+
 ## Storage and configuration
 
 Host development reads MATERIAL_STORAGE_DIR (default ./data/materials, relative to

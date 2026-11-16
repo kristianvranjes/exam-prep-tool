@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 from alembic.config import Config
 from fastapi.testclient import TestClient
+from migration_helpers import legacy_rows
 from sqlalchemy import delete, text
 from sqlalchemy.exc import IntegrityError
 from test_materials import clients as clients
@@ -26,7 +27,7 @@ pytestmark = pytest.mark.skipif(os.getenv("RUN_DB_TESTS") != "1", reason="Requir
 def retained_rows():
     with engine.connect() as conn:
         return {
-            table: conn.execute(text(f"SELECT * FROM {table} ORDER BY id")).all()
+            table: legacy_rows(conn, table)
             for table in ("quizzes", "quiz_questions", "answers", "question_review_progress")
         }
 
@@ -114,18 +115,43 @@ def test_abandon_authorization_and_detail_privacy(bank):
         "started_at",
         "submitted_at",
         "abandoned_at",
+        "exam_scope_id",
+        "focus_unit_ids",
+        "focus_label",
+        "feedback_mode",
+        "paper",
+        "deadline_at",
+        "server_time",
         "questions",
     }
     for question in abandoned["questions"]:
         assert set(question) == {
             "id",
+            "source_question_id",
             "position",
             "type",
             "stem",
             "difficulty",
             "options",
+            "choices",
+            "hint",
+            "expr",
             "answer",
+            "units",
+            "favorite",
+            "rating",
+            "feedback",
+            "points",
+            "label",
+            # NUMERIC display unit; the key and tolerances never appear here.
+            "unit",
         }
+        # An END session never checks answers, so nothing is revealed.
+        assert question["feedback"] is None
+        # Live, not frozen: approved bank questions can still be favorited.
+        assert question["favorite"] is False
+        # Only paper sessions carry points and labels.
+        assert question["points"] is None and question["label"] is None
     with SessionLocal() as db:
         user_id = UUID(member.get("/auth/me").json()["id"])
         db.execute(delete(CourseMembership).where(CourseMembership.user_id == user_id))
@@ -328,6 +354,6 @@ def test_0015_downgrade_refuses_to_erase_abandoned_history(bank):
     with pytest.raises(RuntimeError, match="abandoned attempts exist"):
         command.downgrade(Config("alembic.ini"), "0014")
     with engine.connect() as conn:
-        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0015"
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0034"
     assert member.get(path).json() == abandoned
     assert retained_rows() == before

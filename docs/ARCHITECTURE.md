@@ -10,15 +10,17 @@ configuration in app/config.py and SQLAlchemy engine/session factory in
 app/database.py. Alembic owns schema changes. Keep route handlers thin and future
 business logic in services.
 
-Material routes reuse course membership authorization for both OWNER and MEMBER.
+Material reads reuse course membership authorization for both OWNER and MEMBER;
+uploads are limited to the course OWNER and moderators of its faculty.
 The material service orchestrates local storage, MarkItDown PDF extraction and pure
 deterministic section/chunk functions. Processing is synchronous; original sources
 live in private storage and derived content lives in PostgreSQL. No queue or AI
 service is introduced by the material pipeline. See [materials](MATERIALS.md) for boundaries.
 
 Concept extraction reads persisted chunks through a provider-neutral AIProvider and
-Pydantic validation service. Provider HTTP protocols stay in the Ollama and FreeLLMAPI adapters; only the AI
-router selects an adapter from configuration.
+Pydantic validation service. Provider HTTP protocols stay in the Ollama, FreeLLMAPI and OpenAI-compatible adapters;
+only the AI router selects an adapter from configuration (`AI_PROVIDER` may also be
+`disabled`).
 Versioned prompts, bounded batches, atomic draft persistence and per-batch usage
 support review without changing ingestion. Ollama is optional for base app startup;
 there is no cloud fallback. See [AI](AI.md) for failure/rerun/concurrency semantics.
@@ -61,8 +63,9 @@ short final course lock. Review locks/reloads the individual question. Explicit
 Full/public schemas prevent answer-key and audit leakage. The legacy OWNER schema
 tag denotes a full view, not a role grant. Creators edit/submit; faculty moderators
 review other creators. See [community boundaries](COMMUNITY.md).
-The Next.js bank is mounted on demand inside the current course, with no quiz/session
-engine. See [question bank](QUESTIONS.md) for boundaries and failure semantics.
+The question bank screens are separate from practice sessions, which have their own
+services, saved attempts and deterministic grading ([practice](PRACTICE.md)). See
+[question bank](QUESTIONS.md) for boundaries and failure semantics.
 
 
 ## Faculty and course foundation (Phase 10A)
@@ -83,6 +86,17 @@ entries retain historical/member access but cannot be discovered normally, joine
 or used as faculties for new course creation.
 
 Faculty provisioning, deactivation and later legacy-course reassignment are trusted
-maintenance operations for now, not new public/admin endpoints. Faculty moderators,
-community review and question visibility changes come next. The only UI change is
-an explicit faculty selector in the existing course-creation form.
+maintenance operations for now, not new public/admin endpoints. This phase's only UI
+change was an explicit faculty selector in the course-creation form. Faculty moderators,
+community review and question visibility followed; see [community](COMMUNITY.md).
+
+## Content Studio
+
+`tools/studio` is a separate Python CLI (`examprep-studio`) and not part of the deployed
+application. It ingests course PDFs, proposes units, generates and checks questions with
+configured LLM providers, lets a human accept, edit or reject them in a local review page,
+and writes accepted questions as `quiz-import-v2` files or pushes them through the app's
+import API. It loads the backend's question import schemas (`app.schemas.question`)
+read-only, so a question the studio accepts is one the import accepts, and otherwise
+shares no code with the backend. It has its own CI job. See
+[CONTENT_STUDIO.md](CONTENT_STUDIO.md).

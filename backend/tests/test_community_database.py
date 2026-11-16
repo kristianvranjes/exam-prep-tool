@@ -8,6 +8,7 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from community_helpers import provision
 from fastapi.testclient import TestClient
+from migration_helpers import legacy_question_columns, legacy_rows
 from sqlalchemy import delete, text
 from sqlalchemy.exc import IntegrityError
 from test_materials import clients as clients
@@ -181,10 +182,12 @@ def test_governance_status_self_review_and_queue_filter(community):
     row = contribute(moderator, new.json()["id"])
     path = f"/questions/{row['id']}"
     assert moderator.post(path + "/submit").status_code == 200
-    assert moderator.post(path + "/approve").status_code == 403
     assert moderator.post(path + "/reject", json={"reason": "Self"}).status_code == 403
     queue = f"/faculties/{faculty}/question-review"
     assert moderator.get(queue + f"?course_id={new.json()['id']}").json()[0]["id"] == row["id"]
+    # A moderator who owns the course may approve their own question; others still may not.
+    approved = moderator.post(path + "/approve")
+    assert approved.status_code == 200 and approved.json()["status"] == "APPROVED"
     assert moderator.get(queue + f"?course_id={uuid4()}").status_code == 404
     provision(owner, other)
     foreign = owner.post("/courses", json=body | {"faculty_id": other}).json()["id"]
@@ -202,11 +205,58 @@ def test_governance_status_self_review_and_queue_filter(community):
     )
 
 
+def test_bulk_lifecycle_actions_are_atomic_and_follow_single_rules(community):
+    owner, creator, moderator, course, faculty, _ = community
+    bulk = f"/courses/{course}/questions/transition"
+    rows = [contribute(creator, course, f"Bulk statement {n}")["id"] for n in range(3)]
+    first, second, third = rows
+
+    def act(client, ids, action, **extra):
+        return client.post(bulk, json={"question_ids": ids, "action": action, **extra})
+
+    def status(question_id):
+        return creator.get(f"/questions/{question_id}").json()["status"]
+
+    assert act(creator, rows, "reject").status_code == 422
+    assert act(creator, rows, "submit", reason="Not for submit").status_code == 422
+    assert act(creator, [first, first], "submit").status_code == 422
+    # Other members cannot see private drafts, so they cannot act on them.
+    assert act(owner, rows, "submit").status_code == 404
+    submitted = act(creator, rows, "submit")
+    assert submitted.status_code == 200 and submitted.json() == {"changed": 3}
+    assert act(creator, rows, "approve").status_code == 403
+    assert act(moderator, [first, second], "approve").json() == {"changed": 2}
+    # One question in the wrong state rejects the whole request.
+    refused = act(moderator, [first, third], "approve")
+    assert refused.status_code == 409 and "1 of 2" in refused.json()["detail"]
+    assert status(third) == "PENDING_REVIEW"
+    assert act(moderator, [third], "reject", reason="Needs work").status_code == 200
+    assert creator.get(f"/questions/{third}").json()["rejection_reason"] == "Needs work"
+
+    # Creators withdraw their own unpublished questions; shared ones need a moderator.
+    assert act(creator, [third], "archive").json() == {"changed": 1}
+    assert act(creator, [first], "archive").status_code == 403
+    assert act(moderator, [first, second], "archive").json() == {"changed": 2}
+    assert {status(question_id) for question_id in rows} == {"ARCHIVED"}
+    contribute(creator, course, "Bulk statement 2")
+
+    # A moderator who does not own the course still needs a second reviewer.
+    assert moderator.post(f"/courses/{course}/join").status_code == 200
+    own = contribute(moderator, course, "Moderator statement")["id"]
+    assert act(moderator, [own], "approve").status_code == 403
+    # A course owner who moderates may approve their own drafts directly.
+    provision(owner, faculty)
+    drafts = [contribute(owner, course, f"Owner statement {n}")["id"] for n in range(2)]
+    assert act(owner, drafts, "approve").json() == {"changed": 2}
+    assert {owner.get(f"/questions/{d}").json()["status"] for d in drafts} == {"APPROVED"}
+    assert act(owner, drafts, "reject", reason="Self").status_code == 403
+
+
 def history():
     with engine.connect() as conn:
-        return [
-            conn.execute(text(f"SELECT * FROM {table} ORDER BY id")).all()
-            for table in ("questions", "question_versions", "question_options")
+        questions = text(f"SELECT {legacy_question_columns(conn)} FROM questions ORDER BY id")
+        return [conn.execute(questions).all()] + [
+            legacy_rows(conn, table) for table in ("question_versions", "question_options")
         ]
 
 
@@ -277,7 +327,23 @@ def test_migration_roundtrip_and_conflicting_downgrade_is_non_destructive(commun
             assert history() == before
             command.upgrade(config, "0011")
             assert history() == before
-        contribute(owner, course)  # Different creator, same stem, unapproved.
+        # Different creator, same stem, unapproved. Seeded directly because the
+        # current API also uses tables that schema 0011 predates.
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO questions (id, course_id, created_by_user_id, type, status,"
+                    " source, stem, normalized_stem, correct_boolean) VALUES (:id, :course,"
+                    " :user, 'TRUE_FALSE', 'DRAFT', 'USER', :stem, :normalized, true)"
+                ),
+                {
+                    "id": uuid4(),
+                    "course": course,
+                    "user": owner.get("/auth/me").json()["id"],
+                    "stem": row["stem"],
+                    "normalized": row["stem"].casefold(),
+                },
+            )
         conflicting = history()
         with pytest.raises(IntegrityError):
             command.downgrade(config, "0010")
