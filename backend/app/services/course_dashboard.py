@@ -42,7 +42,7 @@ def week_start(moment: datetime) -> date:
     return local - timedelta(days=local.weekday())
 
 
-def _graded_answers(user: User, course_id: UUID, *columns: Any) -> Select[Any]:
+def graded_answers(user: User, course_id: UUID, *columns: Any) -> Select[Any]:
     """Graded answers of the caller's submitted sessions in a course, with `columns` selected."""
     return (
         select(*columns)
@@ -82,7 +82,7 @@ def course_dashboard(db: Session, user: User, course_id: UUID) -> CourseDashboar
 
     # Overall result per session, counting each answer once however many units its question has.
     overall: Sequence[Any] = db.execute(
-        _graded_answers(
+        graded_answers(
             user, course_id, Answer.attempt_id, func.count(), func.count().filter(correct)
         ).group_by(Answer.attempt_id)
     ).all()
@@ -97,7 +97,7 @@ def course_dashboard(db: Session, user: User, course_id: UUID) -> CourseDashboar
     # Per unit and session: correct of graded, ordered by when the session was submitted.
     rows: Sequence[Any] = db.execute(
         _in_units(
-            _graded_answers(
+            graded_answers(
                 user,
                 course_id,
                 QuestionUnit.unit_id,
@@ -209,7 +209,7 @@ def progress_series(
 
     rows: Sequence[Any] = db.execute(
         _in_units(
-            _graded_answers(
+            graded_answers(
                 user,
                 course_id,
                 QuestionUnit.unit_id,

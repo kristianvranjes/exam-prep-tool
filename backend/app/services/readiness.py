@@ -77,7 +77,7 @@ def tally(reviews: Iterable[Review | None], as_of: datetime) -> Tally:
     return Tally(questions, answered, retained, answers, correct)
 
 
-def wilson(successes: int, trials: int) -> tuple[float, float]:
+def wilson(successes: float, trials: int) -> tuple[float, float]:
     """Wilson score interval; without trials the share could be anything."""
     if trials == 0:
         return 0.0, 1.0

@@ -442,6 +442,7 @@ Implemented:
 - Past exams 9a (table with kind filter, date, duration, points, tasks, best result and Riješi/Ponovi) and 9b (rules, scoring and the task list before a paper starts, with the clock or without).
 - Results 2d without the course heading above them, and 2e as one answer at a time with an index and Prethodno / Sljedeće (netočno).
 - Moderator: "Moderator" beside the brand and the page header on the faculty tools; 6b import of several files with a preview of every question (what is missing, warnings, errors) before anything is sent; the unit list as ruled rows.
+- Exam estimate 9c ("Procjena za ispit", `/courses/<id>/estimate`, linked from the course page's other destinations): the expected points as one large figure with the range on a scale that also marks the pass threshold, stated in words as well; a table "Gdje možete dobiti najviše bodova" (topic, points on the exam, accuracy of the last 30 days, expected, points to gain at 85 %) with "Vježbaj" where at least a point is left. Without published papers it says so, and until enough answers exist it asks for them instead of showing a range. Points use a decimal comma. Backed by `GET /exam-scopes/{id}/estimate` (`exam-estimate-v1`).
 
 Pending:
 

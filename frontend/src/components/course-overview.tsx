@@ -58,7 +58,7 @@ function segmentTone(percent: number | null) {
 }
 
 export function CourseOverview({ courseId, active, courseName, courseCode, courseDescription, onPractice, onOpenPractice, knownAttemptId, knownAttempt, checkingSession, activeSession, materials, onResume,
-  onRecommendedPractice, onStartAttempt, onPapers, onProgress, onMaterials, onQuestions }: {
+  onRecommendedPractice, onStartAttempt, onPapers, onProgress, onEstimate, onMaterials, onQuestions }: {
   /** The course's name, short code and description, the heading of the page (handoff 2g). */
   courseName: string; courseCode?: string | null; courseDescription?: string | null;
   /** Opens the practice setup. */
@@ -70,6 +70,8 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
   courseId: string; active: boolean; knownAttemptId: string | null; knownAttempt?: ResumableAttempt;
   checkingSession?: boolean; activeSession?: boolean; onResume: () => void; onRecommendedPractice: () => void;
   onProgress: () => void; onQuestions: () => void;
+  /** Opens the expected-points estimate for the exam; left out, the card is not shown. */
+  onEstimate?: () => void;
   /** Course materials and the way to them; both are given only to people who manage the course. */
   materials?: MaterialsSummary; onMaterials?: () => void;
   /** Opens a session started here: practice for the coming exam or one unit, the due review or a quick quiz. */
@@ -221,6 +223,7 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
   const quickUnitChoices = quickChoices.filter(choice => choice.value.startsWith("unit:"));
   const more = [
     { key: "progress", name: "Napredak", note: summary && summary.resolved_review_count > 0 ? `${summary.resolved_review_count} odgovora` : "Rezultati i ponavljanje", label: "Otvori napredak", open: onProgress },
+    onEstimate && exam && { key: "estimate", name: "Procjena za ispit", note: "Očekivani bodovi po temama", label: "Otvori: Procjena za ispit", open: onEstimate },
     onPractice && { key: "practice", name: "Vježba po mjeri", note: "Cjeline i vrste pitanja", label: "Otvori: Vježba po mjeri", open: onPractice },
     onPapers && { key: "papers", name: "Prošli ispiti", note: papers.length ? `${papers.length} objavljeno · s mjerenjem vremena` : "S mjerenjem vremena", label: "Otvori: Prošli ispiti", open: onPapers },
     onMaterials && materials && { key: "materials", name: "Materijali", note: materials.materials.length ? plural(materials.materials.length, ["materijal", "materijala", "materijala"]) : "Još nema", label: "Otvori materijale", open: onMaterials },
