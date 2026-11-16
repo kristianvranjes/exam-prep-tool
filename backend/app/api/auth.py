@@ -11,12 +11,24 @@ from app.services.auth import hash_password, normalize_email, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+THROTTLED_RESPONSE: dict[int | str, dict[str, object]] = {
+    429: {
+        "description": "Authentication attempt limit reached; retry after the indicated seconds.",
+        "headers": {"Retry-After": {"schema": {"type": "integer", "minimum": 1}}},
+    }
+}
+
 
 def set_session_cookie(response: Response, user: User) -> None:
     write_session_cookie(response, user.id, Settings())
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses=THROTTLED_RESPONSE,
+)
 def register(data: UserCreate, response: Response, db: Session = Depends(get_db)) -> User:
     user = User(
         email=normalize_email(str(data.email)),
@@ -36,7 +48,7 @@ def register(data: UserCreate, response: Response, db: Session = Depends(get_db)
     return user
 
 
-@router.post("/login", response_model=UserResponse)
+@router.post("/login", response_model=UserResponse, responses=THROTTLED_RESPONSE)
 def login(data: LoginRequest, response: Response, db: Session = Depends(get_db)) -> User:
     user = db.scalar(select(User).where(User.email == normalize_email(str(data.email))))
     if user is None or not verify_password(data.password, user.password_hash) or not user.is_active:

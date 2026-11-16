@@ -26,6 +26,7 @@ from app.api.quizzes import router as quizzes_router
 from app.api.reports import router as reports_router
 from app.api.retrieval import router as retrieval_router
 from app.api.suggestions import router as suggestions_router
+from app.auth_limit import AuthRequestLimit
 from app.config import Settings
 from app.database import engine
 from app.origin_guard import OriginGuard
@@ -41,6 +42,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 settings = Settings()
 app = FastAPI(title="ExamPrep API", lifespan=lifespan)
 app.add_middleware(MaterialUploadLimit)
+app.add_middleware(AuthRequestLimit, settings=settings)
 app.add_middleware(
     OriginGuard,
     origin=settings.frontend_url,
@@ -53,6 +55,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["Retry-After"],
 )
 app.include_router(health_router)
 app.include_router(auth_router)
