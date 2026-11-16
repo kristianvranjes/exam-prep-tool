@@ -98,7 +98,7 @@ export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOp
           <label className="block text-xs font-semibold tracking-widest text-muted uppercase">Pretraži po fakultetu
             <Select name="browse-faculty" value={selectedId} className="mt-2 h-[52px] text-base font-normal tracking-normal text-foreground normal-case" onChange={event => { setSelectedId(event.target.value); setCatalog(null); }}>
               <option value="">Odaberite fakultet</option>
-              {faculties.map(faculty => <option key={faculty.id} value={faculty.id}>{faculty.name}{faculty.university_name ? ` — ${faculty.university_name}` : ""}</option>)}
+              {faculties.map(faculty => <option key={faculty.id} value={faculty.id}>{faculty.name}{faculty.university_name ? `, ${faculty.university_name}` : ""}</option>)}
             </Select>
           </label>
           <div>

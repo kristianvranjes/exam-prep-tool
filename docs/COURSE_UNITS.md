@@ -3,7 +3,7 @@
 Course units are the ordered parts of a course syllabus, such as the chapters a
 midterm or final exam covers. They organize the shared question bank and are the
 base for exam scopes (MI/ZI/full exam) and unit-filtered practice planned in
-[roadmap milestone R2](ROADMAP.md#r2--course-units-and-exam-scopes). Units need no AI, embeddings or materials.
+[roadmap milestone R2](ROADMAP.md#r2-course-units-and-exam-scopes). Units need no AI, embeddings or materials.
 
 ## What exists now
 

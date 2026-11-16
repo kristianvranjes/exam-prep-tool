@@ -1,11 +1,11 @@
-# Question bank — Phase 6
+# Question bank
 
 Joined members can author a private USER draft directly in the Question Bank. Manual
 questions need no AI, embeddings, concepts or material provenance. Optional approved
 course concepts may be linked. [External AI quiz import](QUIZ_IMPORT.md) remains a
 separate versioned JSON contribution path; both use the same human review lifecycle.
-Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
-configuration below applies when explicitly enabling that pipeline.
+Set `AI_PROVIDER=disabled` for staging without AI credentials. To enable AI, see
+[AI.md](AI.md).
 
 Questions are curated course data. AI produces proposals; it cannot approve them.
 Community authorization is defined by Phase 10B below. Practice and grading use

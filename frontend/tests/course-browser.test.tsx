@@ -41,7 +41,7 @@ it("loads faculties in backend order, then courses only on selection", async () 
   expect(mock.facultyCourses).not.toHaveBeenCalled();
   pending.resolve(faculties);
   await screen.findByLabelText("Pretraži po fakultetu");
-  expect(screen.getAllByRole("option").map(option => option.textContent)).toEqual(["Odaberite fakultet", "Engineering — University of Zagreb", "Legacy / Unassigned"]);
+  expect(screen.getAllByRole("option").map(option => option.textContent)).toEqual(["Odaberite fakultet", "Engineering, University of Zagreb", "Legacy / Unassigned"]);
   expect(mock.facultyCourses).not.toHaveBeenCalled();
   const loading = deferred<Course[]>();
   mock.facultyCourses.mockReturnValueOnce(loading.promise);

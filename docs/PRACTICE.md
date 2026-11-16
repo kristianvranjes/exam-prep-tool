@@ -1,4 +1,4 @@
-# Practice quizzes and grading (Phases 7–8 / Issues #20, #22)
+# Practice quizzes and grading
 
 Open a course, then **Open practice quizzes**. Choose 1–20 questions and one or
 more types. Selection is deterministic: APPROVED questions plus the caller's own DRAFT/PENDING_REVIEW questions in this course, ordered

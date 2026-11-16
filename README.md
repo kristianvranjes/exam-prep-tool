@@ -4,7 +4,7 @@ ExamPrep is a local-first university exam preparation platform for FER students.
 can [discover and join faculty courses](docs/FRONTEND.md#your-courses-and-course-enrolment),
 upload and browse PDF materials, write and submit private Question Bank drafts, and
 practice by course unit, by exam scope (midterm, final, exam term) or on past exam papers.
-Questions are multiple-choice, true/false, short-answer, numeric and multiple-select, with
+Questions are multiple-choice, true/false, short-answer, numeric, multiple-select and matching, with
 deterministic grading, immediate or end-of-session feedback, mistakes, favorites, due-only
 review, an exam readiness estimate and learning progress. Students report approved
 questions and suggest reviewed corrections. Faculty moderators review contributions,
@@ -21,8 +21,8 @@ offline with the [Content Studio](docs/CONTENT_STUDIO.md) (`tools/studio`).
 
 Optional [external AI quiz import](docs/QUIZ_IMPORT.md) accepts versioned JSON as drafts
 for human review. Manual in-app authoring also needs no AI provider or embeddings.
-Set `AI_PROVIDER=disabled` for staging without AI credentials; existing internal AI
-configuration below applies when explicitly enabling that pipeline.
+Set `AI_PROVIDER=disabled` for staging without AI credentials. To enable AI, see
+[docs/AI.md](docs/AI.md).
 
 The frontend is hosted on Vercel and the backend on managed infrastructure with
 PostgreSQL/pgvector. Follow [the staging guide](docs/STAGING.md) for required
@@ -30,7 +30,7 @@ environment variables, HTTPS AI configuration, Secure/SameSite cookies, explicit
 origin/CSRF protection, storage, migrations, smoke tests and recovery (written for
 Railway). To host the backend on Azure Container Apps (paid from the Azure for Students
 credit), see [DEPLOY_CONTAINER_APPS.md](docs/DEPLOY_CONTAINER_APPS.md); for any always-on
-Ubuntu VM, see [DEPLOY_VM.md](docs/DEPLOY_VM.md). Local defaults remain unchanged. A
+Ubuntu VM, see [DEPLOY_VM.md](docs/DEPLOY_VM.md). A
 complete generation demo needs the optional backend embedding runtime; no models run on
 Vercel.
 
@@ -50,8 +50,8 @@ cp .env.example .env
 docker compose up --build -d --wait
 ```
 
-PowerShell uses `Copy-Item .env.example .env` instead of `cp` (either works in PowerShell).
-Open http://localhost:3000 — register or log in, then create a course.
+In PowerShell, `Copy-Item .env.example .env` does the same as `cp`.
+Open http://localhost:3000: register or log in, then create a course.
 Select a course, choose a PDF under Study materials, and click Upload PDF. Open
 the material row to inspect its status, extracted text and section/chunk counts.
 For optional concept extraction, install Ollama and run `ollama pull qwen3:4b`.
@@ -204,8 +204,6 @@ security limits and exact test instructions.
 - `docs/PRODUCT_VISION.md`: original Croatian product vision, preserved as historical
   planning; its roadmap numbering and tentative stack do not define issue #1 scope.
 
-Licensed under the MIT License; see [LICENSE](LICENSE).
-
 ## Optional FreeLLMAPI development setup
 
 Install and configure [FreeLLMAPI separately](https://github.com/tashfeenahmed/freellmapi/blob/main/docs/install.md).
@@ -234,9 +232,9 @@ See [AI details and optional smoke test](docs/AI.md).
 
 ## Local embeddings and semantic retrieval
 
-Phase 5 adds a separate `EmbeddingProvider` for BGE-M3 dense vectors. `AIProvider`
-continues to handle Ollama/FreeLLMAPI text generation independently. Phase 6 reuses
-retrieval to generate question drafts. The base Docker image and CI exclude the optional
+A separate `EmbeddingProvider` produces BGE-M3 dense vectors, independently of the
+`AIProvider` that handles Ollama/FreeLLMAPI text generation. Question draft generation
+reuses retrieval. The base Docker image and CI exclude the optional
 ML stack and model weights; all existing application features start without them.
 Embedding refresh/search requests return a safe 503 until a local embedding model is available;
 the READY material status read works without loading it.
@@ -246,43 +244,32 @@ extra and a predownloaded pinned model. See [exact setup, authenticated requests
 limits and migration commands](docs/RETRIEVAL.md). No paid API or GPU is required.
 The model download and inference are optional manual steps, never part of CI.
 
-## Question bank and human review (Phase 6)
+## Question bank and human review
 
-Select a course and **Open question bank**. Any joined member can **Create question**
-as a private USER draft, with optional approved concepts, then edit and submit it for
-review. JSON import remains available for bulk contributions. OWNER may optionally
-select 1–5 approved concepts and generate 1–10 experimental AI drafts. Each selected
-concept needs current embedded READY sources. Open a READY material in the course
-Materials section and explicitly prepare or refresh its semantic sources, then
-extract and approve concepts before generation (requires the optional local model
-setup above). See [retrieval details](docs/RETRIEVAL.md) and start with 1–3 questions
-and a small source count. Manual question creation and JSON import remain available
-without the local embedding model.
+Select a course and **Open question bank**. Any joined member can **Create question** as
+a private USER draft, optionally linked to approved concepts, then edit it and submit it
+for review. A different faculty moderator approves or rejects it with a reason; editing
+rejected content returns it to DRAFT. Approved content accepts moderated edit
+suggestions or archival, and archived content cannot be reopened. AI never approves.
+Members see their own private questions and the answer-free approved questions of
+others. JSON import remains available for bulk contributions. Quiz-taking and
+deterministic grading are described in [practice rules](docs/PRACTICE.md). For the
+lifecycle, API, transactions and limits, see [docs/QUESTIONS.md](docs/QUESTIONS.md) and
+[community moderation](docs/COMMUNITY.md).
 
-Choose a draft to inspect its answer, concepts, material/chunk references and history.
-Creators edit and **Submit for review**; a different faculty moderator approves
-or rejects with a reason. Editing rejected content returns it to DRAFT. Approved
-content accepts moderated edit suggestions or archival; archived content cannot be
-reopened. Suggest edit sends sparse replacements without revealing hidden current
-answers/explanations. Another faculty moderator compares base/proposed content and
-rejects or applies atomically, preserving APPROVED and adding one EDITED version.
-Reports remain unchanged by apply; archive closes open reports and suggestions.
-The current Alembic head is the newest file in `backend/alembic/versions/`. AI never approves.
-Members see their own private questions and answer-free approved questions from others. Quiz-taking
-and deterministic grading are available separately through Phase 7 practice quizzes.
-
-Generation uses the configured AIProvider: laptop development → FreeLLMAPI;
-home PC → Ollama/Qwen; future production/demo → an explicitly supported provider.
-FreeLLMAPI is development infrastructure, not a production guarantee. Generation
-also requires the separate Phase 5 embedding provider; the base Compose image
-starts and serves the bank without loading either model but cannot generate with
-its optional embedding dependencies absent. Run the native backend with the
-documented embedding extra/model for real generation.
+OWNER can optionally select 1–5 approved concepts and generate 1–10 experimental AI
+drafts. Each selected concept needs current embedded READY sources: open a READY material
+in the course Materials section, prepare or refresh its semantic sources, then extract
+and approve concepts. Generation needs the AIProvider (see the provider notes above) and
+the optional local embedding setup, so the base Compose image serves the bank but cannot
+generate. Start with 1–3 questions and a small source count; see
+[retrieval details](docs/RETRIEVAL.md). Manual creation and JSON import need neither
+model.
 
 The five `QUESTION_GENERATION_*` settings in `.env.example` bound count, concepts,
 retrieval top-k, context chunks and serialized context characters. Compose forwards
-them; restart/rebuild after changes. Limits can be lowered. Requests that exceed
-them fail explicitly. See [question lifecycle, API, transactions and limits](docs/QUESTIONS.md).
+them; restart or rebuild after changes. Limits can be lowered. Requests that exceed
+them fail explicitly.
 
 For migration rollback verification, set `DATABASE_URL` to a **disposable** PostgreSQL
 database and run from `backend/` with the virtual environment activated:
@@ -295,3 +282,5 @@ python -m alembic upgrade head
 
 This removes test data and re-creates all tables and pgvector. Do not run the
 downgrade or truncating integration suite against your normal study database.
+
+Licensed under the MIT License; see [LICENSE](LICENSE).

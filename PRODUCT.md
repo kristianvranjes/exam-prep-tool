@@ -48,8 +48,8 @@ what enters the bank.
 ## Capabilities and Constraints
 
 - Hierarchy: Faculty → Course → units, exam scopes, materials and a shared question
-  bank. Question types today: multiple choice, true/false, short answer; numeric and
-  multiple-select questions with formulas and code highlighting come later (R4).
+  bank. Question types today: multiple choice, true/false, short answer, numeric,
+  multiple-select and matching, with formulas and code highlighting in question text.
 - Student project, local-first and cloud-optional; infrastructure cost must stay near
   zero.
 - Interface language: Croatian only. English UI localization and a language switch are out

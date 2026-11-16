@@ -14,8 +14,8 @@
 - Backend: FastAPI, Pydantic, SQLAlchemy 2, Alembic, PostgreSQL/pgvector.
 - Frontend: Next.js, TypeScript, Tailwind CSS, shadcn/ui-ready.
 - During feature development:
-- run targeted tests for changed behavior
-- run relevant lint/type checks
-- do not duplicate repository-wide CI locally
-- GitHub Actions is the authoritative full regression gate
-- broaden local verification only when investigating a failure
+  - run targeted tests for changed behavior
+  - run relevant lint/type checks
+  - do not duplicate repository-wide CI locally
+  - GitHub Actions is the authoritative full regression gate
+  - broaden local verification only when investigating a failure

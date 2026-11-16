@@ -1,6 +1,6 @@
 # Pilot metrics (R6)
 
-Read-only SQL for the [R6 pilot targets](ROADMAP.md#r6--evaluate-the-pilot-and-prepare-the-next-release),
+Read-only SQL for the [R6 pilot targets](ROADMAP.md#r6-evaluate-the-pilot-and-prepare-the-next-release),
 run by an operator in the Neon SQL editor (or `psql`) against the production database
 after the observation period. Every query is a single `SELECT` that returns counts,
 shares and durations only: no answer text, no question or document content, and no

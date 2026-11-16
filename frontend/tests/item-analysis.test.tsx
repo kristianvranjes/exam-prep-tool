@@ -44,7 +44,7 @@ it("lists flagged questions first with plain-language explanations and the answe
   const notes = within(flagged).getByRole("list", { name: "Što provjeriti" });
   expect(within(notes).getAllByRole("listitem").map(note => note.textContent)).toEqual([
     "Studenti koji dobro rješavaju ostala pitanja ovo pitanje griješe češće od slabijih studenata (u najboljoj skupini točno odgovara 30%, u najslabijoj 50%). Ključ je možda pogrešan.",
-    "Jaki studenti često biraju opciju C („S → SS | a“) — provjerite ključ.",
+    "Jaki studenti često biraju opciju C („S → SS | a“). Provjerite ključ.",
     "Gotovo nitko ne bira opciju D („S → a“). Uvjerljiviji netočan odgovor učinio bi pitanje informativnijim.",
   ]);
   expect(within(flagged).getByText("Provjerite ključ")).toBeVisible();
@@ -75,7 +75,7 @@ it("explains true/false distractors by name and reports small groups honestly", 
     type: "TRUE_FALSE", flags: ["STRONG_DISTRACTOR"], discrimination: 0.1, upper_correct: 0.4, lower_correct: 0.3,
     options: [option(0, "True", { is_key: true, upper_share: 0.4 }), option(1, "False", { upper_share: 0.6, flag: "STRONG_DISTRACTOR" })],
   });
-  expect(explanations(trueFalse)).toEqual(["Jaki studenti često biraju False — provjerite ključ."]);
+  expect(explanations(trueFalse)).toEqual(["Jaki studenti često biraju False. Provjerite ključ."]);
   const small = item({ flags: ["TOO_HARD"], difficulty: 0.15, discrimination: null, upper_correct: null, lower_correct: null, group_size: null, ranked_size: 12,
     options: [option(0, "A", { is_key: true, upper_share: null, lower_share: null }), option(1, "B", { upper_share: null, lower_share: null })] });
   expect(explanations(small)).toEqual(["Samo 15% studenata odgovara točno. Provjerite ključ i formulaciju te pokriva li kolegij to gradivo."]);

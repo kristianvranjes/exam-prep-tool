@@ -4,7 +4,7 @@ A past exam paper records a real exam as it was set: which bank questions it had
 what order, how many points each was worth and how wrong answers were scored. Papers
 build on the shared question bank; they never copy question content. Students retake
 a published paper as a scored, optionally timed session (see the
-[roadmap](ROADMAP.md#r3--past-exams-and-materials-as-practice-sources)).
+[roadmap](ROADMAP.md#r3-past-exams-and-materials-as-practice-sources)).
 
 ## Who can do what
 
