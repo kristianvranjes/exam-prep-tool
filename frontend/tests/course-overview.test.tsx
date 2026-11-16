@@ -47,7 +47,7 @@ it("leads with the next exam: days left, the estimate, the weakest units and pra
   mock.examScopes.mockResolvedValue([dated("undated", null), dated("zi", "2027-02-01"), dated("mi", "2026-11-23", "2026-12-01")]);
   mock.examScopeReadiness.mockResolvedValue(readiness);
   render(<CourseOverview {...props()} onStartAttempt={vi.fn()} />);
-  const card = await screen.findByRole("region", { name: /do ispita/ });
+  const card = await screen.findByRole("region", { name: /do međuispita/ });
   expect(card).toHaveTextContent("34");
   expect(card).toHaveTextContent("obuhvaća 2 cjeline");
   expect(await within(card).findByText("Procjena 48–61 %")).toBeVisible();
@@ -157,7 +157,7 @@ it("hides the due review when nothing is due or a session is open", async () => 
   expect(screen.queryByRole("button", { name: "Ponovi dospjela pitanja" })).not.toBeInTheDocument();
 });
 
-it("picks the quick quiz's target from chips: the whole course, an exam cycle or one unit", async () => {
+it("picks the quick quiz's target: the whole course and exam cycles as chips, one unit from a list", async () => {
   vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 9, 20, 12));
   mock.examScopes.mockResolvedValue([dated("mi", "2026-11-23")]);
   mock.units.mockResolvedValue([unit("u1", "Logika")]);
@@ -167,12 +167,17 @@ it("picks the quick quiz's target from chips: the whole course, an exam cycle or
   const group = await screen.findByRole("group", { name: "Pitanja iz" });
   expect(within(group).getByRole("button", { name: "Cijeli kolegij" })).toHaveAttribute("aria-pressed", "true");
   expect(screen.getByRole("button", { name: "Započni brzi kviz: Cijeli kolegij" })).toHaveTextContent("Započni · Cijeli kolegij");
-  fireEvent.click(within(group).getByRole("button", { name: "Logika" }));
-  expect(within(group).getByRole("button", { name: "Logika" })).toHaveAttribute("aria-pressed", "true");
+  // Units are not chips: with many of them the chips wrapped into rows of their own.
+  expect(within(group).queryByRole("button", { name: "Logika" })).toBeNull();
+  const units = screen.getByRole("combobox", { name: "Ili jedna tema" });
+  fireEvent.change(units, { target: { value: "unit:u1" } });
+  expect(units).toHaveValue("unit:u1");
+  expect(within(group).getByRole("button", { name: "Cijeli kolegij" })).toHaveAttribute("aria-pressed", "false");
   fireEvent.click(screen.getByRole("button", { name: "Započni brzi kviz: Logika" }));
   await waitFor(() => expect(onStartAttempt).toHaveBeenCalledWith({ id: "quick" }));
   expect(mock.quickQuiz).toHaveBeenCalledWith("course", { unit_ids: ["u1"] });
   fireEvent.click(within(group).getByRole("button", { name: /Međuispit 2026\/27/ }));
+  expect(units).toHaveValue("");
   fireEvent.click(screen.getByRole("button", { name: "Započni brzi kviz: Međuispit" }));
   await waitFor(() => expect(mock.quickQuiz).toHaveBeenLastCalledWith("course", { exam_scope_id: "mi" }));
 });
