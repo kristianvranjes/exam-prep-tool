@@ -45,7 +45,7 @@ export function QuizAnswerEditor({ question, answer, change, disabled, feedback,
   const problem = typed ? numberProblem(typed) : null;
   return <fieldset disabled={disabled || Boolean(feedback)} className="flex min-w-0 flex-col gap-3">
       <legend className="mb-5 w-full max-w-prose break-words font-display text-[1.75rem] font-extrabold leading-tight sm:text-[2rem]"><RichText text={question.stem} /></legend>
-      {question.expr && <p className="-mt-2 mb-2 w-fit max-w-full overflow-x-auto border-l-4 border-accent bg-surface-sunken px-4 py-3 font-mono text-lg tabular-nums">{question.expr}</p>}
+      {question.expr && <p className="-mt-2 mb-2 w-fit max-w-full overflow-x-auto bg-surface-sunken px-4 py-3 font-mono text-lg tabular-nums">{question.expr}</p>}
       {question.hint && <details className="-mt-1 mb-2 max-w-prose text-sm"><summary className="w-fit cursor-pointer font-semibold underline-offset-4 hover:underline">Nagovještaj</summary><p className="mt-2 text-muted"><RichText text={question.hint} /></p></details>}
       {question.type === "MULTIPLE_CHOICE" && question.options.map((option, index) => choice(index, String(option.position), option.text,
         answer?.type === "MULTIPLE_CHOICE" && answer.option_position === option.position,
