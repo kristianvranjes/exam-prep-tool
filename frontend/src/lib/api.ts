@@ -92,7 +92,7 @@ export const api = {
     if (options.course_id) params.set("course_id", options.course_id);
     if (options.limit) params.set("limit", String(options.limit));
     if (options.offset !== undefined) params.set("offset", String(options.offset));
-    return request<OwnerQuestion[]>(`/faculties/${facultyId}/question-review?${params}`);
+    return request<ReviewQuestion[]>(`/faculties/${facultyId}/question-review?${params}`);
   },
   questionReports: (facultyId: string, options: { course_id?: string; status?: ReportStatus; limit?: number; offset?: number } = {}) => {
     const params = new URLSearchParams();
@@ -152,6 +152,16 @@ export const api = {
   setQuestionUnits: (id: string, unitIds: string[]) => request<Question>(`/questions/${id}/units`, { method: "PATCH", body: JSON.stringify({ unit_ids: unitIds }) }),
   bulkTransitionQuestions: (courseId: string, body: { question_ids: string[]; action: QuestionAction; reason?: string }) => request<{ changed: number }>(`/courses/${courseId}/questions/transition`, { method: "POST", body: JSON.stringify(body) }),
   bulkQuestionUnits: (courseId: string, body: { question_ids: string[]; unit_id: string; action: "ADD" | "REMOVE" }) => request<{ changed: number; unchanged: number }>(`/courses/${courseId}/questions/units`, { method: "POST", body: JSON.stringify(body) }),
+  /** Course owner or faculty moderator: the quizzes (units) of the course with moderation counters. */
+  unitModeration: (courseId: string) => request<UnitModerationRow[]>(`/courses/${courseId}/units/moderation`),
+  unitModerationDetail: (unitId: string, options: { limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(options).forEach(([key, value]) => { if (value !== undefined) params.set(key, String(value)); });
+    return request<UnitModerationDetail>(`/units/${unitId}/moderation${params.size ? `?${params}` : ""}`);
+  },
+  /** Owner sends a draft for review, a faculty moderator publishes it or takes it back to draft. */
+  setUnitStatus: (unitId: string, status: UnitStatus) => request<CourseUnit>(`/units/${unitId}/status`, { method: "POST", body: JSON.stringify({ status }) }),
+  moderationCounts: (facultyId: string, courseId?: string) => request<ModerationCounts>(`/faculties/${facultyId}/moderation-counts${courseId ? `?course_id=${encodeURIComponent(courseId)}` : ""}`),
   units: (courseId: string, includeArchived = false) => request<CourseUnit[]>(`/courses/${courseId}/units${includeArchived ? "?include_archived=true" : ""}`),
   createUnit: (courseId: string, body: { title: string; description: string | null }) => request<CourseUnit>(`/courses/${courseId}/units`, { method: "POST", body: JSON.stringify(body) }),
   updateUnit: (id: string, body: { title?: string; description?: string | null }) => request<CourseUnit>(`/units/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
@@ -213,7 +223,26 @@ export type MaterialEmbeddingStatus = { material_id: string; total_chunks: numbe
 export type MaterialEmbeddingResult = { material_id: string; embedded: number; skipped: number; signature: string };
 export type MaterialChunk = { id: string; material_id: string; section_id: string | null; ordinal: number; content: string; char_count: number };
 
-export type CourseUnit = { id: string; course_id: string; position: number; title: string; description: string | null; is_archived: boolean; approved_question_count: number; created_at: string; updated_at: string };
+/** A unit is a quiz: its author wrote it and a faculty moderator publishes it. The status labels it; it does not hide approved questions. */
+export type UnitStatus = "DRAFT" | "PENDING_REVIEW" | "PUBLISHED";
+export type UnitPerson = { id: string; display_name: string };
+export type CourseUnit = {
+  id: string; course_id: string; position: number; title: string; description: string | null; is_archived: boolean; approved_question_count: number; created_at: string; updated_at: string;
+  status?: UnitStatus; author?: UnitPerson | null; reviewer?: UnitPerson | null; reviewed_at?: string | null;
+};
+/** A unit on the moderator's list of quizzes (6a): counters over its questions that are not archived. */
+export type UnitModerationRow = CourseUnit & {
+  status: UnitStatus; question_count: number; draft_count: number; rejected_count: number; pending_review_count: number;
+  without_explanation_count: number; open_report_count: number; open_suggestion_count: number; last_changed_at: string;
+};
+export type UnitQuestionRow = {
+  id: string; type: QuestionType; status: QuestionStatus; source: string; stem: string; difficulty: number | null;
+  has_explanation: boolean; author: UnitPerson | null; open_report_count: number; open_suggestion_count: number; updated_at: string;
+};
+export type UnitModerationDetail = { unit: UnitModerationRow; questions: UnitQuestionRow[] };
+/** A question in the review queue with who wrote it and who reviewed it. */
+export type ReviewQuestion = OwnerQuestion & { author_name?: string | null; reviewer_name?: string | null };
+export type ModerationCounts = { pending_questions: number; open_reports: number; open_suggestions: number; pending_units: number };
 
 /** LAB is a lab session, QUIZ a short in-class quiz (blic). */
 export type ExamScopeKind = "MIDTERM" | "FINAL" | "FULL_EXAM" | "LAB" | "QUIZ";

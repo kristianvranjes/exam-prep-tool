@@ -72,6 +72,14 @@ class BulkQuestionUnitsResult(BaseModel):
     unchanged: int
 
 
+UnitStatus = Literal["DRAFT", "PENDING_REVIEW", "PUBLISHED"]
+
+
+class UnitPerson(BaseModel):
+    id: UUID
+    display_name: str
+
+
 class CourseUnitResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
@@ -80,6 +88,11 @@ class CourseUnitResponse(BaseModel):
     title: str
     description: str | None
     is_archived: bool
+    # Review state of the unit as a quiz: its author wrote it, a moderator published it.
+    status: UnitStatus
+    author: UnitPerson | None = None
+    reviewer: UnitPerson | None = None
+    reviewed_at: datetime | None
     approved_question_count: int = 0
     created_at: datetime
     updated_at: datetime

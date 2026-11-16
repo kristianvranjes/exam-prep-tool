@@ -252,6 +252,15 @@ item and `match_text` its partner. Nothing is backfilled. Downgrade refuses whil
 exists (delete them first), otherwise drops the columns and restores the earlier constraints; a hint or
 expression written meanwhile is lost.
 
+## Unit review migration 0034
+
+Revision **0034** (`down_revision = 0033`) adds `course_units.status` (`DRAFT`, `PENDING_REVIEW` or
+`PUBLISHED`, `ck_course_unit_status`; units that exist are backfilled as `PUBLISHED`, new units start as
+`DRAFT`), nullable `reviewer_id` (FK users, `ON DELETE SET NULL`) and `reviewed_at`. `ck_course_unit_reviewed`
+allows a reviewer only on a published unit. The author is the existing `created_by_user_id`; no `quizzes`
+table exists. The status is a label for moderators: it never hides a unit's approved questions from
+students. Downgrade drops the three columns.
+
 ## Faculty catalog migration 0010
 
 Revision 0010 follows 0009. `faculties` stores UUID id, name (1-150 characters,

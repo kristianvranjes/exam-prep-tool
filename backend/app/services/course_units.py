@@ -13,6 +13,7 @@ from app.schemas.course_unit import (
     CourseUnitCreate,
     CourseUnitResponse,
     CourseUnitUpdate,
+    UnitPerson,
 )
 from app.schemas.question import normalize
 from app.services.courses import get_member_course, get_owner_course
@@ -47,6 +48,16 @@ def course_units(db: Session, course_id: UUID, include_archived: bool) -> list[C
     )
 
 
+def people(db: Session, ids: set[UUID | None]) -> dict[UUID, UnitPerson]:
+    wanted = [id_ for id_ in ids if id_ is not None]
+    if not wanted:
+        return {}
+    return {
+        id_: UnitPerson(id=id_, display_name=name)
+        for id_, name in db.execute(select(User.id, User.display_name).where(User.id.in_(wanted)))
+    }
+
+
 def responses(db: Session, course_id: UUID, units: list[CourseUnit]) -> list[CourseUnitResponse]:
     counts: dict[UUID, int] = {
         unit_id: count
@@ -57,10 +68,15 @@ def responses(db: Session, course_id: UUID, units: list[CourseUnit]) -> list[Cou
             .group_by(QuestionUnit.unit_id)
         )
     }
+    named = people(
+        db, {id_ for unit in units for id_ in (unit.created_by_user_id, unit.reviewer_id)}
+    )
     result = []
     for unit in units:
         row = CourseUnitResponse.model_validate(unit)
         row.approved_question_count = counts.get(unit.id, 0)
+        row.author = named.get(unit.created_by_user_id)
+        row.reviewer = named.get(unit.reviewer_id) if unit.reviewer_id else None
         result.append(row)
     return result
 

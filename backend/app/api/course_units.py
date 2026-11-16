@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_db
@@ -11,7 +11,9 @@ from app.schemas.course_unit import (
     CourseUnitResponse,
     CourseUnitUpdate,
 )
+from app.schemas.unit_moderation import UnitModerationDetail, UnitModerationRow, UnitStatusChange
 from app.services import course_units as service
+from app.services import unit_moderation
 
 router = APIRouter(tags=["course units"])
 
@@ -68,3 +70,31 @@ def restore(
     unit_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> CourseUnitResponse:
     return service.set_archived(db, user, unit_id, False)
+
+
+@router.get("/courses/{course_id}/units/moderation", response_model=list[UnitModerationRow])
+def moderation_list(
+    course_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> list[UnitModerationRow]:
+    return unit_moderation.list_units(db, user, course_id)
+
+
+@router.get("/units/{unit_id}/moderation", response_model=UnitModerationDetail)
+def moderation_detail(
+    unit_id: UUID,
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0, le=10000),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UnitModerationDetail:
+    return unit_moderation.unit_detail(db, user, unit_id, limit, offset)
+
+
+@router.post("/units/{unit_id}/status", response_model=CourseUnitResponse)
+def change_status(
+    unit_id: UUID,
+    data: UnitStatusChange,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CourseUnitResponse:
+    return unit_moderation.set_status(db, user, unit_id, data.status)

@@ -397,6 +397,19 @@ Codes: `INVALID_CONTENT`, `NEEDS_V2`, `DUPLICATE_IN_FILE`, `UNKNOWN_UNIT`, `ARCH
 (errors) and `DUPLICATE_OWN`, `DUPLICATE_APPROVED`, `NO_EXPLANATION` (warnings). Members only;
 415 and 413 as for the import.
 
+Every unit response also has `status` (`DRAFT`, `PENDING_REVIEW`, `PUBLISHED`), `author`
+(`{id, display_name}`, the creator), `reviewer` (set while published) and `reviewed_at`. A unit is
+a quiz; its status labels it for moderators and never hides approved questions.
+
+| Method/path | Contract |
+| --- | --- |
+| POST `/units/{unit_id}/status` | `{status}`. The course OWNER sends a DRAFT for review (`PENDING_REVIEW`); a faculty moderator publishes (`PUBLISHED`, records `reviewer` and `reviewed_at`), also straight from DRAFT when they own the course; the owner or a moderator takes a unit back to `DRAFT`. 403 without the role, 409 for an impossible change or an archived unit, 404 for people who cannot see the course. |
+| GET `/courses/{course_id}/units/moderation` | Course OWNER or faculty moderator (a moderator need not have joined; 403 for other members, 404 for strangers). Active units with the unit fields plus `question_count`, `draft_count`, `rejected_count`, `pending_review_count`, `without_explanation_count`, `open_report_count`, `open_suggestion_count` (all over the unit's non-archived questions) and `last_changed_at` (the unit or any of its questions). |
+| GET `/units/{unit_id}/moderation` | Same access. `{unit, questions[]}`; each question has `id`, `type`, `status`, `source`, `stem`, `difficulty`, `has_explanation`, `author`, `open_report_count`, `open_suggestion_count`, `updated_at`. `limit` (default 100, max 200) and `offset`. |
+| GET `/faculties/{faculty_id}/moderation-counts` | Faculty moderators; optional `course_id`. `{pending_questions, open_reports, open_suggestions, pending_units}`. |
+
+`GET /faculties/{faculty_id}/question-review` rows also carry `author_name` and `reviewer_name`.
+
 ### Exam cycles (R2)
 
 See [exam cycles](COURSE_UNITS.md#exam-cycles-ispitni-ciklusi). Same membership and
