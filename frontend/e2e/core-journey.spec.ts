@@ -94,7 +94,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(student.getByLabel("Pretraži po fakultetu")).toHaveCount(0);
     await student.getByRole("button", { name: "Upiši kolegij" }).first().click();
     await expect(student).toHaveURL(/\/enrol$/);
-    await student.getByLabel("Pretraži po fakultetu").selectOption({ label: "E2E Faculty — Example Test University" });
+    await student.getByLabel("Pretraži po fakultetu").selectOption({ label: "E2E Faculty, Example Test University" });
     await expect(student.getByRole("button", { name: `Upiši kolegij: ${courseName}` })).toBeVisible();
     await student.getByRole("button", { name: `Upiši kolegij: ${courseName}` }).click();
     await expect(student.getByRole("button", { name: `Upisano, otvori kolegij: ${courseName}` })).toBeVisible();
