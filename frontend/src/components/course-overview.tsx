@@ -10,10 +10,15 @@ import type { MaterialsSummary } from "./course-materials";
 import { kindLabels } from "./exam-scopes";
 import { ResumeSession } from "./resume-session";
 import { resumableAttempt, type ResumableAttempt } from "./use-resumable-sessions";
-import { Alert, Button, ProgressBar, SegmentedControl } from "./ui";
+import { Alert, Button, ProgressBar, SegmentedControl, Select } from "./ui";
 import type { PracticeSetupRequest } from "./practice-quiz";
 import { QUESTIONS, UNITS, plural, pluralForm } from "../lib/plural";
 import { cn } from "../lib/utils";
+
+/** The exam's kind in the genitive, for "N dana do ...": the handoff names the exam in the headline, and the scope's own free-text name cannot be declined. */
+const kindGenitive: Record<ExamScope["kind"], string> = {
+  MIDTERM: "međuispita", FINAL: "završnog ispita", FULL_EXAM: "ispitnog roka", LAB: "laboratorijske vježbe", QUIZ: "kviza",
+};
 
 type Availability = "loading" | "available" | "empty" | "unknown";
 type Countdown = { exam: NextExam; readiness: ExamScopeReadiness | null };
@@ -212,6 +217,8 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
   const quickChoices = [{ value: "", label: "Cijeli kolegij" },
     ...targets.scopes.map(scope => ({ value: `scope:${scope.id}`, label: `${scope.name} ${scope.academic_year} · ${kindLabels[scope.kind]}` })),
     ...targets.units.filter(unit => !unit.is_archived).map(unit => ({ value: `unit:${unit.id}`, label: unit.title }))];
+  const quickScopeChoices = quickChoices.filter(choice => !choice.value.startsWith("unit:"));
+  const quickUnitChoices = quickChoices.filter(choice => choice.value.startsWith("unit:"));
   const more = [
     { key: "progress", name: "Napredak", note: summary && summary.resolved_review_count > 0 ? `${summary.resolved_review_count} odgovora` : "Rezultati i ponavljanje", label: "Otvori napredak", open: onProgress },
     onPractice && { key: "practice", name: "Vježba po mjeri", note: "Cjeline i vrste pitanja", label: "Otvori: Vježba po mjeri", open: onPractice },
@@ -256,7 +263,7 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
           <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
             {!exam.ongoing && <span aria-hidden="true" className="hero-number text-[5rem] text-accent">{exam.days}</span>}
             <div>
-              <h2 id="overview-exam-heading" className="text-2xl font-extrabold">{exam.ongoing ? `${exam.scope.name} traje` : `${pluralForm(exam.days, ["dan", "dana", "dana"])} do ispita`}<span className="sr-only">{!exam.ongoing && ` — ${plural(exam.days, ["dan", "dana", "dana"])}`}</span></h2>
+              <h2 id="overview-exam-heading" className="text-2xl font-extrabold">{exam.ongoing ? `${exam.scope.name} traje` : `${pluralForm(exam.days, ["dan", "dana", "dana"])} do ${kindGenitive[exam.scope.kind]}`}<span className="sr-only">{!exam.ongoing && ` — ${plural(exam.days, ["dan", "dana", "dana"])}`}</span></h2>
               <p className="mt-1 text-sm text-soft">{exam.scope.name} · {exam.scope.starts_on && <><time dateTime={exam.scope.starts_on}>{formatScopeDates(exam.scope)}</time> · </>}obuhvaća {plural(unitCount, UNITS)}</p>
             </div>
           </div>
@@ -303,10 +310,17 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
         {canStart && <div role="group" aria-labelledby={`${id}-quick`} className="min-w-0 bg-surface p-6">
           <p className="flex items-baseline justify-between gap-3"><span id={`${id}-quick`} className="text-lg font-extrabold">Brzi kviz</span><span className="text-sm text-soft">5 pitanja · provjera odmah</span></p>
           {quickChoices.length > 1 && <div role="group" aria-label="Pitanja iz" className="mt-3 flex flex-wrap gap-2">
-            {quickChoices.map(choice => <button key={choice.value} type="button" aria-pressed={quickTarget === choice.value} disabled={quickStarting}
+            {quickScopeChoices.map(choice => <button key={choice.value} type="button" aria-pressed={quickTarget === choice.value} disabled={quickStarting}
               onClick={() => { setQuickTarget(choice.value); setQuickError(""); }}
               className="border px-3 py-1.5 text-sm border-line-strong aria-pressed:border-accent aria-pressed:bg-accent-surface aria-pressed:text-accent hover:bg-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">{choice.label}</button>)}
           </div>}
+          {/* Up to nine chips wrapped into three rows; the course and the exam cycles stay as chips, the units are one list. */}
+          {quickUnitChoices.length > 0 && <Select aria-label="Ili jedna tema" className="mt-2 w-full" disabled={quickStarting}
+            value={quickTarget.startsWith("unit:") ? quickTarget : ""}
+            onChange={event => { if (event.target.value) { setQuickTarget(event.target.value); setQuickError(""); } }}>
+            <option value="">Ili jedna tema…</option>
+            {quickUnitChoices.map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
+          </Select>}
           {quickError && <Alert className="mt-stack">{quickError}</Alert>}
           <Button variant="secondary" className="mt-4" disabled={quickStarting} aria-label={`Započni brzi kviz: ${quickLabel}`} onClick={() => void quickQuiz()}>{quickStarting ? "Pokrećem brzi kviz…" : `Započni · ${quickLabel}`}</Button>
         </div>}
