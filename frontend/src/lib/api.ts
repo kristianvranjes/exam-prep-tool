@@ -134,12 +134,17 @@ export const api = {
     return request<Question[]>(`/courses/${courseId}/questions?${params}`);
   },
   createQuestion: (courseId: string, body: QuestionCreate) => request<OwnerQuestion>(`/courses/${courseId}/questions`, { method: "POST", body: JSON.stringify(body) }),
-  importQuestions: (courseId: string, json: string, unitIds: string[] = []) => {
+  importQuestions: (courseId: string, json: string, unitIds: string[] = [], options: ImportOptions = {}) => {
     const params = new URLSearchParams();
     unitIds.forEach((id) => params.append("unit_ids", id));
-    const query = unitIds.length ? `?${params}` : "";
+    if (options.duplicates) params.set("duplicates", options.duplicates);
+    if (options.importAs) params.set("import_as", options.importAs);
+    if (options.skipInvalid) params.set("skip_invalid", "true");
+    const query = params.size ? `?${params}` : "";
     return request<OwnerQuestion[]>(`/courses/${courseId}/questions/import${query}`, { method: "POST", body: json });
   },
+  /** Reports on every question of a file (errors, warnings, duplicates, unknown units) without saving anything. */
+  checkImport: (courseId: string, json: string) => request<ImportReport>(`/courses/${courseId}/questions/import/check`, { method: "POST", body: json }),
   generateQuestions: (courseId: string, body: QuestionGeneration) => request<AIJob>(`/courses/${courseId}/questions/generate`, { method: "POST", body: JSON.stringify(body) }),
   question: (id: string) => request<Question>(`/questions/${id}`),
   editQuestion: (id: string, body: QuestionEdit) => request<OwnerQuestion>(`/questions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
@@ -307,6 +312,14 @@ export type ReportReceipt = { id: string; question_id: string; reason: ReportRea
 export type ModeratorReport = ReportReceipt & { resolution: "DISMISSED" | "QUESTION_ARCHIVED" | null; resolved_by_user_id: string | null; resolved_at: string | null; question: OwnerQuestion };
 type QuestionBase = { id: string; course_id: string; type: QuestionType; stem: string; difficulty: number | null };
 export type PublicQuestion = QuestionBase & { visibility: "MEMBER"; status: "APPROVED"; options: { position: number; text: string }[]; choices?: { position: number; text: string }[]; hint?: string | null; expr?: string | null; unit_ids?: string[]; unit?: string | null };
+/** What to do with a question whose text you already have: fail the import, leave it out, or overwrite it while it is still a draft. */
+export type ImportOptions = { duplicates?: "REJECT" | "SKIP" | "REPLACE"; importAs?: "DRAFT" | "PENDING_REVIEW"; skipInvalid?: boolean };
+export type ImportIssueCode = "INVALID_CONTENT" | "NEEDS_V2" | "DUPLICATE_IN_FILE" | "UNKNOWN_UNIT" | "ARCHIVED_UNIT" | "DUPLICATE_OWN" | "DUPLICATE_APPROVED" | "NO_EXPLANATION";
+export type ImportItemReport = {
+  position: number; line: number | null; type: string | null; stem: string | null; course_unit: string | null;
+  status: "OK" | "WARNING" | "ERROR"; issues: { code: ImportIssueCode; severity: "WARNING" | "ERROR"; message: string }[];
+};
+export type ImportReport = { readable: boolean; message: string | null; version: string | null; total: number; ok: number; warnings: number; errors: number; items: ImportItemReport[] };
 export type OwnerQuestion = QuestionBase & {
   visibility: "OWNER"; status: QuestionStatus; source: "AI" | "USER"; ai_job_id: string | null;
   created_by_user_id: string; created_at: string; updated_at: string;

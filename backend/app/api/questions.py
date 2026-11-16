@@ -22,13 +22,19 @@ from app.schemas.question import (
     RejectRequest,
     VersionResponse,
 )
+from app.schemas.question_import import DuplicatePolicy, ImportAs, ImportReport
 from app.services.ai.base import AIProvider
 from app.services.ai.router import get_ai_provider
 from app.services.embeddings.base import EmbeddingProvider
 from app.services.embeddings.router import get_embedding_provider
 from app.services.questions import service
 from app.services.questions.generation import generate_questions
-from app.services.questions.importing import import_questions, read_import
+from app.services.questions.importing import (
+    check_import,
+    import_questions,
+    read_body,
+    read_import,
+)
 
 router = APIRouter(tags=["questions"])
 
@@ -49,11 +55,26 @@ def create(
 def import_quiz(
     course_id: UUID,
     unit_ids: list[UUID] = Query(default=[], max_length=5),
+    duplicates: DuplicatePolicy = "REJECT",
+    import_as: ImportAs = "DRAFT",
+    skip_invalid: bool = False,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     document: QuizImport = Depends(read_import),
 ) -> list[OwnerQuestion]:
-    return import_questions(db, user, course_id, document, unit_ids)
+    return import_questions(
+        db, user, course_id, document, unit_ids, duplicates, import_as, skip_invalid
+    )
+
+
+@router.post("/courses/{course_id}/questions/import/check", response_model=ImportReport)
+def check_quiz_import(
+    course_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    body: bytes = Depends(read_body),
+) -> ImportReport:
+    return check_import(db, user, course_id, body)
 
 
 @router.post("/courses/{course_id}/questions/generate", response_model=JobDetail)

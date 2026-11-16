@@ -58,6 +58,13 @@ approval claims. The existing strict question-content schemas validate each item
 | Numeric `relative_tolerance` | Optional share of the key's magnitude, 0–1 (`"0.01"` allows 1 %) |
 | Numeric `unit` | Optional display unit, 1–20 characters; never converted |
 
+`quiz-import-v2` also accepts an optional `course_unit`: the title of an existing unit of the course
+(a quiz), at the top level for the whole file and/or on a question, which wins. (It is not `unit`:
+a numeric question uses that for its measurement unit.) Titles are matched
+ignoring case and extra spaces. An unknown or archived unit is an error for that question (the
+whole import fails unless `skip_invalid` is used). A question without a unit takes the unit
+chosen in the request, if any. `quiz-import-v1` rejects `course_unit`.
+
 Text fields may use the [formula and code syntax](QUESTIONS.md#formulas-and-code)
 (`$…$`, `$$…$$`, backticks and code fences). It is plain text to the importer; in JSON,
 write each backslash twice (`"$\\frac{1}{2}$"`) and line breaks as `\n`. The prompt
@@ -85,6 +92,13 @@ hard maxima. Both are forwarded by Compose. The stream is bounded before JSON pa
 including without Content-Length. No file is saved or executed. Text is rendered
 through existing React text output. Validation returns 422 with up to five field-path
 errors without echoing the document; wrong content type is 415 and oversize is 413.
+
+`POST /courses/{course_id}/questions/import/check` is a dry run: it reports per question
+(position, line in the file, status, issues) what the import would do, including unknown units,
+duplicates within the file, questions you already have or that are already approved, and
+missing explanations (warnings). See [API](API.md#course-units-r2) for the options of the
+real import: `duplicates` (`REJECT`, `SKIP`, `REPLACE`), `import_as` (`DRAFT`,
+`PENDING_REVIEW`) and `skip_invalid`.
 
 All content is validated before writes. Questions, options and initial history are
 committed together. Duplicate normalized stems within a file are rejected; an active
