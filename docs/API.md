@@ -339,7 +339,7 @@ OWNER here, so there is no separate owner-only 403 operation in this phase.
 
 These endpoints do not invoke text generation, reparse PDFs, or construct RAG prompts.
 
-## Question bank (Phase 6)
+## Question bank
 
 All routes require a session (401 otherwise). Outsiders/missing resources return
 404. Members read their own questions in all states and public APPROVED content.

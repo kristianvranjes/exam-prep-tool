@@ -36,7 +36,7 @@ export function explanations(item: ItemAnalysis): string[] {
   const flagged = (flag: OptionAnalysis["flag"]) => item.options.filter(option => option.flag === flag);
   return item.flags.flatMap(flag => {
     if (flag === "NEGATIVE_DISCRIMINATION") return [`Studenti koji dobro rješavaju ostala pitanja ovo pitanje griješe češće od slabijih studenata (u najboljoj skupini točno odgovara ${percent(item.upper_correct ?? 0)}, u najslabijoj ${percent(item.lower_correct ?? 0)}). Ključ je možda pogrešan.`];
-    if (flag === "STRONG_DISTRACTOR") return flagged(flag).map(option => `Jaki studenti često biraju ${optionName(item, option)} — provjerite ključ.`);
+    if (flag === "STRONG_DISTRACTOR") return flagged(flag).map(option => `Jaki studenti često biraju ${optionName(item, option)}. Provjerite ključ.`);
     if (flag === "TOO_HARD") return [`Samo ${percent(item.difficulty ?? 0)} studenata odgovara točno. Provjerite ključ i formulaciju te pokriva li kolegij to gradivo.`];
     if (flag === "TOO_EASY") return [`${percent(item.difficulty ?? 0)} studenata odgovara točno. Pitanje možda otkriva svoj odgovor.`];
     return flagged(flag).map(option => `Gotovo nitko ne bira ${optionName(item, option)}. Uvjerljiviji netočan odgovor učinio bi pitanje informativnijim.`);

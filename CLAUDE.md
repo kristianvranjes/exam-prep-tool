@@ -15,13 +15,9 @@ Current stack:
 - PostgreSQL + pgvector
 - Vitest / pytest / Playwright
 - `tools/studio`: the Content Studio, a separate Python CLI that prepares reviewed question sets offline (see `docs/CONTENT_STUDIO.md`)
-- GitHub Actions is the authoritative full regression gate
 
 ## Working rules
 
-- Follow AGENTS.md.
-- Prefer targeted local verification only.
-- Do not repeatedly run full backend/frontend suites locally.
 - Do not rewrite working backend business logic during frontend-only issues.
 - Do not change authorization, migrations, AI providers, or data models unless the issue explicitly requires it.
 - Inspect git status and diff before editing.
