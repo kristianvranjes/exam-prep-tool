@@ -4,7 +4,7 @@ ExamPrep is a local-first university exam preparation platform for FER students.
 can [discover and join faculty courses](docs/FRONTEND.md#your-courses-and-course-enrolment),
 upload and browse PDF materials, write and submit private Question Bank drafts, and
 practice by course unit, by exam scope (midterm, final, exam term) or on past exam papers.
-Questions are multiple-choice, true/false, short-answer, numeric and multiple-select, with
+Questions are multiple-choice, true/false, short-answer, numeric, multiple-select and matching, with
 deterministic grading, immediate or end-of-session feedback, mistakes, favorites, due-only
 review, an exam readiness estimate and learning progress. Students report approved
 questions and suggest reviewed corrections. Faculty moderators review contributions,

@@ -13,9 +13,10 @@ Remaining work is ordered against the FER 2026/27 calendar (see
 [section 2](#2-semester-plan-202627)). Target windows follow exam periods; they are not
 delivery commitments. Revisions are listed at the end of the document.
 
-**Roadmap status (12 November 2026):** R2, R3 core (past exam papers, paper sessions and
-generated mock exams), R4 (numeric and multiple-select questions, formulas), R5, R12
-(tutor practice) and the exam dates of R10 are implemented. R13 is in progress (design
+**Roadmap status (16 November 2026):** R2, R3 core (past exam papers, paper sessions and
+scored, timed mock exams), R4 (numeric and multiple-select questions, formulas), R5, R12
+(tutor practice) and the exam dates of R10 are implemented. Matching questions and half
+credit for multiple-select, both from R8, are implemented; ordering is not. R13 is in progress (design
 brief, tokens, palettes, navigation and the course screens are done; practice, results
 and progress screens are pending, see `DESIGN.md`). R14 has item analysis, R6 has the
 pilot metrics queries, and R1 has a deployed backend on Azure Container Apps but no
@@ -27,17 +28,19 @@ completed verification. R7–R11 and the rest of R3, R6 and R14 are planned.
 - PDF ingestion, stored sections/chunks, optional concept extraction and semantic retrieval.
 - Manual question authoring, JSON draft import, question versions, and human approval.
 - Multiple-choice, true/false, and short-answer practice, plus numeric answers with
-  tolerances and multiple-select questions (R4).
+  tolerances, multiple-select questions (R4) and matching questions (R8).
 - Saved attempts, resume, abandonment, and frozen submitted results.
 - Deterministic grading for multiple-choice and true/false, numeric answers by tolerance
-  (`numeric-tolerance-v1`) and multiple-select by exact set (`exact-set-v1`).
+  (`numeric-tolerance-v1`), multiple-select by exact set with half the points for a right
+  but incomplete set on point-scored items (`partial-set-v1`; earlier answers keep
+  `exact-set-v1`) and matching (`match-v1`).
 - Question-level review scheduling, adaptive selection, and course progress summaries.
 - Faculty moderation, question reports, and reviewed edit suggestions.
 - Unit, PostgreSQL integration, and multi-user browser acceptance coverage.
 - Ordered course units, exam scopes per academic year, unit/scope-filtered practice,
   server-side practice availability, per-unit progress, and bulk unit assignment (R2).
 - Mistakes and due-only review sessions with one-click due review (R5 selection), and
-  generated mock exams spread across an exam scope's units (R3).
+  scored, timed mock exams of up to 60 questions spread across an exam scope's units (R3).
 - Private, course-scoped favorites with a star in practice and results, FAVORITES focus
   sessions with unit/scope filters, and a one-click five-question quick quiz (R5).
 - Paginated Mistakes and Favorites lists in Progress, each opening its practice mode (R5).
@@ -54,7 +57,7 @@ completed verification. R7–R11 and the rest of R3, R6 and R14 are planned.
 self-reviews them (migration 0025). The feedback mode (`END` or immediate) is stored with
 the attempt (0018), and answer confidence is stored with each answer. Practice sessions
 are selected from the whole bank or from chosen units, an exam scope, mistakes, due
-reviews or favorites (at most 20 questions). Exam scopes have optional dates (0019).
+reviews or favorites (1–20 questions; mock exams allow up to 60). Exam scopes have optional dates (0019).
 Past exam papers have published, timed sessions with a server-enforced deadline (0020–0022).
 Material kinds, material-based practice, time per question and images in questions do
 not exist yet. Scheduling is `leitner-v1`.
@@ -412,13 +415,15 @@ deterministically.
    - Grade inclusively at tolerance boundaries, with tests at the exact boundary.
 
 2. **Multiple-select answers**
-   - Add a `MULTIPLE_SELECT` type graded by exact-set correctness. Partial credit is only
-     available through an explicit paper scoring rule (R3), never by default.
+   - Add a `MULTIPLE_SELECT` type graded by exact-set correctness. Partial credit applies
+     only to point scoring on papers and mock exams (R3), never to the grade itself.
 
    *Packages 1 and 2 are implemented* (migration 0024): authoring, moderation, edit
    suggestions, versions, snapshots, practice and paper sessions, checked feedback,
    results and scheduling, and the `quiz-import-v2` format (v1 still imports). Paper
-   sessions apply their usual penalty to any wrong set; no partial-credit rule exists yet.
+   sessions apply their usual penalty to any set containing a wrong option. A right but
+   incomplete set earns half the item's points with no penalty (`partial-set-v1`,
+   migration 0032).
 
 3. **Formulas and diagrams**
    - Render LaTeX in stems, options, explanations, and reference answers with KaTeX;
@@ -570,7 +575,7 @@ evaluated.
 | Milestone | Planned capability | Entry and release gate |
 | --- | --- | --- |
 | **R7: Past-exam and material ingestion** | OCR for scanned PDFs, assisted splitting of past-exam PDFs into draft paper items (deterministic layout heuristics first, optional AI second), clearer source/page references, duplicate candidates across years, and richer provenance. | Entering past papers by hand is the observed content bottleneck. OCR and AI remain optional; every extracted item, duplicate match, and correction requires a human decision before approval. |
-| **R8: Further deterministic question types** | Matching and ordering in separate issues; optional partial credit for multiple-select. | Pilot demonstrates demand. Define scoring before each type ships. Preserve existing import compatibility. |
+| **R8: Further deterministic question types** | Ordering, in its own issue. Matching (`match-v1`) and half credit for multiple-select (`partial-set-v1`) are implemented. | Pilot demonstrates demand. Define scoring before each type ships. Preserve existing import compatibility. |
 | **R9: Optional AI assessment of extended answers and explanations** | Rubric-based assessment of short and extended answers against R4 rubrics; optional “explain your answer” field on objective questions, with the explanation assessed against the question's explanation and rubric. Clearly labeled suggestions with reasons and human review. | A human-labeled evaluation set demonstrates acceptable correctness, abstention, latency, and cost. Start disabled and advisory; students retain rubric self-review. The correctness of an objective answer always stays deterministic. |
 | **R10: Study planning and deeper learning tools** | Exam-date goals tied to exam scopes (for example “MI on 23 November covers units 1–5”), due-only review, time-bounded sessions, optional confidence capture, and progress trends. Scope dates, the countdown, confidence and due-only review are pulled forward into Phases A and B; FSRS scheduling, readiness ranges and trends follow. | Pilot usage establishes which tools help. Keep recommendation logic deterministic and distinguish self-assessment from automatic grades. |
 | **R11: Wider rollout and measured scale** | Evaluate AAI@EduHr sign-in, self-service account recovery, operational administration, retention/export/deletion policies, and capacity improvements. The interface is Croatian only (no language switch); English localization is out of scope unless a non-Croatian audience appears. | Recovery, moderation, and content permissions are sustainable. Add workers, storage changes, indexes, or replicas only when measurements show the need. |
@@ -652,3 +657,4 @@ that require it. Keep optional AI disabled until its separate release gate passe
 - 6 October 2026: first version, based on the repository as inspected that day and the project owner's confirmation that the website runs on Vercel and Railway.
 - 14 October 2026: course structure and past exams moved ahead of secondary learning tools.
 - 20 October 2026: remaining work ordered against the FER 2026/27 academic calendar; tutor practice, UI foundations and scalable community review added.
+- 16 November 2026: status brought up to date with scored mock exams, half credit for multiple-select and matching questions.
