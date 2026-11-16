@@ -104,6 +104,6 @@ export function ApplicationFrame({ user, logout, busy, nav, onNavigate, settings
         </div>}
       </div>
     </header>
-    <main id="main-content" tabIndex={-1} className={cn("mx-auto min-w-0 px-4 pt-8 sm:px-8", focusedPractice ? cn(width, "pb-8") : cn(width, "pb-24 md:pb-8"))}>{children}</main>
+    <main id="main-content" tabIndex={-1} className={cn("mx-auto min-w-0 px-4 sm:px-8", focusedPractice ? cn(width, "pt-3 pb-8 sm:pt-4") : cn(width, "pt-8 pb-24 md:pb-8"))}>{children}</main>
   </div>;
 }

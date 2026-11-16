@@ -325,15 +325,14 @@ export function ActiveQuiz({ attempt, experience, update: onUpdate, back: onBack
         <QuizAnswerEditor question={question} answer={answer} change={changeAnswer} disabled={busy} feedback={feedback} shortcuts />
         {immediate && !feedback && <ConfidencePicker name={question.id} value={confidence} onChange={setConfidence} disabled={busy} />}
         <div aria-live="polite">{feedback && <CheckedFeedback question={question} feedback={feedback} headingRef={feedbackHeading} onSelfReview={selfReview} />}</div>
-        <div className="flex flex-col gap-3">
-          {!valid && <p id="answer-help" className="text-sm text-muted">{paper ? "Odgovorite ili preskočite i ostavite pitanje prazno." : question.type === "SHORT_ANSWER" || question.type === "NUMERIC" ? "Upišite odgovor za nastavak." : "Odaberite odgovor za nastavak."}</p>}
+        {/* The bar is a direct child of the form: a sticky element cannot leave its parent, so inside a small wrapper it never reached the bottom of the window. */}
+          {!valid && <p id="answer-help" className="-mb-3 text-sm text-muted">{paper ? "Odgovorite ili preskočite i ostavite pitanje prazno." : question.type === "SHORT_ANSWER" || question.type === "NUMERIC" ? "Upišite odgovor za nastavak." : "Odaberite odgovor za nastavak."}</p>}
           <div className="sticky bottom-0 z-20 -mx-1 flex flex-wrap justify-between gap-3 border-t-2 border-line bg-background px-1 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:-mx-4 sm:px-4">
             <Button variant="secondary" disabled={busy || index === 0} aria-keyshortcuts="P K" onClick={() => navigate(index - 1)}>Prethodno</Button>
             {paper && !feedback && (question.answer !== null || answer !== null) && <Button variant="ghost" disabled={busy} onClick={leaveBlank}>Ostavi prazno</Button>}
             {paper && !valid && !finalQuestion && <Button variant="secondary" disabled={busy} onClick={() => navigate(index + 1)}>Preskoči zasad</Button>}
             <Button type="submit" className="ml-auto" disabled={busy || !valid} aria-describedby={!valid ? "answer-help" : undefined} aria-keyshortcuts="Enter">{saving ? "Spremam…" : immediate && !feedback ? (busy ? "Provjeravam…" : "Provjeri odgovor") : immediate ? (finishesFromQuestion ? (busy ? "Završavam…" : "Završi vježbu") : finalQuestion ? "Nastavi na pregled" : "Sljedeće pitanje") : finalQuestion ? "Spremi i pregledaj" : "Spremi i dalje"}</Button>
           </div>
-        </div>
       </form>
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
         <p className="text-sm text-muted">{progress}</p>
@@ -364,12 +363,13 @@ export function ActiveQuiz({ attempt, experience, update: onUpdate, back: onBack
           <p className="flex items-center gap-2"><span aria-hidden="true" className="size-3 border-2 border-accent" />Trenutno pitanje</p>
           <p className="flex items-center gap-2"><Flag aria-hidden="true" className="size-3" />Označeno za povratak</p>
         </div>
-        {!confirmation && <Button className="mt-5 w-full" disabled={busy} onClick={openReview}>{paper ? "Pregledaj i predaj ispit" : "Pregledaj i završi"}</Button>}
+        {/* Finishing is the loudest button only once there is nothing left to answer; until then the next question's action leads. */}
+        {!confirmation && <Button variant={unanswered === 0 ? "primary" : "secondary"} className="mt-5 w-full" disabled={busy} onClick={openReview}>{paper ? "Pregledaj i predaj ispit" : "Pregledaj i završi"}</Button>}
       </aside>}
     </div>
     <Sheet open={mobileNavigatorOpen} onClose={() => setMobileNavigatorOpen(false)} title="Pitanja">
       {navigator(true)}
-      {!confirmation && <Button className="mt-5 w-full" disabled={busy} onClick={() => { setMobileNavigatorOpen(false); openReview(); }}>
+      {!confirmation && <Button variant={unanswered === 0 ? "primary" : "secondary"} className="mt-5 w-full" disabled={busy} onClick={() => { setMobileNavigatorOpen(false); openReview(); }}>
         {paper ? "Pregledaj i predaj ispit" : "Pregledaj i završi"}
       </Button>}
     </Sheet>
