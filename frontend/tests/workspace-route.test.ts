@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { attemptPath, coursePath, documentTitle, parseWorkspaceRoute } from "../src/lib/workspace-route";
 
-it.each(["overview", "practice", "papers", "progress", "materials", "more"] as const)("roundtrips the %s course destination", destination => {
+it.each(["overview", "practice", "papers", "progress", "estimate", "materials", "more"] as const)("roundtrips the %s course destination", destination => {
   expect(parseWorkspaceRoute(coursePath("course", destination))).toMatchObject({ view: "course", courseId: "course", destination, attemptId: null });
 });
 it("roundtrips attempt and results identities", () => {
