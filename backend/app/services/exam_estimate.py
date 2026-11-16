@@ -7,9 +7,11 @@ counts as its fraction.
 """
 
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -153,7 +155,7 @@ def scope_estimate(db: Session, user: User, scope_id: UUID) -> ExamEstimate:
     points, max_points, threshold = exam_points_by_unit(papers, items, units_of)
 
     since = as_of - timedelta(days=WINDOW_DAYS)
-    answered = db.execute(
+    answered: Sequence[Any] = db.execute(
         graded_answers(
             user,
             course_id,
