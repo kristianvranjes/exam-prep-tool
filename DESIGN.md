@@ -442,10 +442,11 @@ Implemented:
 - Past exams 9a (table with kind filter, date, duration, points, tasks, best result and Riješi/Ponovi) and 9b (rules, scoring and the task list before a paper starts, with the clock or without).
 - Results 2d without the course heading above them, and 2e as one answer at a time with an index and Prethodno / Sljedeće (netočno).
 - Moderator: "Moderator" beside the brand and the page header on the faculty tools; 6b import of several files with a preview of every question (what is missing, warnings, errors) before anything is sent; the unit list as ruled rows.
+- Moderator quizzes 6a and 6c ("Kvizovi" in a course's "Više", for owners and moderators): a table of the course's units as quizzes with a status filter (Svi / Skice / Na pregledu / Objavljeni), question count, what still needs a moderator in words, status and last change; the quiz page lists its questions with type, source, review status and flags (reports, suggestions, no explanation), "Uredi" opens the question in the bank, and the properties panel shows name, description, status, author and reviewer. Status actions follow the role: the owner sends a draft for review, a moderator publishes, either takes it back to a draft. The design's per-quiz settings (time limit, attempts, shuffle, collaborators) are not in this version.
 
 Pending:
 
 - Study plan 2g and course page 2c (wait for the plan data); Google sign-in on 2a.
-- Moderator quiz list and quiz page (6a, 6c: need a quiz status and question order), the single-question editor (6d) and the duplicate/unknown-topic warnings of the import (need the server).
+- Moderator question order inside a quiz (the drag handle of 6c), the single-question editor (6d) and the duplicate/unknown-topic warnings of the import preview (the server now reports them).
 - Remaining mobile screens 7a-7m and 8d-8e (practice question sheet and safe-area-aware
   answer actions are implemented with 1a/1e).
