@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.models import Course, User
 from app.models.question import Question
-from app.schemas.question import OwnerQuestion, QuestionStatus
+from app.schemas.question import QuestionStatus
+from app.schemas.unit_moderation import ReviewQuestion
+from app.services.course_units import people
 from app.services.moderation import require_moderator
 from app.services.questions.service import owner_view
 
@@ -19,7 +21,7 @@ def review_queue(
     status: QuestionStatus,
     limit: int,
     offset: int,
-) -> list[OwnerQuestion]:
+) -> list[ReviewQuestion]:
     require_moderator(db, user, faculty_id)
     if (
         course_id is not None
@@ -36,12 +38,28 @@ def review_queue(
     )
     if course_id is not None:
         query = query.where(Question.course_id == course_id)
-    return [
-        owner_view(db, row)
-        for row in db.scalars(
+    rows = list(
+        db.scalars(
             query.order_by(Question.created_at, Question.id)
             .limit(limit)
             .offset(offset)
             .with_for_update(read=True, of=Question)
         )
+    )
+    named = people(
+        db, {id_ for row in rows for id_ in (row.created_by_user_id, row.reviewed_by_user_id)}
+    )
+
+    def name(id_: UUID | None) -> str | None:
+        return named[id_].display_name if id_ in named else None
+
+    return [
+        ReviewQuestion.model_validate(
+            owner_view(db, row).model_dump()
+            | {
+                "author_name": name(row.created_by_user_id),
+                "reviewer_name": name(row.reviewed_by_user_id),
+            }
+        )
+        for row in rows
     ]

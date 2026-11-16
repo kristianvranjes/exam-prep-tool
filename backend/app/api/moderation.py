@@ -6,13 +6,15 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_current_user, get_db
 from app.models import User
 from app.models.faculty import Faculty
-from app.schemas.question import OwnerQuestion, QuestionStatus
+from app.schemas.question import QuestionStatus
 from app.schemas.question_edit_suggestion import ModeratorSuggestion, SuggestionStatus
 from app.schemas.question_report import ModeratorReport, ReportStatus
+from app.schemas.unit_moderation import ModerationCounts, ReviewQuestion
 from app.services.moderation import is_moderator
 from app.services.questions.review import review_queue
 from app.services.reports import report_queue
 from app.services.suggestions import suggestion_queue
+from app.services.unit_moderation import moderation_counts
 
 router = APIRouter(prefix="/faculties/{faculty_id}", tags=["moderation"])
 
@@ -26,7 +28,17 @@ def moderator_status(
     return {"is_moderator": is_moderator(db, user.id, faculty_id)}
 
 
-@router.get("/question-review", response_model=list[OwnerQuestion])
+@router.get("/moderation-counts", response_model=ModerationCounts)
+def counts(
+    faculty_id: UUID,
+    course_id: UUID | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ModerationCounts:
+    return moderation_counts(db, user, faculty_id, course_id)
+
+
+@router.get("/question-review", response_model=list[ReviewQuestion])
 def question_review(
     faculty_id: UUID,
     course_id: UUID | None = None,
@@ -35,7 +47,7 @@ def question_review(
     offset: int = Query(0, ge=0, le=10000),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[OwnerQuestion]:
+) -> list[ReviewQuestion]:
     return review_queue(db, user, faculty_id, course_id, status, limit, offset)
 
 
