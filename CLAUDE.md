@@ -33,3 +33,17 @@ Current stack:
 - Avoid generic indigo SaaS dashboards, gradients, glassmorphism, neon, giant hero sections, and gamified quiz styling (streak flames, confetti, mascots).
 - The interface is Croatian only; text is written directly in the components.
 - Accessibility: visible focus, semantic labels, adequate contrast, touch-friendly controls, reduced-motion friendly; correct, incorrect and pending states are always stated in words, never by colour alone.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (`kristianvranjes/exam-prep-tool`), via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
