@@ -120,7 +120,7 @@ export function QuestionEditor({ question, rows, offset, canEdit, concepts, unit
       <nav aria-label="Pitanja u popisu" className="min-w-0 border-line max-lg:order-3 max-lg:border-t-2 lg:border-r-2">
         <p className="label-caps px-4 pb-2 pt-4">Pitanja · {rows.length}</p>
         <ul>
-          {creating && <li aria-current="true" className="border-t border-line border-l-4 border-l-accent bg-surface px-4 py-3 text-sm">
+          {creating && <li aria-current="true" className="border-t border-line bg-accent-surface px-4 py-3 text-sm">
             <span className="font-extrabold">Novo pitanje</span><span className="block text-muted">Još nije spremljeno</span>
           </li>}
           {rows.map((row, index) => {
@@ -129,7 +129,7 @@ export function QuestionEditor({ question, rows, offset, canEdit, concepts, unit
             const missingExplanation = row.visibility === "OWNER" && !row.explanation;
             return <li key={row.id} className="border-t border-line">
               <button type="button" disabled={!editable || active} aria-current={active ? "true" : undefined}
-                className={cn("grid min-h-11 w-full grid-cols-[1.5rem_minmax(0,1fr)] gap-2 border-l-4 px-4 py-3 text-left text-sm disabled:cursor-default", active ? "border-l-accent bg-surface" : "border-l-transparent hover:bg-subtle disabled:hover:bg-transparent", !editable && !active && "text-muted")}
+                className={cn("grid min-h-11 w-full grid-cols-[1.5rem_minmax(0,1fr)] gap-2 px-4 py-3 text-left text-sm disabled:cursor-default", active ? "bg-accent-surface" : "hover:bg-subtle disabled:hover:bg-transparent", !editable && !active && "text-muted")}
                 onClick={() => { if (editable && confirmLeave()) openQuestion(row); }}>
                 <span className="font-extrabold tabular-nums">{offset + index + 1}</span>
                 <span className="min-w-0">
