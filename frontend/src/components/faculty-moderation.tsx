@@ -275,7 +275,7 @@ export function FacultyModeration({ currentUserId, moderatedFaculties }: { curre
   </section>;
 }
 
-function ReportsQueue({ facultyId, courseId, courses }: { facultyId: string; courseId: string; courses: Course[] }) {
+export function ReportsQueue({ facultyId, courseId, courses }: { facultyId: string; courseId: string; courses: Course[] }) {
   const [rows, setRows] = useState<ModeratorReport[]>([]);
   const [offset, setOffset] = useState(0);
   const [count, setCount] = useState(0);

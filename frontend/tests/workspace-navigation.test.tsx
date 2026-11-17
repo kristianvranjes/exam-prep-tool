@@ -10,6 +10,8 @@ const mock = vi.hoisted(() => ({
   reviewProgressSummary: vi.fn(), moderatorStatus: vi.fn(), concepts: vi.fn(), questions: vi.fn(), logout: vi.fn(),
   history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), availability: vi.fn(),
   examScopes: vi.fn(), examScopeCoverage: vi.fn(), itemAnalysis: vi.fn(), question: vi.fn(), units: vi.fn(),
+  // Upravljanje shows how many reports and suggestions wait for a faculty moderator.
+  questionReports: vi.fn(), questionSuggestions: vi.fn(), unitModeration: vi.fn(),
 }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
@@ -26,6 +28,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mock.me.mockResolvedValue(user);
   mock.examScopes.mockResolvedValue([]);
+  mock.questionReports.mockResolvedValue([]); mock.questionSuggestions.mockResolvedValue([]); mock.unitModeration.mockResolvedValue([]);
   mock.login.mockResolvedValue(user);
   mock.courses.mockResolvedValue([course, { ...course, id: "statistics", name: "Statistics" }]);
   mock.faculties.mockResolvedValue([]);
@@ -169,7 +172,7 @@ function navigate(name: string) {
   if (buttons.length > 1) fireEvent.click(buttons[1]);
   const control = {
     "Pregled": null, "Vježba": "Otvori: Vježba po mjeri", "Prošli ispiti": "Otvori: Prošli ispiti", "Napredak": "Otvori napredak",
-    "Materijali": "Otvori materijale", "Više": "Otvori: Baza pitanja i alati",
+    "Materijali": "Otvori materijale", "Više": /Otvori: (Baza pitanja i alati|Cjeline i postavke)/,
   }[name];
   if (control) fireEvent.click(screen.getAllByRole("button", { name: control })[0]);
 }
@@ -418,7 +421,7 @@ it("offers item analysis to a faculty moderator only and opens a flagged questio
   const opened = await screen.findByRole("article", { name: "Odabrano pitanje" });
   await waitFor(() => expect(within(opened).getByRole("heading", { name: stem })).toHaveFocus());
   expect(mock.question).toHaveBeenCalledWith("flagged");
-  expect(screen.getByRole("button", { name: "Baza pitanja" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "Banka pitanja" })).toHaveAttribute("aria-pressed", "true");
   expect(within(opened).getByRole("button", { name: "Prijavi problem" })).toBeVisible();
 });
 

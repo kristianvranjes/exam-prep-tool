@@ -81,7 +81,7 @@ function navigate(name: string) {
   if (buttons.length > 1) fireEvent.click(buttons[1]);
   const control = {
     "Pregled": null, "Vježba": "Otvori: Vježba po mjeri", "Prošli ispiti": "Otvori: Prošli ispiti", "Napredak": "Otvori napredak",
-    "Materijali": "Otvori materijale", "Više": "Otvori: Baza pitanja i alati",
+    "Materijali": "Otvori materijale", "Više": /Otvori: (Baza pitanja i alati|Cjeline i postavke)/,
   }[name];
   if (control) fireEvent.click(screen.getAllByRole("button", { name: control })[0]);
 }

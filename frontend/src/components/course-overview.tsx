@@ -58,7 +58,7 @@ function segmentTone(percent: number | null) {
 }
 
 export function CourseOverview({ courseId, active, courseName, courseCode, courseDescription, onPractice, onOpenPractice, knownAttemptId, knownAttempt, checkingSession, activeSession, materials, onResume,
-  onRecommendedPractice, onStartAttempt, onPapers, onProgress, onEstimate, onMaterials, onQuestions }: {
+  onRecommendedPractice, onStartAttempt, onPapers, onProgress, onEstimate, onMaterials, onQuestions, onManage, onMore }: {
   /** The course's name, short code and description, the heading of the page (handoff 2g). */
   courseName: string; courseCode?: string | null; courseDescription?: string | null;
   /** Opens the practice setup. */
@@ -70,6 +70,10 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
   courseId: string; active: boolean; knownAttemptId: string | null; knownAttempt?: ResumableAttempt;
   checkingSession?: boolean; activeSession?: boolean; onResume: () => void; onRecommendedPractice: () => void;
   onProgress: () => void; onQuestions: () => void;
+  /** Managers (owner, faculty moderator): opens Upravljanje, which holds the question bank. */
+  onManage?: () => void;
+  /** Managers only: the remaining tools (units, item analysis, settings) that stay under "Više". */
+  onMore?: () => void;
   /** Opens the expected-points estimate for the exam; left out, the card is not shown. */
   onEstimate?: () => void;
   /** Course materials and the way to them; both are given only to people who manage the course. */
@@ -227,7 +231,9 @@ export function CourseOverview({ courseId, active, courseName, courseCode, cours
     onPractice && { key: "practice", name: "Vježba po mjeri", note: "Cjeline i vrste pitanja", label: "Otvori: Vježba po mjeri", open: onPractice },
     onPapers && { key: "papers", name: "Prošli ispiti", note: papers.length ? `${papers.length} objavljeno · s mjerenjem vremena` : "S mjerenjem vremena", label: "Otvori: Prošli ispiti", open: onPapers },
     onMaterials && materials && { key: "materials", name: "Materijali", note: materials.materials.length ? plural(materials.materials.length, ["materijal", "materijala", "materijala"]) : "Još nema", label: "Otvori materijale", open: onMaterials },
-    { key: "questions", name: "Baza pitanja", note: "Prijedlozi i postavke", label: "Otvori: Baza pitanja i alati", open: onQuestions },
+    onManage ? { key: "manage", name: "Upravljanje", note: "Kvizovi, pitanja i prijave", label: "Otvori: Upravljanje", open: onManage }
+      : { key: "questions", name: "Baza pitanja", note: "Prijedlozi i postavke", label: "Otvori: Baza pitanja i alati", open: onQuestions },
+    onMore && { key: "more", name: "Cjeline i postavke", note: "Cjeline, analiza pitanja, postavke", label: "Otvori: Cjeline i postavke", open: onMore },
   ].filter(Boolean) as { key: string; name: string; note: string; label: string; open: () => void }[];
 
   const resumeCard = knownAttemptId ? <section aria-labelledby={`${id}-resume`} className="min-w-0 bg-accent-surface p-6">

@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Course } from "../lib/api";
 import type { Attempt } from "../lib/practice-api";
 import type { CourseDestination } from "../lib/workspace-route";
+import { CourseManagement, type ManageTab } from "./course-management";
 import { CourseMaterials, type MaterialsSummary } from "./course-materials";
 import { CourseOverview } from "./course-overview";
 import { CourseSettings } from "./course-settings";
@@ -13,8 +14,8 @@ import { ExamPapers } from "./exam-papers";
 import { ItemAnalysisView } from "./item-analysis";
 import { PracticeQuiz, type PracticeSetupRequest } from "./practice-quiz";
 import { ProgressPanel } from "./progress-panel";
-import { QuestionBank, type QuestionFocus } from "./question-bank";
-import { QuizModeration } from "./quiz-moderation";
+import { type QuestionFocus } from "./question-bank";
+import { QuestionBank } from "./question-bank";
 import { Button, LoadingState } from "./ui";
 import type { ResumableAttempt } from "./use-resumable-sessions";
 
@@ -37,7 +38,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
   onAnswerDirtyChange: (dirty: boolean) => void;
   onUpdated: (course: Course) => void; onDeleted: (course: Course) => void;
 }) {
-  const [moreDestination, setMoreDestination] = useState<"questions" | "units" | "quizzes" | "analysis" | "settings" | null>(null);
+  const [moreDestination, setMoreDestination] = useState<"questions" | "units" | "analysis" | "settings" | null>(null);
+  const [manageTab, setManageTab] = useState<ManageTab>("quizzes");
   const [questionFocus, setQuestionFocus] = useState<QuestionFocus | null>(null);
   const manager = isOwner || isModerator;
   // Mount units on first use, then keep them mounted like other destinations.
@@ -45,9 +47,17 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
   const [materials, setMaterials] = useState<MaterialsSummary>({ materials: [], loading: true, error: false });
   const [setupRequest, setSetupRequest] = useState<PracticeSetupRequest | null>(null);
   const focused = destination === "practice" && activeSession;
+  // Managers keep the question bank in Upravljanje; students find it under Više.
+  const [manageOpened, setManageOpened] = useState(destination === "manage");
+  if (destination === "manage" && !manageOpened) setManageOpened(true);
+  function openQuestionBank() {
+    if (manager) { setManageOpened(true); setManageTab("bank"); navigate("manage"); }
+    else { setMoreDestination("questions"); navigate("more"); }
+  }
   function openQuestion(id: string) {
     setQuestionFocus(current => ({ id, request: (current?.request ?? 0) + 1 }));
-    setMoreDestination("questions");
+    if (manager) { setManageOpened(true); setManageTab("bank"); navigate("manage"); }
+    else setMoreDestination("questions");
   }
   function openPractice(mode: PracticeSetupRequest["mode"], focus: Pick<PracticeSetupRequest, "scopeId" | "unitIds"> = {}) {
     setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode, ...focus }));
@@ -71,13 +81,14 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         onStartAttempt={onOpenAttempt}
         onOpenPractice={request => openPractice(request.mode, request)}
         onPapers={() => navigate("papers")} onProgress={() => navigate("progress")} onEstimate={() => navigate("estimate")} onMaterials={manager ? () => navigate("materials") : undefined}
-        onQuestions={() => { setMoreDestination("questions"); navigate("more"); }} />
+        onQuestions={openQuestionBank} onManage={manager ? () => { setManageOpened(true); navigate("manage"); } : undefined}
+        onMore={manager ? () => navigate("more") : undefined} />
     </section>
     <div id="course-practice" hidden={destination !== "practice"}>
       <div id="practice" tabIndex={-1} className="outline-none"><PracticeQuiz courseId={course.id} active={visible && destination === "practice"}
         adaptiveReviewRequest={adaptiveReviewRequest} setupRequest={setupRequest} resumeAttemptId={knownAttemptId} onResumableAttemptChange={onResumableAttemptChange}
         routeAttemptId={routeAttemptId} routeResults={routeResults} onAttemptRoute={onAttemptRoute} onAttemptChange={onAttemptChange} onAnswerDirtyChange={onAnswerDirtyChange}
-        onOpenMaterials={manager ? () => navigate("materials") : undefined} onOpenQuestions={() => { setMoreDestination("questions"); navigate("more"); }}
+        onOpenMaterials={manager ? () => navigate("materials") : undefined} onOpenQuestions={openQuestionBank}
         onOpenProgress={() => navigate("progress")} onBackToCourse={() => navigate("overview")} /></div>
     </div>
     {/* Past papers are the main way to rehearse an exam, so they get their own destination. */}
@@ -94,18 +105,27 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
           <Button variant="secondary" className="mt-4" onClick={() => navigate("overview")}>Natrag na pregled</Button>
         </> : <LoadingState>Provjeravam pristup materijalima…</LoadingState>}
       </div>}
+    {manager ? manageOpened && <div id="course-manage" hidden={destination !== "manage"}>
+      <CourseManagement course={course} currentUserId={currentUserId} isOwner={isOwner} isModerator={isModerator} tab={manageTab} onTab={setManageTab}
+        focus={questionFocus} onOpenQuestion={openQuestion} onOpenMaterials={() => navigate("materials")} />
+    </div>
+      // A student who follows an old link gets a way back instead of an empty page.
+      : destination === "manage" && <div id="course-manage" className="mt-6 max-w-prose">
+        {roleKnown ? <>
+          <p>Upravljanje kolegijem vide samo vlasnik kolegija i moderatori fakulteta.</p>
+          <Button variant="secondary" className="mt-4" onClick={() => navigate("overview")}>Natrag na pregled</Button>
+        </> : <LoadingState>Provjeravam pristup upravljanju…</LoadingState>}
+      </div>}
     <section id="course-more" hidden={destination !== "more"} aria-label="Više alata kolegija" className="mt-6">
       <h2 className="text-xl font-semibold">Više</h2>
       <div className="mt-4 flex flex-wrap gap-3">
-        <Button variant="secondary" aria-pressed={moreDestination === "questions"} onClick={() => setMoreDestination("questions")}>Baza pitanja</Button>
+        {!manager && <Button variant="secondary" aria-pressed={moreDestination === "questions"} onClick={() => setMoreDestination("questions")}>Baza pitanja</Button>}
         <Button variant="secondary" aria-pressed={moreDestination === "units"} onClick={() => { setUnitsOpened(true); setMoreDestination("units"); }}>Cjeline kolegija</Button>
-        {manager && <Button variant="secondary" aria-pressed={moreDestination === "quizzes"} onClick={() => setMoreDestination("quizzes")}>Kvizovi</Button>}
         {manager && <Button variant="secondary" aria-pressed={moreDestination === "analysis"} onClick={() => setMoreDestination("analysis")}>Analiza pitanja</Button>}
         {isOwner && <Button variant="secondary" aria-pressed={moreDestination === "settings"} onClick={() => setMoreDestination("settings")}>Postavke kolegija</Button>}
       </div>
-      <div hidden={moreDestination !== "questions"}><QuestionBank courseId={course.id} focus={questionFocus} onOpenMaterials={manager ? () => navigate("materials") : undefined} /></div>
+      {!manager && <div hidden={moreDestination !== "questions"}><QuestionBank courseId={course.id} focus={questionFocus} /></div>}
       {unitsOpened && <div hidden={moreDestination !== "units"}><CourseUnits courseId={course.id} isOwner={isOwner} /></div>}
-      {manager && moreDestination === "quizzes" && <QuizModeration courseId={course.id} isOwner={isOwner} isModerator={isModerator} onOpenQuestion={openQuestion} />}
       {manager && moreDestination === "analysis" &&<ItemAnalysisView courseId={course.id} onOpenQuestion={openQuestion} />}
       {isOwner && <div hidden={moreDestination !== "settings"}><CourseSettings course={course} onUpdated={onUpdated} onDeleted={onDeleted} /></div>}
     </section>
