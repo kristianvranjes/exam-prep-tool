@@ -8,6 +8,10 @@ base for exam scopes (MI/ZI/full exam) and unit-filtered practice planned in
 ## What exists now
 
 - A course OWNER creates, renames, describes, reorders, archives and restores units.
+- A course OWNER can also **merge** a unit into another active unit of the same course
+  (`POST /units/{id}/merge`): its question links and exam-scope links move over without duplicates,
+  the unit is deleted (not archived) and the positions are renumbered; an optional `title` renames the
+  unit that stays. It is all or nothing and cannot be undone. Use it when a topic was split into parts.
   A course has at most 50 units. Titles are 1–150 characters and unique per course
   after whitespace normalization and case folding (archived units included).
   Descriptions are optional, at most 2000 characters.

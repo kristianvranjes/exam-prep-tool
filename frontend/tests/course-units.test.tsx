@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { CourseUnits } from "../src/components/course-units";
 import type { CourseUnit } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ units: vi.fn(), createUnit: vi.fn(), updateUnit: vi.fn(), archiveUnit: vi.fn(), restoreUnit: vi.fn(), reorderUnits: vi.fn(), examScopes: vi.fn(), createExamScope: vi.fn(), updateExamScope: vi.fn(), deleteExamScope: vi.fn(), copyExamScopes: vi.fn() }));
+const mock = vi.hoisted(() => ({ units: vi.fn(), createUnit: vi.fn(), updateUnit: vi.fn(), archiveUnit: vi.fn(), mergeUnit: vi.fn(), restoreUnit: vi.fn(), reorderUnits: vi.fn(), examScopes: vi.fn(), createExamScope: vi.fn(), updateExamScope: vi.fn(), deleteExamScope: vi.fn(), copyExamScopes: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 
 function unit(id: string, title: string, position: number, extra: Partial<CourseUnit> = {}): CourseUnit {
@@ -101,4 +101,36 @@ it("offers a retry when units cannot load", async () => {
   render(<CourseUnits courseId="course" isOwner={false} />);
   fireEvent.click(await screen.findByRole("button", { name: "Ponovno učitaj cjeline" }));
   expect(await screen.findByText("Propositional logic")).toBeInTheDocument();
+});
+
+it("merges a unit into another one, optionally renaming it, and removes the merged unit from the list", async () => {
+  mock.mergeUnit.mockResolvedValue({ ...sets, title: "Logic and sets", approved_question_count: 4 });
+  render(<CourseUnits courseId="course" isOwner />);
+  await screen.findByRole("list", { name: "Popis cjelina kolegija" });
+  fireEvent.click(screen.getByRole("button", { name: "Spoji s drugom cjelinom: Propositional logic" }));
+  const form = screen.getByRole("form", { name: "Spajanje cjeline Propositional logic" });
+  // The unit cannot be merged into itself, and an archived unit is not offered.
+  expect(within(form).getAllByRole("option").map((option) => option.textContent)).toEqual(["Sets"]);
+  expect(form).toHaveTextContent("To nije moguće poništiti");
+  fireEvent.change(within(form).getByLabelText("Novi naziv (neobavezno)"), { target: { value: " Logic and sets " } });
+  fireEvent.click(within(form).getByRole("button", { name: "Spoji cjeline" }));
+  await waitFor(() => expect(mock.mergeUnit).toHaveBeenCalledWith("u1", { into_unit_id: "u2", title: "Logic and sets" }));
+  expect(await screen.findByText("Cjelina Propositional logic spojena u Logic and sets.")).toBeInTheDocument();
+  const items = within(screen.getByRole("list", { name: "Popis cjelina kolegija" })).getAllByRole("listitem");
+  expect(items).toHaveLength(1);
+  expect(items[0]).toHaveTextContent("1. Logic and sets");
+  expect(items[0]).toHaveTextContent("4 odobrena pitanja");
+});
+
+it("keeps the form and shows the server's message when a merge is refused", async () => {
+  mock.mergeUnit.mockRejectedValue(new Error("A unit with this title already exists in the course"));
+  render(<CourseUnits courseId="course" isOwner />);
+  await screen.findByRole("list", { name: "Popis cjelina kolegija" });
+  fireEvent.click(screen.getByRole("button", { name: "Spoji s drugom cjelinom: Sets" }));
+  const form = screen.getByRole("form", { name: "Spajanje cjeline Sets" });
+  fireEvent.click(within(form).getByRole("button", { name: "Spoji cjeline" }));
+  expect(await screen.findByText("A unit with this title already exists in the course")).toBeInTheDocument();
+  expect(mock.mergeUnit).toHaveBeenCalledWith("u2", { into_unit_id: "u1" });
+  expect(screen.getByRole("form", { name: "Spajanje cjeline Sets" })).toBeInTheDocument();
+  expect(within(screen.getByRole("list", { name: "Popis cjelina kolegija" })).getAllByRole("listitem")).toHaveLength(2);
 });

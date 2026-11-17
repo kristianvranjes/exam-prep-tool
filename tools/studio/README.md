@@ -243,7 +243,9 @@ named by `password_env`) or typed when asked, and never stored. Per unit it impo
 accepted questions not pushed before, so pushing again after reviewing more questions
 never duplicates the bank. Each unit is linked to the application's course unit named in
 `app_unit` in `course.yaml`, or else to the one active unit with the same title
-(ignoring case, diacritics and punctuation); otherwise the push stops before importing
+(ignoring case, diacritics and punctuation); `app_title` names that unit when it should differ from the
+studio unit's `title`, and units that share an `app_title` share one course unit. Use it to generate a long
+lecture in parts ("Sintaksna analiza (1/3)" ... "(3/3)") and still show students one unit; otherwise the push stops before importing
 anything and lists the units to choose from. With `--approve`, the imported questions
 are approved in batches of 50, which works for an owner who is also a faculty
 moderator; anyone else gets drafts and a note. With `--create-units`, a unit that has no

@@ -59,6 +59,33 @@ def test_missing_units_are_created_in_course_order_and_then_match() -> None:
     assert [match_unit(u, found) for u in units] == ["id-Uvod", "new-1", "new-2"]
 
 
+def test_units_sharing_an_app_title_share_one_application_unit() -> None:
+    created: list[dict[str, Any]] = []
+    units = [
+        unit("03", "Sintaksna analiza (1/3)", app_title="Sintaksna analiza"),
+        unit("04", "Sintaksna analiza (2/3)", app_title="Sintaksna analiza"),
+        unit("05", "Sintaksna analiza (3/3)", app_title="Sintaksna analiza"),
+        unit("06", "Semantička analiza"),
+    ]
+    found, made = create_missing_units(client(created), units, [])
+    # One unit for the three parts, named by app_title, created once and before the next topic.
+    assert [body["title"] for body in created] == ["Sintaksna analiza", "Semantička analiza"]
+    assert [u.id for u in made] == ["03", "06"]
+    targets = [match_unit(u, found) for u in units]
+    assert targets == ["new-1", "new-1", "new-1", "new-2"]
+
+
+def test_an_existing_unit_with_the_app_title_is_used_without_creating() -> None:
+    created: list[dict[str, Any]] = []
+    parts = [
+        unit("03", "Analiza (1/2)", app_title="Analiza"),
+        unit("04", "Analiza (2/2)", app_title="Analiza"),
+    ]
+    found, made = create_missing_units(client(created), parts, [row("analiza")])
+    assert created == [] and made == []
+    assert [match_unit(u, found) for u in parts] == ["id-analiza", "id-analiza"]
+
+
 def test_nothing_is_created_when_every_unit_exists() -> None:
     created: list[dict[str, Any]] = []
     found, made = create_missing_units(client(created), [unit("01", "Uvod")], [row("Uvod")])

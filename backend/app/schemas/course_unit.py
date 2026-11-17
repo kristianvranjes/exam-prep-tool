@@ -35,6 +35,14 @@ class CourseUnitUpdate(BaseModel):
         return self
 
 
+class CourseUnitMerge(StrictModel):
+    """Move a unit's questions and exam scopes into another unit, then remove it."""
+
+    into_unit_id: UnitId
+    # Renames the unit that stays, so "Analiza (1/3)" can become "Analiza" in one step.
+    title: UnitTitle | None = None
+
+
 class CourseUnitOrder(StrictModel):
     unit_ids: list[UnitId] = Field(min_length=1, max_length=MAX_COURSE_UNITS)
 

@@ -13,6 +13,7 @@ from test_quiz_import import document
 from app.database import Base, SessionLocal, engine
 from app.main import app
 from app.models.course_unit import CourseUnit, QuestionUnit
+from app.models.exam_scope import ExamScopeUnit
 from app.models.faculty_moderator import FacultyModerator
 from app.models.question import Question, QuestionVersion
 
@@ -332,6 +333,84 @@ def test_course_delete_removes_units_and_links(clients):
     with SessionLocal() as db:
         assert db.scalar(select(func.count()).select_from(CourseUnit)) == 0
         assert db.scalar(select(func.count()).select_from(QuestionUnit)) == 0
+
+
+def unit_links(question_id: str) -> set[UUID]:
+    with SessionLocal() as db:
+        return set(
+            db.scalars(
+                select(QuestionUnit.unit_id).where(QuestionUnit.question_id == UUID(question_id))
+            )
+        )
+
+
+def test_merge_moves_questions_and_scopes_and_removes_the_source(clients):
+    owner, member, stranger, course = clients
+    part_one = unit(owner, course, "Sintaksna analiza (1/2)")
+    part_two = unit(owner, course, "Sintaksna analiza (2/2)")
+    other = unit(owner, course, "Semantika")
+    archived = unit(owner, course, "Stara cjelina")
+    assert owner.post(f"/units/{archived}/archive").status_code == 200
+    path = f"/courses/{course}/questions"
+    only_one = member.post(path, json=question("Only in part one?", [part_one])).json()["id"]
+    shared = member.post(path, json=question("In both parts?", [part_one, part_two])).json()["id"]
+    only_two = member.post(path, json=question("Only in part two?", [part_two])).json()["id"]
+    scope = owner.post(
+        f"/courses/{course}/exam-scopes",
+        json={
+            "academic_year": "2026/27",
+            "kind": "MIDTERM",
+            "name": "MI",
+            "unit_ids": [part_one, other],
+        },
+    )
+    assert scope.status_code == 201, scope.text
+
+    merge = f"/units/{part_one}/merge"
+    assert member.post(merge, json={"into_unit_id": part_two}).status_code == 403
+    assert stranger.post(merge, json={"into_unit_id": part_two}).status_code == 404
+    assert owner.post(f"/units/{uuid4()}/merge", json={"into_unit_id": part_two}).status_code == 404
+    assert owner.post(merge, json={"into_unit_id": part_one}).status_code == 422
+    assert owner.post(merge, json={"into_unit_id": str(uuid4())}).status_code == 422
+    assert owner.post(merge, json={"into_unit_id": archived}).status_code == 422
+    assert owner.post(merge, json={"into_unit_id": part_two, "extra": 1}).status_code == 422
+    assert owner.post(merge, json={"into_unit_id": part_two, "title": "  "}).status_code == 422
+    foreign_course = create_course(
+        owner,
+        json={"name": "Other", "faculty_id": owner.get(f"/courses/{course}").json()["faculty_id"]},
+    ).json()["id"]
+    foreign = unit(owner, foreign_course, "Foreign")
+    assert owner.post(merge, json={"into_unit_id": foreign}).status_code == 422
+    # A title that another unit already has is refused and nothing moves.
+    assert (
+        owner.post(merge, json={"into_unit_id": part_two, "title": "Semantika"}).status_code == 409
+    )
+    assert titles(owner, course) == [
+        "Sintaksna analiza (1/2)",
+        "Sintaksna analiza (2/2)",
+        "Semantika",
+    ]
+    assert unit_links(only_one) == {UUID(part_one)}
+
+    merged = owner.post(merge, json={"into_unit_id": part_two, "title": "Sintaksna analiza"})
+    assert merged.status_code == 200, merged.text
+    assert merged.json()["id"] == part_two and merged.json()["title"] == "Sintaksna analiza"
+    assert titles(owner, course, include_archived=True) == [
+        "Sintaksna analiza",
+        "Semantika",
+        "Stara cjelina",
+    ]
+    assert [
+        row["position"]
+        for row in owner.get(f"/courses/{course}/units?include_archived=true").json()
+    ] == [0, 1, 2]
+    assert unit_links(only_one) == {UUID(part_two)}
+    assert unit_links(shared) == {UUID(part_two)}
+    assert unit_links(only_two) == {UUID(part_two)}
+    with SessionLocal() as db:
+        assert db.get(CourseUnit, UUID(part_one)) is None
+        assert set(db.scalars(select(ExamScopeUnit.unit_id))) == {UUID(part_two), UUID(other)}
+    assert owner.post(merge, json={"into_unit_id": part_two}).status_code == 404
 
 
 def test_model_migration_parity():

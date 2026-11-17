@@ -194,11 +194,11 @@ def match_unit(unit: Unit, app_units: list[dict[str, Any]]) -> str:
         raise StudioError(
             f"unit {unit.id}: app_unit {unit.app_unit} is not an active unit ({listing})"
         )
-    same = [u for u in active if fold(str(u.get("title", ""))) == fold(unit.title)]
+    same = [u for u in active if fold(str(u.get("title", ""))) == fold(unit.app_name)]
     if len(same) == 1:
         return str(same[0]["id"])
     raise StudioError(
-        f"unit {unit.id} ({unit.title}): no single application unit with this title; "
+        f"unit {unit.id} ({unit.app_name}): no single application unit with this title; "
         f"set app_unit in course.yaml to one of: {listing}"
     )
 
@@ -212,7 +212,7 @@ def needs_app_unit(unit: Unit, app_units: list[dict[str, Any]]) -> bool:
     if unit.app_unit:
         return False
     active = [u for u in app_units if not u.get("is_archived")]
-    return not any(fold(str(u.get("title", ""))) == fold(unit.title) for u in active)
+    return not any(fold(str(u.get("title", ""))) == fold(unit.app_name) for u in active)
 
 
 def create_missing_units(
@@ -226,7 +226,7 @@ def create_missing_units(
     created: list[Unit] = []
     for unit in units:
         if needs_app_unit(unit, found):
-            found.append(client.create_unit(unit.title))
+            found.append(client.create_unit(unit.app_name))
             created.append(unit)
     return found, created
 
