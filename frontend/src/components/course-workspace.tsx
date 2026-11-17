@@ -122,12 +122,13 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         {!manager && <Button variant="secondary" aria-pressed={moreDestination === "questions"} onClick={() => setMoreDestination("questions")}>Baza pitanja</Button>}
         <Button variant="secondary" aria-pressed={moreDestination === "units"} onClick={() => { setUnitsOpened(true); setMoreDestination("units"); }}>Cjeline kolegija</Button>
         {manager && <Button variant="secondary" aria-pressed={moreDestination === "analysis"} onClick={() => setMoreDestination("analysis")}>Analiza pitanja</Button>}
-        {isOwner && <Button variant="secondary" aria-pressed={moreDestination === "settings"} onClick={() => setMoreDestination("settings")}>Postavke kolegija</Button>}
+        {/* The owner edits the course; the owner and faculty moderators archive, restore and delete it. */}
+        {manager && <Button variant="secondary" aria-pressed={moreDestination === "settings"} onClick={() => setMoreDestination("settings")}>Postavke kolegija</Button>}
       </div>
       {!manager && <div hidden={moreDestination !== "questions"}><QuestionBank courseId={course.id} focus={questionFocus} /></div>}
       {unitsOpened && <div hidden={moreDestination !== "units"}><CourseUnits courseId={course.id} isOwner={isOwner} /></div>}
       {manager && moreDestination === "analysis" &&<ItemAnalysisView courseId={course.id} onOpenQuestion={openQuestion} />}
-      {isOwner && <div hidden={moreDestination !== "settings"}><CourseSettings course={course} onUpdated={onUpdated} onDeleted={onDeleted} /></div>}
+      {manager && <div hidden={moreDestination !== "settings"}><CourseSettings course={course} canEdit={isOwner} onUpdated={onUpdated} onDeleted={onDeleted} /></div>}
     </section>
   </section>;
 }

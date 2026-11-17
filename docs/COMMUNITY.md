@@ -151,7 +151,10 @@ submission results.
   rows include course/creator IDs, provenance and review metadata.
 - `POST /courses`: selected active faculty's moderator only; creates the existing
   OWNER membership. Other students browse/join via catalog/enrollment APIs.
-  Course update/delete management permissions remain unchanged.
+  Course details stay with the OWNER; archiving, restoring and deleting a course (only once
+  archived, confirmed with its name) are open to the OWNER and to a moderator of the course's
+  faculty. Editing, archiving and deleting faculties is for the people who may add one. See
+  [API](API.md#courses).
 
 The selected-course Question Bank supports manual creation, JSON import, own
 statuses/edit/submit and moderator actions. Faculty moderators also have a

@@ -6,7 +6,7 @@ import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
-from community_helpers import provision
+from community_helpers import delete_course, provision
 from fastapi.testclient import TestClient
 from migration_helpers import (
     legacy_membership_columns,
@@ -141,8 +141,8 @@ def test_empty_course_delete_permissions_cascade_and_duplicate(clients):
         assert anonymous.delete(path).status_code == 401
     assert stranger.delete(path).status_code == 404
     assert member.delete(path).status_code == 403
-    assert owner.delete(path).status_code == 204
-    assert owner.delete(path).status_code == 404
+    assert delete_course(owner, course_id).status_code == 204
+    assert delete_course(owner, course_id, "Materials").status_code == 404
     with SessionLocal() as db:
         assert db.get(Course, UUID(course_id)) is None
         assert (

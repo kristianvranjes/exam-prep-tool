@@ -2,7 +2,7 @@ import os
 from uuid import UUID
 
 import pytest
-from community_helpers import create_course
+from community_helpers import archive_course, create_course, delete_course
 from fastapi.testclient import TestClient
 from pdf_fixture import make_pdf
 from sqlalchemy import func, select, text
@@ -89,7 +89,7 @@ def test_course_delete_removes_all_sources_and_leaves_other_course(clients, tmp_
         db.get(Material, sources[1][0]).status = "FAILED"
         db.commit()
     assert len(unrelated) == 1 and unrelated[0][1].is_file()
-    assert owner.delete(f"/courses/{course_id}").status_code == 204
+    assert delete_course(owner, course_id).status_code == 204
     assert all(not path.exists() for _, path in sources)
     assert unrelated[0][1].is_file()
     with SessionLocal() as db:
@@ -116,7 +116,7 @@ def test_course_delete_storage_failure_commits_and_retries(clients, monkeypatch,
         return original_delete(self, key)
 
     monkeypatch.setattr(LocalMaterialStorage, "delete", fail_second)
-    response = owner.delete(f"/courses/{course_id}")
+    response = delete_course(owner, course_id)
     assert response.status_code == 204 and response.content == b""
     assert "private" not in response.text and "secret" not in response.text
     assert all(path.name not in response.text for _, path in sources)
@@ -140,6 +140,7 @@ def test_course_delete_commit_failure_rolls_back_and_retries(clients, monkeypatc
     assert upload(owner, course_id).status_code == 201
     assert upload(owner, course_id).status_code == 201
     sources = source_paths(course_id, tmp_path)
+    name = archive_course(owner, course_id)
     original_commit = Session.commit
 
     def fail_commit(self):
@@ -147,7 +148,7 @@ def test_course_delete_commit_failure_rolls_back_and_retries(clients, monkeypatc
         raise RuntimeError("private database failure")
 
     monkeypatch.setattr(Session, "commit", fail_commit)
-    response = owner.delete(f"/courses/{course_id}")
+    response = delete_course(owner, course_id, name)
     monkeypatch.setattr(Session, "commit", original_commit)
     assert response.status_code == 503 and "private" not in response.text
     assert len(sources) == 2 and all(path.is_file() for _, path in sources)
@@ -155,7 +156,7 @@ def test_course_delete_commit_failure_rolls_back_and_retries(clients, monkeypatc
         assert db.get(Course, UUID(course_id)) is not None
         assert all(db.get(Material, material_id) is not None for material_id, _ in sources)
         assert db.scalar(select(func.count()).select_from(MaterialStorageCleanup)) == 0
-    assert owner.delete(f"/courses/{course_id}").status_code == 204
+    assert delete_course(owner, course_id, name).status_code == 204
     with SessionLocal() as db:
         assert db.get(Course, UUID(course_id)) is None
     assert all(not path.exists() for _, path in sources)

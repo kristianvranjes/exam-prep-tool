@@ -2,15 +2,20 @@
 
 import { useState, type FormEvent } from "react";
 import { api, type Faculty } from "../lib/api";
+import { FacultyList } from "./faculty-list";
 import { FacultyModeration } from "./faculty-moderation";
 import { Alert, Button, Input, PageHeader, Select, Surface } from "./ui";
 import { DraftForm } from "./unsaved-changes";
 
-export function FacultyWorkspace({ faculties, currentUserId, busy, createCourse, onFacultyCreated, goHome }: {
+export function FacultyWorkspace({ faculties, currentUserId, busy, createCourse, onFacultyCreated, onFacultiesChanged, goHome }: {
   faculties: Faculty[]; currentUserId: string; busy: boolean;
   createCourse: (event: FormEvent<HTMLFormElement>) => Promise<void>;
-  onFacultyCreated: (faculty: Faculty) => void; goHome: () => void;
+  onFacultyCreated: (faculty: Faculty) => void;
+  /** A faculty was edited, archived, restored or deleted, so the moderated faculties are read again. */
+  onFacultiesChanged?: () => void;
+  goHome: () => void;
 }) {
+  const [listRevision, setListRevision] = useState(0);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState("");
   const [addNotice, setAddNotice] = useState("");
@@ -24,6 +29,7 @@ export function FacultyWorkspace({ faculties, currentUserId, busy, createCourse,
     try {
       const faculty = await api.createFaculty({ name: String(values.get("name") ?? ""), university_name: universityName || undefined });
       onFacultyCreated(faculty);
+      setListRevision(value => value + 1);
       form.reset();
       setAddNotice(`${faculty.name} je dodan. Vi ga moderirate, pa kolegije za njega možete izraditi u nastavku.`);
     } catch (error) {
@@ -45,6 +51,7 @@ export function FacultyWorkspace({ faculties, currentUserId, busy, createCourse,
         <p role="status" className="min-h-6 text-sm text-muted">{addNotice}</p>
       </DraftForm>
     </Surface>
+    <FacultyList revision={listRevision} onChanged={() => onFacultiesChanged?.()} />
     <Surface className="mt-10">
       <DraftForm onSubmit={createCourse} className="space-y-4" aria-label="Izradi kolegij">
         <div><h2 className="text-lg font-semibold">Izradi kolegij</h2><p className="mt-1 text-sm text-muted">Zajedničke kolegije mogu izraditi samo moderatori fakulteta.</p></div>

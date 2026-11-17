@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,7 @@ from app.services.courses import (
     delete_course,
     get_member_course,
     join_course,
+    set_course_active,
     set_membership_status,
     update_course,
 )
@@ -85,12 +86,31 @@ def update(
     return update_course(db, user, course_id, data)
 
 
+@router.post("/{course_id}/archive", response_model=CourseResponse)
+def archive(
+    course_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> Course:
+    return set_course_active(db, user, course_id, active=False)
+
+
+@router.post("/{course_id}/restore", response_model=CourseResponse)
+def restore(
+    course_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> Course:
+    return set_course_active(db, user, course_id, active=True)
+
+
 @router.delete("/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove(
-    course_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    course_id: UUID,
+    # The course name, typed by the person deleting it; checked after the caller's access.
+    confirm_name: str | None = Query(default=None, max_length=500),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> Response:
     settings = Settings()
-    delete_course(db, user, course_id, LocalMaterialStorage(settings.material_storage_dir))
+    storage = LocalMaterialStorage(settings.material_storage_dir)
+    delete_course(db, user, course_id, storage, confirm_name)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

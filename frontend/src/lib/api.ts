@@ -1,5 +1,7 @@
 export type User = { id: string; email: string; display_name: string; is_active: boolean; created_at: string };
 export type Faculty = { id: string; name: string; slug: string; university_name: string | null };
+/** A faculty in the faculty tools, archived ones included; only an archived faculty without courses can be deleted. */
+export type ManagedFaculty = Faculty & { is_active: boolean; course_count: number };
 /** A student's own view of the course list; the course stays accessible whatever it is. */
 export type MembershipStatus = "ACTIVE" | "DONE" | "HIDDEN";
 export type CourseMembership = { course_id: string; user_id: string; role: "OWNER" | "MEMBER"; status?: MembershipStatus };
@@ -65,6 +67,12 @@ const BACKEND_MESSAGES: Readonly<Record<string, string>> = {
   "Course not found": "Kolegij nije pronađen",
   "Faculty not found": "Fakultet nije pronađen",
   "Faculty moderator access required": "Potrebna su prava moderatora fakulteta",
+  "Owner or faculty moderator access required": "Potrebna su prava vlasnika kolegija ili moderatora fakulteta",
+  "Archive the course before deleting it": "Kolegij prvo arhivirajte, a zatim ga obrišite.",
+  "Type the course name to confirm deletion": "Za potvrdu upišite točan naziv kolegija.",
+  "Archive the faculty before deleting it": "Fakultet prvo arhivirajte, a zatim ga obrišite.",
+  "A faculty with courses cannot be deleted": "Fakultet koji ima kolegije nije moguće obrisati.",
+  "Enter a faculty name": "Unesite naziv fakulteta.",
 };
 
 function backendMessage(detail: string | null): string | null {
@@ -212,11 +220,20 @@ export const api = {
   savePreferences: (preferences: Preferences) => request<Preferences>("/users/me/preferences", { method: "PUT", body: JSON.stringify(preferences) }),
   course: (id: string) => request<Course>(`/courses/${id}`),
   updateCourse: (id: string, body: { name: string; code: string | null; description: string | null }) => request<Course>(`/courses/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  deleteCourse: (id: string) => request<void>(`/courses/${id}`, { method: "DELETE" }),
+  archiveCourse: (id: string) => request<Course>(`/courses/${id}/archive`, { method: "POST" }),
+  restoreCourse: (id: string) => request<Course>(`/courses/${id}/restore`, { method: "POST" }),
+  // Only an archived course; the server checks the typed name again.
+  deleteCourse: (id: string, confirmName: string) => request<void>(`/courses/${id}?confirm_name=${encodeURIComponent(confirmName)}`, { method: "DELETE" }),
   createCourse: (body: { faculty_id: string; name: string; code?: string; description?: string }) => request<Course>("/courses", { method: "POST", body: JSON.stringify(body) }),
   // Moderators of any faculty may add one; the creator becomes its first moderator.
   createFaculty: (body: { name: string; university_name?: string }) => request<Faculty>("/faculties", { method: "POST", body: JSON.stringify(body) }),
   canCreateFaculty: () => request<{ can_create: boolean }>("/faculties/can-create"),
+  // Editing, archiving and deleting faculties is for the same people who may add one.
+  managedFaculties: () => request<ManagedFaculty[]>("/faculties/manage"),
+  updateFaculty: (id: string, body: { name: string; university_name: string | null }) => request<ManagedFaculty>(`/faculties/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  archiveFaculty: (id: string) => request<ManagedFaculty>(`/faculties/${id}/archive`, { method: "POST" }),
+  restoreFaculty: (id: string) => request<ManagedFaculty>(`/faculties/${id}/restore`, { method: "POST" }),
+  deleteFaculty: (id: string) => request<void>(`/faculties/${id}`, { method: "DELETE" }),
 };
 
 export type Material = { id: string; course_id: string; uploaded_by_user_id: string; original_filename: string; media_type: string; file_size_bytes: number; status: 'UPLOADED' | 'PROCESSING' | 'READY' | 'FAILED'; processing_error: string | null; created_at: string; updated_at: string };
