@@ -83,6 +83,12 @@ async function open() {
   await screen.findByRole("button", { name: /What is a matrix/ });
 }
 
+/** The editor stays open after saving; this returns to the bank once the save is confirmed. */
+async function backToBank(notice = "Pitanje je spremljeno.") {
+  await screen.findByText(notice);
+  fireEvent.click(screen.getByRole("button", { name: "Natrag na bazu pitanja" }));
+}
+
 async function openCreate() {
   await open();
   fireEvent.click(await screen.findByRole("button", { name: "Stvori pitanje" }));
@@ -162,6 +168,7 @@ it("lets a creator edit and submit without granting OWNER moderation", async () 
   fireEvent.click(screen.getByLabelText("Točna opcija 2"));
   fireEvent.click(screen.getByRole("button", { name: "Spremi pitanje" }));
   await waitFor(() => expect(mock.editQuestion).toHaveBeenCalledWith("q1", expect.objectContaining({ stem: "Revised matrix question?", options: [{ text: "A table", is_correct: false }, { text: "Revised option", is_correct: true }] })));
+  await backToBank();
   fireEvent.click(await screen.findByRole("button", { name: "Pošalji na pregled" }));
   await waitFor(() => expect(screen.queryByRole("button", { name: "Pošalji na pregled" })).not.toBeInTheDocument());
   expect(screen.getByRole("article", { name: "Odabrano pitanje" })).toHaveTextContent("Na pregledu");
@@ -194,6 +201,8 @@ it("sends the complete MCQ edit payload with one correct option and native bound
     stem: draft.stem,
     explanation: "Revised explanation",
     difficulty: 4,
+    hint: null,
+    expr: null,
     concept_ids: ["c1"],
     options: [{ text: "A table", is_correct: false }, { text: "A vector", is_correct: true }],
   }));
@@ -367,6 +376,7 @@ it("lets the contributor rework a rejected question and resubmit", async () => {
   expect(await screen.findByText("Razlog odbijanja: Needs precision")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Uredi pitanje" }));
   fireEvent.click(screen.getByRole("button", { name: "Spremi pitanje" }));
+  await backToBank();
   fireEvent.click(await screen.findByRole("button", { name: "Pošalji na pregled" }));
   await waitFor(() => expect(mock.transitionQuestion).toHaveBeenCalledWith("q1", "submit", undefined));
   expect(screen.queryByText("Razlog odbijanja: Needs precision")).not.toBeInTheDocument();
@@ -580,12 +590,16 @@ it("keeps form and selected detail on failure, deduplicates pending save, and re
   expect(within(form).getByLabelText("Tekst pitanja")).toHaveValue("Keep this stem");
   expect(within(form).getByLabelText("Opcija 1")).toHaveValue("Keep A");
   expect(within(form).getByLabelText("Matrices")).toBeChecked();
-  expect(screen.getByRole("article", { name: "Odabrano pitanje" })).toHaveTextContent("What is a matrix?");
-  expect(screen.getByRole("button", { name: /What is a matrix/ })).toBeInTheDocument();
+  // The editor keeps the user's list beside the form, and the bank's selection is untouched until it is closed.
+  expect(within(screen.getByRole("navigation", { name: "Pitanja u popisu" })).getByRole("button", { name: /What is a matrix/ })).toBeInTheDocument();
+  expect(screen.queryByRole("article", { name: "Odabrano pitanje" })).not.toBeInTheDocument();
   mock.createQuestion.mockResolvedValueOnce({ ...draft, id: "retry", stem: "Keep this stem", source: "USER", ai_job_id: null, source_chunks: [] });
   fireEvent.click(within(form).getByRole("button", { name: "Spremi nacrt" }));
   await waitFor(() => expect(mock.createQuestion).toHaveBeenCalledTimes(2));
   expect(await screen.findByText("Pitanje je spremljeno kao privatni nacrt.")).toBeInTheDocument();
+  // The saved draft is now being edited, not created again.
+  expect(screen.getByRole("form", { name: "Obrazac za uređivanje pitanja" })).toBeInTheDocument();
+  expect(mock.createQuestion).toHaveBeenCalledTimes(2);
 });
 
 it("selects the new draft and resets filters, page and form without transitioning", async () => {
@@ -602,6 +616,9 @@ it("selects the new draft and resets filters, page and form without transitionin
   fireEvent.change(within(form).getByLabelText("Opcija 2"), { target: { value: "B" } });
   fireEvent.click(within(form).getByRole("button", { name: "Spremi nacrt" }));
   expect(await screen.findByText("Pitanje je spremljeno kao privatni nacrt.")).toBeInTheDocument();
+  expect(screen.queryByRole("form", { name: "Obrazac za stvaranje pitanja" })).not.toBeInTheDocument();
+  expect(screen.getByRole("form", { name: "Obrazac za uređivanje pitanja" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Natrag na bazu pitanja" }));
   expect(screen.getByRole("article", { name: "Odabrano pitanje" })).toHaveTextContent("New question?");
   expect(screen.getByLabelText("Status")).toHaveValue("DRAFT");
   expect(screen.getByLabelText("Vrsta")).toHaveValue("");

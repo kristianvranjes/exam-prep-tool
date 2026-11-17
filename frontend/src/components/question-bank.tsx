@@ -1,13 +1,16 @@
 "use client";
 
-import { FormEvent, useEffect, useId, useRef, useState } from "react";
-import { api, Concept, type CourseUnit, OwnerQuestion, Question, QuestionAction, QuestionCreate, QuestionEdit, QuestionStatus, QuestionType, QuestionVersion } from "../lib/api";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { api, Concept, type CourseUnit, OwnerQuestion, Question, QuestionAction, QuestionCreate, QuestionStatus, QuestionType, QuestionVersion } from "../lib/api";
 
-import { CLASSIC_TYPES, keyText, numberProblem, QUESTION_TYPES, sourceLabels, statusLabels, typeLabels } from "../lib/question-types";
+import { toEdit } from "../lib/question-draft";
+import { CLASSIC_TYPES, keyText, QUESTION_TYPES, sourceLabels, statusLabels, typeLabels } from "../lib/question-types";
 import { plural, QUESTIONS } from "../lib/plural";
 import { QuestionBadges } from "./question-badges";
+import { QuestionEditor } from "./question-editor";
+import { MAX_QUESTION_UNITS, UnitChoices } from "./question-unit-choices";
 import { QuizImport } from "./quiz-import";
-import { FormattingHelp, RichText, RichTextPreview } from "./rich-text";
+import { RichText } from "./rich-text";
 import { SuggestQuestionEdit } from "./suggest-question-edit";
 import { DraftForm } from "./unsaved-changes";
 import { ReportIssue } from "./question-report";
@@ -20,8 +23,6 @@ const versionReasons: Record<string, string> = { CREATED: "Stvoreno", EDITED: "U
 const reasonLabel = (value: string) => versionReasons[value] ?? value.charAt(0) + value.slice(1).toLowerCase().replaceAll("_", " ");
 /** A disclosure that is itself one sheet; its content is ruled, never another box. */
 const SHEET_DISCLOSURE = "min-w-0 rounded-card border border-line bg-surface px-card py-3 sm:px-card-lg";
-const textareaClass = "min-h-28 w-full rounded-control border border-line-strong bg-surface px-3 py-2 text-foreground";
-const MAX_QUESTION_UNITS = 5;
 const UNPUBLISHED: QuestionStatus[] = ["DRAFT", "PENDING_REVIEW", "REJECTED"];
 const DONE: Record<QuestionAction, { status: QuestionStatus; verb: string }> = {
   submit: { status: "PENDING_REVIEW", verb: "Poslano na pregled" }, approve: { status: "APPROVED", verb: "Odobreno" },
@@ -81,11 +82,9 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
   const [error, setError] = useState("");
   const [listError, setListError] = useState("");
   const [notice, setNotice] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [createBusy, setCreateBusy] = useState(false);
-  const [createError, setCreateError] = useState("");
-  const [createNotice, setCreateNotice] = useState("");
-  const createInFlight = useRef(false);
+  // The full-page editor: a new question (null) or one of the user's own; `session` remounts it for each question opened.
+  const [editor, setEditor] = useState<{ session: number; question: OwnerQuestion | null } | null>(null);
+  const sessions = useRef(0);
   const selectedHeading = useRef<HTMLHeadingElement>(null);
   const [revealed, setRevealed] = useState(0);
 
@@ -144,18 +143,19 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
 
   function refresh() { setLoading(true); setListError(""); setRevision((value) => value + 1); }
 
-  async function createQuestion(body: QuestionCreate) {
-    if (createInFlight.current) return;
-    createInFlight.current = true;
-    setCreateBusy(true); setCreateError(""); setCreateNotice("");
-    try {
-      const created = await api.createQuestion(courseId, body);
-      setStatus("DRAFT"); setType(""); setUnit(""); setOffset(0); setSelected(created);
-      setCreating(false); setCreateNotice("Pitanje je spremljeno kao privatni nacrt.");
-      refresh();
-    } catch (e) { setCreateError(e instanceof Error ? e.message : "Pitanje nije moguće stvoriti"); }
-    finally { createInFlight.current = false; setCreateBusy(false); }
+  function openEditor(question: OwnerQuestion | null) { setEditor({ session: ++sessions.current, question }); }
+
+  /** Saves from the editor; a failure is thrown for the editor to show beside the form it keeps. */
+  async function saveQuestion(body: QuestionCreate, existing: OwnerQuestion | null) {
+    const saved = existing ? await api.editQuestion(existing.id, toEdit(body)) : await api.createQuestion(courseId, body);
+    if (!existing) { setStatus("DRAFT"); setType(""); setUnit(""); setOffset(0); setPicked([]); }
+    setSelected(saved);
+    setEditor((current) => current && { ...current, question: saved });
+    refresh();
+    return saved;
   }
+  // The creator may edit a draft or a rejected question; the server stays authoritative.
+  const canEditRow = (q: Question): q is OwnerQuestion => q.visibility === "OWNER" && own(q) && (q.status === "DRAFT" || q.status === "REJECTED");
 
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -220,16 +220,16 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
     finally { setBusy(false); }
   }
 
+  if (editor) return <QuestionEditor key={editor.session} question={editor.question} rows={rows} offset={offset} canEdit={canEditRow} concepts={concepts} units={units}
+    save={saveQuestion} openQuestion={openEditor} startNew={() => openEditor(null)} close={() => setEditor(null)} />;
+
   return <div className="mt-5 min-w-0 space-y-6">
     {joined && <Surface className="min-w-0 space-y-4">
       <div>
         <h4 className="text-lg font-semibold">Stvaranje pitanja</h4>
         <p className="mt-1 text-sm text-muted">Ovdje napišite privatni nacrt. Možete ga urediti i poslati na pregled fakulteta kad bude spreman.</p>
       </div>
-      {!creating && <Button type="button" variant="secondary" disabled={busy} onClick={() => { setCreating(true); setCreateError(""); setCreateNotice(""); }}>Stvori pitanje</Button>}
-      {creating && <QuestionForm concepts={concepts} units={units} busy={createBusy} save={createQuestion} cancel={() => setCreating(false)} />}
-      {createError && <Alert>{createError}</Alert>}
-      {createNotice && <Alert tone="info">{createNotice}</Alert>}
+      <Button type="button" variant="secondary" disabled={busy} onClick={() => openEditor(null)}>Stvori pitanje</Button>
     </Surface>}
 
     <QuizImport courseId={courseId} disabled={busy} units={units.filter((u) => !u.is_archived)} onImported={(imported) => {
@@ -359,7 +359,7 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
       <div className="flex flex-wrap items-center gap-2"><QuestionBadges type={selected.type} status={selected.status} />{selected.difficulty && <span className="text-sm text-muted">Težina {selected.difficulty}/5</span>}</div>
       {units.length > 0 && <p className="break-words text-sm [overflow-wrap:anywhere]"><span className="font-medium">Cjeline:</span> {unitNames(selected.unit_ids, units).join(", ") || "Nema"}</p>}
       <ul className="list-inside list-disc space-y-1 text-sm">{selected.options.map((option) => <li key={option.position} className="break-words [overflow-wrap:anywhere]"><RichText text={option.text} />{selected.visibility === "OWNER" && selected.options.find((o) => o.position === option.position)?.is_correct ? " (točno)" : ""}</li>)}</ul>
-      {selected.visibility === "OWNER" && <OwnerReview key={selected.id + ":" + selected.updated_at} question={selected} creator={selected.created_by_user_id === userId} moderator={moderator} owner={owner} concepts={concepts} units={units} busy={busy} mutate={mutate} />}
+      {selected.visibility === "OWNER" && <OwnerReview key={selected.id + ":" + selected.updated_at} question={selected} creator={selected.created_by_user_id === userId} moderator={moderator} owner={owner} concepts={concepts} busy={busy} mutate={mutate} edit={() => openEditor(selected)} />}
       {(owner || moderator) && selected.status !== "ARCHIVED" && units.some((u) => !u.is_archived) && <QuestionUnitsEditor key={selected.id + ":" + (selected.unit_ids ?? []).join(",")} question={selected} units={units} busy={busy} save={(ids) => saveUnits(selected.id, ids)} />}
       {joined && selected.status === "APPROVED" && <ReportIssue key={"report:" + selected.id} questionId={selected.id} />}
       {joined && selected.status === "APPROVED" && <SuggestQuestionEdit key={"suggest:" + selected.id} question={{ id: selected.id, type: selected.type, stem: selected.stem, difficulty: selected.difficulty, options: selected.options.map(({ position, text }) => ({ position, text })) }} />}
@@ -386,16 +386,7 @@ function QuestionUnitsEditor({ question, units, busy, save }: { question: Questi
   </section>;
 }
 
-function UnitChoices({ units, linked, chosen, setChosen }: { units: CourseUnit[]; linked: string[]; chosen: string[]; setChosen: (update: (ids: string[]) => string[]) => void }) {
-  // Archived units stay listed only where the question already uses them, so they can be removed.
-  const offered = units.filter((unit) => !unit.is_archived || linked.includes(unit.id));
-  return <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">{offered.map((unit) => <label key={unit.id}>
-    <input type="checkbox" checked={chosen.includes(unit.id)} disabled={!chosen.includes(unit.id) && chosen.length >= MAX_QUESTION_UNITS} onChange={(e) => setChosen((ids) => e.target.checked ? [...ids, unit.id] : ids.filter((id) => id !== unit.id))} />{unit.title}{unit.is_archived ? " (arhivirano)" : ""}
-  </label>)}</div>;
-}
-
-function OwnerReview({ question: q, creator, moderator, owner, concepts, units, busy, mutate }: { creator: boolean; moderator: boolean; owner: boolean; question: OwnerQuestion; concepts: Concept[]; units: CourseUnit[]; busy: boolean; mutate: (operation: () => Promise<OwnerQuestion>) => Promise<void> }) {
-  const [editing, setEditing] = useState(false);
+function OwnerReview({ question: q, creator, moderator, owner, concepts, busy, mutate, edit }: { creator: boolean; moderator: boolean; owner: boolean; question: OwnerQuestion; concepts: Concept[]; busy: boolean; mutate: (operation: () => Promise<OwnerQuestion>) => Promise<void>; edit: () => void }) {
   const [versions, setVersions] = useState<QuestionVersion[]>([]);
   const [versionError, setVersionError] = useState("");
   const [versionBusy, setVersionBusy] = useState(false);
@@ -427,7 +418,7 @@ function OwnerReview({ question: q, creator, moderator, owner, concepts, units, 
     </details>
 
     <div className="flex flex-wrap gap-2">
-      {creator && ["DRAFT", "REJECTED"].includes(q.status) && <Button type="button" variant="secondary" disabled={busy} onClick={() => setEditing(!editing)}>{editing ? "Odustani od uređivanja" : "Uredi pitanje"}</Button>}
+      {creator && ["DRAFT", "REJECTED"].includes(q.status) && <Button type="button" variant="secondary" disabled={busy} onClick={edit}>Uredi pitanje</Button>}
       {creator && q.status === "DRAFT" && <Button type="button" disabled={busy} onClick={() => transition("submit")}>Pošalji na pregled</Button>}
       {/* Course owners who moderate may approve their own questions, even straight from draft. */}
       {moderator && (creator ? owner && (q.status === "DRAFT" || q.status === "PENDING_REVIEW") : q.status === "PENDING_REVIEW") && <Button type="button" disabled={busy} onClick={() => transition("approve")}>Odobri pitanje</Button>}
@@ -439,7 +430,6 @@ function OwnerReview({ question: q, creator, moderator, owner, concepts, units, 
       <Input aria-label="Razlog odbijanja" className="min-w-0 flex-1" name="reason" required maxLength={1000} placeholder="npr. i opcija B je točna" disabled={busy} />
       <Button type="submit" variant="secondary" disabled={busy}>Odbij pitanje</Button>
     </DraftForm>}
-    {editing && <QuestionForm question={q} concepts={concepts} units={units} busy={busy} save={(body) => mutate(() => api.editQuestion(q.id, toEdit(body)))} />}
 
     {(versions.length > 0 || versionBusy || versionError) && <section className="min-w-0 space-y-3 border-t border-line pt-4" aria-label="Povijest pitanja">
       <h5 className="font-semibold">Povijest verzija</h5>
@@ -463,168 +453,4 @@ function OwnerReview({ question: q, creator, moderator, owner, concepts, units, 
       </li>)}</ol>}
     </section>}
   </div>;
-}
-
-function toEdit(body: QuestionCreate): QuestionEdit {
-  const patch: QuestionEdit = { stem: body.stem, explanation: body.explanation, difficulty: body.difficulty, concept_ids: body.concept_ids };
-  if (body.unit_ids) patch.unit_ids = body.unit_ids;
-  if (body.type === "MULTIPLE_CHOICE" || body.type === "MULTIPLE_SELECT") patch.options = body.options;
-  if (body.type === "NUMERIC") Object.assign(patch, { correct_value: body.correct_value, absolute_tolerance: body.absolute_tolerance, relative_tolerance: body.relative_tolerance, unit: body.unit });
-  if (body.type === "TRUE_FALSE") patch.correct_answer = body.correct_answer;
-  if (body.type === "SHORT_ANSWER") patch.reference_answer = body.reference_answer;
-  return patch;
-}
-
-function QuestionForm({ question: q, concepts, units, busy, save, cancel }: { question?: OwnerQuestion; concepts: Concept[]; units: CourseUnit[]; busy: boolean; save: (body: QuestionCreate) => Promise<void>; cancel?: () => void }) {
-  const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>(q?.unit_ids ?? []);
-  const [questionType, setQuestionType] = useState<QuestionType>(q?.type ?? "MULTIPLE_CHOICE");
-  const [options, setOptions] = useState(q?.options.map((o) => ({ text: o.text, is_correct: o.is_correct })) ?? [{ text: "", is_correct: true }, { text: "", is_correct: false }]);
-  const [pairs, setPairs] = useState(q?.type === "MATCH" ? q.options.map((o) => ({ left: o.text, right: o.match_text ?? "" })) : [{ left: "", right: "" }, { left: "", right: "" }]);
-  const [selectedConceptIds, setSelectedConceptIds] = useState<string[]>(q?.concept_ids ?? []);
-  const [stem, setStem] = useState(q?.stem ?? "");
-  const formattingHelp = useId();
-  const [formError, setFormError] = useState("");
-  const multiple = questionType === "MULTIPLE_SELECT";
-  const approved = concepts.filter((concept) => concept.status === "APPROVED");
-  const approvedIds = new Set(approved.map((concept) => concept.id));
-  // Keep edit associations that are not currently offered, including when concepts fail to load.
-  const retained = q?.concept_ids.filter((id) => !approvedIds.has(id)) ?? [];
-  const chosen = selectedConceptIds.filter((id) => approvedIds.has(id));
-
-  function removeOption(index: number) {
-    const remaining = options.filter((_, position) => position !== index);
-    if (!remaining.some((option) => option.is_correct)) remaining[0] = { ...remaining[0], is_correct: true };
-    setOptions(remaining);
-  }
-
-  function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const data = new FormData(e.currentTarget);
-    const common = {
-      stem: String(data.get("stem")),
-      explanation: String(data.get("explanation") || "") || null,
-      difficulty: data.get("difficulty") ? Number(data.get("difficulty")) : null,
-      hint: String(data.get("hint") ?? "").trim() || null,
-      expr: String(data.get("expr") ?? "").trim() || null,
-      concept_ids: [...retained, ...chosen],
-      // Omitted when units are unavailable, so an edit keeps existing links.
-      ...(units.length ? { unit_ids: selectedUnitIds } : {}),
-    };
-    let body: QuestionCreate;
-    const text = (name: string) => String(data.get(name) ?? "").trim();
-    if (questionType === "NUMERIC") {
-      const fields: [string, string][] = [["Točna vrijednost", text("correctValue")], ["Apsolutna tolerancija", text("absoluteTolerance")], ["Relativna tolerancija", text("relativeTolerance")]];
-      const problem = fields.find(([name, value]) => (name === "Točna vrijednost" || value) && numberProblem(value));
-      if (problem) { setFormError(`${problem[0]}: ${numberProblem(problem[1])}.`); return; }
-      const percent = text("relativeTolerance");
-      // Authors type a percentage; the API stores the share of the key (1 % = 0.01).
-      const relative = percent ? String(Number((Number(percent.replace(",", ".")) / 100).toPrecision(12))) : null;
-      setFormError("");
-      body = { ...common, type: questionType, correct_value: text("correctValue"), absolute_tolerance: text("absoluteTolerance") || null, relative_tolerance: relative, unit: text("unit") || null };
-      void save(body);
-      return;
-    }
-    if (questionType === "MATCH") {
-      if (pairs.some((pair) => !pair.left.trim() || !pair.right.trim())) { setFormError("Svaki par mora imati lijevu i desnu stavku."); return; }
-      setFormError("");
-      body = { ...common, type: questionType, pairs: pairs.map((pair) => ({ left: pair.left.trim(), right: pair.right.trim() })) };
-      void save(body);
-      return;
-    }
-    if (questionType === "MULTIPLE_SELECT" && !options.some((option) => option.is_correct)) { setFormError("Označite barem jednu točnu opciju."); return; }
-    setFormError("");
-    if (questionType === "MULTIPLE_CHOICE" || questionType === "MULTIPLE_SELECT") body = { ...common, type: questionType, options };
-    else if (questionType === "TRUE_FALSE") body = { ...common, type: questionType, correct_answer: data.get("answer") === "true" };
-    else body = { ...common, type: questionType, reference_answer: String(data.get("reference")) };
-    void save(body);
-  }
-
-  return <DraftForm onSubmit={submit} aria-label={q ? "Obrazac za uređivanje pitanja" : "Obrazac za stvaranje pitanja"} className="min-w-0 border-t border-line pt-4">
-    <fieldset disabled={busy} className="space-y-4">
-      <legend className="px-1 font-semibold">{q ? "Uređivanje sadržaja nacrta" : "Novi privatni nacrt"}</legend>
-      {!q && <label className="block font-medium">Vrsta pitanja
-        <Select className="mt-1" value={questionType} onChange={(e) => {
-          const next = e.target.value as QuestionType;
-          // A single-answer question keeps only its first correct option.
-          if (next === "MULTIPLE_CHOICE") { const first = Math.max(0, options.findIndex((option) => option.is_correct)); setOptions(options.map((option, position) => ({ ...option, is_correct: position === first }))); }
-          setQuestionType(next);
-        }}>
-          {types.map((value) => <option key={value} value={value}>{typeLabels[value]}</option>)}
-        </Select>
-      </label>}
-      <label className="block font-medium">Tekst pitanja
-        <textarea className={textareaClass + " mt-1"} name="stem" defaultValue={q?.stem ?? ""} required maxLength={400} aria-describedby={formattingHelp} onChange={(e) => setStem(e.target.value)} />
-      </label>
-      <FormattingHelp id={formattingHelp} />
-      <RichTextPreview text={stem} label="Pregled teksta pitanja" />
-      <label className="block font-medium">Objašnjenje
-        <textarea className={textareaClass + " mt-1"} name="explanation" defaultValue={q?.explanation || ""} maxLength={2000} />
-      </label>
-      <label className="block font-medium">Težina (neobavezno)
-        <Input className="mt-1 sm:w-24" name="difficulty" type="number" min={1} max={5} defaultValue={q?.difficulty || ""} />
-      </label>
-      <label className="block font-medium">Nagovještaj (neobavezno)
-        <Input className="mt-1" name="hint" maxLength={400} defaultValue={q?.hint ?? ""} aria-describedby={`${formattingHelp}-hint`} />
-        <span id={`${formattingHelp}-hint`} className="mt-1 block text-sm font-normal text-muted">Student ga može otvoriti prije odgovora.</span>
-      </label>
-      <label className="block font-medium">Izraz (neobavezno)
-        <Input className="mt-1 font-mono" name="expr" maxLength={200} defaultValue={q?.expr ?? ""} placeholder="npr. A·B + C" />
-      </label>
-      {questionType === "MATCH" && <fieldset className="space-y-2">
-        <legend className="font-medium">Parovi (od 2 do 6)</legend>
-        {pairs.map((pair, index) => <div key={index} className="flex min-w-0 flex-wrap items-center gap-2">
-          <Input aria-label={"Lijeva stavka " + (index + 1)} className="min-w-32 flex-1" value={pair.left} required maxLength={400} onChange={(e) => setPairs(pairs.map((item, position) => position === index ? { ...item, left: e.target.value } : item))} />
-          <span aria-hidden="true">→</span>
-          <Input aria-label={"Desna stavka " + (index + 1)} className="min-w-32 flex-1" value={pair.right} required maxLength={400} onChange={(e) => setPairs(pairs.map((item, position) => position === index ? { ...item, right: e.target.value } : item))} />
-          <Button type="button" variant="secondary" aria-label={"Ukloni par " + (index + 1)} disabled={pairs.length <= 2} onClick={() => setPairs(pairs.filter((_, position) => position !== index))}>Ukloni</Button>
-        </div>)}
-        <Button type="button" variant="secondary" disabled={pairs.length >= 6} onClick={() => setPairs([...pairs, { left: "", right: "" }])}>Dodaj par</Button>
-        <p className="text-sm text-muted">Studentima se desni stupac prikazuje u nasumičnom redoslijedu za svaku sesiju. Pola bodova nosi odgovor u kojem su neki parovi točni, a ostali ostavljeni prazni.</p>
-      </fieldset>}
-
-      {(questionType === "MULTIPLE_CHOICE" || multiple) && <fieldset className="space-y-2">
-        <legend className="font-medium">{multiple ? "Opcije (označite svaki točan odgovor)" : "Opcije (odaberite jedan točan odgovor)"}</legend>
-        {options.map((option, index) => <div key={index} className="flex min-w-0 flex-wrap items-center gap-2">
-          <input aria-label={"Točna opcija " + (index + 1)} type={multiple ? "checkbox" : "radio"} name="correctOption" checked={option.is_correct}
-            onChange={() => setOptions(options.map((item, position) => multiple ? (position === index ? { ...item, is_correct: !item.is_correct } : item) : { ...item, is_correct: position === index }))} required={!multiple} />
-          <Input aria-label={"Opcija " + (index + 1)} className="min-w-32 flex-1" value={option.text} required maxLength={400} onChange={(e) => setOptions(options.map((item, position) => position === index ? { ...item, text: e.target.value } : item))} />
-          <Button type="button" variant="secondary" aria-label={"Ukloni opciju " + (index + 1)} disabled={options.length <= 2} onClick={() => removeOption(index)}>Ukloni</Button>
-        </div>)}
-        <Button type="button" variant="secondary" disabled={options.length >= 6} onClick={() => setOptions([...options, { text: "", is_correct: false }])}>Dodaj opciju</Button>
-      </fieldset>}
-      {questionType === "TRUE_FALSE" && <label className="block font-medium">Točan odgovor
-        <Select className="mt-1" name="answer" defaultValue={q ? String(q.correct_boolean) : ""} required>
-          {!q && <option value="">Odaberite točno ili netočno</option>}
-          <option value="true">Točno</option><option value="false">Netočno</option>
-        </Select>
-      </label>}
-      {questionType === "NUMERIC" && <fieldset className="space-y-3">
-        <legend className="font-medium">Brojčani odgovor</legend>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block">Točna vrijednost<Input className="mt-1" name="correctValue" inputMode="decimal" required maxLength={40} defaultValue={q?.correct_value ?? ""} placeholder="npr. 9,81" /></label>
-          <label className="block">Jedinica (neobavezno)<Input className="mt-1" name="unit" maxLength={20} defaultValue={q?.unit ?? ""} placeholder="npr. m/s²" /></label>
-          <label className="block">Apsolutna tolerancija (neobavezno)<Input className="mt-1" name="absoluteTolerance" inputMode="decimal" maxLength={40} defaultValue={q?.absolute_tolerance ?? ""} placeholder="npr. 0,05" /></label>
-          <label className="block">Relativna tolerancija u % (neobavezno)<Input className="mt-1" name="relativeTolerance" inputMode="decimal" maxLength={40} defaultValue={q?.relative_tolerance ? String(Number((Number(q.relative_tolerance) * 100).toPrecision(12))) : ""} placeholder="npr. 1" /></label>
-        </div>
-        <p className="text-sm text-muted">Odgovori unutar veće od dviju tolerancija smatraju se točnima, uključujući granice. Bez tolerancija vrijedi samo točna vrijednost. Studenti upisuju broj bez mjerne jedinice.</p>
-      </fieldset>}
-      {questionType === "SHORT_ANSWER" && <label className="block font-medium">Referentni odgovor
-        <textarea className={textareaClass + " mt-1"} name="reference" defaultValue={q?.reference_answer || ""} required maxLength={2000} />
-      </label>}
-      <fieldset>
-        <legend className="font-medium">Povezani pojmovi (neobavezno, najviše 5)</legend>
-        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">{approved.map((concept) => <label key={concept.id}><input type="checkbox" checked={chosen.includes(concept.id)} disabled={!chosen.includes(concept.id) && retained.length + chosen.length >= 5} onChange={(e) => setSelectedConceptIds((ids) => e.target.checked ? [...ids, concept.id] : ids.filter((id) => id !== concept.id))} />{concept.name}</label>)}</div>
-        {approved.length === 0 && <p className="mt-2 text-sm text-muted">Nema dostupnih odobrenih pojmova. Možete spremiti i bez njih.</p>}
-      </fieldset>
-      {units.length > 0 && <fieldset>
-        <legend className="font-medium">Cjeline kolegija (neobavezno, najviše {MAX_QUESTION_UNITS})</legend>
-        <UnitChoices units={units} linked={q?.unit_ids ?? []} chosen={selectedUnitIds} setChosen={setSelectedUnitIds} />
-      </fieldset>}
-      {formError && <Alert>{formError}</Alert>}
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={busy}>{busy ? "Spremanje…" : q ? "Spremi pitanje" : "Spremi nacrt"}</Button>
-        {cancel && <Button type="button" variant="secondary" disabled={busy} onClick={cancel}>Odustani</Button>}
-      </div>
-    </fieldset>
-  </DraftForm>;
 }
