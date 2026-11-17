@@ -23,6 +23,20 @@ def create_course(client, *, json):
     return client.post("/courses", json=json)
 
 
+def archive_course(client, course_id):
+    """Archive a course and return its name, which deleting it requires."""
+    response = client.post(f"/courses/{course_id}/archive")
+    assert response.status_code == 200, response.text
+    return response.json()["name"]
+
+
+def delete_course(client, course_id, name=None):
+    """Delete a course the way the settings do: archive it, then confirm with its name."""
+    if name is None:
+        name = archive_course(client, course_id)
+    return client.delete(f"/courses/{course_id}", params={"confirm_name": name})
+
+
 def review_question(client, path, **kwargs):
     # A separate human reviewer, never the creator. No public provisioning API.
     with TestClient(app) as reviewer:

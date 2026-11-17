@@ -2,7 +2,7 @@ import os
 from uuid import UUID
 
 import pytest
-from community_helpers import create_course
+from community_helpers import create_course, delete_course
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -76,7 +76,7 @@ def test_auth_and_course_authorization() -> None:
         assert (
             client.patch(f"/courses/{course_id}", json={"name": "Algorithms 2"}).status_code == 200
         )
-        assert client.delete(f"/courses/{course_id}").status_code == 204
+        assert delete_course(client, course_id).status_code == 204
 
 
 def test_bad_login_and_non_owner_cannot_manage_course() -> None:
@@ -145,4 +145,4 @@ def test_bad_login_and_non_owner_cannot_manage_course() -> None:
             membership.role = MembershipRole.OWNER.value
             db.commit()
         assert member.patch(path, json={"name": "Allowed"}).status_code == 200
-        assert member.delete(path).status_code == 204
+        assert delete_course(member, course["id"]).status_code == 204

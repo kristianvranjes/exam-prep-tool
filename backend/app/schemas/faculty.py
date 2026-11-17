@@ -18,6 +18,16 @@ class FacultyCreate(BaseModel):
     slug: str | None = Field(default=None, pattern=r"^[a-z0-9]+(-[a-z0-9]+)*$", max_length=100)
 
 
+class FacultyUpdate(BaseModel):
+    """A faculty's name and university; the slug stays as it was created."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: FacultyName | None = None
+    # Null clears it.
+    university_name: UniversityName | None = None
+
+
 class FacultyCreation(BaseModel):
     can_create: bool
 
@@ -29,3 +39,11 @@ class FacultyResponse(BaseModel):
     name: str
     slug: str
     university_name: str | None
+
+
+class ManagedFacultyResponse(FacultyResponse):
+    """A faculty in the list of those who can create faculties, archived ones included."""
+
+    is_active: bool
+    # All of its courses, archived ones included; only a faculty without any can be deleted.
+    course_count: int

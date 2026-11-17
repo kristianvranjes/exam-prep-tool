@@ -273,6 +273,9 @@ No faculty write endpoint is introduced.
 Every course has a non-null indexed `faculty_id`, referencing faculties with
 ON DELETE RESTRICT, and `is_active` default true. Deactivate a faculty instead of
 deleting one with courses. No course-child foreign key or identifier is changed.
+Since issue #176 the API archives and restores courses and faculties through these
+`is_active` columns, and deletes only an archived course or an archived faculty without
+courses; no migration was needed.
 
 The migration always seeds UUID `00000000-0000-0000-0000-000000000010`, named
 **Legacy / Unassigned**, slug `legacy-unassigned`. It assigns all existing courses
