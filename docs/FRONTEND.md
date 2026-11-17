@@ -141,9 +141,23 @@ view. Joined members can **Create question** directly: choose a type, enter its 
 and optionally link up to five approved course concepts. Saving creates a private
 USER/DRAFT without AI, embeddings or material provenance. Success selects the draft,
 switches to the DRAFT filter, clears the type filter and returns to page one without
-submitting it; failure keeps the form, list and selection for retry. Changing course
+submitting it; failure keeps the form and its values for retry. Changing course
 clears an unfinished form. Imported JSON also creates private DRAFTs and selects an
 imported question after switching to the DRAFT filter.
+
+**Create question** and **Uredi pitanje** open the single-question editor
+(`question-editor.tsx`, handoff 6d) in place of the bank's contents, still inside
+`QuestionBank`: no route of its own. Three columns (one on a phone, the side panel under
+the form): the questions of the current list and filter (number, text, type, status,
+"Nema objašnjenja"; only the user's own DRAFT or REJECTED questions can be opened from
+it), the form, and a panel with **Pregled** (the question as a student's practice screen
+shows it before checking, without the key or the explanation) and **JSON** (the same
+question as one `quiz-import-v2` item, read only, built by `lib/question-json.ts`). The
+type is chosen when a question is created and is fixed afterwards, because the edit
+endpoint cannot change it. **Spremi nacrt** / **Spremi pitanje** saves explicitly and the
+editor stays open ("Spremljeno u HH:MM"); unsaved changes are guarded by
+`useUnsavedChanges`, and leaving, switching question or starting a new one asks first.
+**Natrag na bazu pitanja** returns to the list with the saved question selected.
 
 Creators can edit their DRAFT or REJECTED questions and submit DRAFTs for review.
 Editing a REJECTED question returns it to DRAFT so the creator can rework and
