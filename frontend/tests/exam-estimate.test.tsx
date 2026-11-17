@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { ExamEstimateView } from "../src/components/exam-estimate";
 import type { ExamEstimate, ExamScope, TopicEstimate } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ examScopes: vi.fn(), examScopeEstimate: vi.fn() }));
+const mock = vi.hoisted(() => ({ examScopes: vi.fn(), examScopeEstimate: vi.fn(), courseDashboard: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 
 const scope = (id: string, fields: Partial<ExamScope> = {}): ExamScope => ({
@@ -94,4 +94,35 @@ it("says so when the exam cannot be loaded", async () => {
   mock.examScopeEstimate.mockRejectedValue(new Error("boom"));
   render(<ExamEstimateView courseId="course" />);
   expect(await screen.findByRole("alert")).toHaveTextContent("Procjena nije učitana");
+});
+
+it("shows the range as the figure and names the topics with the most points left, at most three", async () => {
+  mock.examScopeEstimate.mockResolvedValue(estimate({ topics: [
+    topic("u1", "Bistabili", { answer_count: 20, accuracy: 0.48, expected_points: 3.84, gain_points: 2.96 }),
+    topic("u2", "Logička vrata", { exam_points: 6, answer_count: 20, accuracy: 0.91, expected_points: 5.46, gain_points: 0 }),
+    topic("u3", "Brojila", { gain_points: 5.1 }), topic("u4", "Automati", { gain_points: 1.2, accuracy: 0.7, answer_count: 4 }), topic("u5", "Registri", { gain_points: 0.5, accuracy: 0.8, answer_count: 4 }),
+  ] }));
+  render(<ExamEstimateView courseId="course" />);
+  expect(await screen.findByText("25–32")).toBeVisible();
+  const gains = screen.getByRole("region", { name: "Gdje dobiti najviše bodova" });
+  expect(within(gains).getAllByRole("listitem").map(item => item.querySelector("span")?.textContent)).toEqual(["Brojila", "Bistabili", "Automati"]);
+  expect(within(gains).getByText("Još niste vježbali, a na ispitu nosi 8 bodova.")).toBeVisible();
+  expect(within(gains).getByText("Točnost 48 %, a na ispitu nosi 8 bodova.")).toBeVisible();
+});
+
+it("offers the mock exam for the chosen cycle and names the last one with its points and date", async () => {
+  mock.courseDashboard.mockResolvedValue({ as_of: "2026-10-20", units_total: 3, units_attempted: 0, average_percent: null, units: [],
+    last_mock: { attempt_id: "a1", title: "Probni ispit", earned: 26.5, max_points: 40, submitted_at: "2026-10-18T10:00:00Z" } });
+  const onMock = vi.fn();
+  render(<ExamEstimateView courseId="course" onMock={onMock} />);
+  expect(await screen.findByText(/Zadnji probni ispit/)).toHaveTextContent("Zadnji probni ispit: 26,5 / 40 · 18. 10. 2026.");
+  fireEvent.click(screen.getByRole("button", { name: "Probni ispit" }));
+  expect(onMock).toHaveBeenCalledExactlyOnceWith("s1");
+});
+
+it("has no mock exam button without a way to open it", async () => {
+  render(<ExamEstimateView courseId="course" />);
+  await screen.findByText("Cijeli raspon je iznad praga od 20 bodova.");
+  expect(screen.queryByRole("button", { name: "Probni ispit" })).not.toBeInTheDocument();
+  expect(mock.courseDashboard).not.toHaveBeenCalled();
 });

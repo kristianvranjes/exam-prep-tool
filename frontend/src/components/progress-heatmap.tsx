@@ -25,16 +25,23 @@ function weekLabel(iso: string) {
  * (a dash where nothing was answered), so colour is never the only signal. Left out until there is
  * something to show, and when the series cannot be loaded.
  */
-export function ProgressHeatmap({ courseId }: { courseId: string }) {
+export function ProgressHeatmap({ courseId, series: given }: {
+  courseId: string;
+  /** The series when the caller already reads it (the course's Napredak tab); left out, the grid reads its own. */
+  series?: ProgressSeries | null;
+}) {
   const headingId = useId();
-  const [series, setSeries] = useState<ProgressSeries | null>(null);
+  const [own, setOwn] = useState<ProgressSeries | null>(null);
+  const reads = given === undefined;
   useEffect(() => {
+    if (!reads) return;
     let current = true;
     void Promise.resolve().then(() => api.progressSeries(courseId, WEEKS)).then(result => {
-      if (current) setSeries(result ?? null);
+      if (current) setOwn(result ?? null);
     }).catch(() => undefined);
     return () => { current = false; };
-  }, [courseId]);
+  }, [courseId, reads]);
+  const series = reads ? own : given;
 
   const units = series?.units.filter(unit => unit.cells.some(cell => cell.graded_count > 0)) ?? [];
   if (!series || units.length === 0) return null;

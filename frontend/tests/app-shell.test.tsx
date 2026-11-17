@@ -27,6 +27,8 @@ const apiMock = vi.hoisted(() => ({
   joinCourse: vi.fn(),
   setMembershipStatus: vi.fn(),
   examScopes: vi.fn().mockResolvedValue([]),
+  // Upravljanje opens on its quizzes.
+  unitModeration: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../src/lib/api", () => ({ api: apiMock }));
@@ -74,18 +76,24 @@ function logOut() { openAccount(); fireEvent.click(screen.getByRole("button", { 
 async function openCourse(name = "Algorithms") {
   fireEvent.click(await within(screen.getByRole("region", { name: "Vaši kolegiji" })).findByRole("button", { name: `Otvori kolegij: ${name}` }));
 }
-/** The handoff has no course tabs: go back to the course page through the breadcrumb, then take its link. */
+/**
+ * The course tabs (handoff 21a-21d). Custom practice is reached from Učenje; "Više" is the managers' "Cjeline i postavke"
+ * in Upravljanje, and for a student the question bank in "Pitanja i materijali".
+ */
 function navigate(name: string) {
-  const nav = screen.getByRole("navigation", { name: "Navigacija kolegija" });
-  const buttons = within(nav).getAllByRole("button");
-  if (buttons.length > 1) fireEvent.click(buttons[1]);
-  const control = {
-    "Pregled": null, "Vježba": "Otvori: Vježba po mjeri", "Prošli ispiti": "Otvori: Prošli ispiti", "Napredak": "Otvori napredak",
-    "Materijali": "Otvori materijale", "Više": /Otvori: (Baza pitanja i alati|Cjeline i postavke)/,
-  }[name];
-  if (control) fireEvent.click(screen.getAllByRole("button", { name: control })[0]);
+  const tabs = screen.getByRole("navigation", { name: "Navigacija kolegija" });
+  const tab = (label: string) => fireEvent.click(within(tabs).getByRole("button", { name: new RegExp(`^${label}`) }));
+  const manage = within(tabs).queryByRole("button", { name: /^Upravljanje/ });
+  if (name === "Učenje") tab("Učenje");
+  else if (name === "Vježba") { tab("Učenje"); fireEvent.click(screen.getByRole("button", { name: "Otvori: Vježba po mjeri" })); }
+  else if (name === "Ispit") tab("Ispit");
+  else if (name === "Napredak") tab("Napredak");
+  else if (name === "Više" && manage) { fireEvent.click(manage); fireEvent.click(screen.getByRole("button", { name: "Otvori: Cjeline i postavke" })); }
+  else tab("Pitanja i materijali");
 }
 async function openSettings() {
+  // Upravljanje (and its "Cjeline i postavke") appears once the owner's role is read.
+  await within(screen.getByRole("navigation", { name: "Navigacija kolegija" })).findByRole("button", { name: /^Upravljanje/ });
   navigate("Više");
   fireEvent.click(await screen.findByRole("button", { name: "Postavke kolegija" }));
   return screen.getByRole("region", { name: "Postavke kolegija" });
@@ -210,8 +218,9 @@ it("replaces Home with the selected course overview and switches one destination
   expect(screen.queryByRole("region", { name: "Vaši kolegiji" })).not.toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Vaši kolegiji" })).not.toBeInTheDocument();
   const nav = screen.getByRole("navigation", { name: "Navigacija kolegija" });
-  // On the course page the breadcrumb only leads back to the course list.
-  expect(within(nav).getAllByRole("button")).toHaveLength(1);
+  // A member's course has the four tabs of the handoff; Upravljanje is for managers only.
+  expect(within(nav).getAllByRole("button").map(tab => tab.textContent)).toEqual(["Učenje", "Ispit", "Napredak", "Pitanja i materijali"]);
+  expect(within(nav).getByRole("button", { name: "Učenje" })).toHaveAttribute("aria-current", "page");
   for (const name of ["Course materials", "Vježba", "Napredak", "Baza pitanja"]) expect(screen.queryByRole("region", { name })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Započni preporučenu vježbu" }));
   expect(screen.getByRole("region", { name: "Vježba" })).toHaveTextContent("course-1");
@@ -220,11 +229,13 @@ it("replaces Home with the selected course overview and switches one destination
   expect(screen.getByRole("region", { name: "Napredak" })).toHaveTextContent("course-1");
   expect(screen.queryByRole("region", { name: "Vježba" })).not.toBeInTheDocument();
   expect(document.title).toBe("Napredak · Algorithms · ExamPrep");
+  expect(within(nav).getByRole("button", { name: "Napredak" })).toHaveAttribute("aria-current", "page");
   // Materials are for course managers; a member's course has no such tab.
   expect(within(nav).queryByRole("button", { name: "Materijali" })).not.toBeInTheDocument();
-  navigate("Više");
-  fireEvent.click(screen.getByRole("button", { name: "Baza pitanja" }));
+  navigate("Pitanja");
   expect(screen.getByRole("region", { name: "Baza pitanja" })).toHaveTextContent("course-1");
+  expect(screen.queryByRole("group", { name: "Pitanja i materijali" })).not.toBeInTheDocument();
+  expect(document.title).toBe("Pitanja i materijali · Algorithms · ExamPrep");
   fireEvent.click(screen.getByRole("button", { name: "Vaši kolegiji" }));
   expect(screen.getByRole("heading", { name: "Vaši kolegiji" })).toHaveFocus();
   await openCourse("Statistics");

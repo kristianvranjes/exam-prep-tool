@@ -36,8 +36,18 @@ const unitNames = (ids: string[] | undefined, units: CourseUnit[]) => (ids ?? []
 /** A request to open the bank on one question, for example from item analysis. */
 export type QuestionFocus = { id: string; request: number };
 
-export function QuestionBank({ courseId, onOpenMaterials, focus }: { courseId: string; onOpenMaterials?: () => void; focus?: QuestionFocus | null }) {
-  const [open, setOpen] = useState(false);
+/** The bank's unit filter: "" for every unit, "none" for questions without one, or a unit ID. */
+export type UnitFilter = string;
+
+export function QuestionBank({ courseId, onOpenMaterials, focus, alwaysOpen = false, unitFilter, onUnitFilter }: {
+  courseId: string; onOpenMaterials?: () => void; focus?: QuestionFocus | null;
+  /** In the course's "Pitanja i materijali" tab the bank is the page itself, so it opens without a toggle. */
+  alwaysOpen?: boolean;
+  /** Given together, the unit filter belongs to the caller (the tab's topic sidebar) and the bank's own unit select is left out. */
+  unitFilter?: UnitFilter; onUnitFilter?: (unit: UnitFilter) => void;
+}) {
+  const [toggled, setOpen] = useState(false);
+  const open = alwaysOpen || toggled;
   const [target, setTarget] = useState<QuestionFocus | null>(null);
   useEffect(() => {
     if (!focus) return;
@@ -45,19 +55,23 @@ export function QuestionBank({ courseId, onOpenMaterials, focus }: { courseId: s
     queueMicrotask(() => { if (active) { setTarget(focus); setOpen(true); } });
     return () => { active = false; };
   }, [focus]);
-  return <section className="mt-8 min-w-0 border-t border-line pt-6" aria-label="Baza pitanja">
+  const controlled = unitFilter !== undefined && onUnitFilter !== undefined ? { unit: unitFilter, setUnit: onUnitFilter } : undefined;
+  return <section className={alwaysOpen ? "min-w-0" : "mt-8 min-w-0 border-t border-line pt-6"} aria-label="Baza pitanja">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="max-w-prose">
         <h3 className="text-xl font-semibold">Baza pitanja</h3>
         <p className="mt-2 text-sm text-muted">Stvarajte privatne nacrte, vježbajte ih i šaljite pitanja na pregled fakulteta.</p>
       </div>
-      <Button type="button" variant="secondary" aria-expanded={open} onClick={() => { setOpen(!open); setTarget(null); }}>{open ? "Zatvori bazu pitanja" : "Otvori bazu pitanja"}</Button>
+      {!alwaysOpen && <Button type="button" variant="secondary" aria-expanded={open} onClick={() => { setOpen(!open); setTarget(null); }}>{open ? "Zatvori bazu pitanja" : "Otvori bazu pitanja"}</Button>}
     </div>
-    {open && <BankContents key={courseId} courseId={courseId} onOpenMaterials={onOpenMaterials} focus={target} />}
+    {open && <BankContents key={courseId} courseId={courseId} onOpenMaterials={onOpenMaterials} focus={target} controlled={controlled} />}
   </section>;
 }
 
-function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; onOpenMaterials?: () => void; focus: QuestionFocus | null }) {
+function BankContents({ courseId, onOpenMaterials, focus, controlled }: {
+  courseId: string; onOpenMaterials?: () => void; focus: QuestionFocus | null;
+  controlled?: { unit: UnitFilter; setUnit: (unit: UnitFilter) => void };
+}) {
   const [joined, setJoined] = useState(false);
   const [owner, setOwner] = useState(false);
   const [userId, setUserId] = useState("");
@@ -65,7 +79,9 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
   const [concepts, setConcepts] = useState<Concept[]>([]);
   // Includes archived units so existing links keep readable names.
   const [units, setUnits] = useState<CourseUnit[]>([]);
-  const [unit, setUnit] = useState("");
+  const [ownUnit, setOwnUnit] = useState<UnitFilter>("");
+  const unit = controlled ? controlled.unit : ownUnit;
+  const setUnit = controlled ? controlled.setUnit : setOwnUnit;
   const [rows, setRows] = useState<Question[]>([]);
   const [selected, setSelected] = useState<Question | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
@@ -88,6 +104,9 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
   const createInFlight = useRef(false);
   const selectedHeading = useRef<HTMLHeadingElement>(null);
   const [revealed, setRevealed] = useState(0);
+  // A new unit filter (from the select or the tab's sidebar) starts again on the first page.
+  const [listedUnit, setListedUnit] = useState(unit);
+  if (listedUnit !== unit) { setListedUnit(unit); setOffset(0); setPicked([]); setListError(""); setLoading(true); }
 
   useEffect(() => {
     let active = true;
@@ -277,7 +296,7 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
         <h4 className="text-lg font-semibold">Pregled pitanja</h4>
         <p className="mt-1 text-sm text-muted">Odaberite pitanje kako biste vidjeli njegove detalje i dostupne radnje.</p>
       </div>
-      <div className={units.length ? "grid gap-3 sm:grid-cols-3" : "grid gap-3 sm:grid-cols-2"}>
+      <div className={units.length && !controlled ? "grid gap-3 sm:grid-cols-3" : "grid gap-3 sm:grid-cols-2"}>
         <label className="block text-sm font-medium">Status
           <Select className="mt-1" value={status} disabled={busy} onChange={(e) => { setStatus(e.target.value as QuestionStatus | ""); setOffset(0); setPicked([]); setListError(""); setLoading(true); }}>
             <option value="">Svi statusi</option>{statuses.map((s) => <option key={s} value={s}>{statusLabels[s]}</option>)}
@@ -288,8 +307,8 @@ function BankContents({ courseId, onOpenMaterials, focus }: { courseId: string; 
             <option value="">Sve vrste</option>{types.map((t) => <option key={t} value={t}>{typeLabels[t]}</option>)}
           </Select>
         </label>
-        {units.length > 0 && <label className="block text-sm font-medium">Cjelina
-          <Select className="mt-1" value={unit} disabled={busy} onChange={(e) => { setUnit(e.target.value); setOffset(0); setPicked([]); setListError(""); setLoading(true); }}>
+        {units.length > 0 && !controlled && <label className="block text-sm font-medium">Cjelina
+          <Select className="mt-1" value={unit} disabled={busy} onChange={(e) => setUnit(e.target.value)}>
             <option value="">Sve cjeline</option><option value="none">Bez cjeline</option>
             {units.map((u) => <option key={u.id} value={u.id}>{u.title}{u.is_archived ? " (arhivirano)" : ""}</option>)}
           </Select>

@@ -10,16 +10,22 @@ const password = "ExamPrepE2E!2026";
 // prefixed accent classes such as `aria-pressed:bg-accent-surface`.
 const primaryFill = /(?:^|\s)bg-accent(?:\s|$)/;
 
-/** The handoff has no course tabs: the course page links to its other screens and a breadcrumb leads back. */
-async function openScreen(page: Page, name: "Pregled" | "Vježba" | "Prošli ispiti" | "Napredak" | "Materijali" | "Više", settled = true) {
-  const nav = page.getByRole("navigation", { name: "Navigacija kolegija" });
-  await nav.waitFor();
-  // Only a screen other than the course page has the course in its breadcrumb; the address tells which one this is.
-  if (!/\/courses\/[^/]+$/.test(page.url())) await nav.getByRole("button").nth(1).click({ timeout: 10_000 });
-  const control = { "Pregled": null, "Vježba": "Otvori: Vježba po mjeri", "Prošli ispiti": "Otvori: Prošli ispiti", "Napredak": "Otvori napredak", "Materijali": "Otvori materijale", "Više": "Otvori: Baza pitanja i alati" }[name];
-  if (control) await page.getByRole("button", { name: control, exact: true }).first().click();
+/**
+ * The course tabs (handoff 21a-21d). Custom practice is reached from Učenje; a manager's materials are the Materijali part
+ * of "Pitanja i materijali".
+ */
+async function openScreen(page: Page, name: "Učenje" | "Vježba" | "Ispit" | "Napredak" | "Pitanja" | "Materijali", settled = true) {
+  const tabs = page.getByRole("navigation", { name: "Navigacija kolegija" });
+  await tabs.waitFor();
+  const tab = (label: string) => tabs.getByRole("button", { name: new RegExp(`^${label}`) }).click({ timeout: 10_000 });
+  if (name === "Vježba") { await tab("Učenje"); await page.getByRole("button", { name: "Otvori: Vježba po mjeri", exact: true }).click(); }
+  else if (name === "Pitanja") await tab("Pitanja i materijali");
+  else if (name === "Materijali") {
+    await tab("Pitanja i materijali");
+    await page.getByRole("group", { name: "Pitanja i materijali" }).getByRole("button", { name: /^Materijali/ }).click();
+  } else await tab(name);
   // The screen is open once the address says so; the previous one is still visible until then.
-  const suffix = { "Pregled": "", "Vježba": "/practice", "Prošli ispiti": "/papers", "Napredak": "/progress", "Materijali": "/materials", "Više": "/more" }[name];
+  const suffix = { "Učenje": "", "Vježba": "/practice", "Ispit": "/exam", "Napredak": "/progress", "Pitanja": "/questions", "Materijali": "/materials" }[name];
   // Practice shows the finished review again when one is still open, so that address is left to the caller.
   if (settled) await expect(page).toHaveURL(new RegExp(`/courses/[^/]+${suffix}$`));
 }
@@ -82,9 +88,9 @@ test("moderator and student complete the core exam-preparation journey", async (
       .toContainText("ExamPrep E2E material");
     await expect(materialDetail.getByRole("region", { name: "Izdvojeni tekst materijala" }))
       .toContainText("Deterministic study notes.");
-    await openScreen(moderator, "Pregled");
-    await expect(moderator.getByRole("navigation", { name: "Ostalo u kolegiju" })).toContainText("1 materijal");
-    await moderator.getByRole("navigation", { name: "Navigacija kolegija" }).getByRole("button", { name: "Vaši kolegiji" }).click();
+    await expect(moderator.getByRole("group", { name: "Pitanja i materijali" })).toContainText("Materijali · 1");
+    await openScreen(moderator, "Učenje");
+    await moderator.getByRole("button", { name: "Vaši kolegiji", exact: true }).click();
     await expect(moderatorCourses.getByRole("button", { name: `Otvori kolegij: ${courseName}`, exact: true })).toHaveCount(1);
     await moderator.getByRole("link", { name: "Alati fakulteta", exact: true }).click();
 
@@ -125,9 +131,9 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(student.getByRole("button", { name: "Otvori materijale", exact: true })).toHaveCount(0);
     await expect(studentNavigation.getByRole("button", { name: "Materijali", exact: true })).toHaveCount(0);
 
-    await openScreen(student, "Više");
-    await student.getByRole("button", { name: "Baza pitanja", exact: true }).click();
-    await student.getByRole("button", { name: "Otvori bazu pitanja" }).click();
+    // A student's "Pitanja i materijali" is the question bank, open at once; there is no Materijali part for them.
+    await openScreen(student, "Pitanja");
+    await expect(student.getByRole("group", { name: "Pitanja i materijali" })).toHaveCount(0);
     await student.getByRole("button", { name: "Stvori pitanje", exact: true }).click();
     const questionForm = student.getByRole("form", { name: "Obrazac za stvaranje pitanja" });
     await questionForm.getByLabel("Vrsta pitanja").selectOption("MULTIPLE_CHOICE");
@@ -154,8 +160,8 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(reviewCard).toHaveCount(0);
     await expect(moderator.getByText("Pitanje je odobreno.")).toBeVisible();
 
-    await student.getByRole("button", { name: "Zatvori bazu pitanja" }).click();
-    await student.getByRole("button", { name: "Otvori bazu pitanja" }).click();
+    // The bank in its tab has no close button; reading the page again shows the moderator's decision.
+    await student.reload();
     await student.getByRole("list", { name: "Popis pitanja" })
       .getByRole("button", { name: new RegExp(questionStem.replace("?", "\\?")) }).click();
     await expect(student.getByRole("article", { name: "Odabrano pitanje" })).toContainText("Objavljeno");
@@ -195,14 +201,13 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(suggestionCard).toHaveCount(0);
     await expect(moderator.getByText("Prijedlog je primijenjen. Ostali otvoreni prijedlozi za ovo pitanje zamijenjeni su.")).toBeVisible();
 
-    await student.getByRole("button", { name: "Zatvori bazu pitanja" }).click();
-    await student.getByRole("button", { name: "Otvori bazu pitanja" }).click();
+    await student.reload();
     await student.getByRole("list", { name: "Popis pitanja" })
       .getByRole("button", { name: new RegExp(questionStem.replace("?", "\\?")) }).click();
     await expect(selectedQuestion).toContainText("Težina 3/5");
     await expect(selectedQuestion).toContainText("Objavljeno");
 
-    await openScreen(student, "Pregled");
+    await openScreen(student, "Učenje");
     await student.getByRole("button", { name: "Započni preporučenu vježbu" }).click();
     await expect(student.getByRole("radio", { name: "Preporučena vježba" })).toBeChecked();
     await expect(student.getByRole("heading", { name: "Pitanje 1 od 1" })).toHaveCount(0);
@@ -227,7 +232,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(student.getByRole("navigation", { name: "Glavna navigacija" })).toBeHidden();
     // There is no course navigation while answering; Save and leave returns to the course page.
     await student.getByRole("button", { name: "Spremi i izađi" }).click();
-    await openScreen(student, "Pregled");
+    await openScreen(student, "Učenje");
     await expect(student.getByRole("heading", { name: "Nastavite učiti" })).toBeVisible();
     await expect(student.getByRole("button", { name: "Nastavi vježbu" })).toHaveClass(primaryFill);
     await expect(student.locator("#course-overview").locator("button.bg-accent")).toHaveCount(1);
@@ -235,7 +240,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await student.getByRole("button", { name: "Nastavi vježbu" }).click();
     await expect(student.getByRole("radio", { name: correctOption })).toBeChecked();
     await student.getByRole("button", { name: "Spremi i izađi" }).click();
-    await student.getByRole("navigation", { name: "Navigacija kolegija" }).getByRole("button", { name: "Vaši kolegiji" }).click();
+    await student.getByRole("button", { name: "Vaši kolegiji", exact: true }).click();
     await expect(student.getByRole("heading", { name: "Vaši kolegiji", exact: true })).toBeVisible();
     await expect(student.getByRole("heading", { name: "Nastavite učiti" })).toBeVisible();
     await student.getByRole("button", { name: "Nastavi vježbu" }).click();
@@ -280,16 +285,15 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(student.getByRole("heading", { name: "Pitanje 1 od 1" })).toHaveCount(0);
     for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
       await student.setViewportSize(viewport);
-      await openScreen(student, "Pregled");
+      await openScreen(student, "Učenje");
       const overview = student.locator("#course-overview");
-      await expect(overview.getByRole("heading", { name: "Nema ispita u rasporedu" })).toBeVisible();
       await expect(overview.getByRole("button", { name: "Nastavi vježbu" })).toHaveCount(0);
       await expect(overview.getByRole("button", { name: "Započni preporučenu vježbu" })).toBeVisible();
-      // Graded accuracy is shown in Progress; the overview summary keeps a count only.
-      await expect(overview.getByRole("navigation", { name: "Ostalo u kolegiju" })).toContainText(/\d+ odgovora/);
+      await expect(overview.getByRole("region", { name: "Drugi načini vježbe" })).toBeVisible();
+      // The tab row scrolls on its own on a phone; the page never scrolls sideways.
       await expect.poll(() => student.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await test.info().attach(`overview-${viewport.width}`, { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
-      await overview.getByRole("button", { name: "Otvori napredak" }).click();
+      await openScreen(student, "Napredak");
       await expect(student.getByRole("region", { name: "Napredak", exact: true })).toBeVisible();
       await expect(progress.getByRole("heading", { name: "Što treba pažnju" })).toBeVisible();
       await expect(progress.getByText("Trenutno ništa ne treba ponoviti")).toBeVisible();
@@ -304,7 +308,7 @@ test("moderator and student complete the core exam-preparation journey", async (
       await expect.poll(() => student.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await student.screenshot({ path: test.info().outputPath(`progress-details-${viewport.width}.png`), fullPage: true });
       await scheduling.focus(); await scheduling.press("Enter");
-      await openScreen(student, "Pregled");
+      await openScreen(student, "Učenje");
       await overview.getByRole("button", { name: "Započni preporučenu vježbu" }).click();
       await expect(student.getByRole("radio", { name: "Preporučena vježba" })).toBeChecked();
       await expect(student.getByRole("button", { name: "Započni vježbu", exact: true })).toBeVisible();
@@ -312,10 +316,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     }
 
     // A second real session combines an objective mistake with an ungraded short answer.
-    await openScreen(student, "Više");
-    await student.getByRole("button", { name: "Baza pitanja", exact: true }).click();
-    const openBank = student.getByRole("button", { name: "Otvori bazu pitanja" });
-    if (await openBank.isVisible()) await openBank.click();
+    await openScreen(student, "Pitanja");
     await student.getByRole("button", { name: "Stvori pitanje", exact: true }).click();
     await questionForm.getByLabel("Vrsta pitanja").selectOption("SHORT_ANSWER");
     await questionForm.getByLabel("Tekst pitanja").fill("Explain why regular practice helps learning.");

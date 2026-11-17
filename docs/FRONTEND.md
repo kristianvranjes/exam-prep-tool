@@ -19,10 +19,13 @@ content. During an active practice session the bar is replaced by a focus mode w
 the brand and the settings button.
 
 Navigation uses real routes, so reload and Back/Forward work: `/` (Vaši kolegiji),
-`/enrol`, `/faculty`, `/courses/[id]` (overview) with `/practice`, `/papers`, `/progress`,
-`/materials` and `/more`, and `/courses/[id]/attempts/[attemptId]` with `/results`
-(`lib/workspace-route.ts` parses them and sets the tab title). Browser tests in
-`e2e/url-routing.spec.ts` cover deep links and history.
+`/enrol`, `/faculty`, `/courses/[id]` (the Učenje tab) with the tabs `/exam`, `/progress`,
+`/questions` and, for managers, `/manage`, plus `/practice`, the managers' `/materials` and `/more`,
+and `/courses/[id]/attempts/[attemptId]` with `/results` (`lib/workspace-route.ts` parses them and
+sets the tab title). Old course addresses keep working: `/papers` and `/estimate` show the Ispit tab
+and `useWorkspaceNavigation` replaces the address with `/exam` (`canonicalWorkspacePath`); a
+student's `/materials` and `/more` go on to `/questions` once the course role is known. Browser
+tests in `e2e/url-routing.spec.ts` cover deep links and history.
 
 ## Your courses and course enrolment
 
@@ -174,28 +177,28 @@ selected question unchanged and announces “Suggestion submitted for faculty re
 Success clears the form; failure (including duplicate 409) keeps input for retry.
 Pending submits deduplicate; selecting another question/course ignores late results.
 
-## Course overview and practice setup
+## Course tabs and practice setup
 
-Both screens aim to shorten the path to the next useful question, so each offers one
-primary action.
+The course page is four tabs (handoff Student v3, 21a-21d; the layouts are described in
+`DESIGN.md`): `CourseHeader` shows the course name, its code and the next exam's countdown
+(a button to Ispit) above the tab row, and `CourseWorkspace` mounts the tabs as course
+destinations. Managers (the owner or a moderator of the course's faculty) get a fifth tab,
+Upravljanje, with the open reports and suggestions as its badge (`useOpenCounts` in
+`course-management.tsx`, shared with the area's own sub-tab badges).
 
-`CourseOverview` is a column of ruled sections (hairline `border-t border-line`, no
-sheets):
-
-1. **Continue studying**, when a session is open. It shows the same line as Home (mode,
-   focus, "n of N answered"), reading the session once if only its id is known.
-   **Resume session** is then the only primary action, and starting actions are hidden
-   while the session is mounted.
-2. **The next exam**, as a header section. The heading carries the countdown
-   ("Međuispit in 20 days"), the date is a `<time>`, and the readiness range is the one
-   figure (Literata, tabular), with coverage in counts under it. The actions are
-   **Practice for …** (primary), the past-exams link and the weakest units'
-   **Practice this** shortcuts.
-3. **What to study next**, or **Other ways to study** when the exam leads. It holds
-   **Review due questions** (primary when due questions lead), **Start recommended
-   practice** and a compact quick quiz row.
-4. **Progress summary** (a reviewed count; accuracy lives in Progress) and
-   **Materials**.
+- **Učenje** (`CourseOverview`): "Vježbaj sada" (the two weakest practised topics, opening the
+  setup with recommended practice on them) or, when a session is open, that session with
+  **Nastavi vježbu** as the only primary action; "Drugi načini vježbe" (custom practice, the due
+  cards on `/review`, a whole-course quick quiz); the topics as cards with filters.
+- **Ispit**: `ExamEstimateView` (the points range, **Probni ispit**, the top three topics by
+  points to gain, the full topic table) above `ExamPapers` ("Stari rokovi" as cards).
+- **Napredak** (`ProgressPanel`): average accuracy, accuracy by week, accuracy by topic and the
+  last five finished sessions, then the earlier review tools.
+- **Pitanja i materijali**: for students, `CourseQuestions` (topic sidebar and the question bank,
+  open at once); for managers, Pitanja points to the bank in Upravljanje and Materijali is the
+  upload page (`/materials`).
+- **Upravljanje** (`CourseManagement`), with "Cjeline i postavke" (`/more`: units, item analysis,
+  owner settings) as a link inside it.
 
 `PracticeSetup` asks **What to practice** (whole course, exam cycle or units) first.
 **How to practice** follows, with Recommended practice, Mistakes and Mock exam. Mock
@@ -345,18 +348,18 @@ returns to setup through the existing history refresh; an active session and its
 unsaved answer remain mounted. Recommended practice is due-first, not due-only,
 and may include other eligible questions. The practice setup also offers Mistakes and,
 for an exam cycle, Mock exam, with Course questions, Due for review and Favorites under
-More options (see [course overview and practice setup](#course-overview-and-practice-setup)).
+More options (see [course tabs and practice setup](#course-tabs-and-practice-setup)).
 The backend remains authoritative for membership, grading, scheduling and eligibility.
-Graded accuracy is shown here, not on the course overview.
+Napredak leads with graded accuracy; Učenje states each topic's latest result in words.
 
 ## Materials upload and browsing
 
 Materials are a tool for the people who run a course. Only a course OWNER or a
-moderator of its faculty sees the **Materijali** tab, the overview's materials summary
-and the links to it; for everyone else the tab is absent and `CourseMaterials` is not
-mounted, so students never see uploads, extracted text or the AI source and concept
-controls. An old `/materials` link shows a student a short notice with a way back to
-the overview. The upload endpoint enforces the same rule (see [materials](MATERIALS.md)).
+moderator of its faculty sees the **Materijali** part of "Pitanja i materijali" (with the
+materials count) and the way to it from an empty course; for everyone else it is absent and
+`CourseMaterials` is not mounted, so students never see uploads, extracted text or the AI
+source and concept controls. An old `/materials` link takes a student to `/questions` once the
+role is known. The upload endpoint enforces the same rule (see [materials](MATERIALS.md)).
 
 `CourseMaterials` owns list/detail reads and upload integration. `MaterialUpload`
 provides a labeled native file picker and drop area, with an explicit Upload PDF
