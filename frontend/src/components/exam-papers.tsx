@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api, type CourseUnit, type ExamPaper, type ExamPaperBody, type ExamPaperDetail, type ExamPaperItemInput, type ExamScope, type ExamScopeKind, type Question } from "../lib/api";
 import { shortDate } from "../lib/exam-dates";
 import { typeLabels } from "../lib/question-types";
@@ -39,7 +39,7 @@ function PaperIntro({ paperId, best, starting, onBack, onStart }: {
     { label: "Zadataka", value: String(paper.item_count) },
   ] : [];
   return <section aria-labelledby="paper-intro-heading" className="min-w-0">
-    <Button variant="ghost" className="px-0" onClick={onBack}><span aria-hidden="true">←</span> Prošli ispiti</Button>
+    <Button variant="ghost" className="px-0" onClick={onBack}><span aria-hidden="true">←</span> Stari rokovi</Button>
     {!paper && !error && <LoadingState>Učitavam ispit…</LoadingState>}
     {error && <Alert className="mt-3 max-w-prose">{error}</Alert>}
     {paper && <>
@@ -104,7 +104,7 @@ export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onS
     let active = true;
     api.examPapers(courseId)
       .then((rows) => { if (active) { setList({ canManage: rows.can_manage, papers: rows.papers }); setLoadError(""); } })
-      .catch(() => { if (active) setLoadError("Prošli ispiti nisu učitani. Pokušajte ponovno."); });
+      .catch(() => { if (active) setLoadError("Stari rokovi nisu učitani. Pokušajte ponovno."); });
     return () => { active = false; };
   }, [courseId, revision]);
 
@@ -113,62 +113,57 @@ export function ExamPapers({ courseId, onStartAttempt }: { courseId: string; onS
   const rows = [...(list?.papers ?? [])].filter((paper) => (list?.canManage || paper.status === "PUBLISHED") && matchesFilter(paper, filter))
     .sort((a, b) => (b.exam_date ?? "").localeCompare(a.exam_date ?? "") || b.academic_year.localeCompare(a.academic_year));
 
-  if (viewing) return <div className="mt-6 min-w-0">
+  // The editor belongs to a paper still in the list (it may have been filtered out or deleted).
+  const editing = selected && selected !== "new" ? list?.papers.find((paper) => paper.id === selected) ?? null : null;
+
+  if (viewing) return <div className="min-w-0">
     {startError && <Alert className="mb-4 max-w-prose">{startError}</Alert>}
     <PaperIntro paperId={viewing} best={list?.papers.find((paper) => paper.id === viewing)?.best} starting={starting === viewing} onBack={() => { setViewing(null); setStartError(""); }} onStart={(paper, timed) => void take(paper, timed)} />
   </div>;
 
-  return <section aria-labelledby="exam-papers-heading" className="mt-6 min-w-0 space-y-6">
+  return <section aria-labelledby="exam-papers-heading" className="min-w-0 space-y-6">
     <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
       <div className="min-w-0">
-        <h2 id="exam-papers-heading" className="text-[2.25rem] leading-[1.05] font-extrabold tracking-tight sm:text-[2.75rem]">Prošli ispiti</h2>
-        <p className="mt-2 max-w-prose text-sm text-muted">{list?.canManage
+        <h2 id="exam-papers-heading" className="text-xl font-extrabold">Stari rokovi</h2>
+        <p className="mt-1 max-w-prose text-sm text-muted">{list?.canManage
           ? "Unesite stvarni prošli ispit s pitanjima u izvornom redoslijedu, bodovima i pravilom bodovanja. Studenti vide ispit tek kad ga objavite."
-          : "Izvorno vrijeme, bodovanje i prag. Pitanja ostaju skrivena dok ne počnete rješavati ispit."}</p>
+          : "S izvornim vremenom, bodovanjem i pragom. Pitanja ostaju skrivena dok ne počnete rješavati ispit."}</p>
       </div>
-      {list && list.papers.length > 0 && <SegmentedControl label="Vrsta ispita" value={filter} onChange={setFilter} options={kindFilters} />}
+      {list && list.papers.length > 0 && <SegmentedControl label="Vrsta ispita" size="sm" value={filter} onChange={setFilter} options={kindFilters} />}
     </div>
-    {!list && !loadError && <LoadingState>Učitavam prošle ispite…</LoadingState>}
-    {loadError && <div className="space-y-3"><Alert>{loadError}</Alert><Button variant="secondary" onClick={() => { setLoadError(""); setRevision((value) => value + 1); }}>Ponovno učitaj prošle ispite</Button></div>}
+    {!list && !loadError && <LoadingState>Učitavam stare rokove…</LoadingState>}
+    {loadError && <div className="space-y-3"><Alert>{loadError}</Alert><Button variant="secondary" onClick={() => { setLoadError(""); setRevision((value) => value + 1); }}>Ponovno učitaj stare rokove</Button></div>}
     {notice && <Alert tone="info">{notice}</Alert>}
     {startError && <Alert>{startError}</Alert>}
-    {list && list.papers.length === 0 && <EmptyState title="Još nema prošlih ispita.">{list.canManage ? "Dodajte prvi prošli ispit ispod." : "Nastavnici još nisu objavili prošle ispite."}</EmptyState>}
+    {list && list.papers.length === 0 && <EmptyState title="Još nema starih rokova.">{list.canManage ? "Dodajte prvi prošli ispit ispod." : "Moderatori još nisu objavili stare rokove."}</EmptyState>}
     {list && list.papers.length > 0 && rows.length === 0 && <p className="border-y border-line py-4 text-sm text-muted">Nema ispita ove vrste.</p>}
-    {rows.length > 0 && <div className="overflow-x-auto"><table className="w-full min-w-[46rem] border-t-2 border-line text-left text-sm">
-      <caption className="sr-only">Prošli ispiti</caption>
-      <thead><tr className="label-caps">
-        <th scope="col" className="py-3 pr-4 font-medium">Rok</th>
-        <th scope="col" className="py-3 pr-4 font-medium">Vrsta</th>
-        <th scope="col" className="py-3 pr-4 font-medium">Datum</th>
-        <th scope="col" className="py-3 pr-4 font-medium">Trajanje</th>
-        <th scope="col" className="py-3 pr-4 font-medium">Bodovi</th>
-        <th scope="col" className="py-3 pr-4 font-medium">Zadataka</th>
-        <th scope="col" className="py-3 pr-4 font-medium">Vaš najbolji</th>
-        <th scope="col" className="py-3"><span className="sr-only">Radnja</span></th>
-      </tr></thead>
-      <tbody>{rows.map((paper) => {
+    {rows.length > 0 && <ul aria-label="Stari rokovi" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {rows.map((paper) => {
         const mine = paper.best;
-        return <Fragment key={paper.id}><tr className="border-t border-line align-middle">
-          <th scope="row" className="py-4 pr-4 text-base font-extrabold break-words [overflow-wrap:anywhere]">{paper.title}
-            {(list?.canManage || paper.term_label) && <span className="mt-1 flex flex-wrap gap-2 text-xs font-normal text-muted">
-              {paper.term_label && <span>{paper.term_label}</span>}
-              {list?.canManage && <Badge tone={paper.status === "PUBLISHED" ? "success" : "neutral"}>{paper.status === "PUBLISHED" ? "Objavljeno" : "Nacrt"}</Badge>}
-            </span>}</th>
-          <td className="py-4 pr-4 text-soft">{kindLabels[paper.kind]}</td>
-          <td className="py-4 pr-4 tabular-nums">{paper.exam_date ? shortDate(paper.exam_date) : paper.academic_year}</td>
-          <td className="py-4 pr-4 tabular-nums">{paper.duration_minutes ? `${paper.duration_minutes} min` : "—"}</td>
-          <td className="py-4 pr-4 tabular-nums">{formatPoints(paper.total_points)}</td>
-          <td className="py-4 pr-4 tabular-nums">{paper.item_count}</td>
-          <td className="py-4 pr-4 font-extrabold tabular-nums">{mine ? `${formatPoints(mine.earned)} / ${formatPoints(mine.max_points)}` : "—"}</td>
-          <td className="py-4 text-right"><div className="flex flex-wrap justify-end gap-2">
+        return <li key={paper.id} className="flex min-w-0 flex-col gap-4 border-2 border-transparent bg-surface p-5 aria-[current=true]:border-accent" aria-current={selected === paper.id ? true : undefined}>
+          <div className="min-w-0">
+            <h3 className="text-[1.0625rem] font-extrabold break-words [overflow-wrap:anywhere]">{paper.title}</h3>
+            <p className="mt-1 text-sm text-muted">{[kindLabels[paper.kind], paper.exam_date ? shortDate(paper.exam_date) : paper.academic_year, paper.term_label].filter(Boolean).join(" · ")}</p>
+            {list?.canManage && <Badge className="mt-2" tone={paper.status === "PUBLISHED" ? "success" : "neutral"}>{paper.status === "PUBLISHED" ? "Objavljeno" : "Nacrt"}</Badge>}
+          </div>
+          <dl className="mt-auto flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-line pt-3 text-sm">
+            <div className="flex gap-1.5 tabular-nums text-soft"><dt className="sr-only">Trajanje, bodovi i zadaci</dt>
+              <dd>{[paper.duration_minutes ? `${paper.duration_minutes} min` : "bez ograničenja", `${formatPoints(paper.total_points)} b`, `${paper.item_count} zad.`].join(" · ")}</dd></div>
+            <div className="flex gap-1.5"><dt className="sr-only">Vaš najbolji rezultat</dt>
+              <dd className={mine ? "font-extrabold tabular-nums" : "text-muted"}>{mine ? `${formatPoints(mine.earned)} / ${formatPoints(mine.max_points)}` : "Nije rješavano"}</dd></div>
+          </dl>
+          {((onStartAttempt && paper.status === "PUBLISHED") || list?.canManage) && <div className="flex flex-wrap gap-2">
             {onStartAttempt && paper.status === "PUBLISHED" && <Button variant={mine ? "secondary" : "primary"} aria-label={`${mine ? "Ponovi" : "Riješi"} ${paper.title}`} onClick={() => { setStartError(""); setViewing(paper.id); }}>{mine ? "Ponovi" : "Riješi"}</Button>}
             {list?.canManage && <Button variant="secondary" aria-label={`Otvori ${paper.title}`} aria-expanded={selected === paper.id} onClick={() => { setNotice(""); setSelected(selected === paper.id ? null : paper.id); }}>{selected === paper.id ? "Zatvori" : "Uredi"}</Button>}
-          </div></td>
-        </tr>
-        {selected === paper.id && <tr><td colSpan={8} className="pb-4"><PaperEditor paperId={paper.id} courseId={courseId} onChanged={refresh} onDeleted={(title) => { setSelected(null); refresh(`Obrisano: ${title}.`); }} /></td></tr>}
-        </Fragment>;
-      })}</tbody>
-    </table></div>}
+          </div>}
+        </li>;
+      })}
+    </ul>}
+    {/* The editor needs the full width, so it opens under the cards rather than inside one. */}
+    {editing && <Surface className="min-w-0">
+      <h3 className="text-lg font-extrabold">Uredi: {editing.title}</h3>
+      <PaperEditor key={editing.id} paperId={editing.id} courseId={courseId} onChanged={refresh} onDeleted={(title) => { setSelected(null); refresh(`Obrisano: ${title}.`); }} />
+    </Surface>}
     {list?.canManage && <Surface className="min-w-0 space-y-4">
       {selected === "new"
         ? <PaperForm courseId={courseId} onCancel={() => setSelected(null)} onSave={async (body) => {

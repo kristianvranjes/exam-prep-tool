@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { ProgressPanel } from "../src/components/progress-panel";
 import type { ReviewProgress, ReviewProgressSummary, UnitProgress } from "../src/lib/api";
 
-const mock = vi.hoisted(() => ({ reviewProgress: vi.fn(), reviewProgressSummary: vi.fn(), unitProgress: vi.fn(), progressSeries: vi.fn(), reviewDue: vi.fn(), mistakes: vi.fn(), favorites: vi.fn() }));
+const mock = vi.hoisted(() => ({ reviewProgress: vi.fn(), reviewProgressSummary: vi.fn(), unitProgress: vi.fn(), progressSeries: vi.fn(), reviewDue: vi.fn(), mistakes: vi.fn(), favorites: vi.fn(), history: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 
@@ -64,6 +64,45 @@ it("shows the weekly results per unit as numbers, with a dash where nothing was 
   expect(within(grid).getByRole("row", { name: /Skupovi/ })).toHaveTextContent("Bez odgovora");
   // A unit without any graded answer in the window is left out.
   expect(within(grid).queryByText("Nevježbano")).not.toBeInTheDocument();
+});
+
+it("leads with the average accuracy, accuracy by week and by topic, and the last finished sessions (21c)", async () => {
+  mock.reviewProgressSummary.mockResolvedValue(summary({ reviewed_questions: 5, resolved_review_count: 20, correct_review_count: 15, incorrect_review_count: 5 }));
+  mock.unitProgress.mockResolvedValue({ as_of: asOf, units: [
+    unit({ unit_id: "u1", title: "Logika", resolved_review_count: 10, correct_review_count: 9 }),
+    unit({ unit_id: "u2", title: "Skupovi", resolved_review_count: 10, correct_review_count: 4 }),
+    unit({ unit_id: "u3", title: "Grafovi" }),
+  ] });
+  mock.progressSeries.mockResolvedValue({ weeks: ["2030-01-07", "2030-01-14"], units: [
+    { unit_id: "u1", title: "Logika", position: 0, cells: [{ percent: 40, graded_count: 5 }, { percent: 90, graded_count: 10 }] },
+    { unit_id: "u2", title: "Skupovi", position: 1, cells: [{ percent: null, graded_count: 0 }, { percent: 60, graded_count: 10 }] },
+  ] });
+  const session = { course_id: "course", started_at: "2030-01-01T09:00:00Z", status: "SUBMITTED" };
+  mock.history.mockResolvedValue([
+    { ...session, id: "open", status: "ACTIVE", submitted_at: null },
+    { ...session, id: "paper", submitted_at: "2030-01-02T10:00:00Z", paper: { exam_paper_id: "p1", title: "Ljetni rok 2029.", total_points: 40, wrong_answer_penalty: 0, pass_threshold: 20, duration_minutes: 90 } },
+    { ...session, id: "unit", submitted_at: "2030-01-01T10:00:00Z", focus_label: "Logika" },
+  ]);
+  const onOpenResults = vi.fn();
+  render(<ProgressPanel courseId="course" onOpenResults={onOpenResults} />);
+  expect(await screen.findByText("75 %")).toBeVisible();
+  expect(screen.getByText("prosječna točnost")).toBeVisible();
+  // The week is the answers of every unit together: (9 + 6) of 20 in the second week.
+  const weeks = await screen.findByRole("list", { name: "Točnost po tjednima" });
+  expect(within(weeks).getAllByRole("listitem")[0]).toHaveTextContent("40 posto, 5 odgovora");
+  expect(within(weeks).getAllByRole("listitem")[1]).toHaveTextContent("75 posto, 20 odgovora");
+  const topics = screen.getByRole("region", { name: "Točnost po temama" });
+  expect(within(topics).getByText("Savladano · 90 %")).toBeVisible();
+  expect(within(topics).getByText("Za ponavljanje · 40 %")).toBeVisible();
+  expect(within(topics).getByText("Nije započeto")).toBeVisible();
+  const history = await screen.findByRole("region", { name: "Povijest" });
+  const rows = within(history).getAllByRole("listitem");
+  expect(rows).toHaveLength(2);
+  expect(rows[0]).toHaveTextContent("Stari rok");
+  expect(rows[0]).toHaveTextContent("Ljetni rok 2029.");
+  expect(rows[1]).toHaveTextContent("Vježba");
+  fireEvent.click(within(rows[0]).getByRole("button", { name: /^Rezultati: Ljetni rok 2029\./ }));
+  expect(onOpenResults).toHaveBeenCalledExactlyOnceWith("paper");
 });
 
 it("leaves the weekly grid out when nothing was answered or the series cannot be loaded", async () => {

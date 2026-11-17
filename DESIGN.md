@@ -212,6 +212,19 @@ Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
   popover so palette and font size can still be changed mid-session. `ActiveQuiz` adds the
   session bar (Spremi i izađi, Odgovoreno N / M, remaining time), question progress strip, status
   navigator and desktop focus toggle; the phone navigator is a bottom sheet.
+- **Course tabs** (Student v3, 21a-21d; `course-header.tsx`): under the course name, with the code as a kicker and
+  the next exam's countdown on the right (a button that opens Ispit), a row of `Button variant="tab"` buttons:
+  **Učenje** (`/courses/<id>`), **Ispit** (`/exam`), **Napredak** (`/progress`), **Pitanja i materijali**
+  (`/questions`) and, for managers (the owner or a moderator of the course's faculty), **Upravljanje** (`/manage`)
+  with a `pending` badge for the open reports and suggestions ("3 otvoreno", "20+" when a queue fills its page).
+  The current tab has `aria-current="page"` and the 2px accent underline; on a phone the row scrolls sideways inside
+  its own box. The practice setup belongs to Učenje, the managers' materials (`/materials`) to Pitanja i materijali,
+  and "Cjeline i postavke" (`/more`) to Upravljanje, so those tabs stay marked there. Tabs are course destinations
+  (`CourseDestination` in `workspace-route.ts`), kept mounted but hidden where state must survive (practice, progress,
+  the student's bank, materials, Upravljanje); Ispit is read afresh on every visit. Old addresses keep working:
+  `/papers` and `/estimate` show Ispit and the address is replaced with `/exam`; a student's `/materials` and `/more`
+  go to `/questions` once the role is known; a student's `/manage` says it is for managers, with "Natrag na učenje".
+  While answering and on results only a screen-reader heading stays.
 - **Global pages**: `/review` (`review-home.tsx`), `/progress` (`progress-home.tsx`) and
   `/settings` (`settings-page.tsx`). They start with a `PageHeader` and list the active
   courses; the full 5a, 2f and 8c layouts are pending.
@@ -228,7 +241,8 @@ Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
     segmented control: inverted fill (`foreground` background, `background` text).
   - `ghost`: accent text, for link-like actions.
   - `danger`: filled `danger`, the final destructive step.
-  - `tab`: course destinations, underlined (2px, accent) on `aria-current="page"`.
+  - `tab`: the course tabs (Učenje, Ispit, Napredak, Pitanja i materijali, Upravljanje), underlined (2px, accent) on
+    `aria-current="page"`.
 - **Input / Select**: 2px `line-strong` border, `surface` fill, 44 px tall; border goes to
   `muted` on hover. `textarea`, checkboxes and radios are themed in base styles
   (18 px, `accent-color: accent`).
@@ -351,10 +365,32 @@ components. Only their colours changed: they now come from the palette tokens ab
   pressed toggles in the "Pitanje n od N" row; the footer holds the answer buttons, then
   "Pregledaj i završi", one muted progress line and the shortcuts hint; the mode switch, how
   the session works, reload and abandon sit in one "Sesija" disclosure.
-- **Course overview** (`course-overview.tsx`) is a column of ruled sections: an open session
-  first (**Nastavi vježbu** is then the only primary action), the next exam with its
-  countdown and the readiness range as the one figure, then due review, recommended practice
-  and a compact quick quiz. Headings step down h2 `text-xl`, h3 `text-lg`, h4 `text-base`.
+- **Učenje** (`course-overview.tsx`, 21a): "Vježbaj sada" leads, a surface card with a 3px accent top edge naming
+  the two weakest practised topics (latest result under 80 %, weakest first) or "Preporučena vježba" before any; its
+  **Vježbaj** opens the practice setup with recommended practice on those topics ("Teme možete promijeniti prije
+  početka"). An open session takes its place ("Započeta vježba", **Nastavi vježbu** the only primary action). Beside
+  it, "Drugi načini vježbe": Vježba po mjeri (the setup), Kartice za ponavljanje (the due count, opens `/review`) and
+  a whole-course Brzi kviz. Then "Teme" as cards with the state in words and the filters Sve teme / Nezapočete /
+  Ispod 60 %; a card starts ten questions of that topic. No time estimate: nothing in the data says how long a
+  question takes. Headings step down h2 `text-xl`, h3 `text-lg`, h4 `text-base`.
+- **Ispit** (`exam-estimate.tsx` and `exam-papers.tsx`, 21b): "Procjena bodova" shows the range as the figure
+  ("25–32 / 40"), the scale with the pass mark and the expected points, the pass mark in words, **Probni ispit**
+  (opens the mock exam setup for the cycle) and the last mock exam's points. "Gdje dobiti najviše bodova" lists at
+  most three topics with points left to gain, each with its accuracy in words. "Sve teme roka" keeps the full table
+  with **Vježbaj**. "Stari rokovi" are cards: kind and date, "90 min · 40 b · 12 zad.", the best result or "Nije
+  rješavano", **Riješi** / **Ponovi** (to the 9b rules page); managers also get **Uredi**, and the editor opens under
+  the cards. There is no "Preporučeno" tag: no data says which paper to recommend.
+- **Napredak** (`progress-panel.tsx`, 21c): leads with the average accuracy as the figure, accuracy by week (eight
+  bars, the current week in accent, every bar stating its percentage and answer count to screen readers), accuracy by
+  topic with the state in words, and "Povijest" with the last five finished sessions (date, kind, title,
+  **Rezultati**). The history list has no score, so a row opens the results instead of stating it. The earlier tools
+  (due review, mistakes, favorites, the units-by-weeks grid, the schedule details) follow underneath.
+- **Pitanja i materijali** (21d): for a student, `course-questions.tsx` puts the topics in a sidebar (a row that
+  scrolls on a phone) beside the question bank, open at once, with suggestions and reports as the bank has them, and
+  **Vježbaj ovu temu** / **Vježbaj sve teme**. Materials are for managers only (`docs/MATERIALS.md`), so a student's
+  tab has no Materijali part. A manager's tab switches between Pitanja and Materijali (`SegmentedControl`, the
+  materials count in the label); because their bank lives in Upravljanje, their Pitanja part is a short pointer with
+  **Otvori banku pitanja** rather than a second bank whose drafts would split from the first.
 - **Practice setup** (`practice-setup.tsx`) asks what to practice, then how. A choice with
   nothing to select is left out, not shown faded, unless it is already selected and has to
   explain itself.
@@ -377,8 +413,6 @@ components. Only their colours changed: they now come from the palette tokens ab
 
 - Results open with three bare counts. Lead with "n od N točno", the weakest unit and a
   "vježbaj pogreške" action (results redesign 2d/2e).
-- `progress-panel.tsx` still has one `rounded-lg` disclosure; radius 0 removes it visually
-  but the class should go with the Progress redesign (2f).
 - Concept review (`concept-review.tsx`) shows concept status as a lowercase neutral badge;
   it should share the status tones above.
 - The question bank's owner-only "Source details" and version history still list material and
@@ -433,10 +467,7 @@ Implemented:
   Sign-in 2a: split screen (without Google sign-in, which waits for the backend).
 - Progress 2f on the global page: the weekly grid beside "Ponovi ove teme" (weakest topics by latest result).
 
-- Course page 2b (second round of the handoff): heading with the code and the results (Riješeni kvizovi, Prosjek), an exam card
-  (days, estimate by topic, weakest topics, "Vježbaj za ..." and "Probni ispit"), "Nastavi gdje si stao" (or the recommended practice),
-  a quick quiz with topic chips, "Teme" as cards with filters and a state in words, and the links to progress, custom practice,
-  past exams, materials and the question bank. No tabs; the plan screen is left out until the plan data exists.
+- Course page 2b (second round of the handoff), since replaced by the Student v3 tabs (below).
 
 - The top bar is sticky on every page; side panels that stick sit below it.
 - Past exams 9a (table with kind filter, date, duration, points, tasks, best result and Riješi/Ponovi) and 9b (rules, scoring and the task list before a paper starts, with the clock or without).
@@ -444,11 +475,18 @@ Implemented:
 - Moderator 23, first round: "Upravljanje" is a course destination (`/courses/<id>/manage`) for owners and faculty moderators, with the
   areas Kvizovi, Banka pitanja and, for faculty moderators only, Prijave grešaka and Prijedlozi pitanja (each with an open count, "20+" for a
   full page), scoped to the course. The course page links to it in place of "Baza pitanja"; units, item analysis and settings stay under
-  "Više" ("Cjeline i postavke"). Students keep "Baza pitanja" under "Više". Not yet: the bank's topic sidebar with accuracy and quiz columns
+  "Više" ("Cjeline i postavke"; since the course tabs, a link in Upravljanje). Students' "Baza pitanja" is now the "Pitanja i materijali" tab. Not yet: the bank's topic sidebar with accuracy and quiz columns
   (23b) and the master-detail layouts of the report and suggestion queues (23c, 23d), which need per-question accuracy and similar-question data.
 - Moderator: "Moderator" beside the brand and the page header on the faculty tools; 6b import of several files with a preview of every question (what is missing, warnings, errors) before anything is sent; the unit list as ruled rows.
 - Moderator quizzes 6a and 6c ("Kvizovi" in a course's "Više", for owners and moderators): a table of the course's units as quizzes with a status filter (Svi / Skice / Na pregledu / Objavljeni), question count, what still needs a moderator in words, status and last change; the quiz page lists its questions with type, source, review status and flags (reports, suggestions, no explanation), "Uredi" opens the question in the bank, and the properties panel shows name, description, status, author and reviewer. Status actions follow the role: the owner sends a draft for review, a moderator publishes, either takes it back to a draft. The design's per-quiz settings (time limit, attempts, shuffle, collaborators) are not in this version.
-- Exam estimate 9c ("Procjena za ispit", `/courses/<id>/estimate`, linked from the course page's other destinations): the expected points as one large figure with the range on a scale that also marks the pass threshold, stated in words as well; a table "Gdje možete dobiti najviše bodova" (topic, points on the exam, accuracy of the last 30 days, expected, points to gain at 85 %) with "Vježbaj" where at least a point is left. Without published papers it says so, and until enough answers exist it asks for them instead of showing a range. Points use a decimal comma. Backed by `GET /exam-scopes/{id}/estimate` (`exam-estimate-v1`).
+- Exam estimate 9c ("Procjena za ispit", first a page of its own at `/courses/<id>/estimate`, now part of the Ispit tab): the expected points as one large figure with the range on a scale that also marks the pass threshold, stated in words as well; a table "Gdje možete dobiti najviše bodova" (topic, points on the exam, accuracy of the last 30 days, expected, points to gain at 85 %) with "Vježbaj" where at least a point is left. Without published papers it says so, and until enough answers exist it asks for them instead of showing a range. Points use a decimal comma. Backed by `GET /exam-scopes/{id}/estimate` (`exam-estimate-v1`).
+
+- Student v3, course tabs (21a-21d, #171 first part): the header with the exam countdown and the tabs Učenje, Ispit,
+  Napredak, Pitanja i materijali and, for managers, Upravljanje with its open count, as described under Navigation and
+  the patterns above. They replace the single-page course 2b, the separate past exams (9a) and estimate (9c) pages and
+  the students' "Više"; the course page no longer shows the readiness range (Home's course cards still do). Managers
+  reach units, item analysis and settings through "Cjeline i postavke" in Upravljanje. Without the study plan: where
+  the handoff shows plan variants, the version without a plan is built.
 
 - Course and faculty lifecycle (#176, no handoff screen): "Postavke kolegija" under "Više" is open to the owner and faculty moderators; the owner alone edits the details. "Arhiviranje i brisanje" states the course's state in words (Aktivan / Arhiviran badge plus a sentence), archives or restores it, and only for an archived course offers "Obriši kolegij…": a modal that lists what is lost (attempts and history of every member, materials and source PDFs, questions and the rest) and enables "Trajno obriši kolegij" only once the exact name is typed. The faculty tools list every faculty as ruled rows (name, university, course count, state in words) with Uredi, Arhiviraj / Vrati and, for an archived faculty without courses, a two-step Obriši. The filled danger button is kept for the final step only.
 
@@ -460,6 +498,14 @@ Implemented:
 
 
 Pending:
+
+- Student v3 Danas (20a) and its empty state (20b), the second part of #171; the course list "Vaši kolegiji" stays the
+  home page until then.
+- Study plan on request (#173): 20c (exam date and goal), the plan variants of 21a and 21c, and the goal mark on 21b's
+  scale.
+- Parts of 21a-21d that need data the app does not have: a time estimate for "Vježbaj sada", the "Preporučeno" tag on
+  a past paper, each session's score in Napredak's history, and 21d's Označena, Moji prijedlozi and the per-question
+  "n / m točno" column.
 
 - Study plan 2g and course page 2c (wait for the plan data); Google sign-in on 2a.
 - Moderator question order inside a quiz (the drag handle of 6c; `question_units` has no position column, so it needs a backend change) and the duplicate/unknown-topic warnings of the import preview (the server now reports them).

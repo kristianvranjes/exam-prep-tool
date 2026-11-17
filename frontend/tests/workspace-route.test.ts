@@ -1,8 +1,18 @@
 import { expect, it } from "vitest";
-import { attemptPath, coursePath, documentTitle, parseWorkspaceRoute } from "../src/lib/workspace-route";
+import { attemptPath, canonicalWorkspacePath, coursePath, documentTitle, parseWorkspaceRoute } from "../src/lib/workspace-route";
 
-it.each(["overview", "practice", "papers", "progress", "estimate", "materials", "manage", "more"] as const)("roundtrips the %s course destination", destination => {
+it.each(["overview", "practice", "exam", "progress", "questions", "materials", "manage", "more"] as const)("roundtrips the %s course destination", destination => {
   expect(parseWorkspaceRoute(coursePath("course", destination))).toMatchObject({ view: "course", courseId: "course", destination, attemptId: null });
+  expect(canonicalWorkspacePath(coursePath("course", destination))).toBeNull();
+});
+it.each(["/courses/course/papers", "/courses/course/estimate", "/courses/course/papers/"])("lands the old single-page course address %s on the Ispit tab and corrects it", path => {
+  expect(parseWorkspaceRoute(path)).toMatchObject({ view: "course", courseId: "course", destination: "exam", attemptId: null });
+  expect(canonicalWorkspacePath(path)).toBe("/courses/course/exam");
+});
+it("leaves session addresses and global pages as they are", () => {
+  expect(canonicalWorkspacePath(attemptPath("course", "attempt", true))).toBeNull();
+  expect(canonicalWorkspacePath("/review")).toBeNull();
+  expect(canonicalWorkspacePath("/courses/course/unknown")).toBeNull();
 });
 it("roundtrips attempt and results identities", () => {
   expect(parseWorkspaceRoute(attemptPath("course", "attempt", true))).toMatchObject({ courseId: "course", attemptId: "attempt", destination: "practice", results: true });
@@ -31,8 +41,10 @@ it("names each route in the tab, most specific part first, without raw course ID
   expect(title(coursePath("c1"), "PPJ")).toBe("PPJ · ExamPrep");
   expect(title(coursePath("c1"))).toBe("Kolegij · ExamPrep");
   expect(title(coursePath("c1", "practice"), "PPJ")).toBe("Vježba · PPJ · ExamPrep");
-  expect(title(coursePath("c1", "papers"), "PPJ")).toBe("Prošli ispiti · PPJ · ExamPrep");
-  expect(title(coursePath("c1", "papers"))).toBe("Prošli ispiti · ExamPrep");
+  expect(title(coursePath("c1", "exam"), "PPJ")).toBe("Ispit · PPJ · ExamPrep");
+  expect(title(coursePath("c1", "exam"))).toBe("Ispit · ExamPrep");
+  expect(title("/courses/c1/papers", "PPJ")).toBe("Ispit · PPJ · ExamPrep");
+  expect(title(coursePath("c1", "questions"), "PPJ")).toBe("Pitanja i materijali · PPJ · ExamPrep");
   expect(title(attemptPath("c1", "a1"), "PPJ")).toBe("Vježba · PPJ · ExamPrep");
   expect(title(attemptPath("c1", "a1", true), "PPJ")).toBe("Rezultati · PPJ · ExamPrep");
 });

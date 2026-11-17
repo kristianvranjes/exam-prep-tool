@@ -33,23 +33,24 @@ for (const width of [1280, 390]) {
       await expect(page.getByRole("region", { name: "Napredak", exact: true })).toBeVisible();
       await page.reload();
       await expect(page.getByRole("region", { name: "Napredak", exact: true })).toBeVisible();
-      // The course page links to its other screens; a breadcrumb leads back to it.
-      const openScreen = async (name: "Prošli ispiti" | "Napredak" | "Vježba") => {
-        const nav = page.getByRole("navigation", { name: "Navigacija kolegija", exact: true });
-        await nav.waitFor();
-        // Only a screen other than the course page has the course in its breadcrumb.
-        if (!/\/courses\/[^/]+$/.test(page.url())) await nav.getByRole("button").nth(1).click({ timeout: 10_000 });
-        const control = { "Prošli ispiti": "Otvori: Prošli ispiti", "Napredak": "Otvori napredak", "Vježba": "Otvori: Vježba po mjeri" }[name];
-        await page.getByRole("button", { name: control, exact: true }).first().click();
+      // The course tabs; custom practice is reached from Učenje.
+      const openScreen = async (name: "Ispit" | "Napredak" | "Vježba") => {
+        const tabs = page.getByRole("navigation", { name: "Navigacija kolegija", exact: true });
+        await tabs.waitFor();
+        await tabs.getByRole("button", { name: name === "Vježba" ? "Učenje" : name, exact: true }).click({ timeout: 10_000 });
+        if (name === "Vježba") await page.getByRole("button", { name: "Otvori: Vježba po mjeri", exact: true }).click();
       };
-      // Materials are for course managers, so a student's course page does not offer them.
-      await openScreen("Prošli ispiti");
-      await expect(page).toHaveURL(new RegExp(`${base}/papers$`));
-      // Progress to papers goes through the course page, so Back lands there first.
+      await openScreen("Ispit");
+      await expect(page).toHaveURL(new RegExp(`${base}/exam$`));
+      // Tabs are history entries: Back returns to Progress, Forward to the exam.
       await page.goBack();
-      await expect(page).toHaveURL(new RegExp(`${base}$`));
+      await expect(page).toHaveURL(new RegExp(`${base}/progress$`));
       await page.goForward();
-      await expect(page).toHaveURL(new RegExp(`${base}/papers$`));
+      await expect(page).toHaveURL(new RegExp(`${base}/exam$`));
+      // An old link to past papers lands on the Ispit tab with its address corrected.
+      await page.goto(`http://localhost:3000${base}/papers`);
+      await expect(page).toHaveURL(new RegExp(`${base}/exam$`));
+      await expect(page.getByRole("heading", { name: "Stari rokovi", exact: true })).toBeVisible();
       await openScreen("Vježba");
       await expect(page).toHaveURL(new RegExp(`${base}/practice$`));
       await page.getByRole("radio", { name: "Prilagođeno", exact: true }).check();
@@ -126,11 +127,11 @@ for (const width of [1280, 390]) {
       await expect(page.getByRole("button", { name: "Natrag na vježbu", exact: true })).toBeVisible();
       await page.getByRole("button", { name: "Natrag na vježbu", exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`/courses/${otherId}/practice$`));
-      // An old link to materials gives a student a way back instead of an empty page.
+      // Materials are for course managers: a student's old link lands on the questions instead.
       await page.goto(`http://localhost:3000${base}/materials`);
-      await expect(page.getByText("Materijale kolegija vide samo vlasnik kolegija i moderatori fakulteta.")).toBeVisible();
-      await page.getByRole("button", { name: "Natrag na pregled", exact: true }).click();
-      await expect(page).toHaveURL(new RegExp(`${base}$`));
+      await expect(page).toHaveURL(new RegExp(`${base}/questions$`));
+      await expect(page.getByRole("region", { name: "Baza pitanja", exact: true })).toBeVisible();
+      await expect(page.getByRole("region", { name: "Materijali kolegija", exact: true })).toHaveCount(0);
       await page.goto("http://localhost:3000/courses/00000000-0000-0000-0000-000000000000");
       await expect(page.getByRole("heading", { name: "Kolegij nije dostupan" })).toBeVisible();
       await page.getByRole("button", { name: "Natrag na početnu", exact: true }).click();

@@ -102,10 +102,10 @@ question's `earned_points`, and `UNANSWERED` as the status of blank questions.
 
 ## Interface
 
-The course's **Past exams** tab (`/courses/{id}/papers`) lists published papers by
-academic year; the overview's next-exam countdown links to it with the number of
-published papers for that cycle (or for the course when none are linked to it). Managers
-also see drafts, add a paper with its details, open it to choose approved questions
+The course's **Ispit** tab (`/courses/{id}/exam`; the old `/papers` address lands there)
+lists published papers as "Stari rokovi" cards, newest first, with the kind, date, duration,
+points, number of tasks and the caller's best result; the course header's exam countdown opens
+the tab. Managers also see drafts, add a paper with its details, open it to choose approved questions
 (filtered by unit and searched within the loaded page), set points and labels, reorder
 them, save, and publish or unpublish. Unsaved question changes block publishing.
 Published papers offer **Take this exam** (timed when the paper has a limit) and

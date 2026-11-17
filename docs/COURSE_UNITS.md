@@ -63,14 +63,12 @@ of distinct APPROVED questions in the scope's units and how many of them the cal
 has a graded review for (`question_count`, `reviewed_count`). Pending short answers
 create no review, so they do not count as practiced.
 
-The course overview picks the dated cycle that is in progress or starts next in the
-viewer's local calendar (undated and finished cycles are ignored) and leads with it
-as a ruled header section. The heading names the cycle and the countdown ("Međuispit
-in 34 days", "… tomorrow", "… today" or "… · in progress until …"); under it come the
-dates, the number of covered units, the caller's readiness range with the coverage in
-counts, and **Practice for …**, which opens practice setup focused on that cycle and is
-the overview's primary action unless a session is open. The past-exams link and the
-weakest units, each with **Practice this**, follow as secondary actions; see
+The course header picks the dated cycle that is in progress or starts next in the
+viewer's local calendar (undated and finished cycles are ignored) and shows it on the
+right of the course name: the cycle's name and date, and the days left ("78 dana", or
+"traje" while it is in progress). It opens the Ispit tab, whose estimate uses the same
+cycle unless another is chosen. The single-page course before the Student v3 tabs led
+with this cycle and its readiness range; see
 [exam readiness](PRACTICE.md#exam-readiness-readiness-v1).
 
 ## Practice by unit or exam cycle

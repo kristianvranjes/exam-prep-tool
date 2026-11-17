@@ -220,10 +220,10 @@ export function AppShell() {
     navigateCourse("practice", true);
   }
 
-  function navigateCourse(next: CourseDestination, setup = false) {
+  function navigateCourse(next: CourseDestination, setup = false, replace = false) {
     if (!selected) return;
     navigate(next === "practice" && mountedAttempt?.course_id === selected.id && (!setup || mountedAttempt.status === "ACTIVE")
-      ? attemptPath(selected.id, mountedAttempt.id, mountedAttempt.status === "SUBMITTED") : coursePath(selected.id, next));
+      ? attemptPath(selected.id, mountedAttempt.id, mountedAttempt.status === "SUBMITTED") : coursePath(selected.id, next), replace);
   }
 
   function resumeSession(course = selected) {
@@ -281,7 +281,7 @@ export function AppShell() {
       {selected && <>
         {membershipError && <div className="mb-4"><Alert>{membershipError}</Alert><Button variant="secondary" className="mt-3" onClick={() => { setMembershipError(""); setMembershipRetry(value => value + 1); }}>Ponovno provjeri ovlasti</Button></div>}
         <UnsavedChangesProvider key={selected.id} onDirtyChange={setWorkspaceEdited}>
-        <CourseWorkspace course={selected} currentUserId={user.id} isOwner={isOwner} isModerator={faculties.some(faculty => faculty.id === selected.faculty_id)} roleKnown={selectedRole?.courseId === selected.id} visible={view === "course" && selectedId === routeCourseId}
+        <CourseWorkspace course={selected} currentUserId={user.id} isOwner={isOwner} isModerator={faculties.some(faculty => faculty.id === selected.faculty_id)} roleKnown={selectedRole?.courseId === selected.id && !checkingFaculties} visible={view === "course" && selectedId === routeCourseId}
           destination={destination} navigate={navigateCourse} goHome={() => navigate("/")}
           adaptiveReviewRequest={adaptiveReviewRequest} onOpenAdaptiveReview={openAdaptiveReview}
           knownAttemptId={knownAttemptId} knownAttempt={selectedId ? sessions[selectedId]?.attempt : undefined} checkingSession={sessions[selected.id]?.status === "loading"} onResume={() => resumeSession()} onResumableAttemptChange={onResumableAttemptChange} activeSession={activePractice}
@@ -289,6 +289,7 @@ export function AppShell() {
           routeResults={route?.view === "course" && route.results}
           onAttemptRoute={onAttemptRoute} onAttemptChange={onAttemptChange} onAnswerDirtyChange={setAnswerEdited}
           onOpenAttempt={attempt => navigate(attemptPath(attempt.course_id, attempt.id))}
+          onOpenResults={id => navigate(attemptPath(selected.id, id, true))} onOpenReview={() => navigate("/review")}
           onUpdated={courseUpdated} onDeleted={courseDeleted} />
         </UnsavedChangesProvider>
       </>}

@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type ReviewProgress, type ReviewProgressSummary, type UnitProgress } from "../lib/api";
-import { practiceApi, type Attempt } from "../lib/practice-api";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { api, type ProgressSeries, type ReviewProgress, type ReviewProgressSummary, type UnitProgress } from "../lib/api";
+import { localIsoDate, shortDate } from "../lib/exam-dates";
+import { practiceApi, type Attempt, type AttemptSummary } from "../lib/practice-api";
+import { unitState } from "./course-overview";
 import { FavoritesList, MistakesList } from "./review-lists";
 import { ProgressHeatmap } from "./progress-heatmap";
-import { Alert, Badge, Button, EmptyState, LoadingState, Surface } from "./ui";
+import { Alert, Badge, Button, EmptyState, LoadingState, ProgressBar, Surface } from "./ui";
 import { ANSWERS, QUESTIONS, plural } from "../lib/plural";
 
 type Dashboard = { summary: ReviewProgressSummary; units: UnitProgress[]; rows: ReviewProgress[]; offset: number };
@@ -20,19 +22,117 @@ function dateTime(value: string) {
   return new Date(value).toLocaleString("hr-HR", { dateStyle: "medium", timeStyle: "short" });
 }
 
+/** The share of correct graded answers per week across all units, weighted by how many answers each unit had. */
+export function weeklyAccuracy(series: ProgressSeries) {
+  return series.weeks.map((week, index) => {
+    let graded = 0, correct = 0;
+    for (const unit of series.units) {
+      const cell = unit.cells[index];
+      if (!cell || cell.percent === null || cell.graded_count === 0) continue;
+      graded += cell.graded_count; correct += cell.percent / 100 * cell.graded_count;
+    }
+    return { week, graded, percent: graded ? Math.round(correct / graded * 100) : null };
+  });
+}
+
+function weekLabel(iso: string) {
+  const [, month, day] = iso.split("-");
+  return `${Number(day)}. ${Number(month)}.`;
+}
+
+function attemptKind(attempt: AttemptSummary) {
+  if (attempt.paper) return attempt.paper.exam_paper_id ? "Stari rok" : "Probni ispit";
+  return "Vježba";
+}
+
+/**
+ * Handoff 21c: average accuracy with accuracy by week, accuracy by topic and the last five finished sessions. A session's
+ * score is not in the history list, so a row opens its results instead of stating it.
+ */
+function ProgressOverview({ summary, units, series, history, onOpenResults }: {
+  summary: ReviewProgressSummary; units: UnitProgress[]; series: ProgressSeries | null; history: AttemptSummary[] | null;
+  onOpenResults?: (attemptId: string) => void;
+}) {
+  const id = useId();
+  const graded = summary.resolved_review_count;
+  const average = graded > 0 ? Math.round(summary.correct_review_count / graded * 100) : null;
+  const weeks = series ? weeklyAccuracy(series) : [];
+  const anyWeek = weeks.some(week => week.percent !== null);
+  const topics = units.filter(unit => !unit.is_archived);
+  const finished = (history ?? []).filter(attempt => attempt.status === "SUBMITTED").slice(0, 5);
+  return <div className="space-y-8">
+    <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-start">
+      <section aria-labelledby={`${id}-accuracy`} className="min-w-0 border-t-[3px] border-accent bg-surface p-6 sm:p-8">
+        <h3 id={`${id}-accuracy`} className="sr-only">Prosječna točnost</h3>
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
+          <span className="hero-number text-[4.5rem] text-accent sm:text-[5.5rem]">{average === null ? "—" : `${average} %`}</span>
+          <p className="pb-1"><span className="block text-[1.375rem] font-extrabold">prosječna točnost</span>
+            <span className="mt-1 block text-sm text-muted">{graded > 0 ? `${plural(graded, ["ocijenjeni odgovor", "ocijenjena odgovora", "ocijenjenih odgovora"])} · točno ${summary.correct_review_count}` : "Još nema automatski ocijenjenih odgovora"}</span></p>
+        </div>
+        {anyWeek && <div className="mt-8">
+          <h4 className="label-caps">Točnost po tjednima</h4>
+          <ol aria-label="Točnost po tjednima" className="mt-3 grid grid-cols-8 items-end gap-1.5">
+            {weeks.map((week, index) => {
+              const last = index === weeks.length - 1;
+              return <li key={week.week} className="flex min-w-0 flex-col items-stretch justify-end gap-1.5">
+                <span className={`text-center text-xs font-extrabold tabular-nums ${last ? "text-accent" : "text-muted"}`} aria-hidden="true">{week.percent === null ? "–" : `${week.percent} %`}</span>
+                <span aria-hidden="true" className={`block ${week.percent === null ? "bg-track" : last ? "bg-accent" : "bg-quiet"}`} style={{ height: `${Math.max(week.percent ?? 0, 4) * 1.1}px` }} />
+                <span className="text-center text-xs tabular-nums text-muted" aria-hidden="true">{weekLabel(week.week)}</span>
+                <span className="sr-only">Tjedan od {weekLabel(week.week)}: {week.percent === null ? "bez odgovora" : `${week.percent} posto, ${plural(week.graded, ANSWERS)}`}</span>
+              </li>;
+            })}
+          </ol>
+        </div>}
+      </section>
+      {topics.length > 0 && <section aria-labelledby={`${id}-topics`} className="min-w-0 bg-surface p-6">
+        <h3 id={`${id}-topics`} className="label-caps">Točnost po temama</h3>
+        <ul className="mt-3">{topics.map(unit => {
+          const percent = unit.resolved_review_count > 0 ? Math.round(unit.correct_review_count / unit.resolved_review_count * 100) : null;
+          const state = unitState({ attempts: unit.resolved_review_count, percent });
+          return <li key={unit.unit_id} className="border-t border-line py-2.5">
+            <p className="flex items-baseline justify-between gap-3 text-sm"><span className="font-semibold break-words">{unit.title}</span>
+              <span className={`shrink-0 font-extrabold tabular-nums ${state.tone}`}>{state.label}</span></p>
+            <ProgressBar className="mt-2" size="sm" label={`Točnost: ${unit.title}`} value={state.value} tone={state.bar} />
+          </li>;
+        })}</ul>
+      </section>}
+    </div>
+    {finished.length > 0 && <section aria-labelledby={`${id}-history`} className="min-w-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 pb-3">
+        <h3 id={`${id}-history`} className="text-xl font-extrabold">Povijest</h3>
+        <p className="text-sm text-muted">{finished.length === 1 ? "Zadnji pokušaj" : finished.length < 5 ? `Zadnja ${finished.length} pokušaja` : `Zadnjih ${finished.length} pokušaja`}</p>
+      </div>
+      <ul className="border-b border-line">{finished.map(attempt => {
+        const date = attempt.submitted_at ? shortDate(localIsoDate(new Date(attempt.submitted_at))) : "";
+        const title = attempt.paper?.title ?? attempt.focus_label ?? "Cijeli kolegij";
+        return <li key={attempt.id} className="flex items-center justify-between gap-4 border-t border-line py-3">
+          <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-1 sm:grid sm:grid-cols-[7rem_8rem_minmax(0,1fr)] sm:gap-4">
+            <span className="text-sm tabular-nums text-muted">{date}</span>
+            <span className="text-sm font-extrabold">{attemptKind(attempt)}</span>
+            <span className="w-full font-semibold break-words sm:w-auto">{title}</span>
+          </div>
+          {onOpenResults && <Button variant="ghost" className="shrink-0" aria-label={`Rezultati: ${title}, ${date}`} onClick={() => onOpenResults(attempt.id)}>Rezultati <span aria-hidden="true">→</span></Button>}
+        </li>;
+      })}</ul>
+    </section>}
+  </div>;
+}
+
 type ProgressProps = {
   courseId: string; active?: boolean; onOpenAdaptiveReview?: () => void;
   /** Opens a session started here, such as the one-click due review. */
   onStartAttempt?: (attempt: Attempt) => void;
   /** Open practice setup with Mistakes or Favorites selected. */
   onPracticeMistakes?: () => void; onPracticeFavorites?: () => void;
+  /** Opens the results of a finished session from the history. */
+  onOpenResults?: (attemptId: string) => void;
 };
 
 export function ProgressPanel(props: ProgressProps) {
   return <CourseProgressPanel key={props.courseId} {...props} />;
 }
 
-function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, onStartAttempt, onPracticeMistakes, onPracticeFavorites }: ProgressProps) {
+function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, onStartAttempt, onPracticeMistakes, onPracticeFavorites, onOpenResults }: ProgressProps) {
   const [open, setOpen] = useState(false);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [busy, setBusy] = useState<Action | null>(null);
@@ -42,6 +142,9 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, on
   const [reviewError, setReviewError] = useState("");
   // Bumped by every full load, so the review lists refresh with the rest of Progress.
   const [listVersion, setListVersion] = useState(0);
+  // The weekly series and the session history are optional context, read with every full load and left out on failure.
+  const [series, setSeries] = useState<ProgressSeries | null>(null);
+  const [history, setHistory] = useState<AttemptSummary[] | null>(null);
   const pending = useRef(false);
   const requestId = useRef(0);
   const activated = useRef(false);
@@ -81,6 +184,14 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, on
   }, [courseId]);
 
   useEffect(() => {
+    if (!listVersion) return;
+    let current = true;
+    void Promise.resolve().then(() => api.progressSeries(courseId, 8)).then(result => { if (current) setSeries(result ?? null); }).catch(() => { if (current) setSeries(null); });
+    void Promise.resolve().then(() => practiceApi.history(courseId, 0)).then(rows => { if (current) setHistory(rows ?? null); }).catch(() => { if (current) setHistory(null); });
+    return () => { current = false; };
+  }, [courseId, listVersion]);
+
+  useEffect(() => {
     if (!active) { activated.current = false; return; }
     if (activated.current) return;
     let current = true;
@@ -109,9 +220,9 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, on
   // Archived units stay listed only while they still hold your review history.
   const units = dashboard?.units.filter(unit => !unit.is_archived || unit.reviewed_questions > 0) ?? [];
 
-  return <section className="mt-6 min-w-0 max-w-4xl space-y-8" aria-label="Napredak">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <h2 className="text-xl font-semibold">Napredak</h2>
+  return <section className="min-w-0 space-y-8" aria-label="Napredak">
+    <div className="flex flex-wrap items-center justify-end gap-3">
+      <h2 className="sr-only">Napredak</h2>
       {dashboard && <Button variant="ghost" disabled={busy !== null} onClick={() => load("refresh", dashboard.offset)}>Osvježi napredak</Button>}
     </div>
     {!dashboard && !error && <LoadingState>Učitavam napredak…</LoadingState>}
@@ -122,6 +233,8 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, on
         {failed && <Button variant="secondary" disabled={busy !== null} onClick={() => load(failed.action, failed.offset)}>Ponovno učitaj napredak</Button>}
       </div>}
       {summary && dashboard && <>
+        <ProgressOverview summary={summary} units={dashboard.units} series={series} history={history} onOpenResults={onOpenResults} />
+        <div className="max-w-4xl space-y-8">
         <Surface className="min-w-0">
           <section aria-label="Što treba pažnju" className="space-y-4">
             <h3 className="text-lg font-semibold">Što treba pažnju</h3>
@@ -156,7 +269,7 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, on
           </dl>
           <p className="max-w-prose text-sm text-muted">Točnost broji automatski ocijenjene odgovore iz svih vježbi, uključujući ponovljena pitanja. Kratki odgovori zahtijevaju samoprocjenu i ne mijenjaju točnost ni raspored ponavljanja.</p>
         </section>}
-        <ProgressHeatmap courseId={courseId} />
+        <ProgressHeatmap courseId={courseId} series={series} />
         {hasHistory && units.length > 0 && <section aria-labelledby="unit-progress-heading" className="space-y-4">
           <h3 id="unit-progress-heading" className="text-lg font-semibold">Po cjelinama</h3>
           <p className="max-w-prose text-sm text-muted">Pitanje povezano s više cjelina broji se u svakoj od njih, pa zbroj po cjelinama može biti veći od ukupnog za kolegij. Točnost pokazuje koliko su često vaši automatski ocijenjeni odgovori bili točni; nije mjera znanja.</p>
@@ -187,7 +300,7 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, on
                 {row.is_actionable
                   ? <p className="text-sm">Sljedeće ponavljanje: <time dateTime={row.due_at}>{dateTime(row.due_at)}</time></p>
                   : <p className="text-sm text-muted">Ovo pitanje više nije dostupno za vježbu.</p>}
-                <details className="rounded-lg border border-line p-3">
+                <details className="border border-line p-3">
                   <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">Tehnički detalji</summary>
                   <p className="mt-2 break-words text-sm [overflow-wrap:anywhere]">ID pitanja: {row.question_id}</p>
                   <Badge>Faza {row.review_stage}</Badge>
@@ -200,6 +313,7 @@ function CourseProgressPanel({ courseId, active = true, onOpenAdaptiveReview, on
             </section>
           </div>
         </details>}
+        </div>
       </>}
     </>}
   </section>;

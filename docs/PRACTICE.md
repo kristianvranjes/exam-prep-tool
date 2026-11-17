@@ -514,8 +514,7 @@ to explain why it cannot start. **Mock exam** is listed under How to practice on
 exam cycle is selected under What to practice; before that, a line says to choose one.
 Choosing another focus switches a mock exam back to Recommended practice.
 
-**Review due questions** on the course overview (shown when `due_total` > 0 and no
-session is open) and in Progress (when `due_now` > 0) starts a guided (IMMEDIATE) DUE
+**Review due questions** in the Napredak tab (when `due_now` > 0) starts a guided (IMMEDIATE) DUE
 session in one click: every question type, and as many due questions as a fresh
 `due_total` reports, at most 20. The session opens like a started past paper. If the
 count changed in between, the 409 is shown and nothing starts.
@@ -581,8 +580,10 @@ before an untouched one, and both rank before a well-practised unit. Units are s
 when they are archived (practice setup cannot choose them), have no questions, or have
 every question retained.
 
-**Course overview.** Readiness is the one figure in the
-[next exam](COURSE_UNITS.md#exam-countdown) header section. It shows:
+**Course page (before the Student v3 tabs).** The single-page course showed readiness as the
+one figure of its [next exam](COURSE_UNITS.md#exam-countdown) section; the tabs (#171) dropped it
+in favour of the Ispit tab's points estimate, and Home's course cards keep the range's midpoint.
+That section showed:
 
 - the range ("55–70%") in Literata tabular figures, announced to screen readers as
   "Estimated readiness: 55 to 70 percent", with the cycle's coverage in counts under it;
@@ -647,21 +648,20 @@ badge where it applies, and the same **Favorite** star to remove one. A removed 
 until the next refresh so the star can undo it. **Practice favorites** opens practice
 setup with Favorites selected while a listed favorite can still be practiced.
 
-**Practice for the exam or a unit.** On the course overview, **Vježbaj za <rok>** and the
-**Vježbaj** shortcut next to a weak unit start a session at once instead of opening
-setup: a guided (IMMEDIATE) recommended (ADAPTIVE) session of `min(total, 10)` questions
+**Practice for a topic.** In the Učenje tab, a topic card starts a session at once instead
+of opening setup (the single-page course also had **Vježbaj za <rok>** for an exam cycle): a guided (IMMEDIATE) recommended (ADAPTIVE) session of `min(total, 10)` questions
 of every type, focused on that exam cycle or unit. It is a client preset
 (`practiceApi.focusedPractice`), not a new engine, and it is recorded as an ordinary
 recommended session. With no eligible question it shows the reason and starts nothing.
 Count, types and the other modes stay in Practice setup.
 
-**Quick quiz.** **Start quick quiz**, a compact secondary row on the course overview, starts a guided
-(IMMEDIATE) recommended (ADAPTIVE) session of five questions of every type in one
-click. The optional **Questions from** picker limits it to one exam cycle or one unit.
+**Quick quiz.** **Brzi kviz**, a row of "Drugi načini vježbe" in the Učenje tab, starts a guided
+(IMMEDIATE) recommended (ADAPTIVE) session of five questions of every type from the whole course in one
+click. `practiceApi.quickQuiz` still takes an optional exam cycle or unit focus; the tab does not offer it.
 It is a client preset over existing options, not a new engine: it reads ADAPTIVE
 availability for that focus and starts `min(total, 5)` questions, so a unit with three
 eligible questions gives a three-question quiz. With none it shows the reason and
-starts nothing. The session opens like a due review, and the overview hides the quick
+starts nothing. The session opens like a due review, and Učenje hides the quick
 quiz while a session is open. Its start request adds `quick_quiz: true`, which changes
 nothing about selection and only records the session as `QUICK`
 ([recorded selection mode](#recorded-selection-mode-migration-0026)).

@@ -12,6 +12,8 @@ const mock = vi.hoisted(() => ({
   examScopes: vi.fn(), examScopeCoverage: vi.fn(), itemAnalysis: vi.fn(), question: vi.fn(), units: vi.fn(),
   // Upravljanje shows how many reports and suggestions wait for a faculty moderator.
   questionReports: vi.fn(), questionSuggestions: vi.fn(), unitModeration: vi.fn(),
+  // The Ispit tab: the estimate and the past papers.
+  examScopeEstimate: vi.fn(), examPapers: vi.fn(), courseDashboard: vi.fn(),
 }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
@@ -62,19 +64,71 @@ it("keeps the requested deep link through authentication", async () => {
   expect(window.location.pathname).toBe("/courses/course/progress");
 });
 
-it("keeps materials to course managers: a student gets a way back, an owner gets the tab", async () => {
+it("keeps materials to course managers: a student's old link lands on the questions, an owner gets the Materijali part", async () => {
   window.history.replaceState(null, "", "/courses/course/materials");
   const view = render(<AppShell />);
-  expect(await screen.findByText("Materijale kolegija vide samo vlasnik kolegija i moderatori fakulteta.")).toBeVisible();
-  expect(within(screen.getByRole("navigation", { name: "Navigacija kolegija" })).queryByRole("button", { name: "Materijali" })).not.toBeInTheDocument();
+  await waitFor(() => expect(window.location.pathname).toBe("/courses/course/questions"));
+  expect(await screen.findByRole("region", { name: "Baza pitanja" })).toBeVisible();
+  const tabs = screen.getByRole("navigation", { name: "Navigacija kolegija" });
+  expect(within(tabs).getByRole("button", { name: "Pitanja i materijali" })).toHaveAttribute("aria-current", "page");
+  expect(screen.queryByRole("group", { name: "Pitanja i materijali" })).not.toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Course materials" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Natrag na pregled" }));
-  expect(window.location.pathname).toBe("/courses/course");
   view.unmount();
   mock.membership.mockResolvedValue({ role: "OWNER" });
   window.history.replaceState(null, "", "/courses/course/materials");
   render(<AppShell />);
   expect(await screen.findByRole("region", { name: "Course materials" })).toBeVisible();
+  expect(window.location.pathname).toBe("/courses/course/materials");
+  // A manager's questions are the bank in Upravljanje, so the Pitanja part points there instead of mounting a second bank.
+  const parts = screen.getByRole("group", { name: "Pitanja i materijali" });
+  fireEvent.click(within(parts).getByRole("button", { name: "Pitanja" }));
+  expect(window.location.pathname).toBe("/courses/course/questions");
+  expect(screen.queryByRole("region", { name: "Baza pitanja" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Otvori banku pitanja" }));
+  expect(window.location.pathname).toBe("/courses/course/manage");
+  expect(screen.getByRole("button", { name: "Banka pitanja" })).toHaveAttribute("aria-pressed", "true");
+});
+
+it("lands old links to past exams and the estimate on the Ispit tab and corrects the address", async () => {
+  window.history.replaceState(null, "", "/courses/course/papers");
+  mock.examPapers.mockResolvedValue({ can_manage: false, papers: [] });
+  render(<AppShell />);
+  await waitFor(() => expect(window.location.pathname).toBe("/courses/course/exam"));
+  expect(await screen.findByRole("heading", { name: "Stari rokovi" })).toBeVisible();
+  expect(within(screen.getByRole("navigation", { name: "Navigacija kolegija" })).getByRole("button", { name: "Ispit" })).toHaveAttribute("aria-current", "page");
+  visit("/courses/course/estimate");
+  await waitFor(() => expect(window.location.pathname).toBe("/courses/course/exam"));
+  expect(screen.getByRole("heading", { name: "Procjena bodova" })).toBeVisible();
+});
+
+it("keeps Upravljanje and Cjeline i postavke to managers: a student's old links get a way back or land on the questions", async () => {
+  window.history.replaceState(null, "", "/courses/course/manage");
+  render(<AppShell />);
+  expect(await screen.findByText("Upravljanje kolegijem vide samo vlasnik kolegija i moderatori fakulteta.")).toBeVisible();
+  expect(within(screen.getByRole("navigation", { name: "Navigacija kolegija" })).queryByRole("button", { name: /Upravljanje/ })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Natrag na učenje" }));
+  expect(window.location.pathname).toBe("/courses/course");
+  visit("/courses/course/more");
+  await waitFor(() => expect(window.location.pathname).toBe("/courses/course/questions"));
+  expect(screen.queryByRole("button", { name: "Analiza pitanja" })).not.toBeInTheDocument();
+});
+
+it("gives a faculty moderator the Upravljanje tab with what waits in its queues", async () => {
+  mock.faculties.mockResolvedValue([{ id: "faculty", name: "FER", slug: "fer", university_name: null }]);
+  mock.moderatorStatus.mockResolvedValue({ is_moderator: true });
+  mock.questionReports.mockResolvedValue([{ id: "r1" }, { id: "r2" }]); mock.questionSuggestions.mockResolvedValue([{ id: "s1" }]);
+  window.history.replaceState(null, "", "/courses/course");
+  render(<AppShell />);
+  const tabs = await screen.findByRole("navigation", { name: "Navigacija kolegija" });
+  const manage = await within(tabs).findByRole("button", { name: /^Upravljanje/ });
+  expect(await within(manage).findByLabelText("3 otvoreno")).toBeVisible();
+  fireEvent.click(manage);
+  expect(window.location.pathname).toBe("/courses/course/manage");
+  expect(manage).toHaveAttribute("aria-current", "page");
+  fireEvent.click(screen.getByRole("button", { name: "Otvori: Cjeline i postavke" }));
+  expect(window.location.pathname).toBe("/courses/course/more");
+  expect(manage).toHaveAttribute("aria-current", "page");
+  expect(screen.getByRole("heading", { name: "Cjeline i postavke" })).toBeVisible();
 });
 
 it("does not join or expose an unavailable course through a URL", async () => {
@@ -153,7 +207,7 @@ it("ignores a late attempt read after switching to another course", async () => 
 });
 
 const destinationPaths: Record<string, string> = {
-  "Pregled": "", "Vježba": "/practice", "Prošli ispiti": "/papers", "Napredak": "/progress", "Materijali": "/materials", "Više": "/more",
+  "Pregled": "", "Vježba": "/practice", "Ispit": "/exam", "Napredak": "/progress", "Pitanja": "/questions", "Više": "/questions",
 };
 /** What a followed link or an edited address does: the route changes without a click in the course screens. */
 function visit(path: string) {
@@ -164,17 +218,21 @@ function leaveToHome() {
   const home = screen.queryByRole("button", { name: "Vaši kolegiji" });
   if (home) fireEvent.click(home); else visit("/");
 }
-/** The handoff has no course tabs: go back to the course page through the breadcrumb, then take its link. */
+/**
+ * The course tabs (handoff 21a-21d): "Pregled" is Učenje, custom practice is reached from it, and "Više" is the managers'
+ * "Cjeline i postavke" in Upravljanje or, for a student, the question bank in "Pitanja i materijali".
+ */
 function navigate(name: string) {
-  const nav = screen.queryByRole("navigation", { name: "Navigacija kolegija" });
-  if (!nav) { visit(`/courses/course${destinationPaths[name]}`); return; }
-  const buttons = within(nav).getAllByRole("button");
-  if (buttons.length > 1) fireEvent.click(buttons[1]);
-  const control = {
-    "Pregled": null, "Vježba": "Otvori: Vježba po mjeri", "Prošli ispiti": "Otvori: Prošli ispiti", "Napredak": "Otvori napredak",
-    "Materijali": "Otvori materijale", "Više": /Otvori: (Baza pitanja i alati|Cjeline i postavke)/,
-  }[name];
-  if (control) fireEvent.click(screen.getAllByRole("button", { name: control })[0]);
+  const tabs = screen.queryByRole("navigation", { name: "Navigacija kolegija" });
+  if (!tabs) { visit(`/courses/course${destinationPaths[name]}`); return; }
+  const tab = (label: string) => fireEvent.click(within(tabs).getByRole("button", { name: new RegExp(`^${label}`) }));
+  const manage = within(tabs).queryByRole("button", { name: /^Upravljanje/ });
+  if (name === "Pregled") tab("Učenje");
+  else if (name === "Vježba") { tab("Učenje"); fireEvent.click(screen.getByRole("button", { name: "Otvori: Vježba po mjeri" })); }
+  else if (name === "Ispit") tab("Ispit");
+  else if (name === "Napredak") tab("Napredak");
+  else if (name === "Više" && manage) { fireEvent.click(manage); fireEvent.click(screen.getByRole("button", { name: "Otvori: Cjeline i postavke" })); }
+  else tab("Pitanja i materijali");
 }
 async function enterCourse() {
   fireEvent.click(await screen.findByRole("button", { name: "Otvori kolegij: Algorithms" }));
@@ -239,22 +297,22 @@ it("guards unsaved answers on course switching and logout, including failed save
   expect(screen.queryByRole("heading", { name: "Nastavite učiti" })).not.toBeInTheDocument(); confirm.mockRestore();
 });
 
-it("preserves an actual question draft across More, Progress and Home and guards course changes", async () => {
+it("preserves an actual question draft across Pitanja, Progress and Home and guards course changes", async () => {
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-  render(<AppShell />); await enterCourse(); navigate("Više");
-  fireEvent.click(screen.getByRole("button", { name: "Baza pitanja" }));
-  fireEvent.click(screen.getByRole("button", { name: "Otvori bazu pitanja" }));
+  render(<AppShell />); await enterCourse(); navigate("Pitanja");
+  // In its tab the bank is open from the start.
+  expect(screen.queryByRole("button", { name: "Otvori bazu pitanja" })).not.toBeInTheDocument();
   fireEvent.click(await screen.findByRole("button", { name: "Stvori pitanje" }));
   fireEvent.change(screen.getByLabelText("Tekst pitanja"), { target: { value: "Unfinished draft question" } });
   fireEvent.change(screen.getByLabelText("Opcija 1", { exact: true }), { target: { value: "Draft option" } });
-  navigate("Napredak"); navigate("Više");
+  navigate("Napredak"); navigate("Pitanja");
   expect(screen.getByLabelText("Tekst pitanja")).toHaveValue("Unfinished draft question");
-  leaveToHome(); await enterCourse(); navigate("Više");
+  leaveToHome(); await enterCourse(); navigate("Pitanja");
   expect(screen.getByLabelText("Opcija 1", { exact: true })).toHaveValue("Draft option");
   expect(mock.questions).toHaveBeenCalledOnce();
   leaveToHome();
   fireEvent.click(screen.getByRole("button", { name: "Otvori kolegij: Statistics" }));
-  expect(confirm).toHaveBeenCalledOnce(); await enterCourse(); navigate("Više");
+  expect(confirm).toHaveBeenCalledOnce(); await enterCourse(); navigate("Pitanja");
   expect(screen.getByLabelText("Tekst pitanja")).toHaveValue("Unfinished draft question");
   confirm.mockRestore();
 }, 20000);
@@ -379,25 +437,26 @@ it("keeps the active unsaved answer when Recommended practice is requested from 
   expect(mock.start).toHaveBeenCalledOnce(); expect(mock.read).not.toHaveBeenCalled(); expect(mock.save).not.toHaveBeenCalled();
 });
 
-it("opens progress from its summary, offers students no materials and keeps contribution behind More", async () => {
+it("opens progress from its tab, offers students no materials and leads contribution to the questions tab", async () => {
   mock.availability.mockResolvedValue({ course_total: 0, total: 0, by_type: [], by_unit: [] });
   render(<AppShell />); await enterCourse();
   await screen.findByText("Ovaj kolegij još nema pitanja za vježbu.");
-  fireEvent.click(screen.getByRole("button", { name: "Otvori napredak" }));
+  navigate("Napredak");
   expect(screen.getByRole("region", { name: "Napredak" })).toBeVisible();
   navigate("Pregled");
   await screen.findByText("Ovaj kolegij još nema pitanja za vježbu.");
   expect(screen.queryByRole("button", { name: "Otvori materijale" })).not.toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Materijali" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Predloži pitanje" }));
-  expect(screen.getByRole("button", { name: "Otvori bazu pitanja" })).toBeVisible();
+  expect(window.location.pathname).toBe("/courses/course/questions");
+  expect(screen.getByRole("region", { name: "Baza pitanja" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "Postavke kolegija" })).not.toBeInTheDocument();
 });
 
 it("offers item analysis to a faculty moderator only and opens a flagged question in the bank", async () => {
   window.history.replaceState(null, "", "/");
   const { unmount } = render(<AppShell />); await enterCourse(); navigate("Više");
-  expect(screen.getByRole("button", { name: "Baza pitanja" })).toBeVisible();
+  expect(screen.getByRole("region", { name: "Baza pitanja" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "Analiza pitanja" })).not.toBeInTheDocument();
   unmount();
 
@@ -413,7 +472,9 @@ it("offers item analysis to a faculty moderator only and opens a flagged questio
       { position: 1, text: "Netočno", is_key: false, count: 28, share: 0.7, upper_share: 0.9, lower_share: 0.4, flag: null }],
   }] });
   mock.question.mockResolvedValue({ id: "flagged", course_id: "course", type: "TRUE_FALSE", stem, difficulty: null, visibility: "MEMBER", status: "APPROVED", options: [] });
-  render(<AppShell />); await enterCourse(); navigate("Više");
+  render(<AppShell />); await enterCourse();
+  await within(screen.getByRole("navigation", { name: "Navigacija kolegija" })).findByRole("button", { name: /^Upravljanje/ });
+  navigate("Više");
   fireEvent.click(await screen.findByRole("button", { name: "Analiza pitanja" }));
   expect(await screen.findByText(/Ključ je možda pogrešan/)).toBeVisible();
   expect(mock.itemAnalysis).toHaveBeenCalledWith("course", 0);

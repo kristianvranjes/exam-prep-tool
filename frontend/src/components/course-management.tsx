@@ -14,34 +14,53 @@ export type ManageTab = "quizzes" | "bank" | "reports" | "suggestions";
 const PAGE = 20;
 const countLabel = (count: number | null) => count === null ? null : count >= PAGE ? `${PAGE}+` : String(count);
 
+export type OpenCounts = { reports: number | null; suggestions: number | null };
+
+/** What waits in the faculty moderator's queues for this course; `refresh` re-reads it when it changes. */
+export function useOpenCounts(course: Pick<Course, "id" | "faculty_id">, enabled: boolean, refresh: unknown = null): OpenCounts {
+  const [counts, setCounts] = useState<OpenCounts>({ reports: null, suggestions: null });
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    const rows = { limit: PAGE, course_id: course.id };
+    api.questionReports(course.faculty_id, { ...rows, status: "OPEN" }).then(result => { if (active) setCounts(current => ({ ...current, reports: result.length })); }).catch(() => undefined);
+    api.questionSuggestions(course.faculty_id, { ...rows, status: "OPEN" }).then(result => { if (active) setCounts(current => ({ ...current, suggestions: result.length })); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [course.id, course.faculty_id, enabled, refresh]);
+  return enabled ? counts : { reports: null, suggestions: null };
+}
+
+/** The Upravljanje tab's badge: everything open in both queues, "20+" style when a queue filled its page. */
+export function openCountLabel({ reports, suggestions }: OpenCounts) {
+  if (reports === null && suggestions === null) return null;
+  const total = (reports ?? 0) + (suggestions ?? 0);
+  return (reports ?? 0) >= PAGE || (suggestions ?? 0) >= PAGE ? `${total}+` : String(total);
+}
+
 /**
  * Handoff 23: the course's management area. A moderator sees the same course as a student plus this destination,
  * with the quizzes, the question bank and, for faculty moderators, the report and suggestion queues.
  * Every sub-tab stays mounted once opened so a half-written question or rejection reason is not lost.
  */
-export function CourseManagement({ course, currentUserId, isOwner, isModerator, tab, onTab, focus, onOpenQuestion, onOpenMaterials }: {
+export function CourseManagement({ course, currentUserId, isOwner, isModerator, tab, onTab, focus, onOpenQuestion, onOpenMaterials, onMore, counts: givenCounts, onRefreshCounts }: {
   course: Course; currentUserId: string; isOwner: boolean; isModerator: boolean;
   tab: ManageTab; onTab: (tab: ManageTab) => void;
   focus: QuestionFocus | null; onOpenQuestion: (id: string) => void; onOpenMaterials?: () => void;
+  /** Opens the course's units, item analysis and settings ("Cjeline i postavke"). */
+  onMore?: () => void;
+  /** The open counts when the caller already reads them (the course tab's badge); left out, the area reads its own. */
+  counts?: OpenCounts; onRefreshCounts?: () => void;
 }) {
   const [opened, setOpened] = useState<Set<ManageTab>>(() => new Set([tab]));
-  const [counts, setCounts] = useState<{ reports: number | null; suggestions: number | null }>({ reports: null, suggestions: null });
   const [countRevision, setCountRevision] = useState(0);
+  const ownCounts = useOpenCounts(course, isModerator && !givenCounts, `${countRevision}|${tab}`);
+  const counts = givenCounts ?? ownCounts;
 
   // A destination reached from elsewhere (a question opened from a quiz) must still be mounted.
   const shown = new Set(opened).add(tab);
   function pick(next: ManageTab) { setOpened(current => new Set(current).add(next)); onTab(next); }
 
   // The queues only open for faculty moderators; the badges say how much waits there.
-  useEffect(() => {
-    if (!isModerator) return;
-    let active = true;
-    const rows = { limit: PAGE, course_id: course.id };
-    api.questionReports(course.faculty_id, { ...rows, status: "OPEN" }).then(result => { if (active) setCounts(current => ({ ...current, reports: result.length })); }).catch(() => undefined);
-    api.questionSuggestions(course.faculty_id, { ...rows, status: "OPEN" }).then(result => { if (active) setCounts(current => ({ ...current, suggestions: result.length })); }).catch(() => undefined);
-    return () => { active = false; };
-  }, [course.id, course.faculty_id, isModerator, countRevision, tab]);
-
   const tabs: { key: ManageTab; label: string; count: string | null; tone: "danger" | "info" | "neutral" }[] = [
     { key: "quizzes", label: "Kvizovi", count: null, tone: "neutral" },
     { key: "bank", label: "Banka pitanja", count: null, tone: "neutral" },
@@ -65,7 +84,8 @@ export function CourseManagement({ course, currentUserId, isOwner, isModerator, 
         {item.label}
         {item.count !== null && item.count !== "0" && <Badge tone={item.tone} aria-label={`${item.count} otvoreno`}>{item.count}</Badge>}
       </Button>)}
-      {queueTab && <Button variant="ghost" onClick={() => setCountRevision(value => value + 1)}>Osvježi brojeve</Button>}
+      {queueTab && <Button variant="ghost" onClick={onRefreshCounts ?? (() => setCountRevision(value => value + 1))}>Osvježi brojeve</Button>}
+      {onMore && <Button variant="ghost" className="sm:ml-auto" aria-label="Otvori: Cjeline i postavke" onClick={onMore}>Cjeline i postavke <span aria-hidden="true">→</span></Button>}
     </div>
 
     {shown.has("quizzes") && <div hidden={tab !== "quizzes"}>
