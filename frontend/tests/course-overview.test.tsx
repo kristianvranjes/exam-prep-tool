@@ -243,6 +243,15 @@ it("links to the other screens of the course, with materials only for managers",
   fireEvent.click(within(managerLinks).getByRole("button", { name: "Otvori materijale" })); expect(manager.onMaterials).toHaveBeenCalledOnce();
 });
 
+it("gives managers Upravljanje in place of the question bank link, and a way on to units and settings", async () => {
+  const manager = { ...props(), onManage: vi.fn(), onMore: vi.fn() };
+  render(<CourseOverview {...manager} />);
+  const links = screen.getByRole("navigation", { name: "Ostalo u kolegiju" });
+  expect(within(links).queryByRole("button", { name: "Otvori: Baza pitanja i alati" })).not.toBeInTheDocument();
+  fireEvent.click(await within(links).findByRole("button", { name: "Otvori: Upravljanje" })); expect(manager.onManage).toHaveBeenCalledOnce();
+  fireEvent.click(within(links).getByRole("button", { name: "Otvori: Cjeline i postavke" })); expect(manager.onMore).toHaveBeenCalledOnce();
+});
+
 it("keeps failures distinct from empty data and allows normal navigation", async () => {
   mock.reviewProgressSummary.mockRejectedValue(new Error("Offline")); mock.courseDashboard.mockRejectedValue(new Error("Offline"));
   mock.unitProgress.mockRejectedValue(new Error("Offline")); mock.examPapers.mockRejectedValue(new Error("Offline"));
