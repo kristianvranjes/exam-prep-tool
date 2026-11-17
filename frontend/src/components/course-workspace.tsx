@@ -14,6 +14,7 @@ import { ItemAnalysisView } from "./item-analysis";
 import { PracticeQuiz, type PracticeSetupRequest } from "./practice-quiz";
 import { ProgressPanel } from "./progress-panel";
 import { QuestionBank, type QuestionFocus } from "./question-bank";
+import { QuizModeration } from "./quiz-moderation";
 import { Button, LoadingState } from "./ui";
 import type { ResumableAttempt } from "./use-resumable-sessions";
 
@@ -36,7 +37,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
   onAnswerDirtyChange: (dirty: boolean) => void;
   onUpdated: (course: Course) => void; onDeleted: (course: Course) => void;
 }) {
-  const [moreDestination, setMoreDestination] = useState<"questions" | "units" | "analysis" | "settings" | null>(null);
+  const [moreDestination, setMoreDestination] = useState<"questions" | "units" | "quizzes" | "analysis" | "settings" | null>(null);
   const [questionFocus, setQuestionFocus] = useState<QuestionFocus | null>(null);
   const manager = isOwner || isModerator;
   // Mount units on first use, then keep them mounted like other destinations.
@@ -98,12 +99,14 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
       <div className="mt-4 flex flex-wrap gap-3">
         <Button variant="secondary" aria-pressed={moreDestination === "questions"} onClick={() => setMoreDestination("questions")}>Baza pitanja</Button>
         <Button variant="secondary" aria-pressed={moreDestination === "units"} onClick={() => { setUnitsOpened(true); setMoreDestination("units"); }}>Cjeline kolegija</Button>
+        {manager && <Button variant="secondary" aria-pressed={moreDestination === "quizzes"} onClick={() => setMoreDestination("quizzes")}>Kvizovi</Button>}
         {manager && <Button variant="secondary" aria-pressed={moreDestination === "analysis"} onClick={() => setMoreDestination("analysis")}>Analiza pitanja</Button>}
         {isOwner && <Button variant="secondary" aria-pressed={moreDestination === "settings"} onClick={() => setMoreDestination("settings")}>Postavke kolegija</Button>}
       </div>
       <div hidden={moreDestination !== "questions"}><QuestionBank courseId={course.id} focus={questionFocus} onOpenMaterials={manager ? () => navigate("materials") : undefined} /></div>
       {unitsOpened && <div hidden={moreDestination !== "units"}><CourseUnits courseId={course.id} isOwner={isOwner} /></div>}
-      {manager && moreDestination === "analysis" && <ItemAnalysisView courseId={course.id} onOpenQuestion={openQuestion} />}
+      {manager && moreDestination === "quizzes" && <QuizModeration courseId={course.id} isOwner={isOwner} isModerator={isModerator} onOpenQuestion={openQuestion} />}
+      {manager && moreDestination === "analysis" &&<ItemAnalysisView courseId={course.id} onOpenQuestion={openQuestion} />}
       {isOwner && <div hidden={moreDestination !== "settings"}><CourseSettings course={course} onUpdated={onUpdated} onDeleted={onDeleted} /></div>}
     </section>
   </section>;
