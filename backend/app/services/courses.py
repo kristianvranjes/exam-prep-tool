@@ -16,7 +16,7 @@ from app.schemas.course import (
 from app.services.faculties import active_faculty
 from app.services.materials.cleanup import cleanup_sources, queue_sources
 from app.services.materials.storage import MaterialStorage
-from app.services.moderation import require_moderator
+from app.services.moderation import is_moderator, require_moderator
 
 
 def create_course(db: Session, user: User, data: CourseCreate) -> Course:
@@ -97,18 +97,56 @@ def update_course(db: Session, user: User, course_id: UUID, data: CourseUpdate) 
     return course
 
 
-def delete_course(db: Session, user: User, course_id: UUID, storage: MaterialStorage) -> None:
-    try:
-        get_owner_course(db, user, course_id)
-        # Serialize deletes and keep new child rows from appearing during cleanup.
-        course = db.scalar(
-            select(Course)
-            .where(Course.id == course_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
+def lock_managed_course(db: Session, user: User, course_id: UUID) -> Course:
+    """The course locked for update, for its OWNER or a moderator of its faculty.
+
+    A moderator need not have joined the course. Anyone else who has joined gets 403; everyone
+    else, and a missing course, gets 404, so the course's existence is not revealed.
+    """
+    course = db.scalar(
+        select(Course)
+        .where(Course.id == course_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if course is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found")
+    role = db.scalar(
+        select(CourseMembership.role).where(
+            CourseMembership.course_id == course_id, CourseMembership.user_id == user.id
         )
-        if course is None:
-            raise HTTPException(404, "Course not found")
+    )
+    if role == MembershipRole.OWNER.value or is_moderator(db, user.id, course.faculty_id):
+        return course
+    if role is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found")
+    raise HTTPException(status.HTTP_403_FORBIDDEN, "Owner or faculty moderator access required")
+
+
+def set_course_active(db: Session, user: User, course_id: UUID, active: bool) -> Course:
+    """Archive (hide from the catalog and enrolment) or restore a course; members keep it."""
+    try:
+        course = lock_managed_course(db, user, course_id)
+        course.is_active = active
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(course)
+    return course
+
+
+def delete_course(
+    db: Session, user: User, course_id: UUID, storage: MaterialStorage, confirm_name: str | None
+) -> None:
+    """Delete an archived course whose name the caller typed; the source PDFs are cleaned up."""
+    try:
+        # Serialize deletes and keep new child rows from appearing during cleanup.
+        course = lock_managed_course(db, user, course_id)
+        if course.is_active:
+            raise HTTPException(409, "Archive the course before deleting it")
+        if (confirm_name or "").strip() != course.name.strip():
+            raise HTTPException(422, "Type the course name to confirm deletion")
         materials = db.scalars(
             select(Material)
             .where(Material.course_id == course_id)

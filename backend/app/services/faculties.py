@@ -3,7 +3,7 @@ import unicodedata
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -11,7 +11,12 @@ from app.models import Course, User
 from app.models.faculty import Faculty
 from app.models.faculty_creator import FacultyCreator
 from app.models.faculty_moderator import FacultyModerator
-from app.schemas.faculty import FacultyCreate
+from app.schemas.faculty import (
+    FacultyCreate,
+    FacultyResponse,
+    FacultyUpdate,
+    ManagedFacultyResponse,
+)
 
 
 def slugify(name: str) -> str:
@@ -61,6 +66,131 @@ def create_faculty(db: Session, user: User, data: FacultyCreate) -> Faculty:
     db.commit()
     db.refresh(faculty)
     return faculty
+
+
+def require_faculty_manager(db: Session, user: User, faculty_id: UUID) -> None:
+    """Editing, archiving, restoring and deleting a faculty is for the moderators of that faculty.
+
+    Archived faculties count too, so the people who archived one can always bring it back. A
+    moderator of another faculty, or anyone else, gets 403 whether or not the faculty exists.
+    """
+    moderates = db.scalar(
+        select(
+            exists().where(
+                FacultyModerator.user_id == user.id, FacultyModerator.faculty_id == faculty_id
+            )
+        )
+    )
+    if not moderates:
+        raise HTTPException(403, "Faculty moderator access required")
+
+
+def course_counts(db: Session, faculty_ids: list[UUID]) -> dict[UUID, int]:
+    if not faculty_ids:
+        return {}
+    rows = db.execute(
+        select(Course.faculty_id, func.count())
+        .where(Course.faculty_id.in_(faculty_ids))
+        .group_by(Course.faculty_id)
+    )
+    return {faculty_id: count for faculty_id, count in rows}
+
+
+def managed_row(faculty: Faculty, count: int) -> ManagedFacultyResponse:
+    return ManagedFacultyResponse(
+        **FacultyResponse.model_validate(faculty).model_dump(),
+        is_active=faculty.is_active,
+        course_count=count,
+    )
+
+
+def list_managed_faculties(
+    db: Session, user: User, limit: int, offset: int
+) -> list[ManagedFacultyResponse]:
+    faculties = list(
+        db.scalars(
+            select(Faculty)
+            .where(
+                exists().where(
+                    FacultyModerator.user_id == user.id, FacultyModerator.faculty_id == Faculty.id
+                )
+            )
+            .order_by(Faculty.name, Faculty.id)
+            .limit(limit)
+            .offset(offset)
+        )
+    )
+    counts = course_counts(db, [faculty.id for faculty in faculties])
+    return [managed_row(faculty, counts.get(faculty.id, 0)) for faculty in faculties]
+
+
+def lock_faculty(db: Session, user: User, faculty_id: UUID) -> Faculty:
+    require_faculty_manager(db, user, faculty_id)
+    faculty = db.scalar(
+        select(Faculty)
+        .where(Faculty.id == faculty_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if faculty is None:
+        raise HTTPException(404, "Faculty not found")
+    return faculty
+
+
+def update_faculty(
+    db: Session, user: User, faculty_id: UUID, data: FacultyUpdate
+) -> ManagedFacultyResponse:
+    changes = data.model_dump(exclude_unset=True)
+    if "name" in changes and changes["name"] is None:
+        raise HTTPException(422, "Enter a faculty name")
+    try:
+        faculty = lock_faculty(db, user, faculty_id)
+        for field, value in changes.items():
+            setattr(faculty, field, value)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(faculty)
+    return managed_row(faculty, course_counts(db, [faculty.id]).get(faculty.id, 0))
+
+
+def set_faculty_active(
+    db: Session, user: User, faculty_id: UUID, active: bool
+) -> ManagedFacultyResponse:
+    """Archive (hide from the catalog and from new courses) or restore a faculty.
+
+    Its courses, their members and its moderators are left as they are.
+    """
+    try:
+        faculty = lock_faculty(db, user, faculty_id)
+        faculty.is_active = active
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(faculty)
+    return managed_row(faculty, course_counts(db, [faculty.id]).get(faculty.id, 0))
+
+
+def delete_faculty(db: Session, user: User, faculty_id: UUID) -> None:
+    """Delete an archived faculty that has no courses at all, archived ones included."""
+    try:
+        # The update lock waits for course creation, which holds a share lock on an active faculty.
+        faculty = lock_faculty(db, user, faculty_id)
+        if faculty.is_active:
+            raise HTTPException(409, "Archive the faculty before deleting it")
+        if db.scalar(select(exists().where(Course.faculty_id == faculty_id))):
+            raise HTTPException(409, "A faculty with courses cannot be deleted")
+        db.delete(faculty)
+        db.commit()
+    except IntegrityError:
+        # courses.faculty_id is ON DELETE RESTRICT: a course that appeared meanwhile still blocks.
+        db.rollback()
+        raise HTTPException(409, "A faculty with courses cannot be deleted") from None
+    except Exception:
+        db.rollback()
+        raise
 
 
 def active_faculty(db: Session, faculty_id: UUID) -> Faculty:

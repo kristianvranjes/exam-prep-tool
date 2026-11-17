@@ -154,11 +154,12 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
       <div role="group" aria-label="Alati kolegija" className="mt-4 flex flex-wrap gap-3">
         <Button variant="secondary" aria-pressed={moreDestination === "units"} onClick={() => { setUnitsOpened(true); setMoreDestination("units"); }}>Cjeline kolegija</Button>
         <Button variant="secondary" aria-pressed={moreDestination === "analysis"} onClick={() => setMoreDestination("analysis")}>Analiza pitanja</Button>
-        {isOwner && <Button variant="secondary" aria-pressed={moreDestination === "settings"} onClick={() => setMoreDestination("settings")}>Postavke kolegija</Button>}
+        {/* The owner edits the course; the owner and faculty moderators archive, restore and delete it. */}
+        <Button variant="secondary" aria-pressed={moreDestination === "settings"} onClick={() => setMoreDestination("settings")}>Postavke kolegija</Button>
       </div>
       {unitsOpened && <div hidden={moreDestination !== "units"}><CourseUnits courseId={course.id} isOwner={isOwner} /></div>}
       {moreDestination === "analysis" && <ItemAnalysisView courseId={course.id} onOpenQuestion={openQuestion} />}
-      {isOwner && <div hidden={moreDestination !== "settings"}><CourseSettings course={course} onUpdated={onUpdated} onDeleted={onDeleted} /></div>}
+      <div hidden={moreDestination !== "settings"}><CourseSettings course={course} canEdit={isOwner} onUpdated={onUpdated} onDeleted={onDeleted} /></div>
     </section> : destination === "more" && <div id="course-more">{managersOnly("Cjeline i postavke")}</div>}
   </section>;
 }

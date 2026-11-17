@@ -83,11 +83,23 @@ is an explicit operator override. See [deployment settings and limits](STAGING.m
   non-owners receive `403`. `year_of_study` (1–6, nullable) is changed by a moderator of
   the course's faculty, who need not own or have joined the course (any other caller
   receives `403`); a request that also changes another field needs the OWNER rules too.
-- `DELETE /courses/{course_id}` returns `204` for an OWNER after committing the
-  course deletion together with durable cleanup intents for every source PDF.
-  Existing database cascades remove memberships, materials, questions,
-  attempts, progress and other course children. Joined non-owners receive `403`;
-  inaccessible or already deleted courses receive `404`. Pre-commit DB failure
+- `POST /courses/{course_id}/archive` and `POST /courses/{course_id}/restore` set the course's
+  `is_active` to false or true and return the course (`200`; repeating either is harmless). They
+  are for the course OWNER and for a moderator of the course's faculty, who need not have joined
+  the course. Other members receive `403`; everyone else, including a moderator of another
+  faculty who has not joined, and a missing course receive `404`. An archived course is left out
+  of `GET /faculties/{faculty_id}/courses` and `POST /courses/{course_id}/join` returns `404`;
+  its members keep reading it (`GET /courses`, `GET /courses/{course_id}` and every member API)
+  with their attempts and progress, and practice stays open to them.
+- `DELETE /courses/{course_id}?confirm_name=<course name>` returns `204` after committing the
+  course deletion together with durable cleanup intents for every source PDF. It has the same
+  callers and `403`/`404` rules as archiving, checked first and under a row lock. The course
+  must be archived (`409` "Archive the course before deleting it" otherwise), and
+  `confirm_name`, the name the person typed, must equal the course name after trimming
+  surrounding spaces, case included (`422` "Type the course name to confirm deletion" when it
+  differs or is missing). The name travels as a query parameter because `fetch` DELETE requests
+  carry no body here. Existing database cascades remove memberships, materials, questions,
+  attempts, progress and other course children; already deleted courses receive `404`. Pre-commit DB failure
   returns safe `503`, retaining all domain rows and PDFs and committing no cleanup
   intents. After commit, best-effort storage cleanup may be deferred: `204` remains
   success, deleted rows stay deleted, and durable cleanup is retryable by operators.
@@ -705,6 +717,24 @@ All endpoints require authentication (401 otherwise):
   `faculty_creators`, in one transaction. 201 with the faculty; 409 when the slug is
   taken; 422 for invalid fields or a name without letters or digits.
 - `GET /faculties/can-create`: `{"can_create": bool}` for the current user.
+- Faculty lifecycle, for the moderators of that faculty only (archived faculties included, so whoever
+  archived one can bring it back). A moderator of another faculty, or anyone else, gets `403`
+  "Faculty moderator access required", checked before the faculty is looked up:
+  - `GET /faculties/manage`: the faculties the caller moderates, archived ones included, ordered by
+    name then id, as `{id, name, slug, university_name, is_active, course_count}`; `course_count`
+    counts all of its courses, archived ones included. An empty list when the caller moderates
+    none. `limit` (1-100, default 100) and `offset` (0-10000).
+  - `PATCH /faculties/{faculty_id}`: strict body with optional `name` (1-150 characters, trimmed;
+    null is `422`) and `university_name` (1-200, null clears it). The slug never changes (sending
+    it is `422`). Returns the row as in `/manage`.
+  - `POST /faculties/{faculty_id}/archive` and `/restore` set `is_active`. An archived faculty is
+    left out of `GET /faculties`, its course catalog and joining its courses return `404`, and no
+    course can be created in it (`404`); its courses, their members and its moderators are
+    untouched.
+  - `DELETE /faculties/{faculty_id}`: `204` only for an archived faculty without any course,
+    archived courses included; `409` "Archive the faculty before deleting it" or "A faculty
+    with courses cannot be deleted" otherwise (`courses.faculty_id` is `ON DELETE RESTRICT`).
+    Its moderator and creator rows go with it.
 - `GET /faculties/{faculty_id}/moderator-status`: `{"is_moderator": bool}` for the current
   user; missing faculty 404. See [community](COMMUNITY.md#api-additions-and-governance).
 - `GET /faculties/{faculty_id}/question-review`: faculty moderators only (403 otherwise);

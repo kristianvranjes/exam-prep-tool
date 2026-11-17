@@ -144,6 +144,9 @@ test("moderator and student complete the core exam-preparation journey", async (
     await questionForm.getByLabel("Opcija 2", { exact: true }).fill("Lyon");
     await expect(questionForm.getByLabel(/^Opcija \d$/)).toHaveCount(2);
     await questionForm.getByRole("button", { name: "Spremi nacrt" }).click();
+    // The editor stays open after saving; return to the bank to see the saved draft.
+    await expect(student.getByText("Pitanje je spremljeno kao privatni nacrt.")).toBeVisible();
+    await student.getByRole("button", { name: "Natrag na bazu pitanja" }).click();
     const selectedQuestion = student.getByRole("article", { name: "Odabrano pitanje" });
     await expect(selectedQuestion).toContainText(questionStem);
     await expect(selectedQuestion).toContainText("Skica");
@@ -322,6 +325,8 @@ test("moderator and student complete the core exam-preparation journey", async (
     await questionForm.getByLabel("Tekst pitanja").fill("Explain why regular practice helps learning.");
     await questionForm.getByLabel("Referentni odgovor").fill("Regular practice helps recall and identifies gaps in understanding.");
     await questionForm.getByRole("button", { name: "Spremi nacrt" }).click();
+    await expect(student.getByText("Pitanje je spremljeno kao privatni nacrt.")).toBeVisible();
+    await student.getByRole("button", { name: "Natrag na bazu pitanja" }).click();
     await expect(selectedQuestion).toContainText("Explain why regular practice helps learning.");
     await openScreen(student, "Vježba");
     await moreOptions.click();

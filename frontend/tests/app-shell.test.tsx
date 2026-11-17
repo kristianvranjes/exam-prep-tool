@@ -19,6 +19,9 @@ const apiMock = vi.hoisted(() => ({
   membership: vi.fn(),
   updateCourse: vi.fn(),
   deleteCourse: vi.fn(),
+  archiveCourse: vi.fn(),
+  restoreCourse: vi.fn(),
+  managedFaculties: vi.fn(),
   createCourse: vi.fn(),
   createFaculty: vi.fn(),
   facultyCourses: vi.fn(),
@@ -62,6 +65,8 @@ beforeEach(() => {
   apiMock.membership.mockResolvedValue(membership);
   apiMock.updateCourse.mockResolvedValue({ ...course, name: "Algorithms II", code: null, description: null });
   apiMock.deleteCourse.mockResolvedValue(undefined);
+  apiMock.archiveCourse.mockImplementation(async () => ({ ...course, is_active: false }));
+  apiMock.managedFaculties.mockResolvedValue([{ id: "faculty-1", name: "Engineering", slug: "engineering", university_name: null, is_active: true, course_count: 1 }]);
 });
 
 function deferred<T>() {
@@ -394,9 +399,12 @@ it("deletes the selected course, returns Home and clears its tools and practice 
   navigate("Napredak"); fireEvent.click(screen.getByRole("button", { name: "Započni preporučenu vježbu" }));
   expect(screen.getByRole("region", { name: "Vježba" })).toHaveTextContent("handoff 1");
   const settings = await openSettings();
-  fireEvent.change(within(settings).getByLabelText("Za potvrdu upišite točan naziv kolegija"), { target: { value: "Algorithms" } });
-  fireEvent.click(within(settings).getByRole("button", { name: "Trajno obriši kolegij" }));
-  await waitFor(() => expect(apiMock.deleteCourse).toHaveBeenCalledWith("course-1"));
+  fireEvent.click(within(settings).getByRole("button", { name: "Arhiviraj kolegij" }));
+  fireEvent.click(await within(settings).findByRole("button", { name: "Obriši kolegij…" }));
+  const dialog = screen.getByRole("dialog", { name: "Trajno brisanje kolegija" });
+  fireEvent.change(within(dialog).getByLabelText("Za potvrdu upišite točan naziv kolegija"), { target: { value: "Algorithms" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Trajno obriši kolegij" }));
+  await waitFor(() => expect(apiMock.deleteCourse).toHaveBeenCalledWith("course-1", "Algorithms"));
   expect(await screen.findByText("Algorithms je trajno obrisan.")).toBeVisible();
   expect(screen.getByRole("heading", { name: "Vaši kolegiji" })).toBeVisible();
   for (const name of ["Postavke kolegija", "Vježba", "Napredak", "Baza pitanja"]) expect(screen.queryByRole("region", { name })).not.toBeInTheDocument();
@@ -426,17 +434,21 @@ it("preserves owner edits on Home and requires consent before switching courses"
   confirm.mockRestore();
 });
 
-it("clears typed deletion confirmation only after a confirmed course switch", async () => {
+it("clears typed deletion confirmation after a course switch", async () => {
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
   apiMock.me.mockResolvedValue(user);
-  apiMock.courses.mockResolvedValue([course, { ...course, id: "course-2", name: "Statistics" }]);
+  apiMock.courses.mockResolvedValue([{ ...course, is_active: false }, { ...course, id: "course-2", name: "Statistics" }]);
   apiMock.membership.mockResolvedValue({ ...membership, role: "OWNER" });
   render(<AppShell />);
   await screen.findByRole("region", { name: "Vaši kolegiji" }); await openCourse();
-  fireEvent.change(within(await openSettings()).getByLabelText("Za potvrdu upišite točan naziv kolegija"), { target: { value: "Algorithms" } });
+  fireEvent.click(within(await openSettings()).getByRole("button", { name: "Obriši kolegij…" }));
+  const dialog = screen.getByRole("dialog", { name: "Trajno brisanje kolegija" });
+  fireEvent.change(within(dialog).getByLabelText("Za potvrdu upišite točan naziv kolegija"), { target: { value: "Algorithms" } });
   goHome(); await openCourse("Statistics"); goHome(); await openCourse();
-  expect(within(await openSettings()).getByLabelText("Za potvrdu upišite točan naziv kolegija")).toHaveValue("");
-  expect(confirm).toHaveBeenCalledOnce(); confirm.mockRestore();
+  fireEvent.click(within(await openSettings()).getByRole("button", { name: "Obriši kolegij…" }));
+  expect(within(screen.getByRole("dialog", { name: "Trajno brisanje kolegija" })).getByLabelText("Za potvrdu upišite točan naziv kolegija")).toHaveValue("");
+  // The typed name lives in a modal, not in a draft form, so leaving does not ask to discard it.
+  expect(confirm).not.toHaveBeenCalled(); confirm.mockRestore();
 });
 
 it("logs in and clears the account, courses and selected tools on logout", async () => {
@@ -490,7 +502,7 @@ it("reports faculty loading and joined-course loading errors on Home", async () 
 });
 
 it("does not expose faculty tools or course creation to ordinary members", async () => {
-  apiMock.me.mockResolvedValue(user); apiMock.moderatorStatus.mockResolvedValue({ is_moderator: false }); render(<AppShell />);
+  apiMock.me.mockResolvedValue(user); apiMock.moderatorStatus.mockResolvedValue({ is_moderator: false }); apiMock.managedFaculties.mockResolvedValue([]); render(<AppShell />);
   await screen.findByRole("heading", { name: "Vaši kolegiji" });
   await waitFor(() => expect(apiMock.moderatorStatus).toHaveBeenCalledWith("faculty-1"));
   expect(screen.queryByRole("link", { name: "Alati fakulteta" })).not.toBeInTheDocument();
@@ -508,6 +520,16 @@ it("keeps moderation and creation secondary and preserves management form state"
   goHome(); expect(screen.queryByRole("form", { name: "Izradi kolegij" })).not.toBeInTheDocument();
   await openManagement();
   expect(within(screen.getByRole("form", { name: "Izradi kolegij" })).getByLabelText("Naziv kolegija")).toHaveValue("Unfinished management draft");
+});
+
+it("keeps the faculty tools for a moderator whose only faculty is archived, so it can be restored", async () => {
+  apiMock.me.mockResolvedValue(user);
+  // The public catalog no longer lists the archived faculty, but the moderator's own list does.
+  apiMock.faculties.mockResolvedValue([]);
+  apiMock.managedFaculties.mockResolvedValue([{ id: "faculty-1", name: "Engineering", slug: "engineering", university_name: null, is_active: false, course_count: 0 }]);
+  render(<AppShell />);
+  expect(await screen.findByRole("link", { name: "Alati fakulteta" })).toBeVisible();
+  expect(screen.queryByRole("form", { name: "Izradi kolegij" })).not.toBeInTheDocument();
 });
 
 it("joins immediately, opens the course from discovery and avoids repeated joins", async () => {

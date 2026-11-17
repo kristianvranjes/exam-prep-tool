@@ -25,6 +25,8 @@ import { resumableAttempt, useResumableSessions } from "./use-resumable-sessions
 export function AppShell() {
   const [user, setUser] = useState<User | null>(null);
   const [faculties, setFaculties] = useState<Faculty[]>([]);
+  // A moderator whose only faculty is archived has no active faculty but can still bring it back.
+  const [managesFaculties, setManagesFaculties] = useState(false);
   const [courses, setCourses] = useState<MemberCourse[]>([]);
   const migratedFor = useRef<string | null>(null);
   const [selected, setSelected] = useState<Course | null>(null);
@@ -32,6 +34,7 @@ export function AppShell() {
   const [membershipError, setMembershipError] = useState("");
   const [membershipRetry, setMembershipRetry] = useState(0);
   const [catalogRevision, setCatalogRevision] = useState(0);
+  const [facultyRevision, setFacultyRevision] = useState(0);
   const [deletedNotice, setDeletedNotice] = useState("");
   const [adaptiveReviewRequest, setAdaptiveReviewRequest] = useState(0);
   const [mode, setMode] = useState<AuthMode>("login");
@@ -145,11 +148,12 @@ export function AppShell() {
     let active = true;
     api.faculties().then(async rows => {
       const permissions = await Promise.all(rows.map(row => api.moderatorStatus(row.id)));
-      if (active) setFaculties(rows.filter((_, i) => permissions[i].is_moderator));
+      const managed = await Promise.resolve().then(() => api.managedFaculties()).then(list => list.length > 0, () => false);
+      if (active) { setFaculties(rows.filter((_, i) => permissions[i].is_moderator)); setManagesFaculties(managed); }
     }).catch(() => { if (active) setError("Fakulteti se nisu učitali"); })
       .finally(() => { if (active) setCheckingFaculties(false); });
     return () => { active = false; };
-  }, [user]);
+  }, [user, facultyRevision]);
 
   async function submitAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
@@ -240,7 +244,7 @@ export function AppShell() {
     { href: "/", label: "Kolegiji", icon: BookOpen, active: view === "home" || view === "enrol" },
     { href: "/review", label: "Ponavljanje", icon: RotateCcw, active: view === "review", badge: dueTotal, badgeLabel: "za ponoviti" },
     { href: "/progress", label: "Napredak", icon: BarChart3, active: view === "progress" },
-    ...(faculties.length > 0 ? [{ href: "/faculty", label: "Alati fakulteta", icon: GraduationCap, active: view === "management" }] : []),
+    ...(faculties.length > 0 || managesFaculties ? [{ href: "/faculty", label: "Alati fakulteta", icon: GraduationCap, active: view === "management" }] : []),
   ];
   return <>{tabTitle}<PreferencesSync key={user.id} /><ApplicationFrame user={user} logout={() => void logout()} busy={loggingOut}
     focusedPractice={view === "course" && destination === "practice" && activePractice}
@@ -291,8 +295,8 @@ export function AppShell() {
       </>}
     </div>
     <div hidden={view !== "management"}>
-      {view === "management" && (checkingFaculties ? <LoadingState>Provjeravam pristup fakultetu…</LoadingState> : faculties.length === 0 && <><Alert>Alati fakulteta dostupni su moderatorima fakulteta.</Alert><Button className="mt-4" onClick={() => navigate("/")}>Natrag na početnu</Button></>)}
-      {managementVisited && faculties.length > 0 && <UnsavedChangesProvider onDirtyChange={setManagementEdited}><FacultyWorkspace faculties={faculties} currentUserId={user.id} busy={busy} createCourse={createCourse} onFacultyCreated={faculty => setFaculties(current => [...current, faculty].sort((a, b) => a.name.localeCompare(b.name, "hr")))} goHome={() => navigate("/")} /></UnsavedChangesProvider>}
+      {view === "management" && (checkingFaculties ? <LoadingState>Provjeravam pristup fakultetu…</LoadingState> : faculties.length === 0 && !managesFaculties && <><Alert>Alati fakulteta dostupni su moderatorima fakulteta.</Alert><Button className="mt-4" onClick={() => navigate("/")}>Natrag na početnu</Button></>)}
+      {managementVisited && (faculties.length > 0 || managesFaculties) && <UnsavedChangesProvider onDirtyChange={setManagementEdited}><FacultyWorkspace faculties={faculties} currentUserId={user.id} busy={busy} createCourse={createCourse} onFacultyCreated={faculty => setFaculties(current => [...current, faculty].sort((a, b) => a.name.localeCompare(b.name, "hr")))} onFacultiesChanged={() => { setFacultyRevision(value => value + 1); setCatalogRevision(value => value + 1); }} goHome={() => navigate("/")} /></UnsavedChangesProvider>}
     </div>
   </ApplicationFrame></>;
 }

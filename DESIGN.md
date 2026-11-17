@@ -488,6 +488,15 @@ Implemented:
   reach units, item analysis and settings through "Cjeline i postavke" in Upravljanje. Without the study plan: where
   the handoff shows plan variants, the version without a plan is built.
 
+- Course and faculty lifecycle (#176, no handoff screen): "Postavke kolegija" under "Više" is open to the owner and faculty moderators; the owner alone edits the details. "Arhiviranje i brisanje" states the course's state in words (Aktivan / Arhiviran badge plus a sentence), archives or restores it, and only for an archived course offers "Obriši kolegij…": a modal that lists what is lost (attempts and history of every member, materials and source PDFs, questions and the rest) and enables "Trajno obriši kolegij" only once the exact name is typed. The faculty tools list every faculty as ruled rows (name, university, course count, state in words) with Uredi, Arhiviraj / Vrati and, for an archived faculty without courses, a two-step Obriši. The filled danger button is kept for the final step only.
+
+- Single-question editor 6d (`question-editor.tsx`, inside the question bank, no route of its own): the list of the current bank page on the left, the form in the middle, and a side panel with
+  "Pregled" (the question as a student sees it before checking, no key, no explanation) and "JSON" (the same question as one `quiz-import-v2` item, read only, live). Only fields the data
+  model has: the types are the six real ones (the mockup's "Izraz" is a short answer with an expression, "Broj" is numeric), difficulty stays 1-5, and "Bodovi na ispitu" and the source triple
+  are left out. Saving is explicit ("Spremi", with "Spremljeno u HH:MM" and unsaved changes guarded), the type is chosen when the question is created and then fixed (the edit endpoint cannot change
+  it), the type picker is a labelled select, and the list on the left opens only the user's own drafts and rejected questions.
+
+
 Pending:
 
 - Student v3 Danas (20a) and its empty state (20b), the second part of #171; the course list "Vaši kolegiji" stays the
@@ -499,6 +508,6 @@ Pending:
   "n / m točno" column.
 
 - Study plan 2g and course page 2c (wait for the plan data); Google sign-in on 2a.
-- Moderator question order inside a quiz (the drag handle of 6c), the single-question editor (6d) and the duplicate/unknown-topic warnings of the import preview (the server now reports them).
+- Moderator question order inside a quiz (the drag handle of 6c; `question_units` has no position column, so it needs a backend change) and the duplicate/unknown-topic warnings of the import preview (the server now reports them).
 - Remaining mobile screens 7a-7m and 8d-8e (practice question sheet and safe-area-aware
   answer actions are implemented with 1a/1e).

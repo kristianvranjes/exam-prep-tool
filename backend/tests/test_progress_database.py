@@ -8,7 +8,7 @@ import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
-from community_helpers import create_course, review_question
+from community_helpers import create_course, delete_course, review_question
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select, text, update
 from sqlalchemy.exc import IntegrityError
@@ -491,7 +491,7 @@ def test_deletion_cascades(bank, target):
     assert member.post(saved_boolean(member, course, False) + "/submit").status_code == 200
     assert stored()
     if target == "course":
-        assert owner.delete(f"/courses/{course}").status_code == 204
+        assert delete_course(owner, course).status_code == 204
     else:
         user_id = UUID(member.get("/auth/me").json()["id"])
         with SessionLocal() as db:

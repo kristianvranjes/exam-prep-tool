@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from community_helpers import create_course, review_question
+from community_helpers import create_course, delete_course, review_question
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from test_materials import clients as clients
@@ -329,7 +329,7 @@ def test_course_delete_removes_units_and_links(clients):
         member.post(f"/courses/{course}/questions", json=question("Linked?", [first])).status_code
         == 201
     )
-    assert owner.delete(f"/courses/{course}").status_code == 204
+    assert delete_course(owner, course).status_code == 204
     with SessionLocal() as db:
         assert db.scalar(select(func.count()).select_from(CourseUnit)) == 0
         assert db.scalar(select(func.count()).select_from(QuestionUnit)) == 0

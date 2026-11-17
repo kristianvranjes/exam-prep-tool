@@ -8,6 +8,7 @@ from threading import Event
 from uuid import UUID, uuid4
 
 import pytest
+from community_helpers import archive_course, delete_course
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from test_materials import clients as clients
@@ -31,6 +32,17 @@ def storage(tmp_path):
     yield LocalMaterialStorage(tmp_path)
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE material_storage_cleanups"))
+
+
+def delete_target(owner, kind, course, material_id, name=None):
+    """Delete the course the way the settings do (archived, then confirmed by name) or the material.
+
+    Pass `name` when the course was archived beforehand, so the archive's own commit stays out
+    of a test that counts or breaks commits.
+    """
+    if kind == "course":
+        return delete_course(owner, course, name)
+    return owner.delete(f"/materials/{material_id}")
 
 
 def pending(storage, *, missing=False):
@@ -179,8 +191,7 @@ def test_crash_after_domain_commit_recovers_with_operator(
             db.commit()
     target = "app.services.courses" if kind == "course" else "app.services.materials.service"
     monkeypatch.setattr(target + ".cleanup_sources", lambda *a, **kw: None)
-    endpoint = f"/courses/{course}" if kind == "course" else f"/materials/{material_id}"
-    assert owner.delete(endpoint).status_code == 204
+    assert delete_target(owner, kind, course, material_id).status_code == 204
     assert path.is_file()
     with SessionLocal() as db:
         assert db.get(Material, material_id) is None
@@ -261,9 +272,9 @@ def test_cleanup_commit_failure_does_not_change_logical_delete_success(
             raise RuntimeError("secret /private/database")
         return original(db)
 
+    name = archive_course(owner, course) if kind == "course" else None
     monkeypatch.setattr(Session, "commit", fail_cleanup_commit)
-    endpoint = f"/courses/{course}" if kind == "course" else f"/materials/{material_id}"
-    response = owner.delete(endpoint)
+    response = delete_target(owner, kind, course, material_id, name)
     assert response.status_code == 204 and response.content == b""
     assert not path.exists()
     with SessionLocal() as db:
