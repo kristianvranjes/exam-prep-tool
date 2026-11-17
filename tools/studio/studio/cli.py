@@ -598,10 +598,21 @@ def cmd_push(args: argparse.Namespace) -> int:
         return 0
     if args.dry_run:
         print(f"\n{pending} questions would be imported into course {config.app.course_id}")
+        if args.create_units:
+            print("units missing in the app would be created first (checked when you push)")
         return 0
-    results = push(studio_dir, config.app, units, password_for(config.app), approve=args.approve)
+    results = push(
+        studio_dir,
+        config.app,
+        units,
+        password_for(config.app),
+        approve=args.approve,
+        create_units=args.create_units,
+    )
     for result in results:
         line = f"{result.unit.id}: imported {result.imported} into unit {result.app_unit}"
+        if result.created_unit:
+            line += " (unit created)"
         if args.approve:
             line += f", approved {result.approved}"
         print(line + (f" ({result.note})" if result.note else ""))
@@ -766,6 +777,12 @@ def parser() -> argparse.ArgumentParser:
     push_cmd.add_argument("--unit", action="append", help="unit id; repeat for several")
     push_cmd.add_argument(
         "--approve", action="store_true", help="approve imported questions (owner-moderator)"
+    )
+    push_cmd.add_argument(
+        "--create-units",
+        action="store_true",
+        help="create the course units that are missing in the app, from the titles in course.yaml "
+        "(course owner; run for all units so they follow the course order)",
     )
     push_cmd.add_argument("--dry-run", action="store_true", help="show counts, send nothing")
     push_cmd.set_defaults(run=cmd_push)

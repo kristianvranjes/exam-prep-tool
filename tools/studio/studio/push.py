@@ -74,6 +74,8 @@ class PushResult:
     approved: int
     app_unit: str | None
     note: str | None = None
+    # True when the application unit was created by this push (`--create-units`).
+    created_unit: bool = False
 
 
 def ledger_path(studio_dir: Path, app: App) -> Path:
@@ -148,6 +150,13 @@ class AppClient:
         found = self._send("GET", f"/courses/{self.app.course_id}/units", "listing course units")
         return list(found or [])
 
+    def create_unit(self, title: str) -> dict[str, Any]:
+        """A new course unit, appended after the existing ones (the course owner only)."""
+        created = self._send(
+            "POST", f"/courses/{self.app.course_id}/units", "creating a unit", json={"title": title}
+        )
+        return dict(created or {})
+
     def import_questions(self, document: dict[str, object], unit_id: str | None) -> list[Any]:
         result = self._send(
             "POST",
@@ -194,6 +203,34 @@ def match_unit(unit: Unit, app_units: list[dict[str, Any]]) -> str:
     )
 
 
+def needs_app_unit(unit: Unit, app_units: list[dict[str, Any]]) -> bool:
+    """True when the course has no active unit with this unit's title and none was chosen by hand.
+
+    An `app_unit` that does not match, or several units with the same title, are mistakes to
+    report (by `match_unit`), never reasons to create one more.
+    """
+    if unit.app_unit:
+        return False
+    active = [u for u in app_units if not u.get("is_archived")]
+    return not any(fold(str(u.get("title", ""))) == fold(unit.title) for u in active)
+
+
+def create_missing_units(
+    client: AppClient, units: list[Unit], app_units: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[Unit]]:
+    """Creates the application units the studio units lack, in course order.
+
+    Returns the application's units after creating, and the studio units that were created.
+    """
+    found = list(app_units)
+    created: list[Unit] = []
+    for unit in units:
+        if needs_app_unit(unit, found):
+            found.append(client.create_unit(unit.title))
+            created.append(unit)
+    return found, created
+
+
 def map_imported(sent: list[Accepted], imported: list[Any]) -> list[PushedQuestion]:
     """Pair imported questions with what was sent by stem (stems are unique per import)."""
     normalize = question_module().normalize
@@ -219,6 +256,7 @@ def push(
     password: str,
     *,
     approve: bool,
+    create_units: bool = False,
     transport: httpx.BaseTransport | None = None,
 ) -> list[PushResult]:
     plans = [p for p in plan(studio_dir, app, units) if p.new]
@@ -234,6 +272,11 @@ def push(
     try:
         client.login(password)
         app_units = client.units()
+        created_ids: set[str] = set()
+        if create_units:
+            # Every unit with something to push, in course order, so the new units line up with it.
+            app_units, created = create_missing_units(client, [p.unit for p in plans], app_units)
+            created_ids = {unit.id for unit in created}
         targets = {p.unit.id: match_unit(p.unit, app_units) for p in plans}
         for p in plans:
             imported = client.import_questions(import_document(p.new), targets[p.unit.id])
@@ -258,7 +301,14 @@ def push(
                     note = f"imported as drafts; {exc}"
                 write_json(ledger_path(studio_dir, app), ledger)
             results.append(
-                PushResult(p.unit, len(pushed), record.approved, targets[p.unit.id], note)
+                PushResult(
+                    p.unit,
+                    len(pushed),
+                    record.approved,
+                    targets[p.unit.id],
+                    note,
+                    created_unit=p.unit.id in created_ids,
+                )
             )
     finally:
         client.close()
