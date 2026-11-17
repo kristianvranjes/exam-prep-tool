@@ -391,6 +391,7 @@ OWNER mutates (403 otherwise).
 | PATCH `/units/{unit_id}` | OWNER, `{title?, description?}` with at least one field; `description: null` clears it. |
 | PATCH `/courses/{course_id}/units/order` | OWNER, `{unit_ids}` listing every active unit exactly once (422 otherwise). Archived units follow in their previous order. Returns all units. |
 | POST `/units/{unit_id}/archive`, POST `/units/{unit_id}/restore` | OWNER. Archived units keep existing question links but accept no new ones. |
+| POST `/units/{unit_id}/merge` | OWNER, strict `{into_unit_id, title?}`. Moves the unit's question links and exam-scope links to another active unit of the same course (a question already there is not duplicated), deletes the unit and renumbers the positions; `title` renames the unit that stays. All or nothing: 409 if the title is taken, 422 for the same, an archived or a foreign unit. Returns the unit that stays. |
 
 `POST /courses/{course_id}/questions/import` also accepts repeated `unit_ids` query
 parameters, applied to every imported draft atomically (the default for questions that name

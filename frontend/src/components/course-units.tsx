@@ -4,7 +4,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { api, type CourseUnit } from "../lib/api";
 import { questionCount } from "../lib/utils";
 import { ExamScopes } from "./exam-scopes";
-import { Alert, Badge, Button, EmptyState, Input, LoadingState, Surface } from "./ui";
+import { Alert, Badge, Button, EmptyState, Input, LoadingState, Select, Surface } from "./ui";
 import { DraftForm } from "./unsaved-changes";
 
 const MAX_UNITS = 50;
@@ -18,6 +18,7 @@ export function CourseUnits({ courseId, isOwner }: { courseId: string; isOwner: 
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [merging, setMerging] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const pending = useRef(false);
 
@@ -81,7 +82,15 @@ export function CourseUnits({ courseId, isOwner }: { courseId: string; isOwner: 
     {!loading && !loadError && activeUnits.length === 0 && <EmptyState title="Još nema cjelina kolegija.">{isOwner ? "Dodajte prvu cjelinu u nastavku." : "Vlasnik kolegija još nije dodao cjeline."}</EmptyState>}
     {!loading && !loadError && activeUnits.length > 0 && <ol aria-label="Popis cjelina kolegija" className="border-t-2 border-line">
       {activeUnits.map((unit, index) => <li key={unit.id} className="min-w-0 border-b border-line py-4">
-        {editing === unit.id
+        {merging === unit.id
+          ? <UnitMergeForm unit={unit} others={activeUnits.filter((other) => other.id !== unit.id)} busy={busy} cancel={() => setMerging(null)} merge={async (intoId, title) => {
+            const target = activeUnits.find((other) => other.id === intoId);
+            if (await run(async () => {
+              const kept = await api.mergeUnit(unit.id, { into_unit_id: intoId, ...(title ? { title } : {}) });
+              setUnits((rows) => rows.filter((row) => row.id !== unit.id).map((row, position) => row.id === kept.id ? kept : { ...row, position }));
+            }, `Cjelina ${unit.title} spojena u ${title || target?.title}.`)) setMerging(null);
+          }} />
+          : editing === unit.id
           ? <UnitEditForm unit={unit} busy={busy} cancel={() => setEditing(null)} save={async (body) => {
             if (await run(async () => replace(await api.updateUnit(unit.id, body)), `Spremljena cjelina ${body.title}.`)) setEditing(null);
           }} />
@@ -97,6 +106,7 @@ export function CourseUnits({ courseId, isOwner }: { courseId: string; isOwner: 
               <Button variant="secondary" aria-label={`Pomakni gore: ${unit.title}`} disabled={busy || index === 0} onClick={() => move(index, -1)}>Pomakni gore</Button>
               <Button variant="secondary" aria-label={`Pomakni dolje: ${unit.title}`} disabled={busy || index === activeUnits.length - 1} onClick={() => move(index, 1)}>Pomakni dolje</Button>
               <Button variant="secondary" aria-label={`Uredi: ${unit.title}`} disabled={busy} onClick={() => { setEditing(unit.id); setError(""); setNotice(""); }}>Uredi</Button>
+              <Button variant="secondary" aria-label={`Spoji s drugom cjelinom: ${unit.title}`} disabled={busy || activeUnits.length < 2} onClick={() => { setMerging(unit.id); setEditing(null); setError(""); setNotice(""); }}>Spoji s…</Button>
               <Button variant="ghost" aria-label={`Arhiviraj: ${unit.title}`} disabled={busy} onClick={() => void run(async () => replace(await api.archiveUnit(unit.id)), `Cjelina ${unit.title} arhivirana. Postojeća pitanja ostaju u njoj, ali je nova pitanja ne mogu koristiti.`)}>Arhiviraj</Button>
             </div>}
           </>}
@@ -145,6 +155,37 @@ function UnitEditForm({ unit, busy, save, cancel }: {
       <label className="block text-sm font-medium">Opis (neobavezno)<textarea className={textareaClass} value={description} onChange={(event) => setDescription(event.target.value)} maxLength={2000} rows={2} /></label>
       <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={!title.trim()}>{busy ? "Spremanje…" : "Spremi cjelinu"}</Button>
+        <Button variant="secondary" onClick={cancel}>Odustani</Button>
+      </div>
+    </fieldset>
+  </DraftForm>;
+}
+
+/** Folds a unit into another one: the questions and exam scopes move, the unit goes. It cannot be undone. */
+function UnitMergeForm({ unit, others, busy, merge, cancel }: {
+  unit: CourseUnit; others: CourseUnit[]; busy: boolean; cancel: () => void;
+  merge: (intoId: string, title: string) => Promise<void>;
+}) {
+  const [intoId, setIntoId] = useState(others[0]?.id ?? "");
+  const [title, setTitle] = useState("");
+  const target = others.find((other) => other.id === intoId);
+  return <DraftForm aria-label={`Spajanje cjeline ${unit.title}`} className="space-y-3" onSubmit={(event) => {
+    event.preventDefault();
+    if (intoId) void merge(intoId, title.trim());
+  }}>
+    <fieldset disabled={busy} className="space-y-3">
+      <p className="text-sm font-medium">Spoji cjelinu <strong>{unit.title}</strong> s drugom cjelinom</p>
+      <label className="block text-sm font-medium">Spoji u
+        <Select className="mt-1" value={intoId} onChange={(event) => setIntoId(event.target.value)}>
+          {others.map((other) => <option key={other.id} value={other.id}>{other.title}</option>)}
+        </Select>
+      </label>
+      <label className="block text-sm font-medium">Novi naziv (neobavezno)
+        <Input className="mt-1" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={150} placeholder={target?.title} />
+      </label>
+      <p className="max-w-prose text-sm text-muted">Pitanja i ispiti iz cjeline {unit.title} prelaze u cjelinu {title.trim() || target?.title}, a cjelina {unit.title} se briše. Pitanja koja su već u obje ostaju jednom. To nije moguće poništiti.</p>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" disabled={!intoId}>{busy ? "Spajanje…" : "Spoji cjeline"}</Button>
         <Button variant="secondary" onClick={cancel}>Odustani</Button>
       </div>
     </fieldset>

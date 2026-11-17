@@ -7,6 +7,7 @@ from app.dependencies import get_current_user, get_db
 from app.models import User
 from app.schemas.course_unit import (
     CourseUnitCreate,
+    CourseUnitMerge,
     CourseUnitOrder,
     CourseUnitResponse,
     CourseUnitUpdate,
@@ -70,6 +71,16 @@ def restore(
     unit_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> CourseUnitResponse:
     return service.set_archived(db, user, unit_id, False)
+
+
+@router.post("/units/{unit_id}/merge", response_model=CourseUnitResponse)
+def merge(
+    unit_id: UUID,
+    data: CourseUnitMerge,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CourseUnitResponse:
+    return service.merge_units(db, user, unit_id, data)
 
 
 @router.get("/courses/{course_id}/units/moderation", response_model=list[UnitModerationRow])

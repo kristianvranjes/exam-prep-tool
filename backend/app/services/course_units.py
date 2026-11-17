@@ -1,16 +1,19 @@
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, literal, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Course, CourseMembership, MembershipRole, User
 from app.models.course_unit import CourseUnit, QuestionUnit
+from app.models.exam_scope import ExamScopeUnit
 from app.models.question import Question
 from app.schemas.course_unit import (
     MAX_COURSE_UNITS,
     CourseUnitCreate,
+    CourseUnitMerge,
     CourseUnitResponse,
     CourseUnitUpdate,
     UnitPerson,
@@ -158,6 +161,54 @@ def set_archived(db: Session, user: User, unit_id: UUID, archived: bool) -> Cour
     unit = load_owned_unit(db, user, unit_id)
     unit.is_archived = archived
     return commit_unit(db, unit)
+
+
+def merge_units(
+    db: Session, user: User, unit_id: UUID, data: CourseUnitMerge
+) -> CourseUnitResponse:
+    """Fold one unit into another: its questions and exam scopes move to the target.
+
+    The source is deleted, not archived, so a split such as "Part 1/3, 2/3, 3/3" does not linger
+    in the archive. Questions already in the target are not duplicated. Progress, readiness and
+    review decks are derived from these links, so they follow without further changes.
+    """
+    source = load_owned_unit(db, user, unit_id)
+    if data.into_unit_id == source.id:
+        db.rollback()
+        raise HTTPException(422, "Choose a different unit to merge into")
+    target = db.scalar(
+        select(CourseUnit)
+        .where(CourseUnit.id == data.into_unit_id, CourseUnit.course_id == source.course_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if target is None or target.is_archived:
+        db.rollback()
+        raise HTTPException(422, "Select an active unit from this course")
+    try:
+        for link, key in (
+            (QuestionUnit, QuestionUnit.question_id),
+            (ExamScopeUnit, ExamScopeUnit.scope_id),
+        ):
+            moved = select(key, literal(target.id)).where(link.unit_id == source.id)
+            db.execute(
+                insert(link).from_select([key.key, "unit_id"], moved).on_conflict_do_nothing()
+            )
+        # The source's own links go with it (ON DELETE CASCADE), after they were copied.
+        db.delete(source)
+        db.flush()
+        remaining = course_units(db, target.course_id, include_archived=True)
+        for position, unit in enumerate(remaining):
+            unit.position = position
+        # After the listing: that query reloads rows, and the session does not autoflush, so a
+        # rename made before it would be lost.
+        if "title" in data.model_fields_set and data.title is not None:
+            target.title = data.title
+            target.normalized_title = normalize(data.title)
+    except Exception:
+        db.rollback()
+        raise HTTPException(503, "Could not merge units") from None
+    return commit_unit(db, target)
 
 
 def reorder_units(

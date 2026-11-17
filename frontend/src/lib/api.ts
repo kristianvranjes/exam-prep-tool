@@ -165,6 +165,7 @@ export const api = {
   units: (courseId: string, includeArchived = false) => request<CourseUnit[]>(`/courses/${courseId}/units${includeArchived ? "?include_archived=true" : ""}`),
   createUnit: (courseId: string, body: { title: string; description: string | null }) => request<CourseUnit>(`/courses/${courseId}/units`, { method: "POST", body: JSON.stringify(body) }),
   updateUnit: (id: string, body: { title?: string; description?: string | null }) => request<CourseUnit>(`/units/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  mergeUnit: (id: string, body: { into_unit_id: string; title?: string }) => request<CourseUnit>(`/units/${id}/merge`, { method: "POST", body: JSON.stringify(body) }),
   archiveUnit: (id: string) => request<CourseUnit>(`/units/${id}/archive`, { method: "POST" }),
   restoreUnit: (id: string) => request<CourseUnit>(`/units/${id}/restore`, { method: "POST" }),
   examScopes: (courseId: string) => request<ExamScope[]>(`/courses/${courseId}/exam-scopes`),

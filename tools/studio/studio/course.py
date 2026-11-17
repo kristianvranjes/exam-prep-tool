@@ -53,6 +53,14 @@ class Unit(Strict):
     questions: TypeCounts | None = None
     # The matching course unit in the application, for `studio push`.
     app_unit: str | None = Field(default=None, pattern=UUID_PATTERN)
+    # The title of that unit when it differs from `title`. Units that share an `app_title` share one
+    # course unit, so a long lecture can be generated in parts and still be one unit for students.
+    app_title: str | None = Field(default=None, min_length=1, max_length=150)
+
+    @property
+    def app_name(self) -> str:
+        """What the application's unit is called: `app_title`, or the studio title."""
+        return self.app_title or self.title
 
     @field_validator("questions")
     @classmethod
