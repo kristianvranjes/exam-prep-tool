@@ -380,6 +380,8 @@ export type ModeratorSuggestion = SuggestionReceipt & {
 export type QuestionEdit = {
   stem: string; explanation: string | null; difficulty: number | null; concept_ids: string[]; unit_ids?: string[];
   options?: { text: string; is_correct: boolean }[]; correct_answer?: boolean; reference_answer?: string;
+  /** MATCH: the complete list of pairs. `hint` and `expr` accept null to clear them. */
+  pairs?: { left: string; right: string }[]; hint?: string | null; expr?: string | null;
   correct_value?: string; absolute_tolerance?: string | null; relative_tolerance?: string | null; unit?: string | null;
 };
 export type QuestionVersion = { version_number: number; reason: string; snapshot: OwnerQuestion; changed_by_user_id: string; created_at: string };
