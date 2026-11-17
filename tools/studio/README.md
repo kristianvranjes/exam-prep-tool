@@ -42,6 +42,7 @@ studio review ../../../srs/studio      # local page: accept, edit or reject each
 studio publish ../../../srs/studio     # accepted questions as quiz-import-v2 files in out/
 studio push ../../../srs/studio --dry-run    # what would be imported, nothing sent
 studio push ../../../srs/studio --approve    # import new accepted questions and approve them
+studio push ../../../srs/studio --create-units --approve   # also create the course units the app lacks
 ```
 
 `ingest` rereads only PDFs whose bytes changed (`--force` rereads all). After it, check
@@ -245,7 +246,12 @@ never duplicates the bank. Each unit is linked to the application's course unit 
 (ignoring case, diacritics and punctuation); otherwise the push stops before importing
 anything and lists the units to choose from. With `--approve`, the imported questions
 are approved in batches of 50, which works for an owner who is also a faculty
-moderator; anyone else gets drafts and a note. API addresses must be https, except on
+moderator; anyone else gets drafts and a note. With `--create-units`, a unit that has no
+active course unit with its title (and no `app_unit`) is first created in the application
+with that title, appended in `course.yaml` order; only the course owner can do that, and
+the course allows at most 50 units. Run it for all units, not with `--unit`, so the new
+units follow the course order. A wrong `app_unit` or two units with the same title still
+stop the push, they never create another unit. API addresses must be https, except on
 localhost.
 
 Imported questions get the application's `USER` source and no source links, as for any
