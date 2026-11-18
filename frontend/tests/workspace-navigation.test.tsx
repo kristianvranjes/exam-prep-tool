@@ -138,7 +138,7 @@ it("does not join or expose an unavailable course through a URL", async () => {
   expect(mock.membership).not.toHaveBeenCalledWith("unknown");
   expect(mock.start).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Natrag na početnu" }));
-  expect(screen.getByRole("heading", { name: "Vaši kolegiji" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Danas" })).toBeVisible();
 });
 
 it("corrects an active session's results URL and offers retry for a failed deep-link read", async () => {
@@ -198,8 +198,8 @@ it("ignores a late attempt read after switching to another course", async () => 
   window.history.replaceState(null, "", "/courses/course/attempts/attempt");
   render(<AppShell />);
   await waitFor(() => expect(mock.read).toHaveBeenCalled());
-  fireEvent.click(within(screen.getByRole("navigation", { name: "Glavna navigacija" })).getByRole("link", { name: "Kolegiji" }));
-  fireEvent.click(screen.getByRole("button", { name: "Otvori kolegij: Statistics" }));
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Glavna navigacija" })).getByRole("link", { name: "Danas" }));
+  fireEvent.click(screen.getByRole("link", { name: "Statistics" }));
   await act(async () => resolve(activeAttempt));
   expect(screen.getByRole("heading", { name: "Statistics" })).toBeVisible();
   expect(window.location.pathname).toBe("/courses/statistics");
@@ -215,7 +215,7 @@ function visit(path: string) {
 }
 /** During answering there is no navigation at all, so a test that leaves the session changes the address. */
 function leaveToHome() {
-  const home = screen.queryByRole("button", { name: "Vaši kolegiji" });
+  const home = screen.queryByRole("button", { name: "Danas" });
   if (home) fireEvent.click(home); else visit("/");
 }
 /**
@@ -234,8 +234,9 @@ function navigate(name: string) {
   else if (name === "Više" && manage) { fireEvent.click(manage); fireEvent.click(screen.getByRole("button", { name: "Otvori: Cjeline i postavke" })); }
   else tab("Pitanja i materijali");
 }
+/** Danas lists the courses with their names as links into the course. */
 async function enterCourse() {
-  fireEvent.click(await screen.findByRole("button", { name: "Otvori kolegij: Algorithms" }));
+  fireEvent.click(await screen.findByRole("link", { name: "Algorithms" }));
 }
 async function startPractice() {
   await enterCourse(); navigate("Vježba");
@@ -252,9 +253,11 @@ it("preserves an actual unsaved answer through destinations, Home, same-course r
   expect(screen.getByLabelText("Vaš kratki odgovor")).not.toBeVisible();
   navigate("Vježba"); expect(screen.getByLabelText("Vaš kratki odgovor")).toHaveValue("My unsaved explanation");
   leaveToHome();
-  expect(await screen.findByRole("heading", { name: "Nastavite učiti" })).toBeVisible();
+  // Danas puts the open session on the course's card.
+  const card = await screen.findByRole("article", { name: /Algorithms/ });
+  expect(await within(card).findByRole("button", { name: "Nastavi vježbu" })).toBeVisible();
   // The open session reports its saved progress; the unsaved draft does not count yet.
-  expect(within(screen.getByRole("heading", { name: "Nastavite učiti" }).parentElement!).getByText("odgovoreno 0 od 1", { exact: false })).toBeVisible();
+  expect(within(card).getByText("odgovoreno 0 od 1", { exact: false })).toBeVisible();
   await enterCourse();
   fireEvent.click(screen.getByRole("button", { name: "Nastavi vježbu" }));
   expect(await screen.findByLabelText("Vaš kratki odgovor")).toHaveValue("My unsaved explanation");
@@ -283,7 +286,7 @@ it("guards unsaved answers on course switching and logout, including failed save
   fireEvent.change(await startPractice(), { target: { value: "My unsaved answer" } });
   fireEvent.click(screen.getByRole("button", { name: "Spremi i pregledaj" })); await screen.findByRole("alert");
   leaveToHome();
-  fireEvent.click(screen.getByRole("button", { name: "Otvori kolegij: Statistics" }));
+  fireEvent.click(screen.getByRole("link", { name: "Statistics" }));
   expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Promijeniti kolegij"));
   expect(mock.membership).not.toHaveBeenCalledWith("statistics");
   fireEvent.click(screen.getByRole("button", { name: /^Račun:/ }));
@@ -292,7 +295,7 @@ it("guards unsaved answers on course switching and logout, including failed save
   fireEvent.click(screen.getByRole("button", { name: "Nastavi vježbu" }));
   expect(await screen.findByLabelText("Vaš kratki odgovor")).toHaveValue("My unsaved answer");
   leaveToHome(); confirm.mockReturnValue(true);
-  fireEvent.click(screen.getByRole("button", { name: "Otvori kolegij: Statistics" }));
+  fireEvent.click(screen.getByRole("link", { name: "Statistics" }));
   expect(screen.getByRole("heading", { name: "Statistics" })).toBeVisible();
   expect(screen.queryByRole("heading", { name: "Nastavite učiti" })).not.toBeInTheDocument(); confirm.mockRestore();
 });
@@ -311,7 +314,7 @@ it("preserves an actual question draft across Pitanja, Progress and Home and gua
   expect(screen.getByLabelText("Opcija 1", { exact: true })).toHaveValue("Draft option");
   expect(mock.questions).toHaveBeenCalledOnce();
   leaveToHome();
-  fireEvent.click(screen.getByRole("button", { name: "Otvori kolegij: Statistics" }));
+  fireEvent.click(screen.getByRole("link", { name: "Statistics" }));
   expect(confirm).toHaveBeenCalledOnce(); await enterCourse(); navigate("Pitanja");
   expect(screen.getByLabelText("Tekst pitanja")).toHaveValue("Unfinished draft question");
   confirm.mockRestore();
@@ -330,7 +333,8 @@ it("removes the resume entry after submission and retains the existing result", 
   fireEvent.click(screen.getByRole("button", { name: "Završi vježbu" }));
   await screen.findByRole("region", { name: "Rezultati vježbe" });
   leaveToHome();
-  expect(screen.queryByRole("heading", { name: "Nastavite učiti" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Nastavi vježbu" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Vježbaj: Algorithms" })).toBeVisible();
   await enterCourse(); navigate("Vježba");
   expect(screen.getByRole("region", { name: "Rezultati vježbe" })).toBeVisible();
   mock.history.mockResolvedValue([submitted]);
@@ -514,7 +518,7 @@ it('discovers and resumes saved work from Home and first Overview, including an 
     ? Array.from({ length: 20 }, (_, index) => ({ ...activeAttempt, id: 'submitted-' + index, status: 'SUBMITTED' }))
     : [activeAttempt]);
   render(<AppShell />);
-  await screen.findByRole('heading', { name: 'Nastavite učiti' });
+  await screen.findByRole('button', { name: 'Nastavi vježbu' });
   await enterCourse();
   expect(screen.getByRole('button', { name: 'Nastavi vježbu' })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Nastavi vježbu' }));
@@ -545,7 +549,7 @@ it('does not warn for setup choices or successfully saved answers, but still gua
   await waitFor(() => expect(screen.getByRole('button', { name: 'Započni vježbu' })).toBeEnabled());
   fireEvent.click(screen.getByRole('radio', { name: '10 pitanja' }));
   leaveToHome();
-  fireEvent.click(screen.getByRole('button', { name: 'Otvori kolegij: Statistics' }));
+  fireEvent.click(screen.getByRole('link', { name: 'Statistics' }));
   expect(confirm).not.toHaveBeenCalled();
   leaveToHome();
   await enterCourse(); navigate('Vježba');
@@ -556,7 +560,7 @@ it('does not warn for setup choices or successfully saved answers, but still gua
   fireEvent.click(screen.getByRole('button', { name: 'Spremi i pregledaj' }));
   await screen.findByText('Odgovoreno i spremljeno 1 od 1');
   leaveToHome();
-  fireEvent.click(screen.getByRole('button', { name: 'Otvori kolegij: Statistics' }));
+  fireEvent.click(screen.getByRole('link', { name: 'Statistics' }));
   expect(confirm).not.toHaveBeenCalled();
   confirm.mockRestore();
 });

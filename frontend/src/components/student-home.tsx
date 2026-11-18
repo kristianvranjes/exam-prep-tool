@@ -14,9 +14,9 @@ import type { ResumableAttempt } from "./use-resumable-sessions";
 export type ResumableCourse = { course: Course; attempt?: ResumableAttempt };
 
 const COURSES: Forms = ["kolegij", "kolegija", "kolegija"];
-const courseVar = (course: Course) => ({ "--course": courseColor(course) }) as CSSProperties;
+export const courseVar = (course: Course) => ({ "--course": courseColor(course) }) as CSSProperties;
 /** The course colour as text: full strength on dark palettes, pulled towards the ink on Papir for contrast. */
-const codeText = "text-(--course) in-data-[theme=light]:text-[color-mix(in_srgb,var(--course)_35%,var(--foreground))]";
+export const codeText = "text-(--course) in-data-[theme=light]:text-[color-mix(in_srgb,var(--course)_35%,var(--foreground))]";
 
 /** Overflow menu for one course card; a button + menu with arrow-key navigation, Escape and outside click to close. */
 function CourseMenu({ course, onFinish, onRemove }: { course: Course; onFinish: () => void; onRemove: () => void }) {
@@ -64,13 +64,19 @@ function CourseMenu({ course, onFinish, onRemove }: { course: Course; onFinish: 
   </div>;
 }
 
-/** The share of questions the student would answer correctly today, for the course's next exam. */
-function useReadiness(scopeId: string | undefined) {
-  const [state, setState] = useState<{ scopeId: string; range: ReadinessRange | null } | null>(null);
+/**
+ * The share of questions the student would answer correctly today, for the course's next exam, and the title of the
+ * weakest topic when the readiness rule names one.
+ */
+export function useReadiness(scopeId: string | undefined) {
+  const [state, setState] = useState<{ scopeId: string; range: ReadinessRange | null; weakest: string | null } | null>(null);
   useEffect(() => {
     if (!scopeId) return;
     let live = true;
-    api.examScopeReadiness(scopeId).then(result => { if (live) setState({ scopeId, range: result.readiness }); }).catch(() => undefined);
+    api.examScopeReadiness(scopeId).then(result => {
+      const weakest = result.units?.find(unit => unit.unit_id === result.weakest_unit_ids?.[0])?.title ?? null;
+      if (live) setState({ scopeId, range: result.readiness, weakest });
+    }).catch(() => undefined);
     return () => { live = false; };
   }, [scopeId]);
   return state?.scopeId === scopeId ? state : null;
@@ -117,7 +123,7 @@ export function StudentHome({ courses, loading, onOpen, onEnrol, onStatusChange,
     const id = focusTarget.current;
     if (!id) return;
     focusTarget.current = null;
-    (document.getElementById(id) ?? document.getElementById("home-heading"))?.focus();
+    (document.getElementById(id) ?? document.getElementById("courses-heading"))?.focus();
   }, [courses]);
 
   function change(course: MemberCourse, status: MembershipStatus, message: string) {
@@ -127,14 +133,14 @@ export function StudentHome({ courses, loading, onOpen, onEnrol, onStatusChange,
     const neighbour = list[index + 1] ?? list[index - 1];
     if (status === "ACTIVE") focusTarget.current = `open-${course.id}`;
     else if (neighbour) focusTarget.current = `${fromFinished ? "finished-back" : "open"}-${neighbour.id}`;
-    else focusTarget.current = fromFinished ? "home-heading" : "empty-enrol";
+    else focusTarget.current = fromFinished ? "courses-heading" : "empty-enrol";
     onStatusChange(course, status);
     setAnnouncement(message);
   }
 
   return <>
     <div className="flex flex-wrap items-center justify-between gap-4">
-      <h1 id="home-heading" tabIndex={-1} className="text-4xl font-extrabold tracking-tight sm:text-[2.75rem] sm:leading-[1.1]">Vaši kolegiji</h1>
+      <h1 id="courses-heading" tabIndex={-1} className="text-4xl font-extrabold tracking-tight sm:text-[2.75rem] sm:leading-[1.1]">Vaši kolegiji</h1>
       <Button onClick={onEnrol}>Upiši kolegij</Button>
     </div>
     <p role="status" className="sr-only">{announcement}</p>
@@ -145,7 +151,7 @@ export function StudentHome({ courses, loading, onOpen, onEnrol, onStatusChange,
         <ResumeSession attempt={attempt} name={course.name} nameId={`resume-${course.id}`} primary={index === 0} onResume={() => onResume(course)} />
       </li>)}</ul>
     </section>}
-    <section aria-labelledby="home-heading" className="mt-8">
+    <section aria-labelledby="courses-heading" className="mt-8">
       {loading ? <LoadingState>Učitavam kolegije…</LoadingState> : active.length === 0 ?
         <div className="border-2 border-dashed border-line-strong px-card py-12 text-center sm:px-card-lg">
           <h2 className="text-xl font-extrabold">{courses.length === 0 ? "Još nema kolegija" : "Nema aktivnih kolegija"}</h2>
