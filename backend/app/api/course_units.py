@@ -12,7 +12,13 @@ from app.schemas.course_unit import (
     CourseUnitResponse,
     CourseUnitUpdate,
 )
-from app.schemas.unit_moderation import UnitModerationDetail, UnitModerationRow, UnitStatusChange
+from app.schemas.unit_moderation import (
+    QuestionTable,
+    TableFilter,
+    UnitModerationDetail,
+    UnitModerationRow,
+    UnitStatusChange,
+)
 from app.services import course_units as service
 from app.services import unit_moderation
 
@@ -88,6 +94,20 @@ def moderation_list(
     course_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> list[UnitModerationRow]:
     return unit_moderation.list_units(db, user, course_id)
+
+
+@router.get("/courses/{course_id}/question-table", response_model=QuestionTable)
+def question_table(
+    course_id: UUID,
+    unit: str | None = Query(default=None, max_length=64),
+    show: TableFilter = "ALL",
+    q: str | None = Query(default=None, max_length=200),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0, le=10000),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> QuestionTable:
+    return unit_moderation.question_table(db, user, course_id, unit, show, q, limit, offset)
 
 
 @router.get("/units/{unit_id}/moderation", response_model=UnitModerationDetail)

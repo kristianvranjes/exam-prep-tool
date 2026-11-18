@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QuizResults } from "../src/components/quiz-results";
+import { api as appApi } from "../src/lib/api";
 import type { Attempt, ResultQuestion, SelfReview } from "../src/lib/practice-api";
 
 const api = vi.hoisted(() => ({ selfReview: vi.fn() }));
@@ -395,4 +396,52 @@ it("offers a rating only for graded questions from the bank in results that can 
   unmount();
   render(<QuizResults attempt={attempt} onPracticeAgain={vi.fn()} onBackToHistory={vi.fn()} />);
   expect(screen.queryByRole("group", { name: "Koliko ste dobro znali ovo pitanje?" })).not.toBeInTheDocument();
+});
+
+describe("next step (22e)", () => {
+  const topic = (id: string, title: string) => [{ id, title }];
+  const actions = () => ({ onPracticeAgain: vi.fn(), onBackToHistory: vi.fn(), onPracticeMistakes: vi.fn(), onPracticeTopic: vi.fn(), onBackHome: vi.fn() });
+
+  it("after a weak session, repeats the mistakes while they are fresh, as the one primary action", () => {
+    const wrong = (id: string): ResultQuestion => ({ ...mistake, id, units: topic("u1", "Minimizacija") });
+    const handlers = actions();
+    render(<QuizResults attempt={submitted([wrong("a"), wrong("b"), wrong("c"), { ...correct, units: topic("u2", "Sklopovi") }])} {...handlers} />);
+    const step = screen.getByRole("region", { name: "Ponovite pogreške dok su svježe" });
+    expect(step).toHaveTextContent("Sljedeći korak");
+    expect(step).toHaveTextContent("3 od 4 ocijenjenih pitanja je netočno, najviše u temi „Minimizacija“. Kratko ponavljanje sada pomaže više od nove teme.");
+    expect(screen.getAllByRole("button").filter(button => button.classList.contains("bg-accent"))).toEqual([within(step).getByRole("button", { name: "Vježbaj pogreške" })]);
+    fireEvent.click(within(step).getByRole("button", { name: "Vježbaj pogreške" }));
+    expect(handlers.onPracticeMistakes).toHaveBeenCalledOnce();
+    fireEvent.click(within(step).getByRole("button", { name: "Natrag na Danas" }));
+    expect(handlers.onBackHome).toHaveBeenCalledOnce();
+    // Reviewing the mistakes stays one click away.
+    expect(screen.getByRole("button", { name: "Pregledaj pogreške" })).toBeVisible();
+  });
+
+  it("after a good session, moves on to a topic not started yet", async () => {
+    vi.spyOn(appApi, "courseDashboard").mockResolvedValue({ as_of: "2026-11-18", units_total: 3, units_attempted: 2, average_percent: 80, units: [
+      { unit_id: "u1", title: "Minimizacija", position: 0, attempts: 3, best_percent: 90, last_percent: 90 },
+      { unit_id: "u3", title: "Sklopovi", position: 1, attempts: 2, best_percent: 50, last_percent: 50 },
+      { unit_id: "u2", title: "Bistabili", position: 2, attempts: 0, best_percent: null, last_percent: null },
+    ] });
+    const handlers = actions();
+    render(<QuizResults attempt={submitted([{ ...correct, units: topic("u1", "Minimizacija") }])} {...handlers} />);
+    const step = await screen.findByRole("region", { name: "Sljedeće: Bistabili" });
+    expect(step).toHaveTextContent("Tema „Bistabili“ još nije započeta.");
+    expect(appApi.courseDashboard).toHaveBeenCalledWith("course");
+    fireEvent.click(within(step).getByRole("button", { name: "Vježbaj: Bistabili" }));
+    expect(handlers.onPracticeTopic).toHaveBeenCalledExactlyOnceWith("u2");
+  });
+
+  it("offers the weakest topic left once every topic was started, and no step without a way to act on it", async () => {
+    vi.spyOn(appApi, "courseDashboard").mockResolvedValue({ as_of: "2026-11-18", units_total: 2, units_attempted: 2, average_percent: 70, units: [
+      { unit_id: "u1", title: "Minimizacija", position: 0, attempts: 3, best_percent: 90, last_percent: 90 },
+      { unit_id: "u3", title: "Sklopovi", position: 1, attempts: 2, best_percent: 50, last_percent: 50 },
+    ] });
+    const view = render(<QuizResults attempt={submitted([{ ...correct, units: topic("u1", "Minimizacija") }])} {...actions()} />);
+    expect(await screen.findByRole("region", { name: "Sljedeće: Sklopovi" })).toHaveTextContent("Zadnji rezultat u toj temi je 50 %.");
+    view.unmount();
+    open([mistake, mistake]);
+    expect(screen.queryByText("Sljedeći korak")).not.toBeInTheDocument();
+  });
 });

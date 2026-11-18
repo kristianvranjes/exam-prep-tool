@@ -169,3 +169,83 @@ def test_faculty_counters_and_review_queue_names(clients, moderator):
     ).json()
     assert approved[0]["author_name"] == "owner"
     assert approved[0]["reviewer_name"] == "Reviewer"
+
+
+def answer_true_false(client, course, value):
+    started = client.post(
+        f"/courses/{course}/attempts",
+        json={"count": 1, "question_types": ["TRUE_FALSE"], "selection_mode": "STANDARD"},
+    )
+    assert started.status_code == 201, started.text
+    attempt = started.json()
+    path = f"/courses/{course}/attempts/{attempt['id']}"
+    question = attempt["questions"][0]["id"]
+    saved = client.patch(f"{path}/answers/{question}", json={"type": "TRUE_FALSE", "value": value})
+    assert saved.status_code == 200, saved.text
+    assert client.post(f"{path}/submit").status_code == 200
+
+
+def test_question_table_lists_quizzes_reports_and_accuracy(clients, moderator):
+    owner, member, stranger, course = clients
+    logic = make_unit(owner, course)
+    sets = make_unit(owner, course, "Skupovi")
+    rows = import_into(owner, course, logic, short("Reported one"), short("Plain one"))
+    loose = owner.post(f"/courses/{course}/questions", json=short("Loose one"))
+    assert loose.status_code == 201, loose.text
+    true_false = owner.post(
+        f"/courses/{course}/questions",
+        json={
+            "type": "TRUE_FALSE",
+            "stem": "Hard one",
+            "correct_answer": True,
+            "unit_ids": [logic["id"], sets["id"]],
+        },
+    )
+    assert true_false.status_code == 201, true_false.text
+    hard = true_false.json()["id"]
+    for question in (rows[0]["id"], hard):
+        assert owner.post(f"/questions/{question}/submit").status_code == 200
+        assert review_question(owner, f"/questions/{question}/approve").status_code == 200
+    reported = member.post(f"/questions/{rows[0]['id']}/reports", json={"reason": "TYPO"})
+    assert reported.status_code == 201
+    # One right and four wrong answers: 20 %, from the five answers the table needs.
+    for value in (True, False, False, False):
+        answer_true_false(member, course, value)
+
+    path = f"/courses/{course}/question-table"
+    assert member.get(path).status_code == 403
+    assert stranger.get(path).status_code == 404
+    table = moderator.get(path)
+    assert table.status_code == 200, table.text
+    body = table.json()
+    assert body["total"] == 4 and body["min_answers"] == 5 and body["question_count"] == 4
+    by_stem = {row["stem"]: row for row in body["rows"]}
+    assert by_stem["Reported one"]["open_report_count"] == 1
+    assert by_stem["Hard one"]["unit_ids"] == [logic["id"], sets["id"]]
+    assert by_stem["Loose one"]["unit_ids"] == []
+    # Four answers are too few for a share.
+    assert by_stem["Hard one"]["answer_count"] == 4 and by_stem["Hard one"]["accuracy"] is None
+    topics = {topic["unit_id"]: topic["count"] for topic in body["topics"]}
+    assert topics == {logic["id"]: 3, sets["id"]: 1, None: 1}
+
+    answer_true_false(member, course, False)
+    low = owner.get(path, params={"show": "LOW_ACCURACY"}).json()
+    assert [row["stem"] for row in low["rows"]] == ["Hard one"] and low["total"] == 1
+    assert low["rows"][0]["accuracy"] == 0.2 and low["rows"][0]["answer_count"] == 5
+    assert [row["stem"] for row in owner.get(path, params={"show": "REPORTED"}).json()["rows"]] == [
+        "Reported one"
+    ]
+    assert [row["stem"] for row in owner.get(path, params={"unit": "none"}).json()["rows"]] == [
+        "Loose one"
+    ]
+    assert [row["stem"] for row in owner.get(path, params={"unit": sets["id"]}).json()["rows"]] == [
+        "Hard one"
+    ]
+    assert [row["stem"] for row in owner.get(path, params={"q": "PLAIN"}).json()["rows"]] == [
+        "Plain one"
+    ]
+    # A literal percent sign matches only itself.
+    assert owner.get(path, params={"q": "%"}).json()["total"] == 0
+    paged = owner.get(path, params={"limit": 1, "offset": 1}).json()
+    assert len(paged["rows"]) == 1 and paged["total"] == 4
+    assert owner.get(path, params={"unit": "not-a-unit"}).status_code == 422
