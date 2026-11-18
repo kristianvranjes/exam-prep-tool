@@ -3,12 +3,12 @@
 The interface is Croatian only and its text is written directly in the components
 (`DESIGN.md` records the decision). This document names controls in English for
 readability, so match them to the Croatian labels in the code ("Your courses" is
-"Vaši kolegiji", "Course enrolment" is "Upis kolegija", "Faculty tools" is "Alati
+"Vaši kolegiji", "Today" is "Danas", "Course enrolment" is "Upis kolegija", "Faculty tools" is "Alati
 fakulteta"). The visual system is described in [DESIGN.md](../DESIGN.md).
 
 ExamPrep uses a top navigation bar with a single main study area; below the `md`
 breakpoint the same `nav` becomes a fixed bottom tab bar (`ApplicationFrame`). It holds
-Kolegiji (home), Ponavljanje (`/review`, with a badge counting the questions due now across
+Danas (home), Ponavljanje (`/review`, with a badge counting the questions due now across
 the active courses), Napredak (`/progress`), Alati fakulteta (faculty moderators only) and,
 on mobile, Postavke; a settings link (`/settings`) and an account menu sit at the right of
 the bar. The destinations are links, so they also open in a new tab. Appearance
@@ -18,8 +18,8 @@ Escape closes the account menu and restores focus to its button. A skip link rea
 content. During an active practice session the bar is replaced by a focus mode with only
 the brand and the settings button.
 
-Navigation uses real routes, so reload and Back/Forward work: `/` (Vaši kolegiji),
-`/enrol`, `/faculty`, `/courses/[id]` (the Učenje tab) with the tabs `/exam`, `/progress`,
+Navigation uses real routes, so reload and Back/Forward work: `/` (Danas), `/courses`
+(Vaši kolegiji), `/enrol`, `/faculty`, `/courses/[id]` (the Učenje tab) with the tabs `/exam`, `/progress`,
 `/questions` and, for managers, `/manage`, plus `/practice`, the managers' `/materials` and `/more`,
 and `/courses/[id]/attempts/[attemptId]` with `/results` (`lib/workspace-route.ts` parses them and
 sets the tab title). Old course addresses keep working: `/papers` and `/estimate` show the Ispit tab
@@ -27,9 +27,21 @@ and `useWorkspaceNavigation` replaces the address with `/exam` (`canonicalWorksp
 student's `/materials` and `/more` go on to `/questions` once the course role is known. Browser
 tests in `e2e/url-routing.spec.ts` cover deep links and history.
 
+## Today
+
+Today (`/`, "Danas", `today-home.tsx`) is the home page. It lists the active courses (membership status `ACTIVE`)
+by how close their next exam is (`next_exam` from `GET /courses`), courses without a dated exam last and by name.
+The nearest course is a large card with the days to the exam, the readiness estimate and weakest topic from
+`GET /exam-scopes/{id}/readiness`, and either the open practice session (from `useResumableSessions`, "Nastavi
+vježbu") or "Vježbaj", which opens the course on its Učenje tab; the course name is a link to the same place. The
+other courses are rows with the exam, the days, one status line and a secondary "Vježbaj" or "Nastavi". The bottom
+links to Your courses ("Upravljanje kolegijima", `/courses`) and to Course enrolment. A student without any course
+sees a welcome with "Upiši kolegij" and two numbered steps; one whose courses are all finished or removed sees
+Danas with a note pointing to Your courses. The page makes no new backend calls.
+
 ## Your courses and course enrolment
 
-Your courses (`/`, "Vaši kolegiji") shows joined courses as cards in the course's own
+Your courses (`/courses`, "Vaši kolegiji") shows joined courses as cards in the course's own
 colour; the ⋯ menu can mark a course finished or remove it, and finished courses move to
 a "Završeni" section. These choices are the membership status (`ACTIVE`, `DONE`, `HIDDEN`)
 that `GET /courses` returns and `PATCH /courses/{id}/membership` saves; the app shell applies a

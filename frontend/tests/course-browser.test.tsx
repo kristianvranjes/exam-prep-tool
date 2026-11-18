@@ -181,10 +181,10 @@ it("filters the faculty catalog by name or code and starts with an empty search 
   expect(screen.getByLabelText("Pretraži kolegije")).toHaveValue("");
 });
 
-it("goes back to Your courses", async () => {
+it("goes back to Danas", async () => {
   render(view());
   await screen.findByLabelText("Pretraži po fakultetu");
-  fireEvent.click(screen.getByRole("button", { name: /Vaši kolegiji/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Danas" }));
   expect(onBack).toHaveBeenCalledTimes(1);
 });
 
