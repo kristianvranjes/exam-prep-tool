@@ -111,7 +111,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         adaptiveReviewRequest={adaptiveReviewRequest} setupRequest={setupRequest} resumeAttemptId={knownAttemptId} onResumableAttemptChange={onResumableAttemptChange}
         routeAttemptId={routeAttemptId} routeResults={routeResults} onAttemptRoute={onAttemptRoute} onAttemptChange={onAttemptChange} onAnswerDirtyChange={onAnswerDirtyChange}
         onOpenMaterials={manager ? () => navigate("materials") : undefined} onOpenQuestions={openQuestionBank}
-        onOpenProgress={() => navigate("progress")} onBackToCourse={() => navigate("overview")} /></div>
+        onOpenProgress={() => navigate("progress")} onBackToCourse={() => navigate("overview")}
+        onPracticeMistakes={() => openPractice("MISTAKES")} onPracticeTopic={unitId => openPractice("ADAPTIVE", { unitIds: [unitId] })} onBackHome={goHome} /></div>
     </div>
     {/* Ispit (21b): the points estimate with the mock exam, then the past papers. Read afresh on every visit. */}
     {destination === "exam" && <div id="course-exam" className="flex flex-col gap-section">
