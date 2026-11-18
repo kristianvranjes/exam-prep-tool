@@ -85,7 +85,7 @@ export function CourseBrowser({ joinedCourses, loadingMembership, onJoined, onOp
     && (!needle || course.name.toLowerCase().includes(needle) || (course.code ?? "").toLowerCase().includes(needle))) : [];
   return <section id="browse-courses" tabIndex={-1} aria-labelledby="enrol-heading">
     <div className="flex flex-wrap items-center gap-x-5 gap-y-3 border-b-2 border-line pb-5">
-      <Button variant="secondary" onClick={onBack}><span aria-hidden="true">←</span> Vaši kolegiji</Button>
+      <Button variant="secondary" onClick={onBack}><span aria-hidden="true">←</span> Danas</Button>
       <h1 id="enrol-heading" tabIndex={-1} className="min-w-0 text-xl font-extrabold tracking-tight">Upis kolegija</h1>
       <p className="ml-auto text-sm font-semibold text-muted tabular-nums">{loadingMembership ? "Provjeravam upis…" : `Upisano: ${enrolled.length}`}</p>
     </div>
