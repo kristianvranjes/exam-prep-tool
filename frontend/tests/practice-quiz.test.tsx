@@ -1236,3 +1236,19 @@ it("answers numeric and multiple-select questions and shows their keys in result
   fireEvent.click(screen.getByRole("button", { name: "Skoči na pitanje 2" }));
   expect(screen.getAllByText("2; 3", { selector: "dd" })).toHaveLength(2);
 });
+
+it("reports a question while solving, without answer shortcuts firing inside the dialog (22f)", async () => {
+  current.questions[0] = { ...current.questions[0], source_question_id: "bank-mcq", units: [{ id: "u1", title: "Brojevi" }] };
+  await start();
+  fireEvent.click(screen.getByRole("button", { name: "Prijavi grešku" }));
+  const dialog = screen.getByRole("dialog", { name: "Prijava greške ili prijedlog" });
+  expect(dialog).toHaveTextContent("Pitanje 1 · Brojevi");
+  const reason = within(dialog).getByRole("radio", { name: "Nejasno" });
+  reason.focus();
+  fireEvent.keyDown(reason, { key: "2" });
+  expect(screen.getByLabelText("Two")).not.toBeChecked();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Odustani" }));
+  // Outside the dialog the shortcut works as before.
+  fireEvent.keyDown(document.body, { key: "2" });
+  expect(screen.getByLabelText("Two")).toBeChecked();
+});

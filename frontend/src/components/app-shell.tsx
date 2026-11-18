@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api, Course, Faculty, User, type CourseMembership, type MemberCourse, type MembershipStatus } from "../lib/api";
 import { migrateLocalCoursePrefs } from "../lib/course-prefs";
 import { CourseWorkspace } from "./course-workspace";
-import { attemptPath, coursePath, documentTitle, parseWorkspaceRoute, type CourseDestination } from "../lib/workspace-route";
+import { attemptPath, coursePath, documentTitle, parseWorkspaceRoute, topicPath, type CourseDestination } from "../lib/workspace-route";
 import type { AttemptSummary, Attempt } from "../lib/practice-api";
 import { useWorkspaceNavigation } from "./use-workspace-navigation";
 import { StudentHome } from "./student-home";
@@ -290,6 +290,7 @@ export function AppShell() {
           knownAttemptId={knownAttemptId} knownAttempt={selectedId ? sessions[selectedId]?.attempt : undefined} checkingSession={sessions[selected.id]?.status === "loading"} onResume={() => resumeSession()} onResumableAttemptChange={onResumableAttemptChange} activeSession={activePractice}
           routeAttemptId={route?.view === "course" && selectedId === routeCourseId && destination === "practice" ? route.attemptId : undefined}
           routeResults={route?.view === "course" && route.results}
+          routeUnitId={route?.view === "course" && destination === "topic" ? route.unitId ?? null : null} onOpenTopic={unitId => navigate(topicPath(selected.id, unitId))}
           onAttemptRoute={onAttemptRoute} onAttemptChange={onAttemptChange} onAnswerDirtyChange={setAnswerEdited}
           onOpenAttempt={attempt => navigate(attemptPath(attempt.course_id, attempt.id))}
           onOpenResults={id => navigate(attemptPath(selected.id, id, true))} onOpenReview={() => navigate("/review")}
