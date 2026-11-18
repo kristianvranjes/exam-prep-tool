@@ -4,7 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import Float, and_, cast, func, select
 from sqlalchemy.orm import Session
 
 from app.models import Course, User
@@ -12,9 +12,14 @@ from app.models.course_unit import CourseUnit, QuestionUnit
 from app.models.question import Question
 from app.models.question_edit_suggestion import QuestionEditSuggestion
 from app.models.question_report import QuestionReport
+from app.models.quiz import Answer, QuizAttempt, QuizQuestion
 from app.schemas.course_unit import CourseUnitResponse, UnitStatus
 from app.schemas.unit_moderation import (
     ModerationCounts,
+    QuestionTable,
+    QuestionTableRow,
+    TableFilter,
+    TopicCount,
     UnitModerationDetail,
     UnitModerationRow,
     UnitQuestionRow,
@@ -185,6 +190,128 @@ def unit_detail(
             )
             for question in questions
         ],
+    )
+
+
+# The bank table shows a share of correct answers from this many graded answers up.
+TABLE_MIN_ANSWERS = 5
+LOW_ACCURACY = 0.5
+
+
+def _without_unit() -> Any:
+    return ~select(QuestionUnit.question_id).where(QuestionUnit.question_id == Question.id).exists()
+
+
+def question_table(
+    db: Session,
+    user: User,
+    course_id: UUID,
+    unit: str | None,
+    show: TableFilter,
+    search: str | None,
+    limit: int,
+    offset: int,
+) -> QuestionTable:
+    """The manager's bank (23b): questions that are not archived, with their quizzes, open
+    reports and students' accuracy; filtered by unit ("none" for questions without one), by
+    reports or low accuracy, and by text."""
+    access(db, user, course_id)
+    graded = (
+        select(
+            QuizQuestion.source_question_id.label("question_id"),
+            func.count().label("answers"),
+            func.count().filter(Answer.grading_status == "CORRECT").label("correct"),
+        )
+        .join(Answer, Answer.quiz_question_id == QuizQuestion.id)
+        .join(QuizAttempt, QuizAttempt.id == Answer.attempt_id)
+        .where(
+            QuizAttempt.status == "SUBMITTED",
+            Answer.grading_status.in_(["CORRECT", "INCORRECT"]),
+        )
+        .group_by(QuizQuestion.source_question_id)
+        .subquery()
+    )
+    reports = (
+        select(QuestionReport.question_id, func.count().label("open"))
+        .where(QuestionReport.status == "OPEN")
+        .group_by(QuestionReport.question_id)
+        .subquery()
+    )
+    answers = func.coalesce(graded.c.answers, 0)
+    share = cast(graded.c.correct, Float) / func.nullif(graded.c.answers, 0)
+    base = [Question.course_id == course_id, Question.status != "ARCHIVED"]
+    filters = list(base)
+    if unit == "none":
+        filters.append(_without_unit())
+    elif unit:
+        try:
+            unit_id = UUID(unit)
+        except ValueError:
+            raise HTTPException(422, "Unknown unit filter") from None
+        filters.append(
+            select(QuestionUnit.question_id)
+            .where(QuestionUnit.question_id == Question.id, QuestionUnit.unit_id == unit_id)
+            .exists()
+        )
+    if search and search.strip():
+        needle = search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        filters.append(Question.stem.ilike(f"%{needle}%", escape="\\"))
+    if show == "REPORTED":
+        filters.append(func.coalesce(reports.c.open, 0) > 0)
+    elif show == "LOW_ACCURACY":
+        filters.append(and_(answers >= TABLE_MIN_ANSWERS, share < LOW_ACCURACY))
+    query = (
+        select(Question, answers, share, func.coalesce(reports.c.open, 0))
+        .outerjoin(graded, graded.c.question_id == Question.id)
+        .outerjoin(reports, reports.c.question_id == Question.id)
+        .where(*filters)
+    )
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    rows = db.execute(
+        query.order_by(Question.created_at, Question.id).limit(limit).offset(offset)
+    ).all()
+    ids = [row[0].id for row in rows]
+    units: dict[UUID, list[UUID]] = {}
+    for question_id, unit_id in db.execute(
+        select(QuestionUnit.question_id, QuestionUnit.unit_id)
+        .join(CourseUnit, CourseUnit.id == QuestionUnit.unit_id)
+        .where(QuestionUnit.question_id.in_(ids))
+        .order_by(CourseUnit.position, CourseUnit.id)
+    ):
+        units.setdefault(question_id, []).append(unit_id)
+    per_unit = pairs(
+        db.execute(
+            select(QuestionUnit.unit_id, func.count())
+            .join(Question, Question.id == QuestionUnit.question_id)
+            .where(*base)
+            .group_by(QuestionUnit.unit_id)
+        )
+    )
+    loose = db.scalar(select(func.count()).select_from(Question).where(*base, _without_unit()))
+    return QuestionTable(
+        rows=[
+            QuestionTableRow(
+                id=question.id,
+                type=question.type,
+                status=question.status,
+                stem=question.stem,
+                unit_ids=units.get(question.id, []),
+                open_report_count=open_reports,
+                answer_count=answer_count,
+                accuracy=round(accuracy, 4)
+                if accuracy is not None and answer_count >= TABLE_MIN_ANSWERS
+                else None,
+                updated_at=question.updated_at,
+            )
+            for question, answer_count, accuracy, open_reports in rows
+        ],
+        total=total,
+        question_count=db.scalar(select(func.count()).select_from(Question).where(*base)) or 0,
+        topics=[
+            *(TopicCount(unit_id=unit_id, count=count) for unit_id, count in per_unit.items()),
+            TopicCount(unit_id=None, count=loose or 0),
+        ],
+        min_answers=TABLE_MIN_ANSWERS,
     )
 
 

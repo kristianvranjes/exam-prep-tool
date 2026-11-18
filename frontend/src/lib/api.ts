@@ -160,6 +160,15 @@ export const api = {
   setQuestionUnits: (id: string, unitIds: string[]) => request<Question>(`/questions/${id}/units`, { method: "PATCH", body: JSON.stringify({ unit_ids: unitIds }) }),
   bulkTransitionQuestions: (courseId: string, body: { question_ids: string[]; action: QuestionAction; reason?: string }) => request<{ changed: number }>(`/courses/${courseId}/questions/transition`, { method: "POST", body: JSON.stringify(body) }),
   bulkQuestionUnits: (courseId: string, body: { question_ids: string[]; unit_id: string; action: "ADD" | "REMOVE" }) => request<{ changed: number; unchanged: number }>(`/courses/${courseId}/questions/units`, { method: "POST", body: JSON.stringify(body) }),
+  /** The manager's bank table (23b): `unit` is a unit ID, "none" or left out for all; `show` filters to reported or low-accuracy questions. */
+  questionTable: (courseId: string, params: { unit?: string; show?: TableFilter; q?: string; offset?: number; limit?: number } = {}) => {
+    const query = new URLSearchParams();
+    if (params.unit) query.set("unit", params.unit);
+    if (params.show && params.show !== "ALL") query.set("show", params.show);
+    if (params.q?.trim()) query.set("q", params.q.trim());
+    query.set("limit", String(params.limit ?? 50)); query.set("offset", String(params.offset ?? 0));
+    return request<QuestionTable>(`/courses/${courseId}/question-table?${query}`);
+  },
   /** Course owner or faculty moderator: the quizzes (units) of the course with moderation counters. */
   unitModeration: (courseId: string) => request<UnitModerationRow[]>(`/courses/${courseId}/units/moderation`),
   unitModerationDetail: (unitId: string, options: { limit?: number; offset?: number } = {}) => {
@@ -259,6 +268,13 @@ export type UnitQuestionRow = {
   has_explanation: boolean; author: UnitPerson | null; open_report_count: number; open_suggestion_count: number; updated_at: string;
 };
 export type UnitModerationDetail = { unit: UnitModerationRow; questions: UnitQuestionRow[] };
+export type TableFilter = "ALL" | "REPORTED" | "LOW_ACCURACY";
+/** A question on the manager's bank table (23b); `accuracy` is null below `min_answers` graded answers. */
+export type QuestionTableRow = {
+  id: string; type: QuestionType; status: QuestionStatus; stem: string; unit_ids: string[];
+  open_report_count: number; answer_count: number; accuracy: number | null; updated_at: string;
+};
+export type QuestionTable = { rows: QuestionTableRow[]; total: number; question_count: number; topics: { unit_id: string | null; count: number }[]; min_answers: number };
 /** A question in the review queue with who wrote it and who reviewed it. */
 export type ReviewQuestion = OwnerQuestion & { author_name?: string | null; reviewer_name?: string | null };
 export type ModerationCounts = { pending_questions: number; open_reports: number; open_suggestions: number; pending_units: number };
