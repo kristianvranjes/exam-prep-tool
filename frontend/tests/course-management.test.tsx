@@ -9,7 +9,7 @@ vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/components/question-bank", () => ({ QuestionBank: ({ courseId, focus }: { courseId: string; focus: { id: string } | null }) => <section aria-label="Baza pitanja">Bank {courseId} {focus?.id ?? "none"}</section> }));
 vi.mock("../src/components/bank-table", () => ({ BankTable: ({ onEdit, onNew }: { onEdit: (id: string) => void; onNew: () => void }) => <section aria-label="Tablica banke"><button onClick={() => onEdit("q7")}>Uredi q7</button><button onClick={onNew}>Novo pitanje</button></section> }));
 vi.mock("../src/components/quiz-moderation", () => ({ QuizModeration: () => <section aria-label="Kvizovi kolegija">Quizzes</section> }));
-vi.mock("../src/components/faculty-moderation", () => ({ ReportsQueue: ({ facultyId, courseId }: { facultyId: string; courseId: string }) => <section aria-label="Prijave">Reports {facultyId} {courseId}</section> }));
+vi.mock("../src/components/report-review", () => ({ ReportReview: ({ facultyId, courseId }: { facultyId: string; courseId: string }) => <section aria-label="Prijave">Reports {facultyId} {courseId}</section> }));
 vi.mock("../src/components/question-suggestions-queue", () => ({ QuestionSuggestionsQueue: () => <section aria-label="Prijedlozi">Suggestions</section> }));
 
 const course = { id: "course", faculty_id: "faculty", name: "Digitalna logika" } as Course;

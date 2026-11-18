@@ -25,7 +25,8 @@ class QuestionReport(Base):
         CheckConstraint(
             "(status = 'OPEN' AND resolution IS NULL AND resolved_by_user_id IS NULL "
             "AND resolved_at IS NULL) OR (status = 'RESOLVED' "
-            "AND resolution IS NOT NULL AND resolution IN ('DISMISSED','QUESTION_ARCHIVED') "
+            "AND resolution IS NOT NULL "
+            "AND resolution IN ('DISMISSED','QUESTION_ARCHIVED','FIXED') "
             "AND resolved_at IS NOT NULL)",
             name="ck_question_report_resolution",
         ),
