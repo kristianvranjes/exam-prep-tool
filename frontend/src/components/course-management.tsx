@@ -5,6 +5,8 @@ import { api, type Course } from "../lib/api";
 import { QuestionBank, type QuestionFocus } from "./question-bank";
 import { BankTable } from "./bank-table";
 import { QuestionSuggestionsQueue } from "./question-suggestions-queue";
+
+import { ProposalReview } from "./proposal-review";
 import { ReportReview } from "./report-review";
 import { QuizModeration } from "./quiz-moderation";
 import { Badge, Button } from "./ui";
@@ -98,9 +100,31 @@ export function CourseManagement({ course, currentUserId, isOwner, isModerator, 
         onChanged={onRefreshCounts ?? (() => setCountRevision(value => value + 1))} />
     </div>}
     {isModerator && shown.has("suggestions") && <div hidden={tab !== "suggestions"}>
-      <QuestionSuggestionsQueue facultyId={course.faculty_id} courseId={course.id} courses={courses} currentUserId={currentUserId} />
+      <ProposalsArea facultyId={course.faculty_id} courseId={course.id} currentUserId={currentUserId} courses={courses} onEditQuestion={onOpenQuestion}
+        onChanged={onRefreshCounts ?? (() => setCountRevision(value => value + 1))} />
     </div>}
   </section>;
+}
+
+/**
+/**
+ * 23d: proposals are new questions waiting for review ("Nova pitanja") and suggested edits of existing ones
+ * ("Izmjene pitanja"), each in its own view; both stay mounted once opened.
+ */
+function ProposalsArea({ facultyId, courseId, currentUserId, courses, onEditQuestion, onChanged }: {
+  facultyId: string; courseId: string; currentUserId: string; courses: Course[];
+  onEditQuestion: (questionId: string) => void; onChanged: () => void;
+}) {
+  const [view, setView] = useState<"new" | "edits">("new");
+  const [editsOpened, setEditsOpened] = useState(false);
+  return <div className="flex flex-col gap-4">
+    <div role="group" aria-label="Vrsta prijedloga" className="flex flex-wrap gap-2">
+      <Button variant="secondary" aria-pressed={view === "new"} onClick={() => setView("new")}>Nova pitanja</Button>
+      <Button variant="secondary" aria-pressed={view === "edits"} onClick={() => { setView("edits"); setEditsOpened(true); }}>Izmjene pitanja</Button>
+    </div>
+    <div hidden={view !== "new"}><ProposalReview facultyId={facultyId} courseId={courseId} onEditQuestion={onEditQuestion} onChanged={onChanged} /></div>
+    {editsOpened && <div hidden={view !== "edits"}><QuestionSuggestionsQueue facultyId={facultyId} courseId={courseId} courses={courses} currentUserId={currentUserId} /></div>}
+  </div>;
 }
 
 /**
@@ -127,3 +151,4 @@ function BankArea({ courseId, active, focus, onOpenMaterials }: {
     </div>
   </>;
 }
+

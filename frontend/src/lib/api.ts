@@ -159,6 +159,8 @@ export const api = {
   question: (id: string) => request<Question>(`/questions/${id}`),
   editQuestion: (id: string, body: QuestionEdit) => request<OwnerQuestion>(`/questions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   transitionQuestion: (id: string, action: QuestionAction, reason?: string) => request<OwnerQuestion>(`/questions/${id}/${action}`, { method: "POST", ...(action === "reject" ? { body: JSON.stringify({ reason }) } : {}) }),
+  /** Up to three approved questions of the course whose text overlaps this one most (23d); for managers. */
+  similarQuestions: (id: string) => request<SimilarQuestion[]>(`/questions/${id}/similar`),
   setQuestionUnits: (id: string, unitIds: string[]) => request<Question>(`/questions/${id}/units`, { method: "PATCH", body: JSON.stringify({ unit_ids: unitIds }) }),
   bulkTransitionQuestions: (courseId: string, body: { question_ids: string[]; action: QuestionAction; reason?: string }) => request<{ changed: number }>(`/courses/${courseId}/questions/transition`, { method: "POST", body: JSON.stringify(body) }),
   bulkQuestionUnits: (courseId: string, body: { question_ids: string[]; unit_id: string; action: "ADD" | "REMOVE" }) => request<{ changed: number; unchanged: number }>(`/courses/${courseId}/questions/units`, { method: "POST", body: JSON.stringify(body) }),
@@ -279,6 +281,8 @@ export type QuestionTableRow = {
 export type QuestionTable = { rows: QuestionTableRow[]; total: number; question_count: number; topics: { unit_id: string | null; count: number }[]; min_answers: number };
 /** A question in the review queue with who wrote it and who reviewed it. */
 export type ReviewQuestion = OwnerQuestion & { author_name?: string | null; reviewer_name?: string | null };
+/** A question of the bank close to another one: `similarity` is the share of shared words, 0..1. */
+export type SimilarQuestion = { id: string; stem: string; similarity: number };
 export type ModerationCounts = { pending_questions: number; open_reports: number; open_suggestions: number; pending_units: number };
 
 /** LAB is a lab session, QUIZ a short in-class quiz (blic). */
