@@ -21,7 +21,7 @@ export type SetupView = "picker" | "custom";
 /** A request to open setup, optionally focused on one exam cycle. Without a view it opens the full form. */
 export type PracticeSetupRequest = { id: number; mode: SelectionMode; scopeId?: string; unitIds?: string[]; view?: SetupView };
 
-export function PracticeQuiz({ courseId, active = true, defaultView = "custom", customRequest = 0, adaptiveReviewRequest = 0, setupRequest, resumeAttemptId, routeAttemptId, routeResults = false, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onResumableAttemptChange, onOpenMaterials, onOpenQuestions, onOpenProgress, onBackToCourse }: {
+export function PracticeQuiz({ courseId, active = true, defaultView = "custom", customRequest = 0, adaptiveReviewRequest = 0, setupRequest, resumeAttemptId, routeAttemptId, routeResults = false, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onResumableAttemptChange, onOpenMaterials, onOpenQuestions, onOpenProgress, onBackToCourse, onPracticeMistakes, onPracticeTopic, onBackHome }: {
   courseId: string; active?: boolean;
   /** The setup shown when practice opens without a request, for example from its address. */
   defaultView?: SetupView;
@@ -33,6 +33,8 @@ export function PracticeQuiz({ courseId, active = true, defaultView = "custom", 
   onAttemptChange?: (attempt: Attempt | null) => void; onAnswerDirtyChange?: (dirty: boolean) => void;
   onOpenMaterials?: () => void; onOpenQuestions?: () => void;
   onOpenProgress?: () => void; onBackToCourse?: () => void;
+  /** The results' next step (22e) and its way back to Danas. */
+  onPracticeMistakes?: () => void; onPracticeTopic?: (unitId: string) => void; onBackHome?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [history, setHistory] = useState<AttemptSummary[]>([]);
@@ -233,7 +235,8 @@ export function PracticeQuiz({ courseId, active = true, defaultView = "custom", 
       {visibleAttempt?.status === "ACTIVE" && <ActiveQuiz key={visibleAttempt.id} attempt={visibleAttempt} experience={experience} update={updateAttempt} back={back} onDirtyChange={onAnswerDirtyChange} />}
       {visibleAttempt?.status === "SUBMITTED" && <QuizResults key={visibleAttempt.id} attempt={visibleAttempt} busy={busy} onUpdate={updateAttempt}
         onPracticeAgain={() => void run(async () => { await back(); setHistoryOpen(false); heading.current?.focus(); })}
-        onViewProgress={onOpenProgress} onBackToCourse={onBackToCourse} onBackToHistory={() => void run(back)} />}
+        onViewProgress={onOpenProgress} onBackToCourse={onBackToCourse} onBackToHistory={() => void run(back)}
+        onPracticeMistakes={onPracticeMistakes} onPracticeTopic={onPracticeTopic} onBackHome={onBackHome} />}
       {visibleAttempt?.status === "ABANDONED" && <><Button variant="secondary" className="self-start" disabled={busy} onClick={() => void run(back)}>Natrag na povijest vježbi</Button><AbandonedQuiz attempt={visibleAttempt} /></>}
     </>}
   </section>;
