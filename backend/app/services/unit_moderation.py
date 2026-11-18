@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any
+from typing import cast as as_type
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -288,23 +289,29 @@ def question_table(
         )
     )
     loose = db.scalar(select(func.count()).select_from(Question).where(*base, _without_unit()))
-    return QuestionTable(
-        rows=[
+    table_rows: list[QuestionTableRow] = []
+    for row in rows:
+        # Row element types differ between SQLAlchemy versions; state them here.
+        question = as_type(Question, row[0])
+        answer_count = int(row[1])
+        accuracy = as_type(float | None, row[2])
+        table_rows.append(
             QuestionTableRow(
                 id=question.id,
-                type=question.type,
-                status=question.status,
+                type=question.type,  # type: ignore[arg-type]
+                status=question.status,  # type: ignore[arg-type]
                 stem=question.stem,
                 unit_ids=units.get(question.id, []),
-                open_report_count=open_reports,
+                open_report_count=int(row[3]),
                 answer_count=answer_count,
                 accuracy=round(accuracy, 4)
                 if accuracy is not None and answer_count >= TABLE_MIN_ANSWERS
                 else None,
                 updated_at=question.updated_at,
             )
-            for question, answer_count, accuracy, open_reports in rows
-        ],
+        )
+    return QuestionTable(
+        rows=table_rows,
         total=total,
         question_count=db.scalar(select(func.count()).select_from(Question).where(*base)) or 0,
         topics=[
