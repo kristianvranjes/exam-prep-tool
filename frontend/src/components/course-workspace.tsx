@@ -118,7 +118,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         adaptiveReviewRequest={adaptiveReviewRequest} setupRequest={setupRequest} resumeAttemptId={knownAttemptId} onResumableAttemptChange={onResumableAttemptChange}
         routeAttemptId={routeAttemptId} routeResults={routeResults} onAttemptRoute={onAttemptRoute} onAttemptChange={onAttemptChange} onAnswerDirtyChange={onAnswerDirtyChange}
         onOpenMaterials={manager ? () => navigate("materials") : undefined} onOpenQuestions={openQuestionBank}
-        onOpenProgress={() => navigate("progress")} onBackToCourse={() => navigate("overview")} /></div>
+        onOpenProgress={() => navigate("progress")} onBackToCourse={() => navigate("overview")}
+        onPracticeMistakes={() => openPractice("MISTAKES")} onPracticeTopic={unitId => openPractice("ADAPTIVE", { unitIds: [unitId], view: "picker" })} onBackHome={goHome} /></div>
     </div>
     {destination === "topic" && routeUnitId && <div id="course-topic"><TopicPage key={routeUnitId} courseId={course.id} unitId={routeUnitId} active={visible}
       canStart={!activeSession} onBack={() => navigate("overview")} onStartAttempt={attempt => onOpenAttempt?.(attempt)} onQuestions={openQuestionBank} /></div>}
