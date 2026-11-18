@@ -274,7 +274,8 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
             <details><summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">Pogledaj odgovor{question.explanation ? " i objašnjenje" : ""}</summary><div className="mt-3 max-w-prose"><ResultAnswers question={question} /></div></details>
           </div> : <Surface className="space-y-5">{header}<div className="max-w-prose"><ResultAnswers question={question} onSelfReview={selfReview(question)} /></div></Surface>}
           {question.source_question_id && (question.grading_status === "CORRECT" || question.grading_status === "INCORRECT") && onUpdate && <div className="mt-3 max-w-prose"><ReviewRatingRow courseId={attempt.course_id} questionId={question.source_question_id} /></div>}
-          {question.source_question_id && <div className="mt-3"><ReportIssue questionId={question.source_question_id} label="Prijavi grešku u pitanju" bordered={false} /></div>}
+          {question.source_question_id && <div className="mt-3"><ReportIssue questionId={question.source_question_id} label="Prijavi grešku u pitanju" bordered={false}
+            courseId={attempt.course_id} units={question.units ?? []} context={[`Pitanje ${number}`, question.units?.[0]?.title].filter(Boolean).join(" · ")} /></div>}
         </article>;
       })}</div>
       </div>

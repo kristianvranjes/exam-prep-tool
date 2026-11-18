@@ -16,6 +16,7 @@ import { QuizNavigator, type QuizExperience } from "./quiz-navigation";
 import { Sheet } from "./sheet";
 import { shortcutAnswer, ShortcutsDialog, usePracticeShortcuts } from "./practice-shortcuts";
 import { useUnsavedChanges } from "./unsaved-changes";
+import { ReportIssue } from "./question-report";
 
 type Confirmation = "submit" | "reload" | "back" | "abandon";
 export function ActiveQuiz({ attempt, experience, update: onUpdate, back: onBack, onDirtyChange }: {
@@ -315,6 +316,8 @@ export function ActiveQuiz({ attempt, experience, update: onUpdate, back: onBack
           </div>
           <div className="flex flex-wrap items-start gap-1">
             <FavoriteToggle favorites={favorites} question={question} keyshortcuts="S" />
+            {question.source_question_id && <ReportIssue key={question.id} questionId={question.source_question_id} label="Prijavi grešku" bordered={false}
+              courseId={attempt.course_id} units={question.units ?? []} context={[`Pitanje ${index + 1}`, question.units?.[0]?.title].filter(Boolean).join(" · ")} />}
             <Button variant="ghost" className="px-3" disabled={busy} aria-pressed={flagged} onClick={toggleFlag}>
               <Flag aria-hidden="true" className="size-4 shrink-0" fill={flagged ? "currentColor" : "none"} />Vrati se
             </Button>

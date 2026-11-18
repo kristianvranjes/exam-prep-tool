@@ -171,8 +171,8 @@ test("moderator and student complete the core exam-preparation journey", async (
 
     await student.getByRole("button", { name: "Prijavi problem" }).click();
     const reportForm = student.getByRole("form", { name: "Prijava problema s pitanjem" });
-    await reportForm.getByLabel("Razlog").selectOption("UNCLEAR");
-    await reportForm.getByLabel("Detalji").fill("E2E report: wording should be reviewed.");
+    await reportForm.getByRole("radio", { name: "Nejasno" }).check();
+    await reportForm.getByLabel("Opis (neobavezno)").fill("E2E report: wording should be reviewed.");
     await reportForm.getByRole("button", { name: "Pošalji prijavu" }).click();
     await expect(student.getByText("Prijava je poslana na pregled fakulteta.")).toBeVisible();
 
