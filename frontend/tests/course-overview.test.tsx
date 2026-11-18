@@ -184,3 +184,12 @@ it("filters the topics to the ones not started or below 60 percent", async () =>
   expect(screen.getByRole("button", { name: "Vježbaj: Automati" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "Vježbaj: Bistabili" })).not.toBeInTheDocument();
 });
+
+it("opens a topic's page from its card when the page is available (22b)", async () => {
+  mock.units.mockResolvedValue([unit("u1", "Booleova algebra"), unit("u2", "Bistabili")]);
+  const p = props(); const onOpenTopic = vi.fn();
+  render(<CourseOverview {...p} onStartAttempt={vi.fn()} onOpenTopic={onOpenTopic} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Otvori temu: Bistabili" }));
+  expect(onOpenTopic).toHaveBeenCalledExactlyOnceWith("u2");
+  expect(mock.focusedPractice).not.toHaveBeenCalled();
+});

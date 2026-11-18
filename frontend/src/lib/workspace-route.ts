@@ -2,9 +2,9 @@
  * A course's destinations. Four are the course tabs (handoff 21a-21d): "overview" (Učenje), "exam" (Ispit),
  * "progress" (Napredak) and "questions" (Pitanja i materijali); managers get a fifth, "manage" (Upravljanje).
  * "practice" holds the setup and the sessions, "materials" the managers' upload page and "more" the managers'
- * units, item analysis and settings.
+ * units, item analysis and settings. "topic" is one topic's page (22b), reached from Učenje.
  */
-export type CourseDestination = "overview" | "practice" | "exam" | "progress" | "questions" | "materials" | "manage" | "more";
+export type CourseDestination = "overview" | "practice" | "exam" | "progress" | "questions" | "materials" | "manage" | "more" | "topic";
 /**
  * Pages outside a course: Danas (the home page), the course list ("Upravljanje kolegijima"), enrolment, the cross-course
  * review and progress pages, settings and faculty tools.
@@ -12,7 +12,7 @@ export type CourseDestination = "overview" | "practice" | "exam" | "progress" | 
 export type GlobalView = "home" | "courses" | "enrol" | "review" | "progress" | "settings" | "management";
 export type WorkspaceRoute =
   | { view: GlobalView }
-  | { view: "course"; courseId: string; destination: CourseDestination; attemptId: string | null; results: boolean };
+  | { view: "course"; courseId: string; destination: CourseDestination; attemptId: string | null; results: boolean; unitId?: string | null };
 
 const globalPaths: Record<string, GlobalView> = {
   "/": "home", "/courses": "courses", "/enrol": "enrol", "/review": "review", "/progress": "progress", "/settings": "settings", "/faculty": "management",
@@ -26,11 +26,13 @@ const legacyDestinations: Record<string, CourseDestination> = { papers: "exam", 
 
 export const coursePath = (id: string, destination: CourseDestination = "overview") =>
   `/courses/${encodeURIComponent(id)}${destination === "overview" ? "" : `/${destination}`}`;
+/** One topic's page (22b). */
+export const topicPath = (courseId: string, unitId: string) => `${coursePath(courseId)}/topics/${encodeURIComponent(unitId)}`;
 export const attemptPath = (courseId: string, id: string, submitted = false) =>
   `${coursePath(courseId)}/attempts/${encodeURIComponent(id)}${submitted ? "/results" : ""}`;
 
 const destinationTitles: Record<CourseDestination, string | null> = {
-  overview: null, practice: "Vježba", exam: "Ispit", progress: "Napredak", questions: "Pitanja i materijali", materials: "Materijali", manage: "Upravljanje", more: "Cjeline i postavke",
+  overview: null, practice: "Vježba", exam: "Ispit", progress: "Napredak", questions: "Pitanja i materijali", materials: "Materijali", manage: "Upravljanje", more: "Cjeline i postavke", topic: "Tema",
 };
 
 /**
@@ -47,14 +49,15 @@ export function documentTitle(route: WorkspaceRoute | null, courseName?: string 
 export function parseWorkspaceRoute(pathname: string): WorkspaceRoute | null {
   const path = pathname.replace(/\/$/, "") || "/";
   if (Object.hasOwn(globalPaths, path)) return { view: globalPaths[path] };
-  const match = /^\/courses\/([^/]+)(?:\/(practice|exam|progress|questions|materials|manage|more|papers|estimate)|\/attempts\/([^/]+)(\/results)?)?$/.exec(path);
+  const match = /^\/courses\/([^/]+)(?:\/(practice|exam|progress|questions|materials|manage|more|papers|estimate)|\/attempts\/([^/]+)(\/results)?|\/topics\/([^/]+))?$/.exec(path);
   if (!match) return null;
   try {
     const courseId = decodeURIComponent(match[1]);
     const attemptId = match[3] ? decodeURIComponent(match[3]) : null;
-    if ([courseId, attemptId].some(id => id !== null && /[\\/#?]/.test(id))) return null;
-    const destination = match[2] ? legacyDestinations[match[2]] ?? match[2] as CourseDestination : attemptId ? "practice" : "overview";
-    return { view: "course", courseId, destination, attemptId, results: Boolean(match[4]) };
+    const unitId = match[5] ? decodeURIComponent(match[5]) : null;
+    if ([courseId, attemptId, unitId].some(id => id !== null && /[\\/#?]/.test(id))) return null;
+    const destination = match[2] ? legacyDestinations[match[2]] ?? match[2] as CourseDestination : attemptId ? "practice" : unitId ? "topic" : "overview";
+    return { view: "course", courseId, destination, attemptId, results: Boolean(match[4]), ...(unitId && { unitId }) };
   } catch { return null; }
 }
 

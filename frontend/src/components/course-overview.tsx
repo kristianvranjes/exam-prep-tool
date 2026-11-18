@@ -44,7 +44,7 @@ function WayRow({ name, note, label, disabled, onClick }: { name: string; note: 
  * the other ways to practise, and the topics as cards with their state in words. Without a study plan (#173).
  */
 export function CourseOverview({ courseId, active, onPractice, knownAttemptId, knownAttempt, checkingSession, activeSession, onResume,
-  onRecommendedPractice, onStartAttempt, onOpenReview, onQuestions, onMaterials }: {
+  onRecommendedPractice, onStartAttempt, onOpenReview, onQuestions, onMaterials, onOpenTopic }: {
   courseId: string; active: boolean; knownAttemptId: string | null; knownAttempt?: ResumableAttempt;
   checkingSession?: boolean; activeSession?: boolean; onResume: () => void;
   /** Opens the practice setup with the recommended practice chosen, limited to the given topics when there are any. */
@@ -55,6 +55,8 @@ export function CourseOverview({ courseId, active, onPractice, knownAttemptId, k
   onOpenReview?: () => void;
   /** Opens the course's questions, where a student can suggest one. */
   onQuestions: () => void;
+  /** Opens a topic's page (22b); without it a topic card starts practice for the topic at once. */
+  onOpenTopic?: (unitId: string) => void;
   /** Managers only: the course materials, offered while the course has no questions yet. */
   onMaterials?: () => void;
   /** Opens a session started here: practice for one topic or a quick quiz. */
@@ -201,7 +203,9 @@ export function CourseOverview({ courseId, active, onPractice, knownAttemptId, k
               <span className="tabular-nums text-soft">{unit.total === null ? `Odgovoreno ${unit.answered}` : `Odgovoreno ${unit.answered} / ${unit.total}`} · najbolji {unit.best === null ? "—" : `${unit.best} %`}</span></span>
           </>;
           return <li key={unit.id} className="min-w-0">
-            {canStart && !noQuestions ? <button type="button" disabled={starting !== null} aria-label={`Vježbaj: ${unit.title}`} onClick={() => void focused({ unit_ids: [unit.id] })}
+            {onOpenTopic ? <button type="button" aria-label={`Otvori temu: ${unit.title}`} onClick={() => onOpenTopic(unit.id)}
+              className="block h-full w-full border-2 border-transparent bg-surface p-5 text-left hover:border-line-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">{body}</button>
+              : canStart && !noQuestions ? <button type="button" disabled={starting !== null} aria-label={`Vježbaj: ${unit.title}`} onClick={() => void focused({ unit_ids: [unit.id] })}
               className="block h-full w-full border-2 border-transparent bg-surface p-5 text-left hover:border-line-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">{body}</button>
               : <div className="h-full bg-surface p-5">{body}</div>}
           </li>;

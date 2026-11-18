@@ -63,6 +63,7 @@ function PaperIntro({ paperId, best, starting, onBack, onStart }: {
             <Button className="h-12 px-6" disabled={starting} onClick={() => onStart(paper, true)}>{starting ? "Pokrećem…" : paper.duration_minutes ? `Započni rok · ${paper.duration_minutes} min` : "Započni rok"}</Button>
             {paper.duration_minutes && <Button variant="secondary" className="h-12 px-5" disabled={starting} onClick={() => onStart(paper, false)}>Vježbaj bez vremena</Button>}
           </div>
+          {paper.duration_minutes && <p className="mt-3 text-sm text-muted">Izlazak tijekom ispita s vremenom znači predaju.</p>}
           {best && <p className="mt-4 text-sm text-soft">Vaš najbolji: <span className="font-extrabold tabular-nums">{formatPoints(best.earned)} / {formatPoints(best.max_points)}</span></p>}
         </div>
         <div className="min-w-0">

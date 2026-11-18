@@ -8,6 +8,8 @@ import { CourseHeader } from "./course-header";
 import { CourseManagement, openCountLabel, useOpenCounts, type ManageTab } from "./course-management";
 import { CourseMaterials, type MaterialsSummary } from "./course-materials";
 import { CourseOverview } from "./course-overview";
+import { MockIntro } from "./mock-intro";
+import { TopicPage } from "./topic-page";
 import { CourseQuestions } from "./course-questions";
 import { CourseSettings } from "./course-settings";
 import { CourseUnits } from "./course-units";
@@ -25,7 +27,7 @@ export type { CourseDestination } from "../lib/workspace-route";
 type MoreDestination = "units" | "analysis" | "settings";
 
 export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = false, roleKnown = true, visible, destination, navigate, goHome, checkingSession,
-  adaptiveReviewRequest, onOpenAdaptiveReview, knownAttemptId, knownAttempt, onResume, onResumableAttemptChange, activeSession, routeAttemptId, routeResults, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onUpdated, onDeleted, onOpenAttempt, onOpenResults, onOpenReview }: {
+  adaptiveReviewRequest, onOpenAdaptiveReview, knownAttemptId, knownAttempt, onResume, onResumableAttemptChange, activeSession, routeAttemptId, routeResults, routeUnitId, onOpenTopic, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onUpdated, onDeleted, onOpenAttempt, onOpenResults, onOpenReview }: {
   course: Course; currentUserId: string; isOwner: boolean; visible: boolean; destination: CourseDestination;
   /** A moderator of the course's faculty; with owners, they manage the course (Upravljanje, materials, item analysis). */
   isModerator?: boolean;
@@ -36,6 +38,10 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
   adaptiveReviewRequest: number; onOpenAdaptiveReview: () => void; knownAttemptId: string | null; knownAttempt?: ResumableAttempt;
   onResume: () => void; onResumableAttemptChange: (id: string | null) => void;
   activeSession: boolean; routeAttemptId?: string | null; routeResults: boolean;
+  /** The topic shown on the topic page (22b), from the address. */
+  routeUnitId?: string | null;
+  /** Opens one topic's page (22b). */
+  onOpenTopic?: (unitId: string) => void;
   onAttemptRoute: (attempt: Attempt | null, replace?: boolean) => void; onAttemptChange: (attempt: Attempt | null) => void;
   /** Opens a session started outside Practice, such as a past exam. */
   onOpenAttempt?: (attempt: Attempt) => void;
@@ -55,6 +61,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
   const [unitsOpened, setUnitsOpened] = useState(false);
   const [materials, setMaterials] = useState<MaterialsSummary>({ materials: [], loading: true, error: false });
   const [setupRequest, setSetupRequest] = useState<PracticeSetupRequest | null>(null);
+  // Ispit's mock exam intro (22c) for one exam cycle; null shows the estimate and the past papers.
+  const [mockScope, setMockScope] = useState<string | null>(null);
   // "Vježba po mjeri" only switches practice to the full form: open results and settings stay as they are.
   const [customRequest, setCustomRequest] = useState(0);
   const focused = destination === "practice" && activeSession;
@@ -105,7 +113,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         onPractice={() => { setCustomRequest(value => value + 1); navigate("practice"); }} onOpenReview={onOpenReview}
         knownAttemptId={knownAttemptId} knownAttempt={knownAttempt} checkingSession={checkingSession} activeSession={activeSession} onResume={onResume}
         onRecommendedPractice={unitIds => openPractice("ADAPTIVE", { unitIds, view: "picker" })}
-        onStartAttempt={onOpenAttempt}
+        onStartAttempt={onOpenAttempt} onOpenTopic={onOpenTopic}
         onQuestions={openQuestionBank} onMaterials={manager ? () => navigate("materials") : undefined} />
     </section>
     <div id="course-practice" hidden={destination !== "practice"}>
@@ -113,13 +121,18 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         adaptiveReviewRequest={adaptiveReviewRequest} setupRequest={setupRequest} resumeAttemptId={knownAttemptId} onResumableAttemptChange={onResumableAttemptChange}
         routeAttemptId={routeAttemptId} routeResults={routeResults} onAttemptRoute={onAttemptRoute} onAttemptChange={onAttemptChange} onAnswerDirtyChange={onAnswerDirtyChange}
         onOpenMaterials={manager ? () => navigate("materials") : undefined} onOpenQuestions={openQuestionBank}
-        onOpenProgress={() => navigate("progress")} onBackToCourse={() => navigate("overview")} /></div>
+        onOpenProgress={() => navigate("progress")} onBackToCourse={() => navigate("overview")}
+        onPracticeMistakes={() => openPractice("MISTAKES")} onPracticeTopic={unitId => openPractice("ADAPTIVE", { unitIds: [unitId], view: "picker" })} onBackHome={goHome} /></div>
     </div>
+    {destination === "topic" && routeUnitId && <div id="course-topic"><TopicPage key={routeUnitId} courseId={course.id} unitId={routeUnitId} active={visible}
+      canStart={!activeSession} onBack={() => navigate("overview")} onStartAttempt={attempt => onOpenAttempt?.(attempt)} onQuestions={openQuestionBank} /></div>}
     {/* Ispit (21b): the points estimate with the mock exam, then the past papers. Read afresh on every visit. */}
-    {destination === "exam" && <div id="course-exam" className="flex flex-col gap-section">
+    {destination === "exam" && mockScope && <div id="course-exam"><MockIntro key={mockScope} courseId={course.id} scopeId={mockScope} canStart={!activeSession}
+      onBack={() => setMockScope(null)} onStartAttempt={attempt => { setMockScope(null); onOpenAttempt?.(attempt); }} /></div>}
+    {destination === "exam" && !mockScope && <div id="course-exam" className="flex flex-col gap-section">
       <ExamEstimateView courseId={course.id} active={visible}
         onPracticeUnit={(unitId, scopeId) => openPractice("ADAPTIVE", { scopeId, unitIds: [unitId] })}
-        onMock={scopeId => openPractice("MOCK", { scopeId })} />
+        onMock={setMockScope} />
       <ExamPapers courseId={course.id} onStartAttempt={onOpenAttempt} />
     </div>}
     <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} onStartAttempt={onOpenAttempt}
