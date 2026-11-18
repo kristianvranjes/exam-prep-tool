@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { api } from "../lib/api";
 import { formatPoints, paperItemLabel, penaltyText, pointsLabel } from "../lib/points";
 import { answerText, keyText } from "../lib/question-types";
 import { practiceApi, type Attempt, type Confidence, type PaperScore, type PaperSession, type ResultQuestion } from "../lib/practice-api";
@@ -11,6 +12,11 @@ import { SelfAssessment, selfReviewLabels, type SaveSelfReview } from "./quiz-fe
 import { Button, ProgressBar, Surface } from "./ui";
 import { cn } from "../lib/utils";
 import { ANSWERS, plural } from "../lib/plural";
+import { weakestUnits } from "./course-overview";
+
+/** Below this share of correct graded answers, the next step is to repeat the mistakes, not a new topic. */
+const WEAK_SESSION = 0.6;
+type TopicSuggestion = { unitId: string; title: string; note: string };
 
 type ReviewView = "INCORRECT" | "PENDING" | "FAVORITES" | "ALL";
 type SubmittedAttempt = Extract<Attempt, { status: "SUBMITTED" }>;
@@ -157,12 +163,19 @@ export function ResultAnswers({ question, onSelfReview }: { question: ResultQues
   </div>;
 }
 
-export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, onViewProgress, onBackToCourse, onBackToHistory }: {
+export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, onViewProgress, onBackToCourse, onBackToHistory, onPracticeMistakes, onPracticeTopic, onBackHome }: {
   attempt: SubmittedAttempt; busy?: boolean;
   /** Receives the attempt after a short-answer self-assessment is saved; without it, results are read-only. */
   onUpdate?: (attempt: Attempt) => void;
   onPracticeAgain: () => void; onViewProgress?: () => void; onBackToCourse?: () => void; onBackToHistory: () => void;
+  /** 22e's next step after a weak session: practise the mistakes. */
+  onPracticeMistakes?: () => void;
+  /** 22e's next step after a good session: practise the suggested topic. */
+  onPracticeTopic?: (unitId: string) => void;
+  /** "Natrag na Danas". */
+  onBackHome?: () => void;
 }) {
+  const id = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const reviewHeading = useRef<HTMLHeadingElement>(null);
   const favorites = useFavorites(attempt.course_id);
@@ -200,6 +213,33 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
 
   const graded = counts.CORRECT + counts.INCORRECT;
   const topics = topicResults(attempt.questions);
+  // 22e: one next step. Short answers waiting for a verdict keep the existing first action; a weak session repeats
+  // its mistakes while they are fresh; a good one moves on to a topic not started yet, or the weakest one left.
+  const weak = graded > 0 && counts.INCORRECT > 0 && counts.CORRECT / graded < WEAK_SESSION;
+  const wantsTopic = hasResults && !weak && tally.unreviewed === 0 && Boolean(onPracticeTopic);
+  const [suggestion, setSuggestion] = useState<TopicSuggestion | null>(null);
+  useEffect(() => {
+    if (!wantsTopic) return;
+    let current = true;
+    const practised = new Set(attempt.questions.flatMap(question => (question.units ?? []).map(unit => unit.id)));
+    void Promise.resolve().then(() => api.courseDashboard(attempt.course_id)).then(dashboard => {
+      if (!current || !dashboard) return;
+      const units = [...dashboard.units].sort((a, b) => a.position - b.position);
+      const fresh = units.find(unit => !unit.attempts && !practised.has(unit.unit_id));
+      const weakest = weakestUnits(units).find(unit => !practised.has(unit.unit_id));
+      setSuggestion(fresh ? { unitId: fresh.unit_id, title: fresh.title, note: `Tema „${fresh.title}“ još nije započeta.` }
+        : weakest ? { unitId: weakest.unit_id, title: weakest.title, note: `Zadnji rezultat u toj temi je ${weakest.last_percent} %.` } : null);
+    }).catch(() => undefined);
+    return () => { current = false; };
+  }, [wantsTopic, attempt.course_id, attempt.questions]);
+  const mostWrong = topics.find(topic => topic.correct < topic.graded)?.title;
+  const nextStep = weak && onPracticeMistakes ? {
+    title: "Ponovite pogreške dok su svježe",
+    text: `${counts.INCORRECT} od ${graded} ocijenjenih pitanja je netočno${mostWrong ? `, najviše u temi „${mostWrong}“` : ""}. Kratko ponavljanje sada pomaže više od nove teme.`,
+    cta: "Vježbaj pogreške", action: onPracticeMistakes,
+  } : wantsTopic && suggestion && onPracticeTopic ? {
+    title: `Sljedeće: ${suggestion.title}`, text: suggestion.note, cta: `Vježbaj: ${suggestion.title}`, action: () => onPracticeTopic(suggestion.unitId),
+  } : null;
   const minutes = minutesUsed(attempt);
   const facts = [
     attempt.score && attempt.score.pending_points === 0 && attempt.score.max_points > 0 ? `${Math.round(attempt.score.earned / attempt.score.max_points * 100)} %` : null,
@@ -222,11 +262,21 @@ export function QuizResults({ attempt, busy = false, onUpdate, onPracticeAgain, 
         <dd className={cn("mt-1 text-2xl font-semibold tabular-nums", count > 0 && (label === "Kratki odgovori" ? tally.unreviewed > 0 && "text-pending" : countTones[label]))}>{count}</dd>
         {note && <dd className="mt-1 text-sm text-muted">{note}</dd>}</div>)}
     </dl>}
+    {nextStep && <section aria-labelledby={`${id}-next`} className="border-2 border-t-[3px] border-line border-t-accent bg-surface p-card">
+      <p className="label-caps text-accent">Sljedeći korak</p>
+      <h3 id={`${id}-next`} className="mt-2 text-xl font-extrabold tracking-tight">{nextStep.title}</h3>
+      <p className="mt-1 max-w-prose text-soft">{nextStep.text}</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button disabled={busy} onClick={nextStep.action}>{nextStep.cta}</Button>
+        {onBackHome && <Button variant="ghost" disabled={busy} onClick={onBackHome}>Natrag na Danas</Button>}
+      </div>
+    </section>}
     <div className="space-y-4">
       {allCorrect && <p>Svi automatski ocijenjeni odgovori su točni.</p>}
       {luckyGuesses > 0 && <p className="text-sm text-muted">Točni odgovori označeni kao pogađanje: {luckyGuesses}. Vježbajte ih ponovno prije ispita.</p>}
       <div className="flex flex-wrap gap-2">
-        <Button className="w-full sm:w-auto" disabled={busy} onClick={primaryView ? () => review(primaryView) : onPracticeAgain}>{primaryView === "INCORRECT" ? "Pregledaj pogreške" : primaryView === "PENDING" ? "Pregledaj kratke odgovore" : "Vježbaj ponovno"}</Button>
+        {/* The next step is the one primary action when there is one. */}
+        <Button variant={nextStep ? "secondary" : "primary"} className="w-full sm:w-auto" disabled={busy} onClick={primaryView ? () => review(primaryView) : onPracticeAgain}>{primaryView === "INCORRECT" ? "Pregledaj pogreške" : primaryView === "PENDING" ? "Pregledaj kratke odgovore" : "Vježbaj ponovno"}</Button>
         {primaryView && <Button variant="secondary" disabled={busy} onClick={onPracticeAgain}>Vježbaj ponovno</Button>}
         {onViewProgress && <Button variant="ghost" disabled={busy} onClick={onViewProgress}>Otvori napredak</Button>}
         {onBackToCourse && <Button variant="ghost" disabled={busy} onClick={onBackToCourse}>Natrag na kolegij</Button>}
