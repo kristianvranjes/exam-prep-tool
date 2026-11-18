@@ -10,7 +10,8 @@ ReportReason = Literal[
     "INCORRECT_ANSWER", "MULTIPLE_CORRECT", "UNCLEAR", "TYPO", "OUTDATED", "DUPLICATE", "OTHER"
 ]
 ReportStatus = Literal["OPEN", "RESOLVED"]
-ReportResolution = Literal["DISMISSED", "QUESTION_ARCHIVED"]
+# FIXED: a moderator corrected the question and closed the report (23c).
+ReportResolution = Literal["DISMISSED", "QUESTION_ARCHIVED", "FIXED"]
 Details = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
 
 

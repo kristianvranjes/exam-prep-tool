@@ -97,6 +97,17 @@ def report_queue(
 
 
 def dismiss_report(db: Session, user: User, report_id: UUID) -> ModeratorReport:
+    return close_report(db, user, report_id, "DISMISSED")
+
+
+def fix_report(db: Session, user: User, report_id: UUID) -> ModeratorReport:
+    """The question was corrected: the report is closed as FIXED and the question stays."""
+    return close_report(db, user, report_id, "FIXED")
+
+
+def close_report(
+    db: Session, user: User, report_id: UUID, resolution: ReportResolution
+) -> ModeratorReport:
     # Lock the question before the report, matching archive's lock order.
     question_id = db.scalar(
         select(QuestionReport.question_id).where(QuestionReport.id == report_id)
@@ -122,13 +133,13 @@ def dismiss_report(db: Session, user: User, report_id: UUID) -> ModeratorReport:
         raise HTTPException(409, "Report is already resolved")
     try:
         report.status = "RESOLVED"
-        report.resolution = "DISMISSED"
+        report.resolution = resolution
         report.resolved_by_user_id = user.id
         report.resolved_at = datetime.now(UTC)
         db.flush()
         result = ModeratorReport(
             **receipt(report).model_dump(),
-            resolution=cast(ReportResolution, report.resolution),
+            resolution=resolution,
             resolved_by_user_id=report.resolved_by_user_id,
             resolved_at=report.resolved_at,
             question=owner_view(db, question),
@@ -137,4 +148,4 @@ def dismiss_report(db: Session, user: User, report_id: UUID) -> ModeratorReport:
         return result
     except Exception:
         db.rollback()
-        raise HTTPException(503, "Could not dismiss report") from None
+        raise HTTPException(503, "Could not close report") from None

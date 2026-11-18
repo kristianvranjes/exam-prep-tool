@@ -112,6 +112,8 @@ export const api = {
   },
   reportQuestion: (id: string, body: { reason: ReportReason; details: string | null }) => request<ReportReceipt>(`/questions/${id}/reports`, { method: "POST", body: JSON.stringify(body) }),
   dismissQuestionReport: (id: string) => request<ModeratorReport>(`/question-reports/${id}/dismiss`, { method: "POST" }),
+  /** Closes a report after the question was corrected (23c "Označi riješeno"). */
+  resolveQuestionReport: (id: string) => request<ModeratorReport>(`/question-reports/${id}/resolve`, { method: "POST" }),
   suggestQuestionEdit: (id: string, body: SuggestionCreate) => request<SuggestionReceipt>(`/questions/${id}/suggestions`, { method: "POST", body: JSON.stringify(body) }),
   questionSuggestions: (facultyId: string, options: { course_id?: string; status?: "OPEN" | "RESOLVED"; limit?: number; offset?: number } = {}) => {
     const params = new URLSearchParams();
@@ -162,6 +164,15 @@ export const api = {
   setQuestionUnits: (id: string, unitIds: string[]) => request<Question>(`/questions/${id}/units`, { method: "PATCH", body: JSON.stringify({ unit_ids: unitIds }) }),
   bulkTransitionQuestions: (courseId: string, body: { question_ids: string[]; action: QuestionAction; reason?: string }) => request<{ changed: number }>(`/courses/${courseId}/questions/transition`, { method: "POST", body: JSON.stringify(body) }),
   bulkQuestionUnits: (courseId: string, body: { question_ids: string[]; unit_id: string; action: "ADD" | "REMOVE" }) => request<{ changed: number; unchanged: number }>(`/courses/${courseId}/questions/units`, { method: "POST", body: JSON.stringify(body) }),
+  /** The manager's bank table (23b): `unit` is a unit ID, "none" or left out for all; `show` filters to reported or low-accuracy questions. */
+  questionTable: (courseId: string, params: { unit?: string; show?: TableFilter; q?: string; offset?: number; limit?: number } = {}) => {
+    const query = new URLSearchParams();
+    if (params.unit) query.set("unit", params.unit);
+    if (params.show && params.show !== "ALL") query.set("show", params.show);
+    if (params.q?.trim()) query.set("q", params.q.trim());
+    query.set("limit", String(params.limit ?? 50)); query.set("offset", String(params.offset ?? 0));
+    return request<QuestionTable>(`/courses/${courseId}/question-table?${query}`);
+  },
   /** Course owner or faculty moderator: the quizzes (units) of the course with moderation counters. */
   unitModeration: (courseId: string) => request<UnitModerationRow[]>(`/courses/${courseId}/units/moderation`),
   unitModerationDetail: (unitId: string, options: { limit?: number; offset?: number } = {}) => {
@@ -261,6 +272,13 @@ export type UnitQuestionRow = {
   has_explanation: boolean; author: UnitPerson | null; open_report_count: number; open_suggestion_count: number; updated_at: string;
 };
 export type UnitModerationDetail = { unit: UnitModerationRow; questions: UnitQuestionRow[] };
+export type TableFilter = "ALL" | "REPORTED" | "LOW_ACCURACY";
+/** A question on the manager's bank table (23b); `accuracy` is null below `min_answers` graded answers. */
+export type QuestionTableRow = {
+  id: string; type: QuestionType; status: QuestionStatus; stem: string; unit_ids: string[];
+  open_report_count: number; answer_count: number; accuracy: number | null; updated_at: string;
+};
+export type QuestionTable = { rows: QuestionTableRow[]; total: number; question_count: number; topics: { unit_id: string | null; count: number }[]; min_answers: number };
 /** A question in the review queue with who wrote it and who reviewed it. */
 export type ReviewQuestion = OwnerQuestion & { author_name?: string | null; reviewer_name?: string | null };
 /** A question of the bank close to another one: `similarity` is the share of shared words, 0..1. */
@@ -346,7 +364,7 @@ export type QuestionAction = "submit" | "approve" | "reject" | "archive";
 export type ReportReason = "INCORRECT_ANSWER" | "MULTIPLE_CORRECT" | "UNCLEAR" | "TYPO" | "OUTDATED" | "DUPLICATE" | "OTHER";
 export type ReportStatus = "OPEN" | "RESOLVED";
 export type ReportReceipt = { id: string; question_id: string; reason: ReportReason; details: string | null; status: ReportStatus; created_at: string };
-export type ModeratorReport = ReportReceipt & { resolution: "DISMISSED" | "QUESTION_ARCHIVED" | null; resolved_by_user_id: string | null; resolved_at: string | null; question: OwnerQuestion };
+export type ModeratorReport = ReportReceipt & { resolution: "DISMISSED" | "QUESTION_ARCHIVED" | "FIXED" | null; resolved_by_user_id: string | null; resolved_at: string | null; question: OwnerQuestion };
 type QuestionBase = { id: string; course_id: string; type: QuestionType; stem: string; difficulty: number | null };
 export type PublicQuestion = QuestionBase & { visibility: "MEMBER"; status: "APPROVED"; options: { position: number; text: string }[]; choices?: { position: number; text: string }[]; hint?: string | null; expr?: string | null; unit_ids?: string[]; unit?: string | null };
 /** What to do with a question whose text you already have: fail the import, leave it out, or overwrite it while it is still a draft. */
