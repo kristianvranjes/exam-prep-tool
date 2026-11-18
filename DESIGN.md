@@ -210,7 +210,7 @@ Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
   frame is called with `focusedPractice`, the nav is hidden, the brand is plain text and the
   content is narrowed (`max-w-3xl`). An appearance button stays in the header and opens a
   popover so palette and font size can still be changed mid-session. `ActiveQuiz` adds the
-  session bar (Spremi i izađi, Odgovoreno N / M, remaining time), question progress strip, status
+  session bar (Izađi iz vježbe / ispita, Odgovoreno N / M, remaining time), question progress strip, status
   navigator and desktop focus toggle; the phone navigator is a bottom sheet.
 - **Course tabs** (Student v3, 21a-21d; `course-header.tsx`): under the course name, with the code as a kicker and
   the next exam's countdown on the right (a button that opens Ispit), a row of `Button variant="tab"` buttons:
@@ -510,6 +510,8 @@ Implemented:
 
 - Mock exam intro 22c (`mock-intro.tsx`, #172): Ispit's "Probni ispit" opens an intro in the tab, laid out like the past paper's 9b intro: "← Ispit", "Probni ispit · <rok>", a stat row (Trajanje, Pitanja, Bodovi, Teme), "Duljina" (20 / 40 / 60 pitanja at about 2¼ min each, only what the cycle can fill), "S vremenskim ograničenjem" (on by default), Pravila (1 bod po pitanju, netočan i prazan 0, rezultat nakon predaje), **Započni · 90 min** with "Izlazak tijekom ispita znači predaju." beside it, and "Pitanja po temama" (round-robin spread, as the server spreads) with "Zadnji: 26 / 40". It starts a scored mock exam (`POST /mock-exams`, one point a question, optional deadline); the MOCK choice of the full setup stays. The past paper intro gets the same exit line under its start buttons.
 
+- Exit dialog 22d (`quiz-exit-dialog.tsx`, #172): the session bar's "Izađi iz vježbe" opens a modal `dialog` instead of leaving at once. Practice and an untimed paper: "Izaći iz vježbe?", "Odgovorili ste na k od N pitanja", that answers are saved (or are saved on the way out) and the session waits on Danas, then **Spremi i izađi** (primary, focused), **Predaj sada i vidi rezultat** (the existing finish; disabled with a reason until one answer exists) and **Nastavi rješavati**. A timed exam ("Izađi iz ispita") has no saving: "Izaći iz ispita?", "izlazak znači predaju", **Predaj ispit i vidi rezultat** or **Nastavi rješavati**. An edited answer that cannot be saved still gets the "Zadržati nespremljen odgovor?" decision first. Escape and Nastavi rješavati return focus to the exit button.
+
 - Topic picker 22a (`topic-picker.tsx`, #172): "Što vježbate?" is the first screen of practice in a course ("Vježbaj" on Učenje opens it with the two weakest topics; the address `/practice` too). Topics are checkbox rows (name, state in words or "Najslabija / Druga najslabija · n %" in accent, a bar, "Predloženo"); before any result the first topic not started is suggested. A "Pitanja koja ste pogriješili" row (checked, "Predloženo") appears when the course has mistakes: they come first, from all topics (`include_mistakes`). A side panel holds the duration (10 / 20 / 30 min = 7 / 14 / 20 questions; a generated session holds at most 20), the count as a hero number with its make-up ("6 pogriješenih · 8 iz 2 teme"), a note when the choice holds fewer questions, **Započni · N pitanja** (a guided session) and "Vježba po mjeri →", the full setup, which keeps a "← Odabir tema" link back. A course without topics goes straight to the full setup. Other ways in (mock exam, Pogreške, Favoriti, the estimate's topic practice) still open the full setup.
 
 - Single-question editor 6d (`question-editor.tsx`, inside the question bank, no route of its own): the list of the current bank page on the left, the form in the middle, and a side panel with
@@ -534,6 +536,7 @@ Pending:
   "n / m točno" column.
 
 - Study plan 2g and course page 2c (wait for the plan data); Google sign-in on 2a.
+- Practice flow 22b, 22c, 22e and 22f (#172; gap list on the issue).
 - Moderator question order inside a quiz (the drag handle of 6c; `question_units` has no position column, so it needs a backend change) and the duplicate/unknown-topic warnings of the import preview (the server now reports them).
 - Remaining mobile screens 7a-7m and 8d-8e (practice question sheet and safe-area-aware
   answer actions are implemented with 1a/1e).
