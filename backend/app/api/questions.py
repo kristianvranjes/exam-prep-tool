@@ -27,6 +27,7 @@ from app.services.ai.base import AIProvider
 from app.services.ai.router import get_ai_provider
 from app.services.embeddings.base import EmbeddingProvider
 from app.services.embeddings.router import get_embedding_provider
+from app.services.question_similarity import SimilarQuestion, similar_questions
 from app.services.questions import service
 from app.services.questions.generation import generate_questions
 from app.services.questions.importing import (
@@ -104,6 +105,16 @@ def list_questions(
     return service.list_questions(
         db, user, course_id, status, type, limit, offset, unit_id, unassigned
     )
+
+
+@router.get("/questions/{question_id}/similar", response_model=list[SimilarQuestion])
+def similar(
+    question_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> list[SimilarQuestion]:
+    """Up to three approved questions of the course whose text overlaps this one most (23d).
+
+    For the course owner and faculty moderators, before accepting a proposed question."""
+    return similar_questions(db, user, question_id)
 
 
 @router.get("/questions/{question_id}", response_model=QuestionResponse)

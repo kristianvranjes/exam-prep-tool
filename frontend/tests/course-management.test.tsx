@@ -10,6 +10,7 @@ vi.mock("../src/components/question-bank", () => ({ QuestionBank: ({ courseId }:
 vi.mock("../src/components/quiz-moderation", () => ({ QuizModeration: () => <section aria-label="Kvizovi kolegija">Quizzes</section> }));
 vi.mock("../src/components/faculty-moderation", () => ({ ReportsQueue: ({ facultyId, courseId }: { facultyId: string; courseId: string }) => <section aria-label="Prijave">Reports {facultyId} {courseId}</section> }));
 vi.mock("../src/components/question-suggestions-queue", () => ({ QuestionSuggestionsQueue: () => <section aria-label="Prijedlozi">Suggestions</section> }));
+vi.mock("../src/components/proposal-review", () => ({ ProposalReview: ({ courseId }: { courseId: string }) => <section aria-label="Nova pitanja na pregledu">Proposals {courseId}</section> }));
 
 const course = { id: "course", faculty_id: "faculty", name: "Digitalna logika" } as Course;
 
@@ -51,7 +52,12 @@ it("opens a queue scoped to this course and keeps the other areas mounted but hi
   // The suggestions queue is not mounted until it is opened.
   expect(screen.queryByRole("region", { name: "Prijedlozi", hidden: true })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /Prijedlozi pitanja/ }));
+  // Proposals open on the new questions (23d); suggested edits are the other view.
+  expect(await screen.findByRole("region", { name: "Nova pitanja na pregledu" })).toHaveTextContent("Proposals course");
+  expect(screen.queryByRole("region", { name: "Prijedlozi", hidden: true })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Izmjene pitanja" }));
   await waitFor(() => expect(screen.getByRole("region", { name: "Prijedlozi" })).toBeVisible());
+  expect(screen.getByRole("region", { name: "Nova pitanja na pregledu", hidden: true })).not.toBeVisible();
 });
 
 it("shows the bank when a question is opened from elsewhere", () => {
