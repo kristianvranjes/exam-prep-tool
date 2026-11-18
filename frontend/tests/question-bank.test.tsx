@@ -50,10 +50,11 @@ it("reports an approved public question without revealing answer content", async
   expect(selected).not.toHaveTextContent("(correct)");
   fireEvent.click(within(selected).getByRole("button", { name: "Prijavi problem" }));
   const form = within(selected).getByRole("form", { name: "Prijava problema s pitanjem" });
-  expect(within(form).getByRole("option", { name: "Više točnih odgovora" })).toBeInTheDocument();
-  fireEvent.change(within(form).getByLabelText("Razlog"), { target: { value: "OTHER" } });
+  expect(within(selected).getByRole("dialog", { name: "Prijava greške ili prijedlog" })).toBeInTheDocument();
+  expect(within(form).getByRole("radio", { name: "Više točnih odgovora" })).toBeInTheDocument();
+  fireEvent.click(within(form).getByRole("radio", { name: "Ostalo" }));
   expect(within(form).getByRole("button", { name: "Pošalji prijavu" })).toBeDisabled();
-  fireEvent.change(within(form).getByLabelText("Detalji"), { target: { value: "  The wording is unclear  " } });
+  fireEvent.change(within(form).getByLabelText("Opis"), { target: { value: "  The wording is unclear  " } });
   fireEvent.click(within(form).getByRole("button", { name: "Pošalji prijavu" }));
   await waitFor(() => expect(mock.reportQuestion).toHaveBeenCalledWith("q1", { reason: "OTHER", details: "The wording is unclear" }));
   expect(await within(selected).findByText("Prijava je poslana na pregled fakulteta.")).toBeInTheDocument();
@@ -67,10 +68,10 @@ it("keeps an approved owner's report form for retry after a duplicate conflict",
   fireEvent.click(screen.getByRole("button", { name: /What is a matrix/ }));
   fireEvent.click(screen.getByRole("button", { name: "Prijavi problem" }));
   const form = screen.getByRole("form", { name: "Prijava problema s pitanjem" });
-  fireEvent.change(within(form).getByLabelText("Detalji"), { target: { value: "Needs review" } });
+  fireEvent.change(within(form).getByLabelText("Opis (neobavezno)"), { target: { value: "Needs review" } });
   fireEvent.click(within(form).getByRole("button", { name: "Pošalji prijavu" }));
   expect(await screen.findByText("You already have an open report for this question")).toBeInTheDocument();
-  expect(within(form).getByLabelText("Detalji")).toHaveValue("Needs review");
+  expect(within(form).getByLabelText("Opis (neobavezno)")).toHaveValue("Needs review");
   fireEvent.click(within(form).getByRole("button", { name: "Pošalji prijavu" }));
   await waitFor(() => expect(mock.reportQuestion).toHaveBeenCalledTimes(2));
   expect(await screen.findByText("Prijava je poslana na pregled fakulteta.")).toBeInTheDocument();
