@@ -8,6 +8,7 @@ import { CourseHeader } from "./course-header";
 import { CourseManagement, openCountLabel, useOpenCounts, type ManageTab } from "./course-management";
 import { CourseMaterials, type MaterialsSummary } from "./course-materials";
 import { CourseOverview } from "./course-overview";
+import { TopicPage } from "./topic-page";
 import { CourseQuestions } from "./course-questions";
 import { CourseSettings } from "./course-settings";
 import { CourseUnits } from "./course-units";
@@ -25,7 +26,7 @@ export type { CourseDestination } from "../lib/workspace-route";
 type MoreDestination = "units" | "analysis" | "settings";
 
 export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = false, roleKnown = true, visible, destination, navigate, goHome, checkingSession,
-  adaptiveReviewRequest, onOpenAdaptiveReview, knownAttemptId, knownAttempt, onResume, onResumableAttemptChange, activeSession, routeAttemptId, routeResults, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onUpdated, onDeleted, onOpenAttempt, onOpenResults, onOpenReview }: {
+  adaptiveReviewRequest, onOpenAdaptiveReview, knownAttemptId, knownAttempt, onResume, onResumableAttemptChange, activeSession, routeAttemptId, routeResults, routeUnitId, onOpenTopic, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onUpdated, onDeleted, onOpenAttempt, onOpenResults, onOpenReview }: {
   course: Course; currentUserId: string; isOwner: boolean; visible: boolean; destination: CourseDestination;
   /** A moderator of the course's faculty; with owners, they manage the course (Upravljanje, materials, item analysis). */
   isModerator?: boolean;
@@ -36,6 +37,10 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
   adaptiveReviewRequest: number; onOpenAdaptiveReview: () => void; knownAttemptId: string | null; knownAttempt?: ResumableAttempt;
   onResume: () => void; onResumableAttemptChange: (id: string | null) => void;
   activeSession: boolean; routeAttemptId?: string | null; routeResults: boolean;
+  /** The topic shown on the topic page (22b), from the address. */
+  routeUnitId?: string | null;
+  /** Opens one topic's page (22b). */
+  onOpenTopic?: (unitId: string) => void;
   onAttemptRoute: (attempt: Attempt | null, replace?: boolean) => void; onAttemptChange: (attempt: Attempt | null) => void;
   /** Opens a session started outside Practice, such as a past exam. */
   onOpenAttempt?: (attempt: Attempt) => void;
@@ -105,7 +110,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         onPractice={() => { setCustomRequest(value => value + 1); navigate("practice"); }} onOpenReview={onOpenReview}
         knownAttemptId={knownAttemptId} knownAttempt={knownAttempt} checkingSession={checkingSession} activeSession={activeSession} onResume={onResume}
         onRecommendedPractice={unitIds => openPractice("ADAPTIVE", { unitIds, view: "picker" })}
-        onStartAttempt={onOpenAttempt}
+        onStartAttempt={onOpenAttempt} onOpenTopic={onOpenTopic}
         onQuestions={openQuestionBank} onMaterials={manager ? () => navigate("materials") : undefined} />
     </section>
     <div id="course-practice" hidden={destination !== "practice"}>
@@ -116,6 +121,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         onOpenProgress={() => navigate("progress")} onBackToCourse={() => navigate("overview")}
         onPracticeMistakes={() => openPractice("MISTAKES")} onPracticeTopic={unitId => openPractice("ADAPTIVE", { unitIds: [unitId], view: "picker" })} onBackHome={goHome} /></div>
     </div>
+    {destination === "topic" && routeUnitId && <div id="course-topic"><TopicPage key={routeUnitId} courseId={course.id} unitId={routeUnitId} active={visible}
+      canStart={!activeSession} onBack={() => navigate("overview")} onStartAttempt={attempt => onOpenAttempt?.(attempt)} onQuestions={openQuestionBank} /></div>}
     {/* Ispit (21b): the points estimate with the mock exam, then the past papers. Read afresh on every visit. */}
     {destination === "exam" && <div id="course-exam" className="flex flex-col gap-section">
       <ExamEstimateView courseId={course.id} active={visible}
