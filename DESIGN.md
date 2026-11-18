@@ -188,7 +188,7 @@ Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
 `frontend/src/lib/workspace-route.ts`.
 
 - **Top bar** (all screens except practice): brand `ExamPrep.` (the dot in `accent`) on the
-  left; on the right the destinations Kolegiji, Ponavljanje, Napredak (and Alati fakulteta
+  left; on the right the destinations Danas, Ponavljanje, Napredak (and Alati fakulteta
   for moderators) at 14 px / 400, the current one in `accent` with a 2px accent underline as
   a non-colour cue and `aria-current="page"`. Then a settings icon (40 px) that leads to the
   settings page (`/settings`) and an avatar (32 px square, initials, `bg-foreground` /
@@ -200,7 +200,7 @@ Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
   courses (`useDueCounts`), as a small accent square; the link's accessible name states it
   ("Ponavljanje, 3 za ponoviti"). No badge when nothing is due.
 - **Mobile bottom tab bar**: below `md` the same `nav` is fixed to the bottom edge with
-  Kolegiji, Ponavljanje (with the badge), Napredak, Alati fakulteta (moderators only) and
+  Danas, Ponavljanje (with the badge), Napredak, Alati fakulteta (moderators only) and
   Postavke (56 px minimum height plus the safe-area inset; the current tab gets a 2px accent
   bar on top). The handoff's separate moderator bar (Kvizovi, Banka, Prijave, Prijedlozi) is
   pending.
@@ -230,8 +230,11 @@ Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
   courses; the full 5a, 2f and 8c layouts are pending.
 - Skip link "Preskoči na sadržaj" (`.skip-link`) targets `#main-content`; headings that
   receive focus after navigation (`tabindex="-1"`) show an underline instead of a box.
-- Flow: Courses (8a) -> Enrol (8b) is a separate page with a "Vaši kolegiji" back button;
-  its faculty selection and search reset every time it opens.
+- **Danas** (`/`, `today-home.tsx`, Student v3 20a/20b): the home page. Danas stays marked in the navigation on the
+  course list (`/courses`) and on enrolment (`/enrol`), which are reached from it.
+- Flow: Danas (20a) -> Enrol (8b) is a separate page with a "Danas" back button; its faculty selection and search reset
+  every time it opens. The course header's back button also reads "Danas". The course list 8a ("Vaši kolegiji") is
+  `/courses`, linked as "Upravljanje kolegijima" at the bottom of Danas.
 
 ## Components (`frontend/src/components/ui.tsx`)
 
@@ -255,6 +258,20 @@ Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
 - **LoadingState**: muted text with `subtle` skeleton bars (`role="status"`).
 - **EmptyState**: 2px dashed `line-strong` border, a title and one sentence that says what
   to do next; pair it with the primary action (for example "Enrol in a course").
+- **Danas, nearest course** (20a): an `article` with a 6px top edge in the course colour; the code in the course
+  colour beside the name, which is a link into the course ("→"); a large day count in the course colour with
+  "N dana do međuispita / završnog ispita / ispitnog roka" (the kind in the genitive, since a scope's own name cannot be
+  declined) and "<name> · <date> · najbliži ispit"; "Spremnost oko 41 % (raspon 35–47 %) · najslabije: <topic>" from the
+  readiness endpoint; on the right either the open session (a `SegmentBars` strip of answered / not answered for
+  sessions of up to 40 questions, `ResumeSession` with mode, "odgovoreno k od N" and "Nastavi vježbu") or a primary
+  "Vježbaj". An exam that is on today or still running reads "<name> je danas" / "<name> traje do <date>".
+- **Danas, other courses** (20a): rows (`li`) with a 4px top edge in the course colour (never a side stripe): code and
+  name link, exam name and date, the days, one status line (readiness and weakest topic, or "Započeta vježba ·
+  odgovoreno k od N") and a secondary "Vježbaj" or "Nastavi". On a phone the row stacks. A course without a dated exam
+  says "Datum ispita još nije objavljen" and sorts last (by name).
+- **Danas, empty** (20b): "Dobrodošli, <ime>", the h1 "Prvo upišite kolegij koji polažete", one sentence, a primary
+  "Upiši kolegij" and an ordered list of two steps (Upis kolegija, Prva vježba); the first is `aria-current="step"`,
+  filled accent number, the second outlined. The handoff's step "Datum ispita i cilj" waits for #173.
 - **Course card** (8a): custom `li` (not `Surface`) with a 6px top edge in the course colour,
   abbreviation (36 px / 800) in the course colour, name, description, an "Open course"
   button and a ⋯ overflow menu (Mark as finished, Remove from list). With a dated next exam
@@ -398,7 +415,7 @@ components. Only their colours changed: they now come from the palette tokens ab
   selected question are sibling cards; inside them, rows are separated by rules (`divide-y`,
   `border-t border-line`), never boxes inside the card.
 - **Tab titles**: most specific first, then the course, then the product ("Vježba · Formalni
-  jezici · ExamPrep", "Prošli ispiti · …", "Rezultati · …", "Vaši kolegiji · ExamPrep",
+  jezici · ExamPrep", "Prošli ispiti · …", "Rezultati · …", "Danas · ExamPrep", "Vaši kolegiji · ExamPrep",
   "Upis kolegija · ExamPrep"). `AppShell` renders React's `<title>` from `documentTitle()` in
   `lib/workspace-route.ts`; the root `metadata` keeps only the description. A course ID is
   never shown while the name is loading.
@@ -427,7 +444,7 @@ Implemented:
 - Tokens, five palettes (dark default, Papir, Noćno plava, Visoki kontrast, Vlastita) and
   the font-size multiplier, theme and appearance controls (`theme.tsx`).
 - Archivo type, radius 0, 2px borders, `ui.tsx` primitives restyled.
-- Navigation bar: Kolegiji, Ponavljanje (due badge), Napredak, settings link and account
+- Navigation bar: Danas, Ponavljanje (due badge), Napredak, settings link and account
   menu; the phone tab bar with the same destinations; practice focus mode as described above.
 - The handoff's neutral steps (`track`, `quiet`, `faint`, `soft`) and the shared primitives
   for the remaining screens (`SegmentedControl`, `PageHeader`, `StatCell`, `ProgressBar`,
@@ -455,7 +472,8 @@ Implemented:
   "Vaš odgovor ✓" wording.
 - First versions of the global pages `/review`, `/progress` and `/settings`.
 - 8a "Vaši kolegiji": course cards with next exam, readiness and progress bar, enrolled
-  list, finished and removed courses saved on the backend.
+  list, finished and removed courses saved on the backend. Since Danas it is its own page, `/courses`
+  ("Upravljanje kolegijima").
 - 8b "Upis kolegija": separate page (`CourseBrowser`, route `/enrol`) with faculty select,
   search, year filter, question count and moderator note per row. Enrolled rows read
   "Upisano ✓" with the accessible name "Upisano, otvori kolegij: <name>".
@@ -484,7 +502,7 @@ Implemented:
 - Student v3, course tabs (21a-21d, #171 first part): the header with the exam countdown and the tabs Učenje, Ispit,
   Napredak, Pitanja i materijali and, for managers, Upravljanje with its open count, as described under Navigation and
   the patterns above. They replace the single-page course 2b, the separate past exams (9a) and estimate (9c) pages and
-  the students' "Više"; the course page no longer shows the readiness range (Home's course cards still do). Managers
+  the students' "Više"; the course page no longer shows the readiness range (Danas and the course list still do). Managers
   reach units, item analysis and settings through "Cjeline i postavke" in Upravljanje. Without the study plan: where
   the handoff shows plan variants, the version without a plan is built.
 
@@ -497,12 +515,16 @@ Implemented:
   it), the type picker is a labelled select, and the list on the left opens only the user's own drafts and rejected questions.
 
 
+- Student v3 Danas (20a) and its empty state (20b), #171 second part: `/` is Danas as described under Navigation and
+  the patterns above; the course list moved to `/courses`. Left out for lack of data: the time left in a started
+  session ("još oko 15 min"; only a timed paper's deadline is known), the question the student is on (the strip counts
+  answered questions, not the position), and the rows' plan line ("Po planu danas", #173). Course colours come from the
+  handoff palette by code or a stable hash of the course id (`courseColor`), never stored.
+
 Pending:
 
-- Student v3 Danas (20a) and its empty state (20b), the second part of #171; the course list "Vaši kolegiji" stays the
-  home page until then.
-- Study plan on request (#173): 20c (exam date and goal), the plan variants of 21a and 21c, and the goal mark on 21b's
-  scale.
+- Study plan on request (#173): 20c (exam date and goal), the "Datum ispita i cilj" step of 20b and the plan line of
+  20a's rows, the plan variants of 21a and 21c, and the goal mark on 21b's scale.
 - Parts of 21a-21d that need data the app does not have: a time estimate for "Vježbaj sada", the "Preporučeno" tag on
   a past paper, each session's score in Napredak's history, and 21d's Označena, Moji prijedlozi and the per-question
   "n / m točno" column.
