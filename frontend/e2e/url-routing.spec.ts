@@ -70,7 +70,8 @@ for (const width of [1280, 390]) {
       await backDialog.dismiss();
       await expect(page).toHaveURL(attemptUrl);
       await expect(answer).toHaveValue("My unsaved explanation");
-      await page.getByRole("button", { name: "Spremi i izađi" }).click();
+      await page.getByRole("button", { name: "Izađi iz vježbe" }).click();
+      await page.getByRole("dialog", { name: "Izaći iz vježbe?" }).getByRole("button", { name: "Spremi i izađi" }).click();
       await expect(page).toHaveURL(new RegExp(`${base}/practice$`));
       await page.getByRole("button", { name: "Nastavi vježbu", exact: true }).click();
       await expect(page).toHaveURL(attemptUrl);
@@ -79,7 +80,8 @@ for (const width of [1280, 390]) {
       await expect(answer).toHaveValue("My unsaved explanation");
       await answer.fill("Changed answer after refresh");
       // There is no course navigation while answering: Save and leave keeps the answer.
-      await page.getByRole("button", { name: "Spremi i izađi" }).click();
+      await page.getByRole("button", { name: "Izađi iz vježbe" }).click();
+      await page.getByRole("dialog", { name: "Izaći iz vježbe?" }).getByRole("button", { name: "Spremi i izađi" }).click();
       await openScreen("Napredak");
       await expect(page).toHaveURL(new RegExp(`${base}/progress$`));
       await expect(page.getByRole("region", { name: "Napredak", exact: true })).toBeVisible();
@@ -89,7 +91,8 @@ for (const width of [1280, 390]) {
       await expect(page).toHaveURL(attemptUrl);
       await expect(answer).toHaveValue("Changed answer after refresh");
       // Cancelling Forward is covered by returning to a dirty session from setup.
-      await page.getByRole("button", { name: "Spremi i izađi" }).click();
+      await page.getByRole("button", { name: "Izađi iz vježbe" }).click();
+      await page.getByRole("dialog", { name: "Izaći iz vježbe?" }).getByRole("button", { name: "Spremi i izađi" }).click();
       await expect(page).toHaveURL(new RegExp(`${base}/practice$`));
       await page.goBack();
       await expect(answer).toHaveValue("Changed answer after refresh");
