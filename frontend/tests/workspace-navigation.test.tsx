@@ -516,8 +516,9 @@ it("minimizes application navigation during answering and restores it after Save
   expect(screen.queryByRole("link", { name: "ExamPrep, početna" })).not.toBeInTheDocument();
   // There is no course navigation while answering, only Save and leave.
   expect(screen.queryByRole("navigation", { name: "Navigacija kolegija" })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Spremi i izađi" })).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Spremi i izađi" }));
+  expect(screen.getByRole("button", { name: "Izađi iz vježbe" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Izađi iz vježbe" }));
+  fireEvent.click(within(screen.getByRole("dialog", { name: "Izaći iz vježbe?" })).getByRole("button", { name: "Spremi i izađi" }));
   await screen.findByRole("button", { name: "Započni vježbu" });
   expect(screen.getByRole("link", { name: "ExamPrep, početna" })).toBeVisible();
   expect(screen.getByRole("navigation", { name: "Navigacija kolegija" })).toBeVisible();
