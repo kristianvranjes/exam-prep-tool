@@ -506,6 +506,13 @@ only records the session as `QUICK` for
 [pilot metrics](PRACTICE.md#recorded-selection-mode-migration-0026). The recorded mode
 is not returned.
 
+Optional `include_mistakes: true` (only with `ADAPTIVE` and without `quick_quiz`, otherwise
+422) is the topic picker's "Pitanja koja ste pogriješili" (handoff 22a): the course's
+mistakes come first, from every unit and with the session's type filter, oldest review
+first as in `MISTAKES`; the rest of `count` is `ADAPTIVE` within the focus, without the
+mistakes already taken. The pool is the union, so a mistake inside the focus counts once;
+409 when it holds fewer than `count`. The session is recorded as `ADAPTIVE`.
+
 ### Mock exams
 
 `POST /courses/{course_id}/mock-exams` — members, 201 with the attempt. A generated exam simulation

@@ -46,7 +46,7 @@ export function CourseHeader({ course, destination, active, manager, openCount, 
   const current = tabOf[destination];
 
   return <header className={cn(!bare && "mb-8")}>
-    {!bare && <Button variant="ghost" className="-ml-1 px-1 text-muted hover:text-foreground" onClick={goHome}><span aria-hidden="true">←</span> Vaši kolegiji</Button>}
+    {!bare && <Button variant="ghost" className="-ml-1 px-1 text-muted hover:text-foreground" onClick={goHome}><span aria-hidden="true">←</span> Danas</Button>}
     <div className={cn(!bare && "mt-2 flex flex-wrap items-end justify-between gap-x-8 gap-y-4")}>
       <div className="min-w-0">
         {!bare && course.code && <p className="label-caps text-accent">{course.code}</p>}
