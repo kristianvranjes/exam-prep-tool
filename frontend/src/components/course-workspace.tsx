@@ -8,6 +8,7 @@ import { CourseHeader } from "./course-header";
 import { CourseManagement, openCountLabel, useOpenCounts, type ManageTab } from "./course-management";
 import { CourseMaterials, type MaterialsSummary } from "./course-materials";
 import { CourseOverview } from "./course-overview";
+import { MockIntro } from "./mock-intro";
 import { CourseQuestions } from "./course-questions";
 import { CourseSettings } from "./course-settings";
 import { CourseUnits } from "./course-units";
@@ -55,6 +56,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
   const [unitsOpened, setUnitsOpened] = useState(false);
   const [materials, setMaterials] = useState<MaterialsSummary>({ materials: [], loading: true, error: false });
   const [setupRequest, setSetupRequest] = useState<PracticeSetupRequest | null>(null);
+  // Ispit's mock exam intro (22c) for one exam cycle; null shows the estimate and the past papers.
+  const [mockScope, setMockScope] = useState<string | null>(null);
   const focused = destination === "practice" && activeSession;
   // Managers keep the question bank in Upravljanje; students find it in Pitanja i materijali. Both mount on first use.
   const [manageOpened, setManageOpened] = useState(destination === "manage");
@@ -114,10 +117,12 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         onOpenProgress={() => navigate("progress")} onBackToCourse={() => navigate("overview")} /></div>
     </div>
     {/* Ispit (21b): the points estimate with the mock exam, then the past papers. Read afresh on every visit. */}
-    {destination === "exam" && <div id="course-exam" className="flex flex-col gap-section">
+    {destination === "exam" && mockScope && <div id="course-exam"><MockIntro key={mockScope} courseId={course.id} scopeId={mockScope} canStart={!activeSession}
+      onBack={() => setMockScope(null)} onStartAttempt={attempt => { setMockScope(null); onOpenAttempt?.(attempt); }} /></div>}
+    {destination === "exam" && !mockScope && <div id="course-exam" className="flex flex-col gap-section">
       <ExamEstimateView courseId={course.id} active={visible}
         onPracticeUnit={(unitId, scopeId) => openPractice("ADAPTIVE", { scopeId, unitIds: [unitId] })}
-        onMock={scopeId => openPractice("MOCK", { scopeId })} />
+        onMock={setMockScope} />
       <ExamPapers courseId={course.id} onStartAttempt={onOpenAttempt} />
     </div>}
     <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} onStartAttempt={onOpenAttempt}
