@@ -301,6 +301,11 @@ async function start(experience: "Vođena vježba" | "Ispitna vježba" = "Vođen
   await screen.findByText("Choose a number");
   fireEvent.click(screen.getByText("Više", { selector: "summary" }));
 }
+/** 22d: the header's exit opens a dialog; this picks "Spremi i izađi" in it. */
+function saveAndLeave() {
+  fireEvent.click(screen.getByRole("button", { name: "Izađi iz vježbe" }));
+  fireEvent.click(within(screen.getByRole("dialog", { name: "Izaći iz vježbe?" })).getByRole("button", { name: "Spremi i izađi" }));
+}
 function allAnswered() {
   current.questions[0].answer = { type: "MULTIPLE_CHOICE", option_position: 1 };
   current.questions[1].answer = { type: "TRUE_FALSE", value: false };
@@ -400,7 +405,7 @@ it("requires an explicit decision before leaving or reloading an edited answer",
   fireEvent.click(screen.getByRole("button", { name: "Nastavi uređivati" }));
   expect(screen.getByText("Pitanje 1 od 3")).toHaveFocus();
   expect(screen.getByLabelText("One")).toBeChecked();
-  fireEvent.click(screen.getByRole("button", { name: "Spremi i izađi" }));
+  saveAndLeave();
   await screen.findByRole("button", { name: "Započni vježbu" });
   expect(current.questions[0].answer).toEqual({ type: "MULTIPLE_CHOICE", option_position: 0 });
 });
@@ -775,14 +780,17 @@ it("saves before leaving, prevents duplicate saves, and preserves a failed draft
   await start(); fireEvent.click(screen.getByLabelText("Two"));
   let reject!: (cause: Error) => void;
   mock.save.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
-  fireEvent.click(screen.getByRole("button", { name: "Spremi i izađi" }));
-  fireEvent.click(screen.getByRole("button", { name: "Spremi i izađi" }));
+  saveAndLeave();
+  // While the save runs, the exit cannot be asked again.
+  expect(screen.getByRole("button", { name: "Izađi iz vježbe" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Izađi iz vježbe" }));
+  expect(screen.queryByRole("dialog", { name: "Izaći iz vježbe?" })).not.toBeInTheDocument();
   expect(mock.save).toHaveBeenCalledOnce();
   expect(mock.history).toHaveBeenCalledOnce();
   await act(async () => reject(new Error("Offline")));
   expect(screen.getByLabelText("Two")).toBeChecked();
   expect(screen.getByText("Spremanje nije uspjelo")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Spremi i izađi" }));
+  saveAndLeave();
   await screen.findByRole("button", { name: "Započni vježbu" });
   expect(current.questions[0].answer).toEqual({ type: "MULTIPLE_CHOICE", option_position: 1 });
   expect(mock.history).toHaveBeenCalledTimes(2);
@@ -792,7 +800,9 @@ it("requires an explicit decision before leaving an invalid edited short answer"
   await start("Ispitna vježba");
   fireEvent.click(screen.getByRole("button", { name: /Pitanje 3.*Bez odgovora/ }));
   fireEvent.change(await screen.findByLabelText("Vaš kratki odgovor"), { target: { value: "   " } });
-  fireEvent.click(screen.getByRole("button", { name: "Spremi i izađi" }));
+  fireEvent.click(screen.getByRole("button", { name: "Izađi iz vježbe" }));
+  // An answer that cannot be saved gets its own decision instead of the exit dialog.
+  expect(screen.queryByRole("dialog", { name: "Izaći iz vježbe?" })).not.toBeInTheDocument();
   expect(screen.getByText("Zadržati nespremljen odgovor?")).toHaveFocus();
   expect(screen.getByRole("button", { name: "Spremi i nastavi" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Nastavi uređivati" }));
@@ -1132,6 +1142,53 @@ it("shows the exam timer and hands in saved answers when the server deadline pas
   await waitFor(() => expect(mock.submit).toHaveBeenCalledWith("course", "attempt"), { timeout: 4000 });
   expect(await screen.findByRole("heading", { name: "Vježba je završena" })).toBeVisible();
   expect(mock.submit).toHaveBeenCalledTimes(1);
+});
+
+it("asks before leaving practice: stay, save and leave, or hand in now (22d)", async () => {
+  await start();
+  const exit = screen.getByRole("button", { name: "Izađi iz vježbe" });
+  // A real click focuses the button; fireEvent does not.
+  exit.focus();
+  fireEvent.click(exit);
+  let dialog = screen.getByRole("dialog", { name: "Izaći iz vježbe?" });
+  expect(dialog).toHaveTextContent("Odgovorili ste na 0 od 3 pitanja. Odgovori su spremljeni, a vježba vas čeka na stranici Danas.");
+  expect(within(dialog).getByRole("button", { name: "Spremi i izađi" })).toHaveFocus();
+  // Nothing answered yet: handing in needs one answer.
+  expect(within(dialog).getByRole("button", { name: "Predaj sada i vidi rezultat" })).toBeDisabled();
+  expect(dialog).toHaveTextContent("Za predaju odgovorite na barem jedno pitanje.");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Nastavi rješavati" }));
+  expect(screen.queryByRole("dialog", { name: "Izaći iz vježbe?" })).not.toBeInTheDocument();
+  expect(exit).toHaveFocus();
+
+  // An answer not saved yet is saved on the way out, and it is enough to hand in.
+  fireEvent.click(screen.getByLabelText("One"));
+  fireEvent.click(exit);
+  dialog = screen.getByRole("dialog", { name: "Izaći iz vježbe?" });
+  expect(dialog).toHaveTextContent("Odgovori se spremaju pri izlasku");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Predaj sada i vidi rezultat" }));
+  expect(await screen.findByRole("heading", { name: "Vježba je završena" })).toBeVisible();
+  expect(mock.save).toHaveBeenCalledWith("course", "attempt", "mcq", { type: "MULTIPLE_CHOICE", option_position: 0 });
+  expect(mock.submit).toHaveBeenCalledOnce();
+});
+
+it("leaving a timed exam hands it in, with no saving to come back to (22d)", async () => {
+  const now = Date.now();
+  current.feedback_mode = "END";
+  current.paper = { exam_paper_id: "p1", title: "MI 2025/26", total_points: 6, wrong_answer_penalty: 0.25, pass_threshold: 4, duration_minutes: 90 };
+  current.questions = current.questions.map((q, index) => ({ ...q, points: [2, 1, 3][index], label: null }));
+  current.deadline_at = new Date(now + 60 * 60_000).toISOString();
+  current.server_time = new Date(now).toISOString();
+  mock.history.mockResolvedValue([current]);
+  render(<PracticeQuiz courseId="course" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Nastavi vježbu" }));
+  await screen.findByText("Choose a number");
+  fireEvent.click(screen.getByRole("button", { name: "Izađi iz ispita" }));
+  const dialog = screen.getByRole("dialog", { name: "Izaći iz ispita?" });
+  expect(dialog).toHaveTextContent("Na ispitu s vremenom nema spremanja: izlazak znači predaju.");
+  expect(within(dialog).queryByRole("button", { name: "Spremi i izađi" })).not.toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Predaj ispit i vidi rezultat" }));
+  await waitFor(() => expect(mock.submit).toHaveBeenCalledWith("course", "attempt"));
+  expect(await screen.findByRole("heading", { name: "Vježba je završena" })).toBeVisible();
 });
 
 it("answers numeric and multiple-select questions and shows their keys in results", async () => {
