@@ -17,6 +17,7 @@ import { Sheet } from "./sheet";
 import { shortcutAnswer, ShortcutsDialog, usePracticeShortcuts } from "./practice-shortcuts";
 import { useUnsavedChanges } from "./unsaved-changes";
 import { ReportIssue } from "./question-report";
+import { QuizExitDialog } from "./quiz-exit-dialog";
 
 type Confirmation = "submit" | "reload" | "back" | "abandon";
 export function ActiveQuiz({ attempt, experience, update: onUpdate, back: onBack, onDirtyChange }: {
@@ -36,6 +37,7 @@ export function ActiveQuiz({ attempt, experience, update: onUpdate, back: onBack
   const [confidence, setConfidence] = useState<Confidence | null>(null);
   const [focusMode, setFocusMode] = useState(false);
   const [mobileNavigatorOpen, setMobileNavigatorOpen] = useState(false);
+  const [exitOpen, setExitOpen] = useState(false);
   // Favorites are saved on their own, so they never wait for or block an answer save.
   const favorites = useFavorites(attempt.course_id);
   const pending = useRef(false);
@@ -70,6 +72,8 @@ export function ActiveQuiz({ attempt, experience, update: onUpdate, back: onBack
   const paper = attempt.paper ?? null;
   // Practice needs one saved answer to record; a paper may be handed in empty when its time runs out.
   const blocked = !paper && answered === 0;
+  // A timed exam keeps no session to come back to: leaving it hands it in (22d).
+  const timed = Boolean(attempt.deadline_at);
   const [timeUp, setTimeUp] = useState(false);
   const answeredPoints = attempt.questions.reduce((sum, item) => sum + (item.answer !== null ? item.points ?? 0 : 0), 0);
   const blankNote = unanswered === 0 || blocked ? null
@@ -201,8 +205,19 @@ export function ActiveQuiz({ attempt, experience, update: onUpdate, back: onBack
     else void run(() => leave(action));
   }
   function saveAndLeave() {
+    setExitOpen(false);
     if (dirty && !valid) { requestLeave("back"); return; }
     void run(async () => { const saved = await persist(); if (saved.status === "ACTIVE") await leave("back"); });
+  }
+  /** 22d: the header's exit asks first. An edited answer that cannot be saved still gets its own decision. */
+  function requestExit() {
+    if (busy) return;
+    if (dirty && !valid) { requestLeave("back"); return; }
+    setExitOpen(true);
+  }
+  function handInFromExit() {
+    setExitOpen(false);
+    finish();
   }
   usePracticeShortcuts(root, !shortcutsOpen, (action, target) => {
     if (action.kind === "help") { setShortcutsOpen(true); return true; }
@@ -226,8 +241,8 @@ export function ActiveQuiz({ attempt, experience, update: onUpdate, back: onBack
 
   return <div ref={root} className="min-w-0">
     <header aria-label="Traka vježbe" className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b-2 border-line py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[auto_minmax(0,1fr)_auto_auto]">
-      <Button variant="secondary" aria-label="Spremi i izađi" disabled={busy} onClick={saveAndLeave} className="px-3 sm:px-4">
-        <ArrowLeft aria-hidden="true" className="size-4 shrink-0" /><span className="hidden sm:inline">Spremi i izađi</span><span className="sm:hidden">Izađi</span>
+      <Button variant="secondary" aria-label={timed ? "Izađi iz ispita" : "Izađi iz vježbe"} aria-haspopup="dialog" disabled={busy} onClick={requestExit} className="px-3 sm:px-4">
+        <ArrowLeft aria-hidden="true" className="size-4 shrink-0" /><span className="hidden sm:inline">{timed ? "Izađi iz ispita" : "Izađi iz vježbe"}</span><span className="sm:hidden">Izađi</span>
       </Button>
       <div className="min-w-0">
         <h1 className="truncate font-display text-base font-extrabold sm:text-lg">{paper?.title ?? attempt.focus_label ?? "Vježba"}</h1>
@@ -377,5 +392,8 @@ export function ActiveQuiz({ attempt, experience, update: onUpdate, back: onBack
       </Button>}
     </Sheet>
     <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+    <QuizExitDialog open={exitOpen} timed={timed} answered={answered} total={attempt.questions.length} unsavedAnswer={dirty}
+      canHandIn={Boolean(paper) || answered > 0 || (dirty && valid)}
+      onSaveAndLeave={saveAndLeave} onHandIn={handInFromExit} onClose={() => setExitOpen(false)} />
   </div>;
 }
