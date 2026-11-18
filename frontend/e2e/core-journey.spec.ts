@@ -234,7 +234,8 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(studentNavigation).toBeHidden();
     await expect(student.getByRole("navigation", { name: "Glavna navigacija" })).toBeHidden();
     // There is no course navigation while answering; Save and leave returns to the course page.
-    await student.getByRole("button", { name: "Spremi i izađi" }).click();
+    await student.getByRole("button", { name: "Izađi iz vježbe" }).click();
+    await student.getByRole("dialog", { name: "Izaći iz vježbe?" }).getByRole("button", { name: "Spremi i izađi" }).click();
     await openScreen(student, "Učenje");
     await expect(student.getByRole("heading", { name: "Nastavite učiti" })).toBeVisible();
     await expect(student.getByRole("button", { name: "Nastavi vježbu" })).toHaveClass(primaryFill);
@@ -242,7 +243,8 @@ test("moderator and student complete the core exam-preparation journey", async (
     await test.info().attach("overview-resume", { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
     await student.getByRole("button", { name: "Nastavi vježbu" }).click();
     await expect(student.getByRole("radio", { name: correctOption })).toBeChecked();
-    await student.getByRole("button", { name: "Spremi i izađi" }).click();
+    await student.getByRole("button", { name: "Izađi iz vježbe" }).click();
+    await student.getByRole("dialog", { name: "Izaći iz vježbe?" }).getByRole("button", { name: "Spremi i izađi" }).click();
     await student.getByRole("button", { name: "Vaši kolegiji", exact: true }).click();
     await expect(student.getByRole("heading", { name: "Vaši kolegiji", exact: true })).toBeVisible();
     await expect(student.getByRole("heading", { name: "Nastavite učiti" })).toBeVisible();

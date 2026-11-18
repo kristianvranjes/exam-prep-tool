@@ -210,7 +210,7 @@ Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
   frame is called with `focusedPractice`, the nav is hidden, the brand is plain text and the
   content is narrowed (`max-w-3xl`). An appearance button stays in the header and opens a
   popover so palette and font size can still be changed mid-session. `ActiveQuiz` adds the
-  session bar (Spremi i izađi, Odgovoreno N / M, remaining time), question progress strip, status
+  session bar (Izađi iz vježbe / ispita, Odgovoreno N / M, remaining time), question progress strip, status
   navigator and desktop focus toggle; the phone navigator is a bottom sheet.
 - **Course tabs** (Student v3, 21a-21d; `course-header.tsx`): under the course name, with the code as a kicker and
   the next exam's countdown on the right (a button that opens Ispit), a row of `Button variant="tab"` buttons:
@@ -490,6 +490,8 @@ Implemented:
 
 - Course and faculty lifecycle (#176, no handoff screen): "Postavke kolegija" under "Više" is open to the owner and faculty moderators; the owner alone edits the details. "Arhiviranje i brisanje" states the course's state in words (Aktivan / Arhiviran badge plus a sentence), archives or restores it, and only for an archived course offers "Obriši kolegij…": a modal that lists what is lost (attempts and history of every member, materials and source PDFs, questions and the rest) and enables "Trajno obriši kolegij" only once the exact name is typed. The faculty tools list every faculty as ruled rows (name, university, course count, state in words) with Uredi, Arhiviraj / Vrati and, for an archived faculty without courses, a two-step Obriši. The filled danger button is kept for the final step only.
 
+- Exit dialog 22d (`quiz-exit-dialog.tsx`, #172): the session bar's "Izađi iz vježbe" opens a modal `dialog` instead of leaving at once. Practice and an untimed paper: "Izaći iz vježbe?", "Odgovorili ste na k od N pitanja", that answers are saved (or are saved on the way out) and the session waits on Danas, then **Spremi i izađi** (primary, focused), **Predaj sada i vidi rezultat** (the existing finish; disabled with a reason until one answer exists) and **Nastavi rješavati**. A timed exam ("Izađi iz ispita") has no saving: "Izaći iz ispita?", "izlazak znači predaju", **Predaj ispit i vidi rezultat** or **Nastavi rješavati**. An edited answer that cannot be saved still gets the "Zadržati nespremljen odgovor?" decision first. Escape and Nastavi rješavati return focus to the exit button.
+
 - Single-question editor 6d (`question-editor.tsx`, inside the question bank, no route of its own): the list of the current bank page on the left, the form in the middle, and a side panel with
   "Pregled" (the question as a student sees it before checking, no key, no explanation) and "JSON" (the same question as one `quiz-import-v2` item, read only, live). Only fields the data
   model has: the types are the six real ones (the mockup's "Izraz" is a short answer with an expression, "Broj" is numeric), difficulty stays 1-5, and "Bodovi na ispitu" and the source triple
@@ -508,6 +510,7 @@ Pending:
   "n / m točno" column.
 
 - Study plan 2g and course page 2c (wait for the plan data); Google sign-in on 2a.
+- Practice flow 22a, 22b, 22c, 22e and 22f (#172; gap list on the issue).
 - Moderator question order inside a quiz (the drag handle of 6c; `question_units` has no position column, so it needs a backend change) and the duplicate/unknown-topic warnings of the import preview (the server now reports them).
 - Remaining mobile screens 7a-7m and 8d-8e (practice question sheet and safe-area-aware
   answer actions are implemented with 1a/1e).
