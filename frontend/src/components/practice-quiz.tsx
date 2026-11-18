@@ -69,6 +69,10 @@ export function PracticeQuiz({ courseId, active = true, defaultView = "custom", 
   // The picker starts from the topics of the latest request; a new request remounts it with them.
   const [picker, setPicker] = useState<{ revision: number; unitIds?: string[] }>({ revision: 0 });
   const showCustom = useCallback(() => setView("custom"), []);
+  // A course without topics has nothing to pick: once the picker finds that, the full setup stays.
+  const [noTopics, setNoTopics] = useState(false);
+  const topicsMissing = useCallback(() => { setNoTopics(true); setView("custom"); }, []);
+  const picking = view === "picker" && !noTopics;
   const [handledCustomRequest, setHandledCustomRequest] = useState(customRequest);
   if (handledCustomRequest !== customRequest) { setHandledCustomRequest(customRequest); setView("custom"); }
   const [busy, setBusy] = useState(false);
@@ -185,7 +189,7 @@ export function PracticeQuiz({ courseId, active = true, defaultView = "custom", 
   }, [setupRequest, attemptStatus, back, busy, loadHistory, open, run]);
 
   return <section className={`mt-6 flex min-w-0 flex-col gap-5${attempt?.status === "ABANDONED" ? " border-t border-line pt-6" : ""}`} aria-label="Vježba">
-    <h2 ref={heading} tabIndex={-1} className={activeSession || attempt?.status === "SUBMITTED" || (!attempt && view === "picker") ? "sr-only" : "text-xl font-semibold"}>Vježba</h2>
+    <h2 ref={heading} tabIndex={-1} className={activeSession || attempt?.status === "SUBMITTED" || (!attempt && picking) ? "sr-only" : "text-xl font-semibold"}>Vježba</h2>
     {!open && <LoadingState>Pripremam vježbu…</LoadingState>}
     {open && <>
       {error && <Alert>{error}</Alert>}
@@ -199,10 +203,10 @@ export function PracticeQuiz({ courseId, active = true, defaultView = "custom", 
           <Button className="mt-4 w-full sm:w-auto" disabled={busy} onClick={() => void run(() => openAttempt(knownResumableId))}>Nastavi vježbu</Button>
         </Surface>}
         {!historyReady && error && <Button variant="secondary" className="self-start" disabled={busy} onClick={() => void run(() => loadHistory())}>Ponovno učitaj postavke vježbe</Button>}
-        {view === "picker" ? <TopicPicker key={picker.revision} courseId={courseId} active={active} initialUnitIds={picker.unitIds}
-          onStarted={next => { adopt(next); onAttemptRoute?.(next); }} onCustom={showCustom} onNoTopics={showCustom} onCancel={onBackToCourse} />
+        {picking ? <TopicPicker key={picker.revision} courseId={courseId} active={active} initialUnitIds={picker.unitIds}
+          onStarted={next => { adopt(next); onAttemptRoute?.(next); }} onCustom={showCustom} onNoTopics={topicsMissing} onCancel={onBackToCourse} />
         : <>
-        {defaultView === "picker" && <Button variant="ghost" className="-ml-1 self-start px-1 text-muted hover:text-foreground" onClick={() => setView("picker")}><span aria-hidden="true">←</span> Odabir tema</Button>}
+        {defaultView === "picker" && !noTopics && <Button variant="ghost" className="-ml-1 self-start px-1 text-muted hover:text-foreground" onClick={() => setView("picker")}><span aria-hidden="true">←</span> Odabir tema</Button>}
         <PracticeSetup courseId={courseId} active={active} ready={historyReady} busy={busy}
           hasUnfinishedSession={Boolean(knownResumableId)} mode={selectionMode} setMode={setSelectionMode}
           count={count} setCount={setCount} length={length} setLength={setLength}
