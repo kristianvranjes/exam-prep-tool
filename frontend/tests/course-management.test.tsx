@@ -6,16 +6,17 @@ import { CourseManagement, type ManageTab } from "../src/components/course-manag
 
 const mock = vi.hoisted(() => ({ questionReports: vi.fn(), questionSuggestions: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
-vi.mock("../src/components/question-bank", () => ({ QuestionBank: ({ courseId }: { courseId: string }) => <section aria-label="Baza pitanja">Bank {courseId}</section> }));
+vi.mock("../src/components/question-bank", () => ({ QuestionBank: ({ courseId, focus }: { courseId: string; focus: { id: string } | null }) => <section aria-label="Baza pitanja">Bank {courseId} {focus?.id ?? "none"}</section> }));
+vi.mock("../src/components/bank-table", () => ({ BankTable: ({ onEdit, onNew }: { onEdit: (id: string) => void; onNew: () => void }) => <section aria-label="Tablica banke"><button onClick={() => onEdit("q7")}>Uredi q7</button><button onClick={onNew}>Novo pitanje</button></section> }));
 vi.mock("../src/components/quiz-moderation", () => ({ QuizModeration: () => <section aria-label="Kvizovi kolegija">Quizzes</section> }));
 vi.mock("../src/components/report-review", () => ({ ReportReview: ({ facultyId, courseId }: { facultyId: string; courseId: string }) => <section aria-label="Prijave">Reports {facultyId} {courseId}</section> }));
 vi.mock("../src/components/question-suggestions-queue", () => ({ QuestionSuggestionsQueue: () => <section aria-label="Prijedlozi">Suggestions</section> }));
 
 const course = { id: "course", faculty_id: "faculty", name: "Digitalna logika" } as Course;
 
-function Harness({ isModerator, initial = "quizzes" }: { isModerator: boolean; initial?: ManageTab }) {
+function Harness({ isModerator, initial = "quizzes", focus = null }: { isModerator: boolean; initial?: ManageTab; focus?: { id: string; request: number } | null }) {
   const [tab, setTab] = useState<ManageTab>(initial);
-  return <CourseManagement course={course} currentUserId="me" isOwner isModerator={isModerator} tab={tab} onTab={setTab} focus={null} onOpenQuestion={() => undefined} />;
+  return <CourseManagement course={course} currentUserId="me" isOwner isModerator={isModerator} tab={tab} onTab={setTab} focus={focus} onOpenQuestion={() => undefined} />;
 }
 
 beforeEach(() => {
@@ -54,8 +55,21 @@ it("opens a queue scoped to this course and keeps the other areas mounted but hi
   await waitFor(() => expect(screen.getByRole("region", { name: "Prijedlozi" })).toBeVisible());
 });
 
-it("shows the bank when a question is opened from elsewhere", () => {
+it("opens the bank on its table (23b), and the full bank to edit or create a question", () => {
   render(<Harness isModerator={false} initial="bank" />);
-  expect(screen.getByRole("region", { name: "Baza pitanja" })).toHaveTextContent("Bank course");
   expect(screen.getByRole("button", { name: "Banka pitanja" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("region", { name: "Tablica banke" })).toBeVisible();
+  expect(screen.getByRole("region", { name: "Baza pitanja", hidden: true })).not.toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Uredi q7" }));
+  expect(screen.getByRole("region", { name: "Baza pitanja" })).toHaveTextContent("Bank course q7");
+  fireEvent.click(screen.getByRole("button", { name: "Tablica pitanja" }));
+  expect(screen.getByRole("region", { name: "Tablica banke" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Novo pitanje" }));
+  expect(screen.getByRole("region", { name: "Baza pitanja" })).toBeVisible();
+});
+
+it("shows the full bank when a question is opened from elsewhere", () => {
+  render(<Harness isModerator={false} initial="bank" focus={{ id: "q3", request: 1 }} />);
+  expect(screen.getByRole("region", { name: "Baza pitanja" })).toHaveTextContent("Bank course q3");
+  expect(screen.queryByRole("region", { name: "Tablica banke" })).not.toBeInTheDocument();
 });

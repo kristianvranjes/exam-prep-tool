@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -57,3 +58,39 @@ class ReviewQuestion(OwnerQuestion):
 
     author_name: str | None = None
     reviewer_name: str | None = None
+
+
+TableFilter = Literal["ALL", "REPORTED", "LOW_ACCURACY"]
+
+
+class QuestionTableRow(BaseModel):
+    """A question on the manager's bank table (23b)."""
+
+    id: UUID
+    type: QuestionType
+    status: QuestionStatus
+    stem: str
+    # Its units: a unit is a quiz, so this is also the quizzes it is in.
+    unit_ids: list[UUID]
+    open_report_count: int
+    # Graded answers (correct or incorrect) in submitted sessions, and the share correct;
+    # the share is null below `QuestionTable.min_answers`.
+    answer_count: int
+    accuracy: float | None
+    updated_at: datetime
+
+
+class TopicCount(BaseModel):
+    unit_id: UUID | None
+    count: int
+
+
+class QuestionTable(BaseModel):
+    rows: list[QuestionTableRow]
+    # Rows matching the filters, for paging.
+    total: int
+    # Questions of the course that are not archived, whatever the filters.
+    question_count: int
+    # Questions that are not archived per unit, and without a unit (`unit_id` null).
+    topics: list[TopicCount]
+    min_answers: int
