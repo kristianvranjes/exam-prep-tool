@@ -164,6 +164,7 @@ it("shows the rules and scoring of a paper before it starts, then starts it with
   expect(screen.getByLabelText("Podaci o ispitu")).toHaveTextContent("Prag3");
   expect(screen.getByText("−¼ bodova zadatka")).toBeVisible();
   expect(screen.getByText("Kao na roku, bez miješanja")).toBeVisible();
+  expect(screen.getByText("Izlazak tijekom ispita s vremenom znači predaju.")).toBeVisible();
   expect(within(screen.getByRole("list", { name: "Zadaci i bodovi" })).getAllByRole("listitem")).toHaveLength(2);
   fireEvent.click(screen.getByRole("button", { name: "Započni rok · 90 min" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Only published papers can be taken");
