@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.course_unit import UnitId
 from app.schemas.exam_estimate import PointsRange
 from app.schemas.question import StrictModel
 
@@ -20,7 +21,7 @@ class PlanSettings(BaseModel):
 
 
 class PlanSettingsUpdate(StrictModel):
-    exam_scope_id: UUID | None = None
+    exam_scope_id: UnitId | None = None
     target_points: float | None = Field(default=None, gt=0, le=1000)
     daily_minutes: int = Field(default=40, ge=10, le=240)
     plan_enabled: bool = False

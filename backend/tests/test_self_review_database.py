@@ -240,7 +240,7 @@ def test_0025_roundtrip_keeps_answers_and_guards_recorded_self_reviews(bank):
         with pytest.raises(RuntimeError, match="self-assessments exist"):
             command.downgrade(config, "0024")
         with engine.connect() as conn:
-            assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0035"
+            assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "0036"
         assert member.get(path).json() == assessed
         review(member, path, short, None)
         for _ in range(2):
