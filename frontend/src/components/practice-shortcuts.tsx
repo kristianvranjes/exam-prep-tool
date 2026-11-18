@@ -88,7 +88,8 @@ export function usePracticeShortcuts(root: RefObject<HTMLElement | null>, enable
       if (!element || !(target instanceof Element) || event.defaultPrevented || event.repeat || event.isComposing) return;
       if (event.ctrlKey || event.altKey || event.metaKey || (event.shiftKey && event.key !== "?")) return;
       if (target !== document.body && !element.contains(target)) return;
-      if (element.closest("[hidden], [inert]") || typing(target)) return;
+      // A dialog over the question (report, exit) keeps its keys to itself.
+      if (element.closest("[hidden], [inert]") || typing(target) || target.closest("dialog")) return;
       const action = shortcutAction(event.key);
       if (!action || (action.kind === "primary" && target.closest(ACTIVATES_ON_ENTER))) return;
       if (handle(action, target)) event.preventDefault();
