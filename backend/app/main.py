@@ -25,6 +25,7 @@ from app.api.quizzes import availability_router, mock_router
 from app.api.quizzes import router as quizzes_router
 from app.api.reports import router as reports_router
 from app.api.retrieval import router as retrieval_router
+from app.api.study_plan import router as study_plan_router
 from app.api.suggestions import router as suggestions_router
 from app.auth_limit import AuthRequestLimit
 from app.config import Settings
@@ -60,6 +61,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(preferences_router)
+app.include_router(study_plan_router)
 app.include_router(courses_router)
 app.include_router(course_units_router)
 app.include_router(exam_scopes_router)

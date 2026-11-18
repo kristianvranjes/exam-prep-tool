@@ -25,6 +25,7 @@ from app.models import (  # noqa: E402,F401
     question_favorite,
     question_report,
     quiz,
+    study_plan,
     user,
     user_question_progress,
 )
