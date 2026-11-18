@@ -183,6 +183,8 @@ def select_questions(
     # Readers with different rankings cannot deadlock on one another.
     if mode == "MOCK":
         return _mock(db, query, user_id, unit_ids, data.count, selection_time)
+    if data.include_mistakes:
+        return _mistakes_first(db, user_id, course_id, data, unit_ids, selection_time)
     return list(
         db.scalars(
             _ranked(query, user_id, mode, selection_time)
@@ -190,6 +192,48 @@ def select_questions(
             .with_for_update(read=True, of=Question)
         )
     )
+
+
+def _mistakes_first(
+    db: Session,
+    user_id: UUID,
+    course_id: UUID,
+    data: StartQuiz,
+    unit_ids: list[UUID],
+    selection_time: datetime,
+) -> list[Question]:
+    """The course's mistakes first (oldest review first), then ADAPTIVE within the focus.
+
+    Both parts keep the session's type filter and skip questions waiting in an unfinished
+    session; a mistake inside the focus is taken once, as a mistake.
+    """
+    mistakes = data.model_copy(update={"selection_mode": "MISTAKES", "include_mistakes": False})
+    first = list(
+        db.scalars(
+            _ranked(
+                select(Question).where(
+                    *selection_filters(user_id, course_id, mistakes, [], selection_time)
+                ),
+                user_id,
+                "MISTAKES",
+                selection_time,
+            )
+            .limit(data.count)
+            .with_for_update(read=True, of=Question)
+        )
+    )
+    remaining = data.count - len(first)
+    if remaining == 0:
+        return first
+    filters = selection_filters(user_id, course_id, data, unit_ids, selection_time)
+    if first:
+        filters.append(Question.id.not_in([question.id for question in first]))
+    rest = db.scalars(
+        _ranked(select(Question).where(*filters), user_id, "ADAPTIVE", selection_time)
+        .limit(remaining)
+        .with_for_update(read=True, of=Question)
+    )
+    return [*first, *rest]
 
 
 def _mock(
