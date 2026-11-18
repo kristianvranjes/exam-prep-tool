@@ -36,7 +36,8 @@ async function login(page: Page, email: string) {
   await form.getByLabel("E-pošta").fill(email);
   await form.getByLabel("Lozinka").fill(password);
   await form.getByRole("button", { name: "Prijavi se" }).click();
-  await expect(page.getByRole("heading", { name: "Vaši kolegiji" })).toBeVisible();
+  // Danas, or its welcome for a student without courses.
+  await expect(page.getByRole("heading", { level: 1, name: /^(Danas|Prvo upišite kolegij koji polažete)$/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Račun:/ })).toBeVisible();
 }
 
@@ -67,7 +68,7 @@ test("moderator and student complete the core exam-preparation journey", async (
     await createCourse.getByLabel("Naziv kolegija").fill(courseName);
     await createCourse.getByLabel("Šifra (neobavezno)").fill("E2E-101");
     await createCourse.getByRole("button", { name: "Izradi kolegij" }).click();
-    const moderatorCourses = moderator.getByRole("region", { name: "Vaši kolegiji" });
+    const moderatorCourses = moderator.getByRole("region", { name: "Danas", exact: true });
     await expect(moderator.getByRole("heading", { name: courseName, exact: true })).toBeVisible();
     await expect(moderatorCourses).toBeHidden();
     // Materials belong to the people who run the course: the owner uploads, students never see the tab.
@@ -90,13 +91,13 @@ test("moderator and student complete the core exam-preparation journey", async (
       .toContainText("Deterministic study notes.");
     await expect(moderator.getByRole("group", { name: "Pitanja i materijali" })).toContainText("Materijali · 1");
     await openScreen(moderator, "Učenje");
-    await moderator.getByRole("button", { name: "Vaši kolegiji", exact: true }).click();
-    await expect(moderatorCourses.getByRole("button", { name: `Otvori kolegij: ${courseName}`, exact: true })).toHaveCount(1);
+    await moderator.getByRole("button", { name: "Danas", exact: true }).click();
+    await expect(moderatorCourses.getByRole("link", { name: courseName, exact: true })).toHaveCount(1);
     await moderator.getByRole("link", { name: "Alati fakulteta", exact: true }).click();
 
     await login(student, "student-e2e@example.com");
-    const studentCourses = student.getByRole("region", { name: "Vaši kolegiji" });
-    await expect(studentCourses.getByRole("heading", { name: "Još nema kolegija" })).toBeVisible();
+    const studentCourses = student.getByRole("region", { name: "Danas", exact: true });
+    await expect(student.getByRole("heading", { level: 1, name: "Prvo upišite kolegij koji polažete" })).toBeVisible();
     await expect(student.getByLabel("Pretraži po fakultetu")).toHaveCount(0);
     await student.getByRole("button", { name: "Upiši kolegij" }).first().click();
     await expect(student).toHaveURL(/\/enrol$/);
@@ -104,9 +105,9 @@ test("moderator and student complete the core exam-preparation journey", async (
     await expect(student.getByRole("button", { name: `Upiši kolegij: ${courseName}` })).toBeVisible();
     await student.getByRole("button", { name: `Upiši kolegij: ${courseName}` }).click();
     await expect(student.getByRole("button", { name: `Upisano, otvori kolegij: ${courseName}` })).toBeVisible();
-    await student.getByRole("button", { name: /Vaši kolegiji/ }).click();
-    await expect(studentCourses.getByRole("button", { name: `Otvori kolegij: ${courseName}`, exact: true })).toHaveCount(1);
-    await studentCourses.getByRole("button", { name: `Otvori kolegij: ${courseName}`, exact: true }).click();
+    await student.getByRole("button", { name: "Danas", exact: true }).click();
+    await expect(studentCourses.getByRole("link", { name: courseName, exact: true })).toHaveCount(1);
+    await studentCourses.getByRole("link", { name: courseName, exact: true }).click();
     await expect(student.getByRole("heading", { name: courseName, exact: true })).toBeVisible();
     await expect(student.getByText("Ovaj kolegij još nema pitanja za vježbu.")).toBeVisible();
     await expect(student.getByRole("region", { name: "Materijali", exact: true })).toHaveCount(0);
@@ -243,10 +244,12 @@ test("moderator and student complete the core exam-preparation journey", async (
     await student.getByRole("button", { name: "Nastavi vježbu" }).click();
     await expect(student.getByRole("radio", { name: correctOption })).toBeChecked();
     await student.getByRole("button", { name: "Spremi i izađi" }).click();
-    await student.getByRole("button", { name: "Vaši kolegiji", exact: true }).click();
-    await expect(student.getByRole("heading", { name: "Vaši kolegiji", exact: true })).toBeVisible();
-    await expect(student.getByRole("heading", { name: "Nastavite učiti" })).toBeVisible();
-    await student.getByRole("button", { name: "Nastavi vježbu" }).click();
+    await student.getByRole("button", { name: "Danas", exact: true }).click();
+    await expect(student.getByRole("heading", { name: "Danas", exact: true })).toBeVisible();
+    // Danas puts the open session on the course's card.
+    const todayCard = studentCourses.getByRole("article", { name: courseName });
+    await expect(todayCard.getByRole("button", { name: "Nastavi vježbu", exact: true })).toBeVisible();
+    await todayCard.getByRole("button", { name: "Nastavi vježbu", exact: true }).click();
     await expect(student.getByRole("radio", { name: correctOption })).toBeChecked();
     // Guided practice checks the answer immediately and reveals only its key.
     await student.getByRole("radio", { name: "Siguran sam", exact: true }).check();

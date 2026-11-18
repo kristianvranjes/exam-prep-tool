@@ -227,3 +227,28 @@ def test_mock_exam_spreads_the_scope_across_its_units(clients):
     assert available(member, course, selection_mode="MOCK", **focus)["total"] == 0
     refused = start(member, course, 1, "MOCK", **focus)
     assert refused.status_code == 409 and "no units" in refused.json()["detail"]
+
+
+def test_mistakes_first_puts_the_course_mistakes_before_the_chosen_topics(clients):
+    owner, member, _, course = clients
+    first = unit(owner, course, "Unit 1")
+    second = unit(owner, course, "Unit 2")
+    for stem in ("A1?", "A2?"):
+        draft(member, course, stem, [first])
+    for stem in ("B1?", "B2?", "B3?"):
+        draft(member, course, stem, [second])
+    attempt = started(member, course, 5, "STANDARD")
+    answer_and_submit(member, course, attempt, correct={"A2?", "B2?", "B3?"})
+    topic = {"include_mistakes": True, "unit_ids": [second]}
+
+    # Only an ADAPTIVE practice takes the option.
+    assert start(member, course, 1, "STANDARD", include_mistakes=True).status_code == 422
+    assert start(member, course, 1, "MISTAKES", include_mistakes=True).status_code == 422
+    # The pool is the course's mistakes plus the topic, each question once: 2 + (3 - 1) = 4.
+    refused = start(member, course, 5, "ADAPTIVE", **topic)
+    assert refused.status_code == 409 and "Only 4 eligible" in refused.json()["detail"]
+
+    mixed = stems(started(member, course, 3, "ADAPTIVE", **topic))
+    # Both mistakes come first, also the one from another topic; then the topic's own questions.
+    assert sorted(mixed[:2]) == ["A1?", "B1?"]
+    assert mixed[2] in {"B2?", "B3?"}
