@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, type Course } from "../lib/api";
 import { QuestionBank, type QuestionFocus } from "./question-bank";
+import { BankTable } from "./bank-table";
 import { QuestionSuggestionsQueue } from "./question-suggestions-queue";
 import { ReportsQueue } from "./faculty-moderation";
 import { QuizModeration } from "./quiz-moderation";
@@ -91,7 +92,7 @@ export function CourseManagement({ course, currentUserId, isOwner, isModerator, 
     {shown.has("quizzes") && <div hidden={tab !== "quizzes"}>
       <QuizModeration courseId={course.id} isOwner={isOwner} isModerator={isModerator} onOpenQuestion={onOpenQuestion} />
     </div>}
-    <div hidden={tab !== "bank"}><QuestionBank courseId={course.id} focus={focus} onOpenMaterials={onOpenMaterials} /></div>
+    <div hidden={tab !== "bank"}><BankArea courseId={course.id} active={tab === "bank"} focus={focus} onOpenMaterials={onOpenMaterials} /></div>
     {isModerator && shown.has("reports") && <div hidden={tab !== "reports"}>
       <ReportsQueue facultyId={course.faculty_id} courseId={course.id} courses={courses} />
     </div>}
@@ -99,4 +100,29 @@ export function CourseManagement({ course, currentUserId, isOwner, isModerator, 
       <QuestionSuggestionsQueue facultyId={course.faculty_id} courseId={course.id} courses={courses} currentUserId={currentUserId} />
     </div>}
   </section>;
+}
+
+/**
+ * The bank area: the table (23b) first; editing one question, creating, importing or generating open the full bank,
+ * which stays mounted so a half-written question is kept. A question opened from elsewhere goes straight to the full bank.
+ */
+function BankArea({ courseId, active, focus, onOpenMaterials }: {
+  courseId: string; active: boolean; focus: QuestionFocus | null; onOpenMaterials?: () => void;
+}) {
+  const [full, setFull] = useState(Boolean(focus));
+  const [local, setLocal] = useState<QuestionFocus | null>(null);
+  const [seen, setSeen] = useState(focus);
+  if (focus !== seen) { setSeen(focus); if (focus) setFull(true); }
+  const shownFocus = local && (!focus || local.request > focus.request) ? local : focus;
+  function edit(id: string) {
+    setLocal(current => ({ id, request: Math.max(current?.request ?? 0, focus?.request ?? 0) + 1 }));
+    setFull(true);
+  }
+  return <>
+    {!full && <BankTable courseId={courseId} active={active} onEdit={edit} onNew={() => setFull(true)} />}
+    <div hidden={!full}>
+      <Button variant="ghost" className="-ml-1 mb-3 px-1 text-muted hover:text-foreground" onClick={() => setFull(false)}><span aria-hidden="true">←</span> Tablica pitanja</Button>
+      <QuestionBank courseId={courseId} focus={shownFocus} onOpenMaterials={onOpenMaterials} />
+    </div>
+  </>;
 }
