@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api, type Course } from "../lib/api";
 import { QuestionBank, type QuestionFocus } from "./question-bank";
 import { QuestionSuggestionsQueue } from "./question-suggestions-queue";
-import { ReportsQueue } from "./faculty-moderation";
+import { ReportReview } from "./report-review";
 import { QuizModeration } from "./quiz-moderation";
 import { Badge, Button } from "./ui";
 
@@ -93,7 +93,8 @@ export function CourseManagement({ course, currentUserId, isOwner, isModerator, 
     </div>}
     <div hidden={tab !== "bank"}><QuestionBank courseId={course.id} focus={focus} onOpenMaterials={onOpenMaterials} /></div>
     {isModerator && shown.has("reports") && <div hidden={tab !== "reports"}>
-      <ReportsQueue facultyId={course.faculty_id} courseId={course.id} courses={courses} />
+      <ReportReview facultyId={course.faculty_id} courseId={course.id} onEditQuestion={onOpenQuestion}
+        onChanged={onRefreshCounts ?? (() => setCountRevision(value => value + 1))} />
     </div>}
     {isModerator && shown.has("suggestions") && <div hidden={tab !== "suggestions"}>
       <QuestionSuggestionsQueue facultyId={course.faculty_id} courseId={course.id} courses={courses} currentUserId={currentUserId} />

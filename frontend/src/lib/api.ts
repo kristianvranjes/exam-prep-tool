@@ -112,6 +112,8 @@ export const api = {
   },
   reportQuestion: (id: string, body: { reason: ReportReason; details: string | null }) => request<ReportReceipt>(`/questions/${id}/reports`, { method: "POST", body: JSON.stringify(body) }),
   dismissQuestionReport: (id: string) => request<ModeratorReport>(`/question-reports/${id}/dismiss`, { method: "POST" }),
+  /** Closes a report after the question was corrected (23c "Označi riješeno"). */
+  resolveQuestionReport: (id: string) => request<ModeratorReport>(`/question-reports/${id}/resolve`, { method: "POST" }),
   suggestQuestionEdit: (id: string, body: SuggestionCreate) => request<SuggestionReceipt>(`/questions/${id}/suggestions`, { method: "POST", body: JSON.stringify(body) }),
   questionSuggestions: (facultyId: string, options: { course_id?: string; status?: "OPEN" | "RESOLVED"; limit?: number; offset?: number } = {}) => {
     const params = new URLSearchParams();
@@ -342,7 +344,7 @@ export type QuestionAction = "submit" | "approve" | "reject" | "archive";
 export type ReportReason = "INCORRECT_ANSWER" | "MULTIPLE_CORRECT" | "UNCLEAR" | "TYPO" | "OUTDATED" | "DUPLICATE" | "OTHER";
 export type ReportStatus = "OPEN" | "RESOLVED";
 export type ReportReceipt = { id: string; question_id: string; reason: ReportReason; details: string | null; status: ReportStatus; created_at: string };
-export type ModeratorReport = ReportReceipt & { resolution: "DISMISSED" | "QUESTION_ARCHIVED" | null; resolved_by_user_id: string | null; resolved_at: string | null; question: OwnerQuestion };
+export type ModeratorReport = ReportReceipt & { resolution: "DISMISSED" | "QUESTION_ARCHIVED" | "FIXED" | null; resolved_by_user_id: string | null; resolved_at: string | null; question: OwnerQuestion };
 type QuestionBase = { id: string; course_id: string; type: QuestionType; stem: string; difficulty: number | null };
 export type PublicQuestion = QuestionBase & { visibility: "MEMBER"; status: "APPROVED"; options: { position: number; text: string }[]; choices?: { position: number; text: string }[]; hint?: string | null; expr?: string | null; unit_ids?: string[]; unit?: string | null };
 /** What to do with a question whose text you already have: fail the import, leave it out, or overwrite it while it is still a draft. */

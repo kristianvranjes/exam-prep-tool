@@ -366,3 +366,26 @@ def test_migration_0012_roundtrip_preserves_question_history(community):
             db.rollback()
     finally:
         command.upgrade(config, "head")
+
+
+def test_a_report_closes_as_fixed_and_the_question_stays(community):
+    owner, creator, moderator, course, faculty, _ = community
+    path = approved(creator, moderator, course)
+    reported = owner.post(path + "/reports", json=BODY)
+    assert reported.status_code == 201, reported.text
+    report = reported.json()["id"]
+    # Only a faculty moderator closes reports.
+    assert owner.post(f"/question-reports/{report}/resolve").status_code == 403
+    assert creator.post(f"/question-reports/{report}/resolve").status_code == 403
+    assert moderator.post(f"/question-reports/{uuid4()}/resolve").status_code == 404
+    fixed = moderator.post(f"/question-reports/{report}/resolve")
+    assert fixed.status_code == 200, fixed.text
+    assert fixed.json()["status"] == "RESOLVED" and fixed.json()["resolution"] == "FIXED"
+    assert fixed.json()["resolved_by_user_id"] == moderator.get("/auth/me").json()["id"]
+    assert moderator.post(f"/question-reports/{report}/resolve").status_code == 409
+    assert moderator.post(f"/question-reports/{report}/dismiss").status_code == 409
+    assert creator.get(path).json()["status"] == "APPROVED"
+    # With nothing open, the same student may report the question again.
+    assert owner.post(path + "/reports", json=BODY).status_code == 201
+    resolved = moderator.get(f"/faculties/{faculty}/question-reports?status=RESOLVED").json()
+    assert [item["resolution"] for item in resolved if item["id"] == report] == ["FIXED"]

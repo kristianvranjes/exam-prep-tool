@@ -8,7 +8,7 @@ const mock = vi.hoisted(() => ({ questionReports: vi.fn(), questionSuggestions: 
 vi.mock("../src/lib/api", () => ({ api: mock }));
 vi.mock("../src/components/question-bank", () => ({ QuestionBank: ({ courseId }: { courseId: string }) => <section aria-label="Baza pitanja">Bank {courseId}</section> }));
 vi.mock("../src/components/quiz-moderation", () => ({ QuizModeration: () => <section aria-label="Kvizovi kolegija">Quizzes</section> }));
-vi.mock("../src/components/faculty-moderation", () => ({ ReportsQueue: ({ facultyId, courseId }: { facultyId: string; courseId: string }) => <section aria-label="Prijave">Reports {facultyId} {courseId}</section> }));
+vi.mock("../src/components/report-review", () => ({ ReportReview: ({ facultyId, courseId }: { facultyId: string; courseId: string }) => <section aria-label="Prijave">Reports {facultyId} {courseId}</section> }));
 vi.mock("../src/components/question-suggestions-queue", () => ({ QuestionSuggestionsQueue: () => <section aria-label="Prijedlozi">Suggestions</section> }));
 
 const course = { id: "course", faculty_id: "faculty", name: "Digitalna logika" } as Course;

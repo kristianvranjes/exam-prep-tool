@@ -252,6 +252,10 @@ item and `match_text` its partner. Nothing is backfilled. Downgrade refuses whil
 exists (delete them first), otherwise drops the columns and restores the earlier constraints; a hint or
 expression written meanwhile is lost.
 
+## Fixed reports migration 0035
+
+Revision **0035** (`down_revision = 0034`) lets `ck_question_report_resolution` accept `FIXED` besides `DISMISSED` and `QUESTION_ARCHIVED`: a moderator corrected the question and closed the report, and the question stays. No column changes. Downgrade turns `FIXED` into `DISMISSED` and restores the old check.
+
 ## Unit review migration 0034
 
 Revision **0034** (`down_revision = 0033`) adds `course_units.status` (`DRAFT`, `PENDING_REVIEW` or
