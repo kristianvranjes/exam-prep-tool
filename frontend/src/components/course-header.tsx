@@ -10,7 +10,7 @@ import { Badge, Button } from "./ui";
 
 /** The tab a destination belongs to: the practice setup is part of Učenje, the materials of Pitanja i materijali. */
 const tabOf: Record<CourseDestination, CourseDestination> = {
-  overview: "overview", practice: "overview", exam: "exam", progress: "progress", questions: "questions", materials: "questions", manage: "manage", more: "manage",
+  overview: "overview", practice: "overview", exam: "exam", progress: "progress", questions: "questions", materials: "questions", manage: "manage", more: "manage", topic: "overview",
 };
 
 /**

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { attemptPath, canonicalWorkspacePath, coursePath, documentTitle, parseWorkspaceRoute } from "../src/lib/workspace-route";
+import { attemptPath, canonicalWorkspacePath, coursePath, documentTitle, parseWorkspaceRoute, topicPath } from "../src/lib/workspace-route";
 
 it.each(["overview", "practice", "exam", "progress", "questions", "materials", "manage", "more"] as const)("roundtrips the %s course destination", destination => {
   expect(parseWorkspaceRoute(coursePath("course", destination))).toMatchObject({ view: "course", courseId: "course", destination, attemptId: null });
@@ -17,6 +17,13 @@ it("leaves session addresses and global pages as they are", () => {
 it("roundtrips attempt and results identities", () => {
   expect(parseWorkspaceRoute(attemptPath("course", "attempt", true))).toMatchObject({ courseId: "course", attemptId: "attempt", destination: "practice", results: true });
   expect(parseWorkspaceRoute(attemptPath("course", "attempt"))).toMatchObject({ results: false });
+});
+it("roundtrips a topic page (22b) and names it in the tab", () => {
+  expect(topicPath("course", "unit 1")).toBe("/courses/course/topics/unit%201");
+  expect(parseWorkspaceRoute(topicPath("course", "unit 1"))).toEqual({ view: "course", courseId: "course", destination: "topic", attemptId: null, results: false, unitId: "unit 1" });
+  expect(canonicalWorkspacePath(topicPath("course", "unit"))).toBeNull();
+  expect(parseWorkspaceRoute("/courses/course/topics/%2Fother")).toBeNull();
+  expect(documentTitle(parseWorkspaceRoute(topicPath("course", "unit")), "Digitalna logika")).toBe("Tema · Digitalna logika · ExamPrep");
 });
 it.each(["/courses/%ZZ", "/courses/%2Fother", "/courses/course/attempts/%3Fid", "/courses/course/unknown", "javascript:alert(1)"])("rejects malformed or unsupported destination %s", path => {
   expect(parseWorkspaceRoute(path)).toBeNull();

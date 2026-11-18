@@ -16,7 +16,7 @@ const mock = vi.hoisted(() => ({
   examScopeEstimate: vi.fn(), examPapers: vi.fn(), courseDashboard: vi.fn(),
 }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
-vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
+vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock, FOCUSED_PRACTICE_QUESTIONS: 10 }));
 vi.mock("../src/components/course-materials", () => ({ CourseMaterials: () => <section aria-label="Course materials">Materials</section> }));
 vi.mock("../src/components/progress-panel", () => ({ ProgressPanel: ({ onOpenAdaptiveReview }: { onOpenAdaptiveReview: () => void }) => <section aria-label="Napredak">Progress<button onClick={onOpenAdaptiveReview}>Započni preporučenu vježbu</button></section> }));
 
@@ -359,6 +359,21 @@ it("opens existing Progress and Course Overview directly from submitted results 
   navigate("Vježba"); expect(results).toBeVisible();
   expect(mock.read).toHaveBeenCalledOnce();
   expect(mock.start).not.toHaveBeenCalled(); expect(mock.submit).not.toHaveBeenCalled();
+});
+
+it("opens a topic's page from Učenje and from its address, under the Učenje tab (22b)", async () => {
+  const topic = { id: "u1", course_id: "course", position: 0, title: "Booleova algebra", description: null, is_archived: false, approved_question_count: 4, created_at: "2026-10-01", updated_at: "2026-10-01" };
+  mock.units.mockResolvedValue([topic]);
+  render(<AppShell />); await enterCourse();
+  fireEvent.click(await screen.findByRole("button", { name: "Otvori temu: Booleova algebra" }));
+  expect(await screen.findByRole("heading", { name: "Booleova algebra", level: 2 })).toBeVisible();
+  expect(window.location.pathname).toBe("/courses/course/topics/u1");
+  const tabs = screen.getByRole("navigation", { name: "Navigacija kolegija" });
+  expect(within(tabs).getByRole("button", { name: /^Učenje/ })).toHaveAttribute("aria-current", "page");
+  fireEvent.click(screen.getByRole("button", { name: "Natrag na Učenje" }));
+  await waitFor(() => expect(window.location.pathname).toBe("/courses/course"));
+  visit("/courses/course/topics/u1");
+  expect(await screen.findByRole("heading", { name: "Booleova algebra", level: 2 })).toBeVisible();
 });
 
 it("opens Recommended setup from Overview without starting an attempt or resetting settings", async () => {
