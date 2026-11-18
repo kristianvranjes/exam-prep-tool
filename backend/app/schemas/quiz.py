@@ -68,11 +68,20 @@ class StartQuiz(PracticeFilters):
     feedback_mode: FeedbackMode = "END"
     # Marks the quick quiz, an ADAPTIVE preset; only the recorded mode (QUICK) differs.
     quick_quiz: bool = False
+    # Topic picker (22a): the questions answered wrongly last time, from the whole course, come
+    # first; the rest of the session is ADAPTIVE within the focus.
+    include_mistakes: bool = False
 
     @model_validator(mode="after")
     def quick_quiz_is_adaptive(self) -> Self:
         if self.quick_quiz and self.selection_mode != "ADAPTIVE":
             raise ValueError("A quick quiz uses ADAPTIVE selection")
+        return self
+
+    @model_validator(mode="after")
+    def mistakes_first_is_adaptive(self) -> Self:
+        if self.include_mistakes and (self.selection_mode != "ADAPTIVE" or self.quick_quiz):
+            raise ValueError("Mistakes first is an ADAPTIVE practice option")
         return self
 
     @model_validator(mode="after")

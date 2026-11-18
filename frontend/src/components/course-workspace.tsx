@@ -58,6 +58,8 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
   const [setupRequest, setSetupRequest] = useState<PracticeSetupRequest | null>(null);
   // Ispit's mock exam intro (22c) for one exam cycle; null shows the estimate and the past papers.
   const [mockScope, setMockScope] = useState<string | null>(null);
+  // "Vježba po mjeri" only switches practice to the full form: open results and settings stay as they are.
+  const [customRequest, setCustomRequest] = useState(0);
   const focused = destination === "practice" && activeSession;
   // Managers keep the question bank in Upravljanje; students find it in Pitanja i materijali. Both mount on first use.
   const [manageOpened, setManageOpened] = useState(destination === "manage");
@@ -82,7 +84,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
     setQuestionFocus(current => ({ id, request: (current?.request ?? 0) + 1 }));
     if (manager) openManage("bank"); else navigate("questions");
   }
-  function openPractice(mode: PracticeSetupRequest["mode"], focus: Pick<PracticeSetupRequest, "scopeId" | "unitIds"> = {}) {
+  function openPractice(mode: PracticeSetupRequest["mode"], focus: Pick<PracticeSetupRequest, "scopeId" | "unitIds" | "view"> = {}) {
     setSetupRequest(current => ({ id: (current?.id ?? 0) + 1, mode, ...focus }));
     navigate("practice", true);
   }
@@ -103,14 +105,14 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
       focused={focused} results={routeResults} onTab={openTab} goHome={goHome} />
     <section id="course-overview" hidden={destination !== "overview"} aria-label={`Učenje: ${course.name}`}>
       <CourseOverview courseId={course.id} active={visible && destination === "overview"}
-        onPractice={() => navigate("practice")} onOpenReview={onOpenReview}
+        onPractice={() => { setCustomRequest(value => value + 1); navigate("practice"); }} onOpenReview={onOpenReview}
         knownAttemptId={knownAttemptId} knownAttempt={knownAttempt} checkingSession={checkingSession} activeSession={activeSession} onResume={onResume}
-        onRecommendedPractice={unitIds => openPractice("ADAPTIVE", unitIds ? { unitIds } : {})}
+        onRecommendedPractice={unitIds => openPractice("ADAPTIVE", { unitIds, view: "picker" })}
         onStartAttempt={onOpenAttempt}
         onQuestions={openQuestionBank} onMaterials={manager ? () => navigate("materials") : undefined} />
     </section>
     <div id="course-practice" hidden={destination !== "practice"}>
-      <div id="practice" tabIndex={-1} className="outline-none"><PracticeQuiz courseId={course.id} active={visible && destination === "practice"}
+      <div id="practice" tabIndex={-1} className="outline-none"><PracticeQuiz courseId={course.id} active={visible && destination === "practice"} defaultView="picker" customRequest={customRequest}
         adaptiveReviewRequest={adaptiveReviewRequest} setupRequest={setupRequest} resumeAttemptId={knownAttemptId} onResumableAttemptChange={onResumableAttemptChange}
         routeAttemptId={routeAttemptId} routeResults={routeResults} onAttemptRoute={onAttemptRoute} onAttemptChange={onAttemptChange} onAnswerDirtyChange={onAnswerDirtyChange}
         onOpenMaterials={manager ? () => navigate("materials") : undefined} onOpenQuestions={openQuestionBank}
