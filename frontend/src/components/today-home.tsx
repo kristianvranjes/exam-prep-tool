@@ -214,9 +214,10 @@ export function TodayHome({ courses, loading, userName, onOpen, onEnrol, onManag
           </ul>}
         </>}
     </div>
-    <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t-2 border-line pt-5">
+    {/* Only once the list is known: a new student gets the welcome and its own Upiši kolegij instead. */}
+    {!loading && <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t-2 border-line pt-5">
       <Link prefetch={false} href="/courses" onClick={manage} className="inline-flex min-h-11 items-center text-sm text-muted underline-offset-4 hover:text-foreground hover:underline">Upravljanje kolegijima</Link>
       <Button variant="secondary" onClick={onEnrol}>Upiši kolegij</Button>
-    </div>
+    </div>}
   </section>;
 }
