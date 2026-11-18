@@ -9,15 +9,25 @@ import { AbandonedQuiz } from "./abandoned-quiz";
 import { focusRequest, PracticeSetup, type FocusChoice, type SessionLength } from "./practice-setup";
 import type { QuizExperience } from "./quiz-navigation";
 import { QuizResults } from "./quiz-results";
+import { TopicPicker } from "./topic-picker";
 import { Alert, Button, LoadingState, Surface } from "./ui";
 
 const types: QuestionType[] = QUESTION_TYPES;
 
-/** A request to open setup, optionally focused on one exam cycle. */
-export type PracticeSetupRequest = { id: number; mode: SelectionMode; scopeId?: string; unitIds?: string[] };
+/**
+ * Where a session is set up: the topic picker (22a, "Što vježbate?") or the full form ("Vježba po mjeri").
+ */
+export type SetupView = "picker" | "custom";
+/** A request to open setup, optionally focused on one exam cycle. Without a view it opens the full form. */
+export type PracticeSetupRequest = { id: number; mode: SelectionMode; scopeId?: string; unitIds?: string[]; view?: SetupView };
 
-export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 0, setupRequest, resumeAttemptId, routeAttemptId, routeResults = false, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onResumableAttemptChange, onOpenMaterials, onOpenQuestions, onOpenProgress, onBackToCourse }: {
-  courseId: string; active?: boolean; adaptiveReviewRequest?: number; setupRequest?: PracticeSetupRequest | null; resumeAttemptId?: string | null;
+export function PracticeQuiz({ courseId, active = true, defaultView = "custom", customRequest = 0, adaptiveReviewRequest = 0, setupRequest, resumeAttemptId, routeAttemptId, routeResults = false, onAttemptRoute, onAttemptChange, onAnswerDirtyChange, onResumableAttemptChange, onOpenMaterials, onOpenQuestions, onOpenProgress, onBackToCourse }: {
+  courseId: string; active?: boolean;
+  /** The setup shown when practice opens without a request, for example from its address. */
+  defaultView?: SetupView;
+  /** Each new value switches the setup to the full form ("Vježba po mjeri") without touching an open session. */
+  customRequest?: number;
+  adaptiveReviewRequest?: number; setupRequest?: PracticeSetupRequest | null; resumeAttemptId?: string | null;
   routeAttemptId?: string | null; routeResults?: boolean; onResumableAttemptChange?: (id: string | null) => void;
   onAttemptRoute?: (attempt: Attempt | null, replace?: boolean) => void;
   onAttemptChange?: (attempt: Attempt | null) => void; onAnswerDirtyChange?: (dirty: boolean) => void;
@@ -55,6 +65,16 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("ADAPTIVE");
   const [selectedTypes, setSelectedTypes] = useState<QuestionType[]>(types);
   const [focus, setFocus] = useState<FocusChoice>({ kind: "COURSE" });
+  const [view, setView] = useState<SetupView>(defaultView);
+  // The picker starts from the topics of the latest request; a new request remounts it with them.
+  const [picker, setPicker] = useState<{ revision: number; unitIds?: string[] }>({ revision: 0 });
+  const showCustom = useCallback(() => setView("custom"), []);
+  // A course without topics has nothing to pick: once the picker finds that, the full setup stays.
+  const [noTopics, setNoTopics] = useState(false);
+  const topicsMissing = useCallback(() => { setNoTopics(true); setView("custom"); }, []);
+  const picking = view === "picker" && !noTopics;
+  const [handledCustomRequest, setHandledCustomRequest] = useState(customRequest);
+  if (handledCustomRequest !== customRequest) { setHandledCustomRequest(customRequest); setView("custom"); }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef(false);
@@ -139,7 +159,7 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
     let active = true;
     queueMicrotask(() => {
       if (!active || handledRequest.current === adaptiveReviewRequest) return;
-      setSelectionMode("ADAPTIVE");
+      setSelectionMode("ADAPTIVE"); setView("custom");
       if (pending.current) return;
       handledRequest.current = adaptiveReviewRequest;
       setOpen(true);
@@ -154,7 +174,9 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
     queueMicrotask(() => {
       if (!active || handledSetupRequest.current === setupRequest.id) return;
       setSelectionMode(setupRequest.mode);
-      if (setupRequest.scopeId) setFocus({ kind: "SCOPE", scopeId: setupRequest.scopeId });
+      setView(setupRequest.view ?? "custom");
+      if (setupRequest.view === "picker") setPicker(current => ({ revision: current.revision + 1, unitIds: setupRequest.unitIds }));
+      else if (setupRequest.scopeId) setFocus({ kind: "SCOPE", scopeId: setupRequest.scopeId });
       else if (setupRequest.unitIds) setFocus({ kind: "UNITS", unitIds: setupRequest.unitIds });
       if (pending.current) return;
       handledSetupRequest.current = setupRequest.id;
@@ -167,7 +189,7 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
   }, [setupRequest, attemptStatus, back, busy, loadHistory, open, run]);
 
   return <section className={`mt-6 flex min-w-0 flex-col gap-5${attempt?.status === "ABANDONED" ? " border-t border-line pt-6" : ""}`} aria-label="Vježba">
-    <h2 ref={heading} tabIndex={-1} className={activeSession || attempt?.status === "SUBMITTED" ? "sr-only" : "text-xl font-semibold"}>Vježba</h2>
+    <h2 ref={heading} tabIndex={-1} className={activeSession || attempt?.status === "SUBMITTED" || (!attempt && picking) ? "sr-only" : "text-xl font-semibold"}>Vježba</h2>
     {!open && <LoadingState>Pripremam vježbu…</LoadingState>}
     {open && <>
       {error && <Alert>{error}</Alert>}
@@ -181,6 +203,10 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
           <Button className="mt-4 w-full sm:w-auto" disabled={busy} onClick={() => void run(() => openAttempt(knownResumableId))}>Nastavi vježbu</Button>
         </Surface>}
         {!historyReady && error && <Button variant="secondary" className="self-start" disabled={busy} onClick={() => void run(() => loadHistory())}>Ponovno učitaj postavke vježbe</Button>}
+        {picking ? <TopicPicker key={picker.revision} courseId={courseId} active={active} initialUnitIds={picker.unitIds}
+          onStarted={next => { adopt(next); onAttemptRoute?.(next); }} onCustom={showCustom} onNoTopics={topicsMissing} onCancel={onBackToCourse} />
+        : <>
+        {defaultView === "picker" && !noTopics && <Button variant="ghost" className="-ml-1 self-start px-1 text-muted hover:text-foreground" onClick={() => setView("picker")}><span aria-hidden="true">←</span> Odabir tema</Button>}
         <PracticeSetup courseId={courseId} active={active} ready={historyReady} busy={busy}
           hasUnfinishedSession={Boolean(knownResumableId)} mode={selectionMode} setMode={setSelectionMode}
           count={count} setCount={setCount} length={length} setLength={setLength}
@@ -194,6 +220,7 @@ export function PracticeQuiz({ courseId, active = true, adaptiveReviewRequest = 
             const next = await practiceApi.start(courseId, count, selectedTypes, selectionMode, focused, feedbackMode);
             if (mounted.current && requestRevision === revision.current) { adopt(next); onAttemptRoute?.(next); }
           })} onOpenMaterials={onOpenMaterials} onOpenQuestions={onOpenQuestions} />
+        </>}
         <details open={historyOpen} onToggle={event => setHistoryOpen(event.currentTarget.open)} className="max-w-2xl border-t border-line pt-3">
           <summary className="min-h-11 cursor-pointer py-2 font-medium">Povijest vježbi</summary>
           {busy ? <LoadingState>Otvaram vježbu…</LoadingState> : <>

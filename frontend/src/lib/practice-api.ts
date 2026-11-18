@@ -160,6 +160,13 @@ export const practiceApi = {
     if (!total) throw new Error("Ovdje još nema pitanja za vježbu.");
     return practiceApi.start(course, Math.min(total, FOCUSED_PRACTICE_QUESTIONS), allTypes, "ADAPTIVE", focus, "IMMEDIATE");
   },
+  /**
+   * Topic picker (22a): a guided session from the chosen topics, after the course's mistakes when `includeMistakes`;
+   * with no topic, the mistakes alone. The caller passes a count it knows is available.
+   */
+  topicPractice: (course: string, count: number, unitIds: string[], includeMistakes: boolean): Promise<Attempt> => unitIds.length
+    ? request<Attempt>(path(course), { method: "POST", body: JSON.stringify({ count, question_types: allTypes, selection_mode: "ADAPTIVE", unit_ids: unitIds, feedback_mode: "IMMEDIATE", ...(includeMistakes && { include_mistakes: true }) }) })
+    : practiceApi.start(course, count, allTypes, "MISTAKES", undefined, "IMMEDIATE"),
   /** Your mistakes in the whole course: practice-eligible first, in the order Mistakes practice takes them. */
   mistakes: (course: string, offset = 0, limit = 20) => request<MistakeQuestion[]>(`/courses/${course}/mistakes?limit=${limit}&offset=${offset}`),
   favorites: (course: string, offset = 0, limit = 20) => request<FavoriteQuestion[]>(`/courses/${course}/favorites?limit=${limit}&offset=${offset}`),
