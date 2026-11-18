@@ -5,17 +5,20 @@
  * units, item analysis and settings.
  */
 export type CourseDestination = "overview" | "practice" | "exam" | "progress" | "questions" | "materials" | "manage" | "more";
-/** Pages outside a course: the course list, enrolment, the cross-course review and progress pages, settings and faculty tools. */
-export type GlobalView = "home" | "enrol" | "review" | "progress" | "settings" | "management";
+/**
+ * Pages outside a course: Danas (the home page), the course list ("Upravljanje kolegijima"), enrolment, the cross-course
+ * review and progress pages, settings and faculty tools.
+ */
+export type GlobalView = "home" | "courses" | "enrol" | "review" | "progress" | "settings" | "management";
 export type WorkspaceRoute =
   | { view: GlobalView }
   | { view: "course"; courseId: string; destination: CourseDestination; attemptId: string | null; results: boolean };
 
 const globalPaths: Record<string, GlobalView> = {
-  "/": "home", "/enrol": "enrol", "/review": "review", "/progress": "progress", "/settings": "settings", "/faculty": "management",
+  "/": "home", "/courses": "courses", "/enrol": "enrol", "/review": "review", "/progress": "progress", "/settings": "settings", "/faculty": "management",
 };
 const globalTitles: Record<GlobalView, string> = {
-  home: "Vaši kolegiji", enrol: "Upis kolegija", review: "Ponavljanje", progress: "Napredak", settings: "Postavke", management: "Fakultet",
+  home: "Danas", courses: "Vaši kolegiji", enrol: "Upis kolegija", review: "Ponavljanje", progress: "Napredak", settings: "Postavke", management: "Fakultet",
 };
 
 /** Paths of the single-page course (2b) that now live in a tab; old links land on the tab and the address is corrected. */
