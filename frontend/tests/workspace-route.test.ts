@@ -28,6 +28,12 @@ it("roundtrips a topic page (22b) and names it in the tab", () => {
 it.each(["/courses/%ZZ", "/courses/%2Fother", "/courses/course/attempts/%3Fid", "/courses/course/unknown", "javascript:alert(1)"])("rejects malformed or unsupported destination %s", path => {
   expect(parseWorkspaceRoute(path)).toBeNull();
 });
+it("keeps the course list apart from a course's own address", () => {
+  expect(parseWorkspaceRoute("/")).toEqual({ view: "home" });
+  expect(parseWorkspaceRoute("/courses")).toEqual({ view: "courses" });
+  expect(parseWorkspaceRoute("/courses/course")).toMatchObject({ view: "course", courseId: "course", destination: "overview" });
+  expect(canonicalWorkspacePath("/courses")).toBeNull();
+});
 it("parses the enrolment page, with or without a trailing slash", () => {
   expect(parseWorkspaceRoute("/enrol")).toEqual({ view: "enrol" });
   expect(parseWorkspaceRoute("/enrol/")).toEqual({ view: "enrol" });
@@ -41,7 +47,8 @@ it.each([["/review", "review", "Ponavljanje"], ["/progress", "progress", "Napred
 });
 it("names each route in the tab, most specific part first, without raw course IDs", () => {
   const title = (path: string, course?: string) => documentTitle(parseWorkspaceRoute(path), course);
-  expect(title("/")).toBe("Vaši kolegiji · ExamPrep");
+  expect(title("/")).toBe("Danas · ExamPrep");
+  expect(title("/courses")).toBe("Vaši kolegiji · ExamPrep");
   expect(title("/enrol")).toBe("Upis kolegija · ExamPrep");
   expect(title("/faculty")).toBe("Fakultet · ExamPrep");
   expect(title("/nowhere/at/all")).toBe("Stranica nije dostupna · ExamPrep");

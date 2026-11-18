@@ -8,9 +8,10 @@ import { attemptPath, coursePath, documentTitle, parseWorkspaceRoute, topicPath,
 import type { AttemptSummary, Attempt } from "../lib/practice-api";
 import { useWorkspaceNavigation } from "./use-workspace-navigation";
 import { StudentHome } from "./student-home";
+import { TodayHome } from "./today-home";
 import { CourseBrowser } from "./course-browser";
 import { FacultyWorkspace } from "./faculty-workspace";
-import { BarChart3, BookOpen, GraduationCap, RotateCcw } from "lucide-react";
+import { BarChart3, CalendarDays, GraduationCap, RotateCcw } from "lucide-react";
 import { ApplicationFrame, Brand, type NavItem } from "./application-frame";
 import { ReviewHome } from "./review-home";
 import { ProgressHome } from "./progress-home";
@@ -241,7 +242,7 @@ export function AppShell() {
 
   const isOwner = !!selected && selectedRole?.courseId === selected.id && selectedRole.role === "OWNER";
   const nav: NavItem[] = [
-    { href: "/", label: "Kolegiji", icon: BookOpen, active: view === "home" || view === "enrol" },
+    { href: "/", label: "Danas", icon: CalendarDays, active: view === "home" || view === "courses" || view === "enrol" },
     { href: "/review", label: "Ponavljanje", icon: RotateCcw, active: view === "review", badge: dueTotal, badgeLabel: "za ponoviti" },
     { href: "/progress", label: "Napredak", icon: BarChart3, active: view === "progress" },
     ...(faculties.length > 0 || managesFaculties ? [{ href: "/faculty", label: "Alati fakulteta", icon: GraduationCap, active: view === "management" }] : []),
@@ -254,10 +255,12 @@ export function AppShell() {
     {view === "unavailable" && <section><h1 id="unavailable-heading" tabIndex={-1} className="text-2xl font-semibold">Stranica nije dostupna</h1><Button className="mt-4" onClick={() => navigate("/")}>Natrag na početnu</Button></section>}
     {deletedNotice && <Alert tone="info" className="mb-5">{deletedNotice}</Alert>}
     <div hidden={view !== "home"}>
-      <StudentHome onEnrol={() => navigate("/enrol")} courses={courses} loading={loadingCourses} onOpen={selectCourse} onStatusChange={changeCourseStatus}
-        resumable={resumable} onResume={resumeSession}
-        checkingSessions={Object.values(sessions).some(session => session.status === "loading")} />
+      <TodayHome courses={courses} loading={loadingCourses} userName={user.display_name} onOpen={selectCourse}
+        onEnrol={() => navigate("/enrol")} onManage={() => navigate("/courses")} resumable={resumable} onResume={resumeSession} />
     </div>
+    {view === "courses" && <StudentHome onEnrol={() => navigate("/enrol")} courses={courses} loading={loadingCourses} onOpen={selectCourse} onStatusChange={changeCourseStatus}
+      resumable={resumable} onResume={resumeSession}
+      checkingSessions={Object.values(sessions).some(session => session.status === "loading")} />}
     {view === "enrol" && <CourseBrowser joinedCourses={courses} loadingMembership={loadingCourses} refreshRevision={catalogRevision}
       onJoined={course => setCourses(current => current.some(item => item.id === course.id)
         ? current.map(item => item.id === course.id ? { ...item, membership_status: item.membership_status === "DONE" ? "DONE" : "ACTIVE" } : item)
