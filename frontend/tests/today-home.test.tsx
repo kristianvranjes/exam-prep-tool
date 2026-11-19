@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { MemberCourse } from "../src/lib/api";
 import type { ResumableAttempt } from "../src/components/use-resumable-sessions";
 
-const mock = vi.hoisted(() => ({ examScopeReadiness: vi.fn() }));
+const mock = vi.hoisted(() => ({ examScopeReadiness: vi.fn(), studyPlan: vi.fn() }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 import { orderByExam, TodayHome, todayLabel } from "../src/components/today-home";
 
@@ -131,4 +131,14 @@ it("waits for the course list before choosing between Danas and the welcome", ()
   expect(screen.getByRole("heading", { level: 1, name: "Danas" })).toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent("Učitavam kolegije…");
   expect(screen.queryByText("Prvo upišite kolegij koji polažete")).not.toBeInTheDocument();
+});
+
+it("names today's topics by the study plan on a course whose plan is on (#173)", async () => {
+  const settings = (plan_enabled: boolean) => ({ exam_scope_id: null, target_points: null, daily_minutes: 40, plan_enabled });
+  mock.studyPlan.mockImplementation(async (id: string) => id === "sis"
+    ? { settings: settings(true), exam: null, weeks: [], today: { topics: [{ unit_id: "u", title: "Z-transformacija", work: "NEW" }], questions: 26, due: 0, mock: false }, covered_by: null, after_plan: [] }
+    : { settings: settings(false), exam: null, weeks: [], today: null, covered_by: null, after_plan: [] });
+  view([asp, sis]);
+  expect(await screen.findByText("Z-transformacija")).toBeVisible();
+  expect(screen.getAllByText("Po planu danas:")).toHaveLength(1);
 });
