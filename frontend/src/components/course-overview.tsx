@@ -2,9 +2,10 @@
 
 import { useEffect, useId, useState } from "react";
 import { QUESTION_TYPES } from "../lib/question-types";
-import { api, type CourseDashboard, type CourseUnit, type UnitResult } from "../lib/api";
+import { api, type CourseDashboard, type CourseUnit, type StudyPlan, type UnitResult } from "../lib/api";
 import { practiceApi, type Attempt, type PracticeFocus } from "../lib/practice-api";
 import { ResumeSession } from "./resume-session";
+import { PlanTodayHero } from "./study-plan";
 import { resumableAttempt, type ResumableAttempt } from "./use-resumable-sessions";
 import { Alert, Button, ProgressBar, SegmentedControl } from "./ui";
 import { QUESTIONS, plural, pluralForm } from "../lib/plural";
@@ -44,7 +45,7 @@ function WayRow({ name, note, label, disabled, onClick }: { name: string; note: 
  * the other ways to practise, and the topics as cards with their state in words. Without a study plan (#173).
  */
 export function CourseOverview({ courseId, active, onPractice, knownAttemptId, knownAttempt, checkingSession, activeSession, onResume,
-  onRecommendedPractice, onStartAttempt, onOpenReview, onQuestions, onMaterials, onOpenTopic }: {
+  onRecommendedPractice, onStartAttempt, onOpenReview, onQuestions, onMaterials, onOpenTopic, plan }: {
   courseId: string; active: boolean; knownAttemptId: string | null; knownAttempt?: ResumableAttempt;
   checkingSession?: boolean; activeSession?: boolean; onResume: () => void;
   /** Opens the practice setup with the recommended practice chosen, limited to the given topics when there are any. */
@@ -57,6 +58,8 @@ export function CourseOverview({ courseId, active, onPractice, knownAttemptId, k
   onQuestions: () => void;
   /** Opens a topic's page (22b); without it a topic card starts practice for the topic at once. */
   onOpenTopic?: (unitId: string) => void;
+  /** The study plan (#173): with it on, the hero is today's session by the plan. */
+  plan?: StudyPlan | null;
   /** Managers only: the course materials, offered while the course has no questions yet. */
   onMaterials?: () => void;
   /** Opens a session started here: practice for one topic or a quick quiz. */
@@ -171,7 +174,7 @@ export function CourseOverview({ courseId, active, onPractice, knownAttemptId, k
     </section>}
 
     <div className={cn("grid min-w-0 gap-5", hero && "lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-start")}>
-      {hero}
+      {!knownAttemptId && plan?.settings.plan_enabled && plan.today ? <PlanTodayHero plan={plan} onStart={unitIds => onRecommendedPractice(unitIds)} /> : hero}
       <section aria-labelledby={`${id}-ways`} className="min-w-0">
         <h2 id={`${id}-ways`} className="label-caps">Drugi načini vježbe</h2>
         <ul className="mt-3 flex flex-col gap-2.5">

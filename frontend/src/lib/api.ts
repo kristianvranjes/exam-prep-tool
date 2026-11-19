@@ -196,6 +196,9 @@ export const api = {
   examScopeCoverage: (id: string) => request<ExamScopeCoverage>(`/exam-scopes/${id}/coverage`),
   examScopeReadiness: (id: string) => request<ExamScopeReadiness>(`/exam-scopes/${id}/readiness`),
   examScopeEstimate: (id: string) => request<ExamEstimate>(`/exam-scopes/${id}/estimate`),
+  /** The caller's study plan for a course (#173): the settings and, when on, the computed plan. */
+  studyPlan: (courseId: string) => request<StudyPlan>(`/courses/${courseId}/study-plan`),
+  saveStudyPlan: (courseId: string, body: PlanSettings) => request<PlanSettings>(`/courses/${courseId}/study-plan`, { method: "PUT", body: JSON.stringify(body) }),
   examPapers: (courseId: string) => request<ExamPaperList>(`/courses/${courseId}/exam-papers`),
   examPaper: (id: string) => request<ExamPaperDetail>(`/exam-papers/${id}`),
   createExamPaper: (courseId: string, body: ExamPaperBody) => request<ExamPaperDetail>(`/courses/${courseId}/exam-papers`, { method: "POST", body: JSON.stringify(body) }),
@@ -309,6 +312,18 @@ export type ExamScopeReadiness = {
 
 /** Points, not shares: what the caller would expect on the exam today (`exam-estimate-v1`). */
 export type PointsRange = { low: number; expected: number; high: number };
+/** Study plan (#173, rule in docs/STUDY_PLAN.md): a topic's work in a week. */
+export type PlanWork = "NEW" | "REVIEW" | "PRACTICE" | "MAINTAIN";
+export type PlanSettings = { exam_scope_id: string | null; target_points: number | null; daily_minutes: number; plan_enabled: boolean };
+export type PlanTopic = { unit_id: string; title: string; work: PlanWork };
+export type PlanWeek = { index: number; starts_on: string; topics: PlanTopic[]; exam_week: boolean; mock: boolean };
+export type StudyPlan = {
+  settings: PlanSettings;
+  exam: { scope_id: string; name: string; starts_on: string; days: number; estimate: PointsRange | null; max_points: number | null } | null;
+  weeks: PlanWeek[];
+  today: { topics: PlanTopic[]; questions: number; due: number; mock: boolean } | null;
+  covered_by: string | null; after_plan: string[];
+};
 export type TopicEstimate = {
   unit_id: string; title: string; position: number;
   /** Average points the topic carried on the scope's published past papers. */

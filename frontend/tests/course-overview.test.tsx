@@ -193,3 +193,19 @@ it("opens a topic's page from its card when the page is available (22b)", async 
   expect(onOpenTopic).toHaveBeenCalledExactlyOnceWith("u2");
   expect(mock.focusedPractice).not.toHaveBeenCalled();
 });
+
+it("leads with today's session by the study plan when the plan is on (#173)", async () => {
+  const p = props();
+  const plan = {
+    settings: { exam_scope_id: null, target_points: null, daily_minutes: 20, plan_enabled: true },
+    exam: { scope_id: "s", name: "Završni", starts_on: "2026-12-07", days: 19, estimate: null, max_points: null },
+    weeks: [], today: { topics: [{ unit_id: "u2", title: "Bistabili", work: "NEW" as const }], questions: 13, due: 0, mock: false },
+    covered_by: null, after_plan: [],
+  };
+  render(<CourseOverview {...p} onStartAttempt={vi.fn()} plan={plan} />);
+  const hero = await screen.findByRole("region", { name: "Bistabili" });
+  expect(hero).toHaveTextContent("Današnja sesija · po planu");
+  expect(screen.queryByText("Vježbaj sada")).not.toBeInTheDocument();
+  fireEvent.click(within(hero).getByRole("button", { name: "Započni sesiju" }));
+  expect(p.onRecommendedPractice).toHaveBeenCalledExactlyOnceWith(["u2"]);
+});

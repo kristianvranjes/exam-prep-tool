@@ -9,6 +9,7 @@ import { CourseManagement, openCountLabel, useOpenCounts, type ManageTab } from 
 import { CourseMaterials, type MaterialsSummary } from "./course-materials";
 import { CourseOverview } from "./course-overview";
 import { MockIntro } from "./mock-intro";
+import { StudyPlanCard, StudyPlanGrid, useStudyPlan } from "./study-plan";
 import { TopicPage } from "./topic-page";
 import { CourseQuestions } from "./course-questions";
 import { CourseSettings } from "./course-settings";
@@ -63,6 +64,9 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
   const [setupRequest, setSetupRequest] = useState<PracticeSetupRequest | null>(null);
   // Ispit's mock exam intro (22c) for one exam cycle; null shows the estimate and the past papers.
   const [mockScope, setMockScope] = useState<string | null>(null);
+  // The study plan (#173) shows on Učenje, Ispit and Napredak; saving its settings reads it again.
+  const [planRevision, setPlanRevision] = useState(0);
+  const plan = useStudyPlan(course.id, visible, planRevision);
   // "Vježba po mjeri" only switches practice to the full form: open results and settings stay as they are.
   const [customRequest, setCustomRequest] = useState(0);
   const focused = destination === "practice" && activeSession;
@@ -113,7 +117,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
         onPractice={() => { setCustomRequest(value => value + 1); navigate("practice"); }} onOpenReview={onOpenReview}
         knownAttemptId={knownAttemptId} knownAttempt={knownAttempt} checkingSession={checkingSession} activeSession={activeSession} onResume={onResume}
         onRecommendedPractice={unitIds => openPractice("ADAPTIVE", { unitIds, view: "picker" })}
-        onStartAttempt={onOpenAttempt} onOpenTopic={onOpenTopic}
+        onStartAttempt={onOpenAttempt} onOpenTopic={onOpenTopic} plan={plan}
         onQuestions={openQuestionBank} onMaterials={manager ? () => navigate("materials") : undefined} />
     </section>
     <div id="course-practice" hidden={destination !== "practice"}>
@@ -130,12 +134,13 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
     {destination === "exam" && mockScope && <div id="course-exam"><MockIntro key={mockScope} courseId={course.id} scopeId={mockScope} canStart={!activeSession}
       onBack={() => setMockScope(null)} onStartAttempt={attempt => { setMockScope(null); onOpenAttempt?.(attempt); }} /></div>}
     {destination === "exam" && !mockScope && <div id="course-exam" className="flex flex-col gap-section">
+      <StudyPlanCard courseId={course.id} active={visible} plan={plan} onSaved={() => setPlanRevision(value => value + 1)} />
       <ExamEstimateView courseId={course.id} active={visible}
         onPracticeUnit={(unitId, scopeId) => openPractice("ADAPTIVE", { scopeId, unitIds: [unitId] })}
         onMock={setMockScope} />
       <ExamPapers courseId={course.id} onStartAttempt={onOpenAttempt} />
     </div>}
-    <div id="course-progress" hidden={destination !== "progress"}><ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} onStartAttempt={onOpenAttempt}
+    <div id="course-progress" hidden={destination !== "progress"}>{plan && <div className="mb-section"><StudyPlanGrid plan={plan} onEdit={() => navigate("exam")} /></div>}<ProgressPanel courseId={course.id} active={visible && destination === "progress"} onOpenAdaptiveReview={() => { openPractice("ADAPTIVE"); onOpenAdaptiveReview(); }} onStartAttempt={onOpenAttempt}
       onOpenResults={onOpenResults} onPracticeMistakes={() => openPractice("MISTAKES")} onPracticeFavorites={() => openPractice("FAVORITES")} /></div>
 
     {/* Pitanja i materijali (21d). Managers switch between a pointer to their bank in Upravljanje and the materials. */}
