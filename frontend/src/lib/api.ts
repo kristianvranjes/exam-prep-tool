@@ -249,7 +249,8 @@ export const api = {
   updateFaculty: (id: string, body: { name: string; university_name: string | null }) => request<ManagedFaculty>(`/faculties/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   archiveFaculty: (id: string) => request<ManagedFaculty>(`/faculties/${id}/archive`, { method: "POST" }),
   restoreFaculty: (id: string) => request<ManagedFaculty>(`/faculties/${id}/restore`, { method: "POST" }),
-  deleteFaculty: (id: string) => request<void>(`/faculties/${id}`, { method: "DELETE" }),
+  /** An archived faculty without courses; with `confirmName` (its exact name) also one with all its courses. */
+  deleteFaculty: (id: string, confirmName?: string) => request<void>(`/faculties/${id}${confirmName === undefined ? "" : `?with_courses=true&confirm_name=${encodeURIComponent(confirmName)}`}`, { method: "DELETE" }),
 };
 
 export type Material = { id: string; course_id: string; uploaded_by_user_id: string; original_filename: string; media_type: string; file_size_bytes: number; status: 'UPLOADED' | 'PROCESSING' | 'READY' | 'FAILED'; processing_error: string | null; created_at: string; updated_at: string };

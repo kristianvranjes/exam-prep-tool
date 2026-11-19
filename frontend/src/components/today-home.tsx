@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { MouseEvent } from "react";
+import { useState, type MouseEvent } from "react";
 import type { Course, MemberCourse, NextExam } from "../lib/api";
 import { daysBetween, localIsoDate, shortDate } from "../lib/exam-dates";
 import { pluralForm, type Forms } from "../lib/plural";
@@ -83,9 +83,9 @@ function ReadinessText({ exam, wide }: { exam: NextExam | null | undefined; wide
 }
 
 /** The nearest course (20a): its countdown, readiness and the next step, which is the open session when there is one. */
-function NearestCourse({ course, today, attempt, resumable, onOpen, onResume }: {
+function NearestCourse({ course, today, attempt, resumable, onOpen, onResume, onLeave }: {
   course: MemberCourse; today: string; attempt?: ResumableAttempt; resumable: boolean;
-  onOpen: (course: Course) => void; onResume: (course: Course) => void;
+  onOpen: (course: Course) => void; onResume: (course: Course) => void; onLeave?: (course: MemberCourse) => void;
 }) {
   const exam = course.next_exam;
   const days = exam ? daysTo(exam, today) : null;
@@ -118,14 +118,15 @@ function NearestCourse({ course, today, attempt, resumable, onOpen, onResume }: 
         <ResumeSession attempt={attempt} nameId={headingId} onResume={() => onResume(course)}
           className="sm:flex-col sm:items-stretch sm:gap-3 sm:[&_button]:w-full" />
       </> : <Button className="w-full" aria-label={`Vježbaj: ${course.name}`} onClick={() => onOpen(course)}>Vježbaj</Button>}
+      {onLeave && <LeaveCourse course={course} onLeave={onLeave} />}
     </div>
   </article>;
 }
 
 /** Every other active course as one row: exam, days to it, one line of status and a secondary action. */
-function CourseRow({ course, today, attempt, resumable, onOpen, onResume }: {
+function CourseRow({ course, today, attempt, resumable, onOpen, onResume, onLeave }: {
   course: MemberCourse; today: string; attempt?: ResumableAttempt; resumable: boolean;
-  onOpen: (course: Course) => void; onResume: (course: Course) => void;
+  onOpen: (course: Course) => void; onResume: (course: Course) => void; onLeave?: (course: MemberCourse) => void;
 }) {
   const exam = course.next_exam;
   const days = exam ? daysTo(exam, today) : null;
@@ -147,10 +148,26 @@ function CourseRow({ course, today, attempt, resumable, onOpen, onResume }: {
           {attempt?.total != null && <span className="text-muted tabular-nums"> · odgovoreno {attempt.answered} od {attempt.total}</span>}</p>
         : <ReadinessText exam={exam} wide={false} />}
     </div>
-    {resumable
-      ? <Button variant="secondary" aria-label={`Nastavi vježbu: ${course.name}`} onClick={() => onResume(course)}>Nastavi</Button>
-      : <Button variant="secondary" aria-label={`Vježbaj: ${course.name}`} onClick={() => onOpen(course)}>Vježbaj</Button>}
+    <div className="flex flex-col gap-1">
+      {resumable
+        ? <Button variant="secondary" aria-label={`Nastavi vježbu: ${course.name}`} onClick={() => onResume(course)}>Nastavi</Button>
+        : <Button variant="secondary" aria-label={`Vježbaj: ${course.name}`} onClick={() => onOpen(course)}>Vježbaj</Button>}
+      {onLeave && <LeaveCourse course={course} onLeave={onLeave} />}
+    </div>
   </li>;
+}
+
+/** "Ispiši se" with a confirmation in place: the course leaves Danas; enrolling again brings it back. */
+function LeaveCourse({ course, onLeave }: { course: MemberCourse; onLeave: (course: MemberCourse) => void }) {
+  const [asking, setAsking] = useState(false);
+  if (!asking) return <Button variant="ghost" className="min-h-9 self-start px-1 text-sm text-muted hover:text-danger" aria-label={`Ispiši se: ${course.name}`} onClick={() => setAsking(true)}>Ispiši se</Button>;
+  return <div role="group" aria-label={`Ispis s kolegija ${course.name}`} className="space-y-2 border-2 border-danger p-3 text-sm">
+    <p>Ispisati se s kolegija {course.name}? Napredak ostaje spremljen, a ponovni upis vraća kolegij.</p>
+    <div className="flex flex-wrap gap-2">
+      <Button variant="secondary" className="text-danger" onClick={() => onLeave(course)}>Ispiši se</Button>
+      <Button variant="ghost" onClick={() => setAsking(false)}>Odustani</Button>
+    </div>
+  </div>;
 }
 
 /** 20b: a student without courses learns the two steps to the first practice. */
@@ -185,10 +202,12 @@ function FirstRun({ userName, onEnrol }: { userName?: string; onEnrol: () => voi
  * countdown, readiness and the open session or "Vježbaj"; the others are rows. The course list itself, with finished
  * and removed courses, is "Upravljanje kolegijima" (`/courses`).
  */
-export function TodayHome({ courses, loading, userName, onOpen, onEnrol, onManage, resumable, onResume }: {
+export function TodayHome({ courses, loading, userName, onOpen, onEnrol, onManage, resumable, onResume, onLeave }: {
   courses: MemberCourse[]; loading: boolean; userName?: string;
   onOpen: (course: Course) => void; onEnrol: () => void; onManage: () => void;
   resumable: ResumableCourse[]; onResume: (course: Course) => void;
+  /** Unenrols from a course (it leaves the list; enrolling again brings it back). */
+  onLeave?: (course: MemberCourse) => void;
 }) {
   const today = localIsoDate();
   if (!loading && courses.length === 0) return <section aria-labelledby="home-heading"><FirstRun userName={userName} onEnrol={onEnrol} /></section>;
@@ -207,10 +226,10 @@ export function TodayHome({ courses, loading, userName, onOpen, onEnrol, onManag
       {loading ? <LoadingState>Učitavam kolegije…</LoadingState> : !nearest
         ? <EmptyState title="Nema aktivnih kolegija">Upišite kolegij ili u Upravljanju kolegijima vratite završeni kolegij među aktivne.</EmptyState>
         : <>
-          <NearestCourse course={nearest} today={today} attempt={session(nearest)?.attempt} resumable={!!session(nearest)} onOpen={onOpen} onResume={onResume} />
+          <NearestCourse course={nearest} today={today} attempt={session(nearest)?.attempt} resumable={!!session(nearest)} onOpen={onOpen} onResume={onResume} onLeave={onLeave} />
           {others.length > 0 && <ul aria-label="Ostali kolegiji" className="space-y-3">
             {others.map(course => <CourseRow key={course.id} course={course} today={today} attempt={session(course)?.attempt}
-              resumable={!!session(course)} onOpen={onOpen} onResume={onResume} />)}
+              resumable={!!session(course)} onOpen={onOpen} onResume={onResume} onLeave={onLeave} />)}
           </ul>}
         </>}
     </div>

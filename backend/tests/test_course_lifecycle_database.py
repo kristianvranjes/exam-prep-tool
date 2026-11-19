@@ -244,3 +244,34 @@ def test_a_moderator_can_restore_the_faculty_they_archived(clients, made):
     assert listed[str(faculty)]["is_active"] is False
     assert stranger.post(f"/faculties/{faculty}/restore").status_code == 403
     assert owner.post(f"/faculties/{faculty}/restore").json()["is_active"] is True
+
+
+def test_a_moderator_deletes_a_faculty_with_all_its_courses(clients, made):
+    owner, member, stranger, _ = clients
+    faculty = made()
+    provision(owner, faculty)
+    with SessionLocal() as db:
+        name = db.get(Faculty, faculty).name
+    active = create_course(owner, json={"name": "Aktivan", "faculty_id": str(faculty)}).json()
+    archived = create_course(owner, json={"name": "Arhiviran", "faculty_id": str(faculty)}).json()
+    archive_course(owner, archived["id"])
+    assert member.post(f"/courses/{active['id']}/join").status_code == 200
+    path = f"/faculties/{faculty}"
+    # Without the option the old rule stands: an active faculty with courses stays.
+    assert owner.delete(path).status_code == 409
+    params = {"with_courses": "true", "confirm_name": name}
+    assert member.delete(path, params=params).status_code == 403
+    assert (
+        owner.delete(path, params={"with_courses": "true", "confirm_name": "kriv"}).status_code
+        == 422
+    )
+    assert owner.delete(path, params={"with_courses": "true"}).status_code == 422
+    with SessionLocal() as db:
+        assert db.get(Faculty, faculty) is not None
+    deleted = owner.delete(path, params={"with_courses": "true", "confirm_name": f"  {name} "})
+    assert deleted.status_code == 204, deleted.text
+    with SessionLocal() as db:
+        assert db.get(Faculty, faculty) is None
+        assert db.scalars(select(Course).where(Course.faculty_id == faculty)).all() == []
+    assert member.get(f"/courses/{active['id']}").status_code == 404
+    assert all(row["id"] != active["id"] for row in member.get("/courses").json())
