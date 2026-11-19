@@ -255,7 +255,7 @@ export function AppShell() {
     {view === "unavailable" && <section><h1 id="unavailable-heading" tabIndex={-1} className="text-2xl font-semibold">Stranica nije dostupna</h1><Button className="mt-4" onClick={() => navigate("/")}>Natrag na početnu</Button></section>}
     {deletedNotice && <Alert tone="info" className="mb-5">{deletedNotice}</Alert>}
     <div hidden={view !== "home"}>
-      <TodayHome courses={courses} loading={loadingCourses} userName={user.display_name} onOpen={selectCourse}
+      <TodayHome courses={courses} loading={loadingCourses} userName={user.display_name} onOpen={selectCourse} onLeave={course => changeCourseStatus(course, "HIDDEN")}
         onEnrol={() => navigate("/enrol")} onManage={() => navigate("/courses")} resumable={resumable} onResume={resumeSession} />
     </div>
     {view === "courses" && <StudentHome onEnrol={() => navigate("/enrol")} courses={courses} loading={loadingCourses} onOpen={selectCourse} onStatusChange={changeCourseStatus}

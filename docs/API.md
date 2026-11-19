@@ -747,6 +747,10 @@ All endpoints require authentication (401 otherwise):
     archived courses included; `409` "Archive the faculty before deleting it" or "A faculty
     with courses cannot be deleted" otherwise (`courses.faculty_id` is `ON DELETE RESTRICT`).
     Its moderator and creator rows go with it.
+    With `with_courses=true&confirm_name=<the faculty's exact name>` (surrounding spaces ignored) the
+    faculty goes **with every course in it**, active or archived, whatever its own state: each course as
+    `DELETE /courses/{course_id}` deletes one, and the courses' source PDFs are cleaned up after the
+    commit. A missing or different name is `422`.
 - `GET /faculties/{faculty_id}/moderator-status`: `{"is_moderator": bool}` for the current
   user; missing faculty 404. See [community](COMMUNITY.md#api-additions-and-governance).
 - `GET /faculties/{faculty_id}/question-review`: faculty moderators only (403 otherwise);

@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
+from app.config import Settings
 from app.dependencies import get_current_user, get_db
 from app.models import User
 from app.models.faculty import Faculty
@@ -19,11 +20,13 @@ from app.services.faculties import (
     can_create_faculty,
     create_faculty,
     delete_faculty,
+    delete_faculty_with_courses,
     list_faculties,
     list_managed_faculties,
     set_faculty_active,
     update_faculty,
 )
+from app.services.materials.storage import LocalMaterialStorage
 
 router = APIRouter(prefix="/faculties", tags=["faculties"])
 
@@ -80,9 +83,19 @@ def restore(
 
 @router.delete("/{faculty_id}", status_code=204)
 def remove(
-    faculty_id: UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    faculty_id: UUID,
+    # With every course in it, once the faculty name is typed; otherwise only an archived
+    # faculty without courses.
+    with_courses: bool = False,
+    confirm_name: str | None = Query(default=None, max_length=500),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> Response:
-    delete_faculty(db, user, faculty_id)
+    if with_courses:
+        storage = LocalMaterialStorage(Settings().material_storage_dir)
+        delete_faculty_with_courses(db, user, faculty_id, storage, confirm_name)
+    else:
+        delete_faculty(db, user, faculty_id)
     return Response(status_code=204)
 
 

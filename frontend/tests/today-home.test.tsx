@@ -132,3 +132,16 @@ it("waits for the course list before choosing between Danas and the welcome", ()
   expect(screen.getByRole("status")).toHaveTextContent("Učitavam kolegije…");
   expect(screen.queryByText("Prvo upišite kolegij koji polažete")).not.toBeInTheDocument();
 });
+
+it("unenrols from a course after a confirmation on Danas", () => {
+  const onLeave = vi.fn();
+  render(<TodayHome courses={[asp, sis]} loading={false} userName="Ivana" onOpen={onOpen} onEnrol={onEnrol} onManage={onManage} resumable={[]} onResume={onResume} onLeave={onLeave} />);
+  fireEvent.click(screen.getByRole("button", { name: "Ispiši se: Signali i sustavi" }));
+  const ask = screen.getByRole("group", { name: "Ispis s kolegija Signali i sustavi" });
+  expect(ask).toHaveTextContent("Napredak ostaje spremljen, a ponovni upis vraća kolegij.");
+  fireEvent.click(within(ask).getByRole("button", { name: "Odustani" }));
+  expect(onLeave).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Ispiši se: Algoritmi i strukture podataka" }));
+  fireEvent.click(within(screen.getByRole("group", { name: "Ispis s kolegija Algoritmi i strukture podataka" })).getByRole("button", { name: "Ispiši se" }));
+  expect(onLeave).toHaveBeenCalledExactlyOnceWith(asp);
+});
