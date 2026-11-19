@@ -5,18 +5,21 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.models import Course, User
 from app.models.faculty import Faculty
 from app.models.faculty_creator import FacultyCreator
 from app.models.faculty_moderator import FacultyModerator
+from app.models.material import Material
 from app.schemas.faculty import (
     FacultyCreate,
     FacultyResponse,
     FacultyUpdate,
     ManagedFacultyResponse,
 )
+from app.services.materials.cleanup import cleanup_sources, queue_sources
+from app.services.materials.storage import MaterialStorage
 
 
 def slugify(name: str) -> str:
@@ -191,6 +194,50 @@ def delete_faculty(db: Session, user: User, faculty_id: UUID) -> None:
     except Exception:
         db.rollback()
         raise
+
+
+def delete_faculty_with_courses(
+    db: Session, user: User, faculty_id: UUID, storage: MaterialStorage, confirm_name: str | None
+) -> None:
+    """Delete a faculty and every course in it, archived or not, once its name is typed.
+
+    Each course goes as `delete_course` removes one (members, questions, attempts and the rest
+    cascade); the source PDFs of its materials are cleaned up after the commit.
+    """
+    try:
+        faculty = lock_faculty(db, user, faculty_id)
+        if (confirm_name or "").strip() != faculty.name.strip():
+            raise HTTPException(422, "Type the faculty name to confirm deletion")
+        courses = list(
+            db.scalars(
+                select(Course)
+                .where(Course.faculty_id == faculty_id)
+                .order_by(Course.id)
+                .with_for_update()
+            )
+        )
+        keys = [
+            key
+            for key in db.scalars(
+                select(Material.storage_key)
+                .where(Material.course_id.in_([course.id for course in courses]))
+                .order_by(Material.id)
+                .with_for_update()
+            )
+        ]
+        cleanup_ids = queue_sources(db, keys)
+        for course in courses:
+            db.delete(course)
+        db.flush()
+        db.delete(faculty)
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(503, "Could not delete faculty") from None
+    cleanup_sources(sessionmaker(bind=db.get_bind()), storage, cleanup_ids=cleanup_ids)
 
 
 def active_faculty(db: Session, faculty_id: UUID) -> Faculty:

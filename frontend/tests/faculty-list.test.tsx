@@ -5,6 +5,7 @@ import type { ManagedFaculty } from "../src/lib/api";
 
 const mock = vi.hoisted(() => ({
   managedFaculties: vi.fn(), updateFaculty: vi.fn(), archiveFaculty: vi.fn(), restoreFaculty: vi.fn(), deleteFaculty: vi.fn(),
+  facultyCourses: vi.fn(), archiveCourse: vi.fn(), deleteCourse: vi.fn(),
 }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 
@@ -30,10 +31,43 @@ it("lists every faculty with its state and course count in words", async () => {
   expect(within(row("Prazni")).getByText("Arhiviran")).toBeInTheDocument();
   expect(within(row("Prazni")).getByText("0 kolegija")).toBeInTheDocument();
   expect(within(row("Stari")).getByText("1 kolegij")).toBeInTheDocument();
-  // Only an archived faculty without courses offers deletion; the others say why not.
-  expect(screen.queryByRole("button", { name: "Obriši fakultet FER" })).not.toBeInTheDocument();
+  // Every faculty can be deleted; one with courses lists them too.
+  expect(screen.getByRole("button", { name: "Obriši fakultet FER" })).toBeEnabled();
   expect(screen.getByRole("button", { name: "Obriši fakultet Prazni" })).toBeEnabled();
-  expect(within(row("Stari")).getByText("Ne može se obrisati dok ima kolegije.")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Kolegiji fakulteta FER" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Kolegiji fakulteta Prazni" })).not.toBeInTheDocument();
+});
+
+it("deletes a faculty with all its courses once its name is typed", async () => {
+  mock.deleteFaculty.mockResolvedValue(undefined);
+  render(<FacultyList revision={0} onChanged={onChanged} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Obriši fakultet FER" }));
+  expect(row("FER")).toHaveTextContent("zajedno sa svim kolegijima (3 kolegija)");
+  const confirm = screen.getByRole("button", { name: "Trajno obriši fakultet i kolegije" });
+  expect(confirm).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Upišite naziv fakulteta za potvrdu"), { target: { value: "FE" } });
+  expect(confirm).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Upišite naziv fakulteta za potvrdu"), { target: { value: " FER " } });
+  fireEvent.click(confirm);
+  await waitFor(() => expect(mock.deleteFaculty).toHaveBeenCalledWith("f1", "FER"));
+  expect(await screen.findByText("FER je obrisan.")).toBeInTheDocument();
+});
+
+it("archives and deletes one of a faculty's courses from the faculty tools", async () => {
+  mock.facultyCourses.mockResolvedValue([{ id: "c1", name: "Digitalna logika", code: "DL" }, { id: "c2", name: "Signali", code: null }]);
+  mock.archiveCourse.mockResolvedValue({}); mock.deleteCourse.mockResolvedValue(undefined);
+  render(<FacultyList revision={0} onChanged={onChanged} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Kolegiji fakulteta FER" }));
+  const list = await screen.findByRole("list", { name: "Kolegiji fakulteta" });
+  fireEvent.click(within(list).getByRole("button", { name: "Obriši kolegij Digitalna logika" }));
+  const confirm = within(list).getByRole("button", { name: "Trajno obriši kolegij" });
+  expect(confirm).toBeDisabled();
+  fireEvent.change(within(list).getByLabelText("Upišite naziv kolegija za potvrdu"), { target: { value: "Digitalna logika" } });
+  fireEvent.click(confirm);
+  expect(await screen.findByText("Digitalna logika je obrisan.")).toBeInTheDocument();
+  expect(mock.archiveCourse).toHaveBeenCalledWith("c1");
+  expect(mock.deleteCourse).toHaveBeenCalledWith("c1", "Digitalna logika");
+  expect(within(row("FER")).getByText("2 kolegija")).toBeInTheDocument();
 });
 
 it("edits a faculty's name and university, keeping its address", async () => {
