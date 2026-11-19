@@ -508,6 +508,7 @@ Implemented:
 
 - Course and faculty lifecycle (#176, no handoff screen): "Postavke kolegija" under "Više" is open to the owner and faculty moderators; the owner alone edits the details. "Arhiviranje i brisanje" states the course's state in words (Aktivan / Arhiviran badge plus a sentence), archives or restores it, and only for an archived course offers "Obriši kolegij…": a modal that lists what is lost (attempts and history of every member, materials and source PDFs, questions and the rest) and enables "Trajno obriši kolegij" only once the exact name is typed. The faculty tools list every faculty as ruled rows (name, university, course count, state in words) with Uredi, Arhiviraj / Vrati and, for an archived faculty without courses, a two-step Obriši. The filled danger button is kept for the final step only.
 
+- Study plan on Danas and Ispit (#173): a course whose plan is on adds "Po planu danas: <topics>" (the label in accent) under its readiness on Danas, and the plan's goal shows on Ispit's scale of that cycle as a dashed foreground mark labelled "cilj 26", with the comparison in words ("Vaš cilj od 26 bodova je unutar raspona procjene." / below / how many points above the range).
 - Deleting and leaving: in the faculty tools every faculty has **Obriši…**. One with courses says how many go with it and enables "Trajno obriši fakultet i kolegije" only once its exact name is typed; an active faculty without courses is archived and deleted in one step. **Kolegiji** under a faculty lists its catalog courses, each with **Obriši kolegij…** (typed name; archives and deletes in one step). On Danas each course has a quiet **Ispiši se** (ghost, muted, danger on hover) that asks in place ("Napredak ostaje spremljen, a ponovni upis vraća kolegij."); it sets the membership to HIDDEN like "Ukloni s popisa" on the course list.
 
 - Study plan, first screens (#173, `study-plan.tsx`, backend `GET/PUT /courses/<id>/study-plan`): on **Ispit** a "Plan učenja · neobavezno" card states the plan in one line ("Završni ispit za 19 dana · 40 min dnevno · cilj 26 od 40 bodova · sve teme prijeđene do …") or what it offers, with **Postavi plan** / **Uredi plan**; editing is 20c in the card: "Kada je ispit?" (the next dated cycle, or a chosen one with its date and days left), "Cilj u bodovima", the "Plan učenja" switch and "Vrijeme dnevno" (20 / 40 / 60 min). With the plan on, **Učenje** leads with "Današnja sesija · po planu" (minutes and questions, this week's topics, the work in words, the cards due) and **Započni sesiju** opens the topic picker with them; **Napredak** starts with "Plan do ispita", a table of topics by week (Ovaj tj., Tj. 2 …) whose cells say the work (Nova tema, Ponavljanje, Vježba, Održavanje) with a fill per kind, a "Probni ispit" row, and what does not fit before the exam. Off, nothing of it shows besides the Ispit card. Not yet: the Danas line ("Po planu danas"), the step in 20b, and the goal mark on 21b's scale.
@@ -539,8 +540,7 @@ Implemented:
 
 Pending:
 
-- Study plan on request (#173): the "Datum ispita i cilj" step of 20b, the plan line of 20a's rows and the goal mark on
-  21b's scale.
+- Study plan on request (#173): the "Datum ispita i cilj" step of 20b.
 - Parts of 21a-21d that need data the app does not have: a time estimate for "Vježbaj sada", the "Preporučeno" tag on
   a past paper, each session's score in Napredak's history, and 21d's Označena, Moji prijedlozi and the per-question
   "n / m točno" column.

@@ -11,6 +11,7 @@ import { ResumeSession } from "./resume-session";
 import { codeText, courseVar, useReadiness, type ResumableCourse } from "./student-home";
 import { Button, EmptyState, LoadingState, PageHeader, SegmentBars } from "./ui";
 import type { ResumableAttempt } from "./use-resumable-sessions";
+import { useStudyPlan } from "./study-plan";
 
 const DAYS: Forms = ["dan", "dana", "dana"];
 /** "7 dana do međuispita": the exam kind in the genitive, since a scope's own name cannot be declined. */
@@ -82,6 +83,17 @@ function ReadinessText({ exam, wide }: { exam: NextExam | null | undefined; wide
   </div>;
 }
 
+/** 20a's plan line: today's topics for a course whose study plan is on (#173); nothing otherwise. */
+function PlanLine({ courseId }: { courseId: string }) {
+  const plan = useStudyPlan(courseId, true);
+  const topics = plan?.settings.plan_enabled ? plan.today?.topics ?? [] : [];
+  const work = topics.filter(topic => topic.work !== "MAINTAIN");
+  const shown = work.length ? work : topics;
+  if (!plan?.today || (!shown.length && !plan.today.mock)) return null;
+  return <p className="text-sm"><span className="font-semibold text-accent">Po planu danas:</span>{" "}
+    {shown.length ? shown.map(topic => topic.title).join(", ") : "probni ispit"}</p>;
+}
+
 /** The nearest course (20a): its countdown, readiness and the next step, which is the open session when there is one. */
 function NearestCourse({ course, today, attempt, resumable, onOpen, onResume, onLeave }: {
   course: MemberCourse; today: string; attempt?: ResumableAttempt; resumable: boolean;
@@ -111,6 +123,7 @@ function NearestCourse({ course, today, attempt, resumable, onOpen, onResume, on
         : <p className="text-3xl font-extrabold tracking-tight">{ongoingText(exam)}</p>
         : <p className="text-muted">Datum ispita još nije objavljen.</p>}
       <ReadinessText exam={exam} wide />
+      <PlanLine courseId={course.id} />
     </div>
     <div className="min-w-0 space-y-3">
       {resumable ? <>
@@ -146,7 +159,7 @@ function CourseRow({ course, today, attempt, resumable, onOpen, onResume, onLeav
       {resumable
         ? <p className="text-sm"><span className="font-semibold">Započeta vježba</span>
           {attempt?.total != null && <span className="text-muted tabular-nums"> · odgovoreno {attempt.answered} od {attempt.total}</span>}</p>
-        : <ReadinessText exam={exam} wide={false} />}
+        : <><ReadinessText exam={exam} wide={false} /><PlanLine courseId={course.id} /></>}
     </div>
     <div className="flex flex-col gap-1">
       {resumable

@@ -21,7 +21,15 @@ function passNote(estimate: NonNullable<ExamEstimate["estimate"]>, threshold: nu
   return `Prag od ${points(threshold)} pada unutar raspona.`;
 }
 
-function RangeScale({ estimate, max, threshold }: { estimate: NonNullable<ExamEstimate["estimate"]>; max: number; threshold: number | null }) {
+/** The goal against the range, in words: the scale alone never carries it. */
+function goalNote(range: { low: number; high: number }, goal: number) {
+  const said = (value: number) => `${num(value)} ${pluralForm(value, POINTS)}`;
+  if (goal <= range.low) return `Vaš cilj od ${said(goal)} je ispod procjene: na dobrom ste putu.`;
+  if (goal > range.high) return `Vaš cilj je ${said(goal)}; do njega nedostaje oko ${said(Math.round((goal - range.high) * 10) / 10)} iznad procjene.`;
+  return `Vaš cilj od ${said(goal)} je unutar raspona procjene.`;
+}
+
+function RangeScale({ estimate, max, threshold, goal = null }: { estimate: NonNullable<ExamEstimate["estimate"]>; max: number; threshold: number | null; goal?: number | null }) {
   const at = (value: number) => `${Math.min(Math.max(value / max, 0), 1) * 100}%`;
   const ticks = [0, 0.25, 0.5, 0.75, 1].map(step => Math.round(step * max));
   return <div aria-hidden="true" className="space-y-2.5 pb-2">
@@ -34,7 +42,9 @@ function RangeScale({ estimate, max, threshold }: { estimate: NonNullable<ExamEs
       <span className="absolute inset-y-1.5 left-0 bg-accent" style={{ width: at(estimate.expected) }} />
       <span className="absolute -inset-y-1.5 w-1 -translate-x-1/2 bg-foreground" style={{ left: at(estimate.expected) }} />
       {threshold != null && <span className="absolute -inset-y-2.5 w-0.5 -translate-x-1/2 bg-danger" style={{ left: at(threshold) }} />}
+      {goal != null && <span className="absolute -inset-y-2.5 w-0 -translate-x-1/2 border-l-2 border-dashed border-foreground" style={{ left: at(goal) }} />}
     </div>
+    {goal != null && <div className="relative h-5"><span className="absolute top-0 -translate-x-1/2 text-xs font-extrabold" style={{ left: at(goal) }}>cilj {num(goal)}</span></div>}
     <div className="flex justify-between text-xs tabular-nums text-muted">{ticks.map(tick => <span key={tick}>{tick}</span>)}</div>
   </div>;
 }
@@ -71,9 +81,11 @@ export function topGains(topics: TopicEstimate[], count = 3) {
  * topic carried on the published past papers and how accurate the student has been in it lately (`exam-estimate-v1`),
  * the mock exam, where the most points are left, and every topic of the cycle.
  */
-export function ExamEstimateView({ courseId, active = true, onPracticeUnit, onMock }: {
+export function ExamEstimateView({ courseId, active = true, onPracticeUnit, onMock, goal = null, goalScopeId = null }: {
   courseId: string;
   active?: boolean;
+  /** The student's goal in points from the study plan (#173), shown on the scale of `goalScopeId` only. */
+  goal?: number | null; goalScopeId?: string | null;
   onPracticeUnit?: (unitId: string, scopeId: string) => void;
   /** Opens the mock exam's setup for the chosen cycle; left out, there is no mock exam button. */
   onMock?: (scopeId: string) => void;
@@ -114,6 +126,7 @@ export function ExamEstimateView({ courseId, active = true, onPracticeUnit, onMo
   const loaded = estimate !== null && estimate.scope_id === scopeId;
   const range = loaded ? estimate.estimate : null;
   const max = loaded ? estimate.max_points : null;
+  const shownGoal = goal != null && scopeId === goalScopeId ? goal : null;
   const dates = scope && formatScopeDates(scope);
   const meta = scope && [scope.name, dates, max != null && points(max), loaded && estimate.pass_threshold != null && `prag ${num(estimate.pass_threshold)}`].filter(Boolean).join(" · ");
   const remaining = loaded ? Math.max(estimate.min_answers - estimate.answer_count, 1) : 0;
@@ -161,7 +174,8 @@ export function ExamEstimateView({ courseId, active = true, onPracticeUnit, onMo
               <p className="mt-3 text-soft" aria-hidden="true">očekivano {num(range.expected)} · raspon {num(range.low)}–{num(range.high)}</p>
               {passNote(range, estimate.pass_threshold) && <p className="mt-1 text-sm text-muted">{passNote(range, estimate.pass_threshold)}</p>}
             </div>
-            <RangeScale estimate={range} max={max} threshold={estimate.pass_threshold} />
+            <RangeScale estimate={range} max={max} threshold={estimate.pass_threshold} goal={shownGoal} />
+            {shownGoal != null && <p className="text-sm text-soft">{goalNote(range, shownGoal)}</p>}
             <p className="max-w-prose text-sm text-soft">Iz vaše točnosti po temama i bodova na objavljenim prošlim ispitima. Raspon se sužava sa svakim riješenim pitanjem.</p>
           </div> : <div>
             <p className="font-semibold">Još nema dovoljno odgovora</p>

@@ -126,3 +126,18 @@ it("has no mock exam button without a way to open it", async () => {
   expect(screen.queryByRole("button", { name: "Probni ispit" })).not.toBeInTheDocument();
   expect(mock.courseDashboard).not.toHaveBeenCalled();
 });
+
+it("marks the study plan's goal on its own cycle and says how it compares (#173)", async () => {
+  const view = render(<ExamEstimateView courseId="course" goal={34} goalScopeId="s1" />);
+  expect(await screen.findByText("Vaš cilj je 34 boda; do njega nedostaje oko 2 boda iznad procjene.")).toBeVisible();
+  expect(screen.getByText("cilj 34")).toBeInTheDocument();
+  view.unmount();
+  render(<ExamEstimateView courseId="course" goal={24} goalScopeId="s1" />);
+  expect(await screen.findByText("Vaš cilj od 24 boda je ispod procjene: na dobrom ste putu.")).toBeVisible();
+});
+
+it("leaves the goal off another cycle's scale", async () => {
+  render(<ExamEstimateView courseId="course" goal={30} goalScopeId="other" />);
+  await screen.findByText("Očekujete 28 bodova od 40 bodova, raspon od 25 do 32.");
+  expect(screen.queryByText(/Vaš cilj/)).not.toBeInTheDocument();
+});

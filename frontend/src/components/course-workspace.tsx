@@ -136,6 +136,7 @@ export function CourseWorkspace({ course, currentUserId, isOwner, isModerator = 
     {destination === "exam" && !mockScope && <div id="course-exam" className="flex flex-col gap-section">
       <StudyPlanCard courseId={course.id} active={visible} plan={plan} onSaved={() => setPlanRevision(value => value + 1)} />
       <ExamEstimateView courseId={course.id} active={visible}
+        goal={plan?.settings.target_points ?? null} goalScopeId={plan?.exam?.scope_id ?? plan?.settings.exam_scope_id ?? null}
         onPracticeUnit={(unitId, scopeId) => openPractice("ADAPTIVE", { scopeId, unitIds: [unitId] })}
         onMock={setMockScope} />
       <ExamPapers courseId={course.id} onStartAttempt={onOpenAttempt} />
