@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
@@ -27,6 +28,10 @@ class Settings(BaseSettings):
     auth_register_max_attempts: int = Field(default=5, ge=1, le=1000)
     auth_register_max_total_attempts: int = Field(default=20, ge=1, le=10000)
     auth_register_window_seconds: int = Field(default=600, ge=1, le=3600)
+    # Google sign-in: the Web OAuth client ID (public, not a secret). Empty turns Google off.
+    google_client_id: str = ""
+    # Unset: password sign-in stays on without a Google client ID, and in development and test.
+    password_login_enabled: bool | None = None
     material_storage_dir: Path = Path("data/materials")
     material_max_upload_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     material_chunk_target_chars: int = Field(default=2500, ge=2)
@@ -88,6 +93,26 @@ class Settings(BaseSettings):
         ):
             raise ValueError("FRONTEND_URL must be one explicit HTTP(S) origin")
         return value
+
+    @field_validator("google_client_id")
+    @classmethod
+    def google_web_client(cls, value: str) -> str:
+        value = value.strip()
+        if value and not re.fullmatch(r"[0-9A-Za-z._-]+\.apps\.googleusercontent\.com", value):
+            raise ValueError("GOOGLE_CLIENT_ID must be a Google OAuth client ID")
+        return value
+
+    @field_validator("password_login_enabled", mode="before")
+    @classmethod
+    def blank_means_unset(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @property
+    def password_login(self) -> bool:
+        """Whether password sign-in and registration are open."""
+        if self.password_login_enabled is not None:
+            return self.password_login_enabled
+        return not self.google_client_id or self.app_env in ("development", "test")
 
     @model_validator(mode="after")
     def deployment_safety(self) -> "Settings":

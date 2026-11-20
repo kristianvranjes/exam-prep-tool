@@ -252,6 +252,10 @@ item and `match_text` its partner. Nothing is backfilled. Downgrade refuses whil
 exists (delete them first), otherwise drops the columns and restores the earlier constraints; a hint or
 expression written meanwhile is lost.
 
+## Google sign-in migration 0037
+
+Revision **0037** (`down_revision = 0036`) adds `users.google_sub` (VARCHAR(255), unique `uq_users_google_sub`, nullable: Google's stable account id once the account signed in with Google) and `users.sessions_valid_after` (nullable timestamptz: sessions signed before it are refused). Both are empty for existing accounts. Downgrade drops them.
+
 ## Study plans migration 0036
 
 Revision **0036** (`down_revision = 0035`) adds `study_plans`: primary key (`user_id`, `course_id`) with FKs to users and courses (`ON DELETE CASCADE`), nullable `exam_scope_id` (FK exam_scopes, `ON DELETE SET NULL`), `target_points` NUMERIC(6,2) (`ck_study_plan_target`: null or 0 < x ≤ 1000), `daily_minutes` (`ck_study_plan_minutes`: 10–240), `plan_enabled` and `updated_at`. Only settings are stored; the plan is computed ([STUDY_PLAN.md](STUDY_PLAN.md)). Downgrade drops the table.

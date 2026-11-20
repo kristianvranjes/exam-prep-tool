@@ -36,18 +36,24 @@ class AuthRateLimiter:
     def __init__(self, settings: Settings, clock: Callable[[], float] = monotonic):
         self._clock = clock
         self._lock = Lock()
+        sign_in = _Window(
+            settings.auth_login_max_attempts,
+            settings.auth_login_max_total_attempts,
+            settings.auth_login_window_seconds,
+        )
         self._windows = {
-            "/auth/login": _Window(
-                settings.auth_login_max_attempts,
-                settings.auth_login_max_total_attempts,
-                settings.auth_login_window_seconds,
-            ),
+            # Password and Google sign-in draw on one budget, so switching does not double it.
+            "/auth/login": sign_in,
+            "/auth/google": sign_in,
             "/auth/register": _Window(
                 settings.auth_register_max_attempts,
                 settings.auth_register_max_total_attempts,
                 settings.auth_register_window_seconds,
             ),
         }
+
+    def limits(self, path: str) -> bool:
+        return path in self._windows
 
     def check(self, path: str, client: str) -> int | None:
         """Consume an attempt or return whole seconds until the window resets."""

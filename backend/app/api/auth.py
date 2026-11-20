@@ -6,8 +6,17 @@ from sqlalchemy.orm import Session
 from app.config import Settings
 from app.dependencies import get_current_user, get_db, write_session_cookie
 from app.models import User
-from app.schemas.user import LoginRequest, UserCreate, UserResponse
+from app.schemas.user import AuthConfig, GoogleLoginRequest, LoginRequest, UserCreate, UserResponse
 from app.services.auth import hash_password, normalize_email, verify_password
+from app.services.google_auth import (
+    AccountDisabledError,
+    GoogleAccountConflictError,
+    GoogleTokenError,
+    GoogleUnavailableError,
+    identity_from_claims,
+    sign_in_with_google,
+    verify_with_google,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -23,6 +32,43 @@ def set_session_cookie(response: Response, user: User) -> None:
     write_session_cookie(response, user.id, Settings())
 
 
+def require_password_login() -> None:
+    if not Settings().password_login:
+        raise HTTPException(status_code=403, detail="Password sign-in is turned off; use Google")
+
+
+@router.get("/config", response_model=AuthConfig)
+def config() -> AuthConfig:
+    """Which sign-in methods the app offers (public)."""
+    settings = Settings()
+    return AuthConfig(
+        google_client_id=settings.google_client_id or None, password_login=settings.password_login
+    )
+
+
+@router.post("/google", response_model=UserResponse, responses=THROTTLED_RESPONSE)
+def google(data: GoogleLoginRequest, response: Response, db: Session = Depends(get_db)) -> User:
+    """Sign in with a Google ID token from Google Identity Services: find, link or create."""
+    settings = Settings()
+    if not settings.google_client_id:
+        raise HTTPException(status_code=404, detail="Google sign-in is not configured")
+    try:
+        claims = verify_with_google(data.credential, settings.google_client_id)
+        user = sign_in_with_google(db, identity_from_claims(claims, settings.google_client_id))
+    except GoogleTokenError:
+        raise HTTPException(status_code=401, detail="Google sign-in failed") from None
+    except GoogleUnavailableError:
+        raise HTTPException(status_code=503, detail="Google is not reachable; try again") from None
+    except AccountDisabledError:
+        raise HTTPException(status_code=403, detail="This account is disabled") from None
+    except GoogleAccountConflictError:
+        raise HTTPException(
+            status_code=409, detail="This e-mail is linked to another Google account"
+        ) from None
+    set_session_cookie(response, user)
+    return user
+
+
 @router.post(
     "/register",
     response_model=UserResponse,
@@ -30,6 +76,7 @@ def set_session_cookie(response: Response, user: User) -> None:
     responses=THROTTLED_RESPONSE,
 )
 def register(data: UserCreate, response: Response, db: Session = Depends(get_db)) -> User:
+    require_password_login()
     user = User(
         email=normalize_email(str(data.email)),
         password_hash=hash_password(data.password),
@@ -50,6 +97,7 @@ def register(data: UserCreate, response: Response, db: Session = Depends(get_db)
 
 @router.post("/login", response_model=UserResponse, responses=THROTTLED_RESPONSE)
 def login(data: LoginRequest, response: Response, db: Session = Depends(get_db)) -> User:
+    require_password_login()
     user = db.scalar(select(User).where(User.email == normalize_email(str(data.email))))
     if user is None or not verify_password(data.password, user.password_hash) or not user.is_active:
         raise HTTPException(status_code=401, detail="Invalid email or password")
