@@ -31,7 +31,8 @@ class Settings(BaseSettings):
     # Google sign-in: the Web OAuth client ID (public, not a secret). Empty turns Google off.
     google_client_id: str = ""
     # Unset: password sign-in stays on without a Google client ID, and in development and test.
-    password_login_enabled: bool | None = None
+    # Kept out of repr: a setting named "password" must never look like a leaked one in logs.
+    password_login_enabled: bool | None = Field(default=None, repr=False)
     material_storage_dir: Path = Path("data/materials")
     material_max_upload_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     material_chunk_target_chars: int = Field(default=2500, ge=2)

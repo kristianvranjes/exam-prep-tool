@@ -320,6 +320,8 @@ def test_migration_roundtrip_and_conflicting_downgrade_is_non_destructive(commun
     creator.post(f"/questions/{row['id']}/submit")
     assert moderator.post(f"/questions/{row['id']}/approve").status_code == 200
     before = history()
+    # Read through the API while the schema is current; the user model has newer columns.
+    owner_id = owner.get("/auth/me").json()["id"]
     config = Config("alembic.ini")
     try:
         for _ in range(2):
@@ -339,7 +341,7 @@ def test_migration_roundtrip_and_conflicting_downgrade_is_non_destructive(commun
                 {
                     "id": uuid4(),
                     "course": course,
-                    "user": owner.get("/auth/me").json()["id"],
+                    "user": owner_id,
                     "stem": row["stem"],
                     "normalized": row["stem"].casefold(),
                 },
