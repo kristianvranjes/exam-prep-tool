@@ -141,6 +141,17 @@ export function PracticeQuiz({ courseId, active = true, defaultView = "custom", 
   function updateAttempt(next: Attempt) {
     if (attemptRef.current?.id !== next.id) return;
     const status = attemptRef.current?.status;
+    // Abandoning from the course goes back to Učenje: the session is no longer open, and the attempt stays in the
+    // history. The history is read again first, so it is not offered for resuming.
+    if (status === "ACTIVE" && next.status === "ABANDONED" && onBackToCourse) {
+      void run(async () => {
+        await loadHistory();
+        if (!mounted.current) return;
+        adopt(null); setHistoryOpen(false); onResumableAttemptChange?.(null);
+        onBackToCourse();
+      });
+      return;
+    }
     adopt(next);
     if (mounted.current && status !== next.status) onAttemptRoute?.(next, true);
   }

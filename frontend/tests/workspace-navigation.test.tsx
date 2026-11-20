@@ -8,7 +8,7 @@ const mock = vi.hoisted(() => ({
   preferences: vi.fn().mockRejectedValue(new Error("no saved preferences")), savePreferences: vi.fn(),
   me: vi.fn(), login: vi.fn(), courses: vi.fn(), faculties: vi.fn(), membership: vi.fn(), course: vi.fn(),
   reviewProgressSummary: vi.fn(), moderatorStatus: vi.fn(), concepts: vi.fn(), questions: vi.fn(), logout: vi.fn(),
-  history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), availability: vi.fn(),
+  history: vi.fn(), start: vi.fn(), read: vi.fn(), save: vi.fn(), submit: vi.fn(), availability: vi.fn(), abandon: vi.fn(),
   examScopes: vi.fn(), examScopeCoverage: vi.fn(), itemAnalysis: vi.fn(), question: vi.fn(), units: vi.fn(),
   // Upravljanje shows how many reports and suggestions wait for a faculty moderator.
   questionReports: vi.fn(), questionSuggestions: vi.fn(), unitModeration: vi.fn(),
@@ -579,4 +579,20 @@ it('does not warn for setup choices or successfully saved answers, but still gua
   fireEvent.click(screen.getByRole('link', { name: 'Statistics' }));
   expect(confirm).not.toHaveBeenCalled();
   confirm.mockRestore();
+});
+
+it("returns to Učenje with its tabs after abandoning a session, without offering to resume it", async () => {
+  const abandoned = { ...activeAttempt, status: "ABANDONED", abandoned_at: "2026-10-01T10:05:00Z" } as Attempt;
+  mock.abandon.mockResolvedValue(abandoned);
+  render(<AppShell />);
+  await startPractice();
+  mock.history.mockResolvedValue([abandoned]);
+  fireEvent.click(screen.getByText("Više", { selector: "summary" }));
+  fireEvent.click(screen.getByRole("button", { name: "Odustani od pokušaja" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Potvrdi odustajanje" }));
+  await waitFor(() => expect(window.location.pathname).toBe("/courses/course"));
+  const tabs = await screen.findByRole("navigation", { name: "Navigacija kolegija" });
+  expect(within(tabs).getByRole("button", { name: /^Učenje/ })).toHaveAttribute("aria-current", "page");
+  expect(screen.queryByText("Pokušaj je napušten")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Nastavi vježbu" })).not.toBeInTheDocument();
 });

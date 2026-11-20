@@ -182,6 +182,9 @@ A user setting of 90 %, 100 %, 115 % or 130 % (`FONT_SCALES` in `theme.tsx`), st
 Lucide (`lucide-react`), 2px stroke, `stroke: currentColor`, 16-22 px, `aria-hidden` when
 next to text. Icon-only buttons need an `aria-label`.
 
+The browser tab icon is `frontend/src/app/icon.svg` (Next.js app icon convention): the brand's "E" in
+`foreground` on the dark `background` with the accent square as its dot, square corners.
+
 ## Navigation
 
 Implemented in `application-frame.tsx` (`ApplicationFrame`); routes in
