@@ -253,6 +253,16 @@ practice, and record their own `grading_version`, so earlier provenance is uncha
   a multiple-select answer. The key (`correct_matches`, and each pair's partner in `options`) is
   revealed only after checking or submission, and students reading the bank see the right-hand
   items alphabetically.
+- **`blanks-v1`** (`TABLE`, `WAVEFORM`): each blank (table cell or segment) is compared with the
+  frozen key, ignoring case and extra spaces; a blank left open counts as wrong. All right is
+  `CORRECT` with fraction 1; otherwise `INCORRECT` with fraction = right / all, rounded **down** to
+  whole percent (7 of 8 is 0.87), so partial credit never rounds up to a full mark. Scoring treats
+  the fraction as for multiple select: above 0 it earns its share of the item's points and pays no
+  penalty.
+- **`circuit-equivalence-v1`** (`CIRCUIT`): the student's gates replace the slots and the circuit is
+  evaluated for every input combination; it is `CORRECT` (1) when every output equals the key
+  circuit's, else `INCORRECT` (0). An open slot is 0. Any equivalent choice counts, not only the
+  author's.
 - **Hint and expression:** any question may carry an optional `hint` (up to 400 characters) and
   `expr` (up to 200). Sessions return both with the question, the hint to be opened on request.
 

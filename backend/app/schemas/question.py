@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
 from pydantic import (
@@ -13,14 +13,25 @@ from pydantic import (
     model_validator,
 )
 
+from app.schemas.interactive import Circuit, Table, Waveform
 from app.services.numbers import parse_number
 
 QuestionType = Literal[
-    "MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"
+    "MULTIPLE_CHOICE",
+    "TRUE_FALSE",
+    "SHORT_ANSWER",
+    "NUMERIC",
+    "MULTIPLE_SELECT",
+    "MATCH",
+    "TABLE",
+    "CIRCUIT",
+    "WAVEFORM",
 ]
 # AI generation and quiz-import-v1 keep the original three types.
 ClassicType = Literal["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"]
 CLASSIC_TYPES = frozenset({"MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"})
+# Types whose layout and key live in a JSON spec (see app.schemas.interactive).
+INTERACTIVE_TYPES = frozenset({"TABLE", "CIRCUIT", "WAVEFORM"})
 QuestionStatus = Literal["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED", "ARCHIVED"]
 Stem = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=400)]
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
@@ -121,6 +132,29 @@ class Match(Content):
         return self
 
 
+class TableQuestion(Content):
+    """Fill in the blank cells of a grid, such as a truth table or a Karnaugh map; graded per
+    cell."""
+
+    type: Literal["TABLE"]
+    table: Table
+
+
+class CircuitQuestion(Content):
+    """Choose a gate for every empty slot; any choice that computes the key's outputs is right."""
+
+    type: Literal["CIRCUIT"]
+    circuit: Circuit
+
+
+class WaveformQuestion(Content):
+    """Draw one or more signals segment by segment next to the given ones; graded per
+    segment."""
+
+    type: Literal["WAVEFORM"]
+    waveform: Waveform
+
+
 class Numeric(Content):
     type: Literal["NUMERIC"]
     correct_value: Number
@@ -141,9 +175,25 @@ class ShortAnswer(Content):
 
 
 QuestionContent = Annotated[
-    MCQ | TrueFalse | ShortAnswer | Numeric | MultipleSelect | Match, Field(discriminator="type")
+    MCQ
+    | TrueFalse
+    | ShortAnswer
+    | Numeric
+    | MultipleSelect
+    | Match
+    | TableQuestion
+    | CircuitQuestion
+    | WaveformQuestion,
+    Field(discriminator="type"),
 ]
 content_adapter: TypeAdapter[QuestionContent] = TypeAdapter(QuestionContent)
+
+
+def stem_key(content: Content) -> str:
+    """What makes two questions duplicates: the stem, and for the interactive types also the
+    expression, since a stem such as "Popunite tablicu istine." recurs with another function."""
+    expr = content.expr if getattr(content, "type", None) in INTERACTIVE_TYPES else None
+    return normalize(f"{content.stem} {expr}" if expr else content.stem)
 
 
 class ManualConcepts(StrictModel):
@@ -199,13 +249,28 @@ class CreateMatch(Match, ManualConcepts, ManualUnits):
     pass
 
 
+class CreateTable(TableQuestion, ManualConcepts, ManualUnits):
+    pass
+
+
+class CreateCircuit(CircuitQuestion, ManualConcepts, ManualUnits):
+    pass
+
+
+class CreateWaveform(WaveformQuestion, ManualConcepts, ManualUnits):
+    pass
+
+
 QuestionCreate = Annotated[
     CreateMCQ
     | CreateTrueFalse
     | CreateShortAnswer
     | CreateNumeric
     | CreateMultipleSelect
-    | CreateMatch,
+    | CreateMatch
+    | CreateTable
+    | CreateCircuit
+    | CreateWaveform,
     Field(discriminator="type"),
 ]
 
@@ -261,6 +326,10 @@ class QuestionPatch(BaseModel):
     reference_answer: Text | None = None
     # MATCH: the complete list of pairs.
     pairs: list[Pair] | None = None
+    # TABLE, CIRCUIT, WAVEFORM: the complete spec.
+    table: Table | None = None
+    circuit: Circuit | None = None
+    waveform: Waveform | None = None
     # Any type; null clears them.
     hint: Hint | None = None
     expr: Expression | None = None
@@ -325,6 +394,8 @@ class PublicQuestion(BaseModel):
     choices: list[PublicOption] = []
     hint: str | None = None
     expr: str | None = None
+    # TABLE, CIRCUIT, WAVEFORM: the layout without the key.
+    spec: dict[str, Any] | None = None
     unit_ids: list[UUID] = []
     # Public for NUMERIC: students see the unit their answer is in.
     unit: str | None = None
@@ -358,6 +429,8 @@ class OwnerQuestion(BaseModel):
     # fixed when the session starts. Item k of the shown column is the partner of left item
     # right_order[k].
     right_order: list[int] = []
+    # TABLE, CIRCUIT, WAVEFORM: the layout with the key; absent from older snapshots.
+    spec: dict[str, Any] | None = None
     # Defaults keep snapshots from before NUMERIC readable.
     correct_value: Decimal | None = None
     absolute_tolerance: Decimal | None = None
@@ -424,20 +497,36 @@ class ImportMatch(Match, ImportUnit):
     pass
 
 
+class ImportTable(TableQuestion, ImportUnit):
+    pass
+
+
+class ImportCircuit(CircuitQuestion, ImportUnit):
+    pass
+
+
+class ImportWaveform(WaveformQuestion, ImportUnit):
+    pass
+
+
 ImportContent = Annotated[
     ImportMCQ
     | ImportTrueFalse
     | ImportShortAnswer
     | ImportNumeric
     | ImportMultipleSelect
-    | ImportMatch,
+    | ImportMatch
+    | ImportTable
+    | ImportCircuit
+    | ImportWaveform,
     Field(discriminator="type"),
 ]
 import_content_adapter: TypeAdapter[ImportContent] = TypeAdapter(ImportContent)
 
 
 class QuizImport(StrictModel):
-    # v2 adds NUMERIC, MULTIPLE_SELECT and MATCH; v1 documents stay valid as they were.
+    # v2 adds NUMERIC, MULTIPLE_SELECT, MATCH, TABLE, CIRCUIT and WAVEFORM; v1 documents stay
+    # valid as they were.
     # `course_unit` (v2 only, optional) names the unit all questions without their own belong to.
     version: Literal["quiz-import-v1", "quiz-import-v2"]
     course_unit: ImportUnitTitle | None = None
@@ -448,12 +537,15 @@ class QuizImport(StrictModel):
         if self.version == "quiz-import-v1" and any(
             q.type not in CLASSIC_TYPES for q in self.questions
         ):
-            raise ValueError("Use quiz-import-v2 for numeric, multiple-select and match questions")
+            raise ValueError(
+                "Use quiz-import-v2 for numeric, multiple-select, match, table, circuit and "
+                "waveform questions"
+            )
         if self.version == "quiz-import-v1" and (
             self.course_unit is not None or any(q.course_unit is not None for q in self.questions)
         ):
             raise ValueError("Use quiz-import-v2 to name units")
-        stems = [normalize(q.stem) for q in self.questions]
+        stems = [stem_key(q) for q in self.questions]
         if len(set(stems)) != len(stems):
             raise ValueError("Duplicate question stems in import")
         return self

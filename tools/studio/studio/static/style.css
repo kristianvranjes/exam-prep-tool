@@ -145,6 +145,11 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .mark { margin-left: auto; color: var(--success); font-weight: 700; white-space: nowrap; }
 .key { padding: 0.5rem 0.75rem; border-left: 3px solid var(--success); background: var(--success-surface); }
 .explanation { color: var(--muted); white-space: pre-wrap; }
+.spec-table { border-collapse: collapse; margin: 0 0 1rem; font-family: var(--font-code); }
+.spec-table th, .spec-table td { border: 1px solid var(--line-strong); padding: 0.25rem 0.75rem; text-align: center; }
+.spec-table td.correct { background: var(--success-surface); }
+.spec-table .mark { margin: 0; }
+.spec-json { font-family: var(--font-code); font-size: 0.875rem; white-space: pre-wrap; overflow-x: auto; margin: 0 0 1rem; }
 
 .flags { list-style: none; padding: 0; margin: 0; }
 .flag {

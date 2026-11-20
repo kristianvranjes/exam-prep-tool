@@ -8,7 +8,7 @@ const mock = vi.hoisted(() => ({ history: vi.fn(), start: vi.fn(), read: vi.fn()
 vi.mock("../src/lib/practice-api", () => ({ practiceApi: mock }));
 vi.mock("../src/lib/api", () => ({ api: mock }));
 
-const allTypes: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"];
+const allTypes: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"];
 const units = ["Unit 1", "Unit 2"].map((title, position) => ({ id: `u${position + 1}`, course_id: "course", position, title, description: null, is_archived: false, approved_question_count: 10, created_at: "2026-10-01", updated_at: "2026-10-01" }));
 const midterm = { id: "mi", course_id: "course", academic_year: "2026/27", kind: "MIDTERM" as const, name: "MI", unit_ids: ["u1", "u2"], starts_on: null, ends_on: null, approved_question_count: 20, created_at: "2026-10-01", updated_at: "2026-10-01" };
 const attempt: Attempt = { id: "attempt", course_id: "course", status: "ACTIVE", started_at: "2026-10-21T10:00:00Z", submitted_at: null,

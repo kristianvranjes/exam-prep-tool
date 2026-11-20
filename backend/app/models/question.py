@@ -27,7 +27,7 @@ class Question(Base):
     __table_args__ = (
         CheckConstraint(
             "type IN ('MULTIPLE_CHOICE','TRUE_FALSE','SHORT_ANSWER','NUMERIC','MULTIPLE_SELECT',"
-            "'MATCH')",
+            "'MATCH','TABLE','CIRCUIT','WAVEFORM')",
             name="ck_question_type",
         ),
         CheckConstraint(
@@ -42,7 +42,8 @@ class Question(Base):
             "length(btrim(stem)) > 0 AND char_length(stem) <= 400", name="ck_question_stem"
         ),
         CheckConstraint(
-            "(type IN ('MULTIPLE_CHOICE','MULTIPLE_SELECT','MATCH') AND correct_boolean IS NULL "
+            "(type IN ('MULTIPLE_CHOICE','MULTIPLE_SELECT','MATCH','TABLE','CIRCUIT','WAVEFORM') "
+            "AND correct_boolean IS NULL "
             "AND reference_answer IS NULL AND correct_value IS NULL) OR "
             "(type = 'TRUE_FALSE' AND correct_boolean IS NOT NULL AND reference_answer IS NULL "
             "AND correct_value IS NULL) OR "
@@ -64,6 +65,11 @@ class Question(Base):
             "(hint IS NULL OR (length(btrim(hint)) > 0 AND char_length(hint) <= 400)) "
             "AND (expr IS NULL OR (length(btrim(expr)) > 0 AND char_length(expr) <= 200))",
             name="ck_question_hint_expr",
+        ),
+        CheckConstraint(
+            "(type IN ('TABLE','CIRCUIT','WAVEFORM')) = (spec IS NOT NULL) "
+            "AND (spec IS NULL OR jsonb_typeof(spec) = 'object')",
+            name="ck_question_spec",
         ),
         Index("ix_question_course_status", "course_id", "status"),
         Index("ix_question_course_type", "course_id", "type"),
@@ -107,6 +113,9 @@ class Question(Base):
     absolute_tolerance: Mapped[Decimal | None] = mapped_column(Numeric)
     relative_tolerance: Mapped[Decimal | None] = mapped_column(Numeric)
     unit: Mapped[str | None] = mapped_column(String(20))
+    # TABLE, CIRCUIT and WAVEFORM: the layout and the key, validated by app.schemas.interactive.
+    # none_as_null: other types store SQL NULL, not a JSON null, as ck_question_spec expects.
+    spec: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True))
     reviewed_by_user_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )

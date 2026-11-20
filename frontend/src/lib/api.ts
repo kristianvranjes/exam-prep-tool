@@ -1,3 +1,4 @@
+import type { CircuitSpec, InteractiveSpec, TableSpec, WaveformSpec } from "./interactive";
 export type User = { id: string; email: string; display_name: string; is_active: boolean; created_at: string };
 export type Faculty = { id: string; name: string; slug: string; university_name: string | null };
 /** A faculty in the faculty tools, archived ones included; only an archived faculty without courses can be deleted. */
@@ -383,7 +384,7 @@ export type Concept = { id: string; course_id: string; name: string; normalized_
 export type ConceptDetail = Concept & { source_chunks: { id: string; material_id: string; ordinal: number; content: string }[] };
 export type AIJob = { id: string; status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'; model: string; error_message: string | null; error_code: string | null };
 
-export type QuestionType = "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER" | "NUMERIC" | "MULTIPLE_SELECT" | "MATCH";
+export type QuestionType = "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER" | "NUMERIC" | "MULTIPLE_SELECT" | "MATCH" | "TABLE" | "CIRCUIT" | "WAVEFORM";
 export type QuestionStatus = "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED";
 export type QuestionAction = "submit" | "approve" | "reject" | "archive";
 export type ReportReason = "INCORRECT_ANSWER" | "MULTIPLE_CORRECT" | "UNCLEAR" | "TYPO" | "OUTDATED" | "DUPLICATE" | "OTHER";
@@ -391,7 +392,9 @@ export type ReportStatus = "OPEN" | "RESOLVED";
 export type ReportReceipt = { id: string; question_id: string; reason: ReportReason; details: string | null; status: ReportStatus; created_at: string };
 export type ModeratorReport = ReportReceipt & { resolution: "DISMISSED" | "QUESTION_ARCHIVED" | "FIXED" | null; resolved_by_user_id: string | null; resolved_at: string | null; question: OwnerQuestion };
 type QuestionBase = { id: string; course_id: string; type: QuestionType; stem: string; difficulty: number | null };
-export type PublicQuestion = QuestionBase & { visibility: "MEMBER"; status: "APPROVED"; options: { position: number; text: string }[]; choices?: { position: number; text: string }[]; hint?: string | null; expr?: string | null; unit_ids?: string[]; unit?: string | null };
+export type PublicQuestion = QuestionBase & { visibility: "MEMBER"; status: "APPROVED"; options: { position: number; text: string }[]; choices?: { position: number; text: string }[]; hint?: string | null; expr?: string | null; unit_ids?: string[]; unit?: string | null;
+  /** TABLE, CIRCUIT, WAVEFORM: the layout without the key. */
+  spec?: InteractiveSpec | null };
 /** What to do with a question whose text you already have: fail the import, leave it out, or overwrite it while it is still a draft. */
 export type ImportOptions = { duplicates?: "REJECT" | "SKIP" | "REPLACE"; importAs?: "DRAFT" | "PENDING_REVIEW"; skipInvalid?: boolean };
 export type ImportIssueCode = "INVALID_CONTENT" | "NEEDS_V2" | "DUPLICATE_IN_FILE" | "UNKNOWN_UNIT" | "ARCHIVED_UNIT" | "DUPLICATE_OWN" | "DUPLICATE_APPROVED" | "NO_EXPLANATION";
@@ -410,6 +413,8 @@ export type OwnerQuestion = QuestionBase & {
   /** MATCH keeps one row per pair: `text` is the left item and `match_text` its partner. */
   options: { position: number; text: string; is_correct: boolean; match_text?: string | null }[];
   hint?: string | null; expr?: string | null;
+  /** TABLE, CIRCUIT, WAVEFORM: the layout with the key (see lib/interactive.ts). */
+  spec?: InteractiveSpec | null;
   concept_ids: string[]; unit_ids?: string[]; source_chunks: { chunk_id: string; material_id: string; ordinal: number }[];
 };
 export type Question = PublicQuestion | OwnerQuestion;
@@ -423,6 +428,10 @@ export type QuestionContent = Omit<QuestionCreateBase, "concept_ids"> & (
   /** Pairs to connect; the right column is shuffled for every session. */
   | { type: "MATCH"; pairs: { left: string; right: string }[] }
   | { type: "NUMERIC"; correct_value: string; absolute_tolerance: string | null; relative_tolerance: string | null; unit: string | null }
+  /** A grid with blank cells, a circuit with empty slots, signals to draw: see lib/interactive.ts. */
+  | { type: "TABLE"; table: TableSpec }
+  | { type: "CIRCUIT"; circuit: CircuitSpec }
+  | { type: "WAVEFORM"; waveform: WaveformSpec }
 );
 export type QuestionCreate = QuestionContent & { concept_ids: string[]; unit_ids?: string[] };
 export type SuggestionChanges = {
@@ -447,6 +456,8 @@ export type QuestionEdit = {
   /** MATCH: the complete list of pairs. `hint` and `expr` accept null to clear them. */
   pairs?: { left: string; right: string }[]; hint?: string | null; expr?: string | null;
   correct_value?: string; absolute_tolerance?: string | null; relative_tolerance?: string | null; unit?: string | null;
+  /** TABLE, CIRCUIT, WAVEFORM: the complete spec. */
+  table?: TableSpec; circuit?: CircuitSpec; waveform?: WaveformSpec;
 };
 export type QuestionVersion = { version_number: number; reason: string; snapshot: OwnerQuestion; changed_by_user_id: string; created_at: string };
 

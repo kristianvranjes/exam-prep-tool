@@ -252,6 +252,15 @@ item and `match_text` its partner. Nothing is backfilled. Downgrade refuses whil
 exists (delete them first), otherwise drops the columns and restores the earlier constraints; a hint or
 expression written meanwhile is lost.
 
+## Interactive questions migration 0038
+
+Revision **0038** (`down_revision = 0037`) adds `TABLE`, `CIRCUIT` and `WAVEFORM` to `ck_question_type`
+and `ck_question_answer` (no boolean, reference or numeric key), and a nullable `questions.spec` JSONB
+holding the layout and the key. `ck_question_spec` requires a spec, a JSON object, exactly for these
+three types (`app.schemas.interactive` validates its shape). Their `normalized_stem` includes `expr`,
+so uniqueness compares stem and expression for them. Nothing is backfilled. Downgrade refuses while
+any of these questions exist (delete them first), otherwise restores the constraints and drops `spec`.
+
 ## Google sign-in migration 0037
 
 Revision **0037** (`down_revision = 0036`) adds `users.google_sub` (VARCHAR(255), unique `uq_users_google_sub`, nullable: Google's stable account id once the account signed in with Google) and `users.sessions_valid_after` (nullable timestamptz: sessions signed before it are refused). Both are empty for existing accounts. Downgrade drops them.

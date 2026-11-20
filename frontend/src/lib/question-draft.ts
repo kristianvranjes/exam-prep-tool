@@ -1,4 +1,5 @@
 import type { OwnerQuestion, QuestionCreate, QuestionEdit, QuestionType } from "./api";
+import { isInteractive, specField, specTemplates } from "./interactive";
 import { numberProblem } from "./question-types";
 
 /** What the question editor holds while an author types: every field as the text typed into it. */
@@ -22,6 +23,8 @@ export type EditorDraft = {
   /** Typed as a percentage; the API stores the share of the key (1 % = 0.01). */
   relativePercent: string;
   unit: string;
+  /** TABLE, CIRCUIT, WAVEFORM: the spec as JSON text (docs/QUIZ_IMPORT.md). */
+  spec: string;
 };
 
 export const MAX_OPTIONS = 6;
@@ -33,6 +36,7 @@ export function emptyDraft(type: QuestionType = "MULTIPLE_CHOICE"): EditorDraft 
     options: [{ text: "", is_correct: true }, { text: "", is_correct: false }],
     pairs: [{ left: "", right: "" }, { left: "", right: "" }],
     answer: "", reference: "", correctValue: "", absoluteTolerance: "", relativePercent: "", unit: "",
+    spec: isInteractive(type) ? JSON.stringify(specTemplates[type], null, 2) : "",
   };
 }
 
@@ -58,11 +62,14 @@ export function draftFromQuestion(q: OwnerQuestion): EditorDraft {
     reference: q.reference_answer ?? "",
     correctValue: q.correct_value ?? "", absoluteTolerance: q.absolute_tolerance ?? "",
     relativePercent: shareToPercent(q.relative_tolerance), unit: q.unit ?? "",
+    spec: q.spec ? JSON.stringify(q.spec, null, 2) : base.spec,
   };
 }
 
 /** Switching to a single-answer type keeps only the first correct option. */
 export function withType(draft: EditorDraft, type: QuestionType): EditorDraft {
+  // Each interactive type starts from its worked example.
+  if (isInteractive(type)) return { ...draft, type, spec: JSON.stringify(specTemplates[type], null, 2) };
   if (type !== "MULTIPLE_CHOICE") return { ...draft, type };
   const first = Math.max(0, draft.options.findIndex((option) => option.is_correct));
   return { ...draft, type, options: draft.options.map((option, position) => ({ ...option, is_correct: position === first })) };
@@ -82,6 +89,11 @@ export function draftToBody(draft: EditorDraft, links: { conceptIds: string[]; u
     ...(links.unitIds ? { unit_ids: links.unitIds } : {}),
   };
   const type = draft.type;
+  if (isInteractive(type)) {
+    const spec = parseSpec(draft.spec);
+    if (typeof spec === "string") return { error: spec };
+    return { body: { ...common, type, [specField[type]]: spec } as QuestionCreate };
+  }
   if (type === "NUMERIC") {
     const fields: [string, string, boolean][] = [
       ["Točna vrijednost", draft.correctValue.trim(), true],
@@ -115,5 +127,19 @@ export function toEdit(body: QuestionCreate): QuestionEdit {
   if (body.type === "TRUE_FALSE") patch.correct_answer = body.correct_answer;
   if (body.type === "SHORT_ANSWER") patch.reference_answer = body.reference_answer;
   if (body.type === "MATCH") patch.pairs = body.pairs;
+  if (body.type === "TABLE") patch.table = body.table;
+  if (body.type === "CIRCUIT") patch.circuit = body.circuit;
+  if (body.type === "WAVEFORM") patch.waveform = body.waveform;
   return patch;
+}
+
+/** The parsed spec object, or the message to show when the text is not one. */
+export function parseSpec(text: string): Record<string, unknown> | string {
+  try {
+    const value: unknown = JSON.parse(text);
+    if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+    return "Specifikacija mora biti JSON objekt.";
+  } catch (error) {
+    return `Specifikacija nije ispravan JSON: ${error instanceof Error ? error.message : "provjerite zagrade i navodnike"}.`;
+  }
 }

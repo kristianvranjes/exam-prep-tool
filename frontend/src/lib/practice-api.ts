@@ -1,4 +1,5 @@
 import { request, type QuestionType, type ReviewRating } from "./api";
+import type { InteractiveSpec } from "./interactive";
 
 /** MISTAKES and DUE use your review progress, FAVORITES your favorites; MOCK needs an exam scope and spreads it across its units. */
 export type SelectionMode = "STANDARD" | "ADAPTIVE" | "MISTAKES" | "DUE" | "FAVORITES" | "MOCK";
@@ -17,7 +18,9 @@ export type PracticeAnswer =
   | { type: "NUMERIC"; value: string }
   | { type: "MULTIPLE_SELECT"; option_positions: number[] }
   /** `matches[i]` is the shown right-hand item chosen for left item i, or null while unmatched. */
-  | { type: "MATCH"; matches: (number | null)[] };
+  | { type: "MATCH"; matches: (number | null)[] }
+  /** One value per blank in reading order (see lib/interactive.ts); null where nothing is filled in yet. */
+  | { type: "TABLE" | "CIRCUIT" | "WAVEFORM"; values: (string | null)[] };
 export type AttemptSummary = {
   id: string; course_id: string; status: "ACTIVE" | "SUBMITTED" | "ABANDONED";
   started_at: string; submitted_at: string | null;
@@ -53,10 +56,12 @@ export type QuestionFeedback = {
   reference_answer: string | null; grading_status: Grade; confidence?: Confidence | null;
   /** SHORT_ANSWER only: your self-assessment, kept apart from `grading_status`. */
   self_review?: SelfReview | null;
-  /** Multiple select and matching: the share of the item's points earned (1, 0.5 or 0); the grade stays CORRECT or INCORRECT. */
+  /** Partial credit: multiple select and matching 1, 0.5 or 0; tables and timing diagrams the share of blanks right. The grade stays CORRECT or INCORRECT. */
   score_fraction?: number | null;
   /** MATCH: for each left item, the shown right-hand item that is its partner. */
   correct_matches?: number[] | null;
+  /** TABLE, CIRCUIT, WAVEFORM: the key, one value per blank; for a circuit one right answer of possibly several. */
+  correct_values?: string[] | null;
   /** NUMERIC keys as exact decimal strings. */
   correct_value?: string | null; absolute_tolerance?: string | null; relative_tolerance?: string | null;
 };
@@ -67,6 +72,8 @@ export type ActiveQuestion = {
   choices?: { position: number; text: string }[] | null;
   /** A nudge the student may open before answering, and an expression set apart from the stem. */
   hint?: string | null; expr?: string | null;
+  /** TABLE, CIRCUIT, WAVEFORM: the layout without the key. */
+  spec?: InteractiveSpec | null;
   units?: QuestionUnitLabel[]; feedback?: QuestionFeedback | null;
   /** The bank question behind this snapshot; favorites refer to it. */
   source_question_id?: string;
@@ -88,6 +95,7 @@ export type ResultQuestion = Omit<ActiveQuestion, "options"> & {
   /** Multiple select and matching: the share of the item's points earned (1, 0.5 or 0). */
   score_fraction?: number | null;
   correct_matches?: number[] | null;
+  correct_values?: string[] | null;
   correct_value?: string | null; absolute_tolerance?: string | null; relative_tolerance?: string | null;
   /** Paper sessions only; null while a short answer awaits self-review. */
   earned_points?: number | null;
@@ -117,7 +125,7 @@ export type FavoriteQuestion = {
   question_id: string; favorited_at: string; type: QuestionType; stem: string; difficulty: number | null; available: boolean;
 };
 const path = (course: string) => `/courses/${course}/attempts`;
-const allTypes: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"];
+const allTypes: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"];
 /** The most questions a generated session may hold. */
 const MAX_SESSION_QUESTIONS = 20;
 /** A quick quiz is this many questions, or fewer when fewer are available. */

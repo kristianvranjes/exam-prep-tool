@@ -133,6 +133,28 @@ reports). Rewritten units need `studio verify` again. "Izvor" alone is not flagg
 since it is an ordinary word in these courses ("izvor prijetnje", "IP adresa izvora",
 "izvorni program").
 
+### Tables, circuits and timing diagrams
+
+`types` may also list `TABLE`, `CIRCUIT` and `WAVEFORM` (format in
+[docs/QUIZ_IMPORT.md](../../docs/QUIZ_IMPORT.md#interactive-questions-table-circuit-waveform)).
+They are opt-in, for courses whose slides teach truth tables, Karnaugh maps, gates or
+timing diagrams (Digitalna logika, Arhitektura računala) or fill-in tables (page
+replacement, scheduling):
+
+```toml
+[questions]
+types = { MULTIPLE_CHOICE = 10, TRUE_FALSE = 3, TABLE = 2, CIRCUIT = 1, WAVEFORM = 1 }
+```
+
+Only windows that ask for one of them get its rules in the prompt and the two extra
+response fields (`spec`, the type's object as a JSON string, and `expr`), so a course
+without them keeps its prompt and is not regenerated. A truth table, Karnaugh map or
+circuit with an `expr` the studio can read (`'`, `·`, `+`, `⊕`, juxtaposition, `¬`) is
+checked against it without a model: every cell, and the circuit's key for every input,
+must agree with the function. A timing diagram depends on a circuit described in words,
+so only the verifier checks it. The review page draws a table with its key cells
+marked and shows circuits and diagrams as their JSON, editable as JSON.
+
 A unit is sent again only when its pages, blueprint, model or prompt version change
 (`--force` regenerates anyway). If some windows fail (rate limit, timeout), a rerun
 requests only those.
@@ -179,7 +201,10 @@ and may name a problem (two defensible answers, an ambiguous stem, a contradicti
 the page, a flattened exponent). The studio compares its answer with the key
 deterministically; numbers go through the application's own parser and tolerance rule.
 Short answers are the exception: the verifier sees the reference answer and judges
-whether the page supports it.
+whether the page supports it. Tables, circuits and timing diagrams are shown as their
+layout without the key; the verifier fills in every blank and the studio grades its
+answer with the application's own rule (all cells or segments, or any circuit with the
+key's outputs).
 
 As with generation, unchanged units are not resent and a rerun repeats only failed
 batches; a batch where the verifier skipped a question counts as failed. Run
@@ -274,6 +299,7 @@ it is, `warn` needs a careful look in review, `info` is a hint.
 | Explanation names an option by letter or position, which shuffling breaks | warn |
 | "All/none of the above" option; two options nearly identical | warn |
 | Negated stem; key clearly the longest option; no explanation | info |
+| Table or circuit key contradicts its `expr` / `expr` cannot be read or names other variables | warn / info |
 | Verifier answered differently from the key; found the question not answerable from its page; named a problem | warn |
 | Verifier agreed with low confidence | info |
 | Exam question: unit uncertain; the slides point to another key than the marked one; the key request saw a problem or failed | warn |

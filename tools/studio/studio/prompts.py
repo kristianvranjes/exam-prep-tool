@@ -69,6 +69,58 @@ Every question must be distinct from the others in content, not only in wording.
 """
 
 
+# Added to QUESTIONS_SYSTEM only when a window asks for interactive types, so courses
+# without them keep their prompt (and their generation cache) unchanged.
+INTERACTIVE_INTRO = """
+Interactive types. Their layout and key go into `spec` as one JSON object written as a
+string; `expr` holds the Boolean function when there is one (null otherwise). For every
+other type both `spec` and `expr` are null. Write them only from material the pages
+actually teach, and give the stem a full task ("Popunite stupac Y za zadanu funkciju.").
+"""
+
+INTERACTIVE_RULES = {
+    "TABLE": """\
+- TABLE: a grid the student fills in: a truth table, a Karnaugh map, a state table, or a
+  table such as process scheduling or page replacement. `spec`:
+  {"columns": ["A","B","Y"], "values": ["0","1"], "rows": [["0","0",{"answer":"0"}], ...]}.
+  1 to 8 column headers, 1 to 16 rows with one cell per column. A given cell is a string;
+  a cell to fill is {"answer": "..."} (1 to 64 of them). `values` (2 to 6 strings) are
+  what the student picks from; leave it out when they type the cell. A Karnaugh map adds
+  "row_labels" (one per row, e.g. "00", "01", "11", "10") and "corner" such as "AB\\CD",
+  with the column headers in Gray code too; use "X" in `values` for don't-care cells.
+  For a truth table or Karnaugh map, `expr` is the function, e.g. "Y = (A ⊕ B) · C",
+  written with ' for NOT, · for AND, + for OR and ⊕ for XOR: the key is checked against it.
+""",
+    "CIRCUIT": """\
+- CIRCUIT: a small logic circuit with one to four empty gate slots the student fills.
+  `spec`: {"inputs": ["A","B","C"], "gates": [{"id":"G1","type":"AND","inputs":["A","B"]},
+  {"id":"G2","type":"NOT","inputs":["C"]}, {"id":"G3","inputs":["G1","G2"],
+  "choices":["AND","OR","XOR","NAND","NOR"],"answer":"OR"}],
+  "outputs": [{"name":"Y","source":"G3"}]}.
+  Gate types: AND, OR, NOT, NAND, NOR, XOR, XNOR, BUF; NOT and BUF take one input, the
+  others 2 to 4. List gates so each reads only inputs and gates listed before it. A slot
+  has no "type", only "choices" and "answer". `expr` is the function the circuit must
+  compute ("Y = AB + C'"); the stem asks the student to complete the circuit for it.
+""",
+    "WAVEFORM": """\
+- WAVEFORM: a timing diagram: given signals and one to three signals the student draws.
+  `spec`: {"segments": 8, "signals": [{"name":"CLK","values":"01010101"},
+  {"name":"D","values":"11001100"}, {"name":"Q","answer":"01100110"}]}: one character,
+  0 or 1, per segment (2 to 32 segments). The stem states the circuit and the initial
+  state ("D bistabil okida se na rastući brid takta. Početno je Q = 0. Docrtajte izlaz Q.").
+  Work out the answer segment by segment before writing it. `expr` is null.
+""",
+}
+
+
+def questions_system(counts: TypeCounts) -> str:
+    """The generation prompt, with the rules of the interactive types the window asks for."""
+    asked = [kind for kind, rules in INTERACTIVE_RULES.items() if counts.get(kind)]  # type: ignore[call-overload]
+    if not asked:
+        return QUESTIONS_SYSTEM
+    return QUESTIONS_SYSTEM + INTERACTIVE_INTRO + "".join(INTERACTIVE_RULES[k] for k in asked)
+
+
 REWRITE_VERSION = "rewrite-v1"
 
 REWRITE_SYSTEM = """\
@@ -127,6 +179,17 @@ For every question return one entry with its `question` id:
 Slide text is extracted from PDF: superscripts and subscripts may be flattened (2^40
 can read "240"). Do not take such a number at face value when context shows it is an
 exponent; say so in `problem` when it affects the question.
+"""
+
+
+# Added to VERIFY_SYSTEM only for batches with interactive questions.
+VERIFY_INTERACTIVE = """
+Interactive questions (TABLE, CIRCUIT, WAVEFORM) show a `layout` and, for tables and
+circuits, often an `expr`. A table's layout has null for each cell to fill; a circuit's
+empty slots list their `choices`; a signal to draw has `values` null. Answer in `values`,
+one entry per blank in reading order: table cells row by row, one gate type per slot in
+gate order, and for each signal to draw one "0" or "1" per segment. For all other types
+`values` is null.
 """
 
 

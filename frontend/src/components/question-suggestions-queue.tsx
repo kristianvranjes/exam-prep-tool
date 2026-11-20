@@ -1,4 +1,5 @@
 "use client";
+import type { CircuitSpec, TableSpec, WaveformSpec } from "../lib/interactive";
 import { useUnsavedChanges } from "./unsaved-changes";
 
 import { useEffect, useRef, useState } from "react";
@@ -14,6 +15,9 @@ function baseContent(question: OwnerQuestion): QuestionContent {
   if (question.type === "MULTIPLE_SELECT") return { ...common, type: question.type, options: question.options };
   if (question.type === "MATCH") return { ...common, type: question.type, pairs: question.options.map((option) => ({ left: option.text, right: option.match_text ?? "" })) };
   if (question.type === "NUMERIC") return { ...common, type: question.type, correct_value: question.correct_value ?? "", absolute_tolerance: question.absolute_tolerance ?? null, relative_tolerance: question.relative_tolerance ?? null, unit: question.unit ?? null };
+  if (question.type === "TABLE") return { ...common, type: question.type, table: question.spec as TableSpec };
+  if (question.type === "CIRCUIT") return { ...common, type: question.type, circuit: question.spec as CircuitSpec };
+  if (question.type === "WAVEFORM") return { ...common, type: question.type, waveform: question.spec as WaveformSpec };
   return { ...common, type: question.type, reference_answer: question.reference_answer ?? "" };
 }
 
@@ -37,6 +41,9 @@ function contentFields(content: QuestionContent): [string, string][] {
     fields.push(["Jedinica", content.unit ?? "Nema"]);
   } else if (content.type === "MATCH") content.pairs.forEach((pair, position) => fields.push([`Par ${position + 1}`, `${pair.left} → ${pair.right}`]));
   else if (content.type === "TRUE_FALSE") fields.push(["Točan odgovor", content.correct_answer ? "Točno" : "Netočno"]);
+  else if (content.type === "TABLE") fields.push(["Tablica", JSON.stringify(content.table)]);
+  else if (content.type === "CIRCUIT") fields.push(["Sklop", JSON.stringify(content.circuit)]);
+  else if (content.type === "WAVEFORM") fields.push(["Vremenski dijagram", JSON.stringify(content.waveform)]);
   else fields.push(["Referentni odgovor", content.reference_answer]);
   return fields;
 }

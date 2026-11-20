@@ -11,6 +11,7 @@ import sys
 from functools import cache
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -50,6 +51,41 @@ def numeric_match(answer: str, content: dict[str, object]) -> bool:
     except (ValueError, KeyError):
         return False
     return bool(numbers.within_tolerance(value, key, absolute, relative))
+
+
+def interactive_module() -> ModuleType:
+    """The application's helpers for TABLE, CIRCUIT and WAVEFORM specs."""
+    question_module()  # puts backend/ on the path
+    return importlib.import_module("app.services.interactive")
+
+
+def stored_spec(content: dict[str, object]) -> dict[str, Any] | None:
+    """The spec of an interactive question as the application stores it, or None."""
+    module = interactive_module()
+    field = module.SPEC_FIELD.get(str(content.get("type")))
+    if field is None:
+        return None
+    try:
+        question = question_module().content_adapter.validate_python(content)
+    except ValidationError:
+        return None
+    spec: dict[str, Any] = getattr(question, field).model_dump(mode="json", exclude_none=True)
+    return spec
+
+
+def blanks_match(values: list[str | None], content: dict[str, object]) -> bool:
+    """The application's own grading of a blanks answer: every blank right, or for a
+    circuit, gates that compute the key's outputs."""
+    spec = stored_spec(content)
+    module = interactive_module()
+    kind = str(content["type"])
+    if spec is None or not module.fits(kind, spec, values) or None in values:
+        return False
+    if kind == "CIRCUIT":
+        return bool(module.computes_key(spec, values))
+    fold = importlib.import_module("app.schemas.interactive").fold
+    key = module.blank_key(kind, spec)
+    return all(fold(str(v)) == fold(k) for v, k in zip(values, key, strict=True))
 
 
 def first_error(exc: ValidationError) -> str:

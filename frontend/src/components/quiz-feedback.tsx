@@ -76,7 +76,8 @@ export function CheckedFeedback({ question, feedback, headingRef, onSelfReview }
   onSelfReview?: SaveSelfReview;
 }) {
   // Right but incomplete (multiple select): still graded Netočno, but half the points count.
-  const verdict = feedback.grading_status === "INCORRECT" && feedback.score_fraction === 0.5
+  const fraction = feedback.score_fraction ?? 0;
+  const verdict = feedback.grading_status === "INCORRECT" && fraction > 0 && fraction < 1
     ? { title: "Djelomično točno", tone: "border-pending/40 bg-pending-surface", text: "text-pending", Icon: CircleDashed }
     : verdicts[feedback.grading_status];
   const typed = question.type === "NUMERIC" || question.type === "SHORT_ANSWER";

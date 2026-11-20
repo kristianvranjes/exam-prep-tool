@@ -401,7 +401,7 @@ it("opens Recommended setup from Overview without starting an attempt or resetti
   expect(mock.start).not.toHaveBeenCalled(); expect(mock.history).toHaveBeenCalledWith("course", 0);
   fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   await screen.findByLabelText("Vaš kratki odgovor");
-  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "ADAPTIVE", undefined, "IMMEDIATE");
+  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 it("offers Resume as the only way back to the mounted session from Overview", async () => {
@@ -431,7 +431,7 @@ it("opens Recommended setup from Progress with ADAPTIVE selected, preserving set
   expect(mock.start).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   await screen.findByLabelText("Vaš kratki odgovor");
-  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "ADAPTIVE", undefined, "IMMEDIATE");
+  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 it("returns completed results to setup from Progress without creating or changing an attempt", async () => {

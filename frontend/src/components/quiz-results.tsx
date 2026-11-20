@@ -7,6 +7,8 @@ import { FavoriteToggle, useFavorites } from "./favorite-toggle";
 import { QuestionUnits } from "./question-units";
 import { ReportIssue } from "./question-report";
 import { ReviewRatingRow } from "./review-rating";
+import { blankKey, blanks, isInteractive } from "../lib/interactive";
+import { InteractiveAnswer } from "./interactive-question";
 import { RichText } from "./rich-text";
 import { SelfAssessment, selfReviewLabels, type SaveSelfReview } from "./quiz-feedback";
 import { Button, ProgressBar, Surface } from "./ui";
@@ -149,14 +151,20 @@ function PaperScoreSummary({ score, paper, tally }: { score: PaperScore; paper: 
 }
 
 export function ResultAnswers({ question, onSelfReview }: { question: ResultQuestion; onSelfReview?: SaveSelfReview }) {
-  const studentAnswer = answerText(question.answer, question.options, question.unit, question.choices);
+  const studentAnswer = answerText(question.answer, question.options, question.unit, question.choices, question.spec);
   const correctAnswer = keyText(question);
   const selfReviewable = question.type === "SHORT_ANSWER" && question.grading_status === "PENDING";
+  // Tables, circuits and timing diagrams show the drawing with every blank's result in words.
+  const drawn = isInteractive(question.type) && question.spec ? question.type : null;
   return <div className="space-y-4">
-    <dl className="space-y-4">
+    {drawn && question.spec && <InteractiveAnswer id={`result-${question.id}`} type={drawn} spec={question.spec}
+      values={question.answer && "values" in question.answer ? question.answer.values : blanks(drawn, question.spec).map(() => null)}
+      correct={question.correct_values ?? blankKey(drawn, question.spec)} />}
+    {drawn && question.grading_status === "UNANSWERED" && <p className="text-sm font-semibold">Ostavljeno prazno</p>}
+    {!drawn && <dl className="space-y-4">
       <div><dt className="text-sm font-medium text-muted">Vaš odgovor</dt><dd className="mt-1 whitespace-pre-wrap"><RichText text={studentAnswer ?? (question.grading_status === "UNANSWERED" ? "Ostavljeno prazno" : "Nema spremljenog odgovora")} /></dd></div>
       {correctAnswer != null && <div><dt className="text-sm font-medium text-muted">{question.type === "SHORT_ANSWER" ? "Referentni odgovor" : "Točan odgovor"}</dt><dd className="mt-1 whitespace-pre-wrap"><RichText text={correctAnswer} /></dd></div>}
-    </dl>
+    </dl>}
     {selfReviewable && <p className="text-sm text-muted">Kratki odgovori se ne ocjenjuju automatski. Usporedite svoj odgovor s referentnim.</p>}
     {selfReviewable && onSelfReview && <SelfAssessment value={question.self_review ?? null} save={onSelfReview} />}
     {question.explanation && <div className="border-t border-line pt-4"><p className="text-sm font-medium text-muted">Objašnjenje</p><p className="mt-1 whitespace-pre-wrap"><RichText text={question.explanation} /></p></div>}

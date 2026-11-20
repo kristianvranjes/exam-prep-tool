@@ -82,6 +82,8 @@ faks/<course>/studio/
   the cheapest defence against invented content.
 - Distractor quality: the correct option is the longest one too often, "all of the
   above" or "none of the above", options that differ only in punctuation, negated stems.
+- Interactive keys: a truth table, Karnaugh map or circuit is evaluated against its own
+  Boolean `expr` (TABLE, CIRCUIT; timing diagrams go to the verifier only).
 - Balance: share of TRUE in true/false items, position of the correct option, difficulty
   distribution against the blueprint.
 - Coverage: every lesson section and page range has at least the blueprint's minimum.

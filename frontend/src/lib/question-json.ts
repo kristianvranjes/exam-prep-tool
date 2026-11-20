@@ -1,5 +1,6 @@
 import type { EditorDraft } from "./question-draft";
-import { percentToShare } from "./question-draft";
+import { parseSpec, percentToShare } from "./question-draft";
+import { specField } from "./interactive";
 
 /** One entry of the `questions` array of a `quiz-import-v2` document (see docs/QUIZ_IMPORT.md). */
 export type ImportItem = Record<string, unknown>;
@@ -36,6 +37,13 @@ export function toImportJson(draft: EditorDraft, courseUnit?: string | null): Im
     case "MATCH":
       item.pairs = draft.pairs.map((pair) => ({ left: pair.left, right: pair.right }));
       break;
+    case "TABLE":
+    case "CIRCUIT":
+    case "WAVEFORM": {
+      const spec = parseSpec(draft.spec);
+      item[specField[draft.type]] = typeof spec === "string" ? draft.spec : spec;
+      break;
+    }
   }
   if (courseUnit) item.course_unit = courseUnit;
   return item;

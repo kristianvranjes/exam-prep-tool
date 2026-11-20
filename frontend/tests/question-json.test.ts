@@ -12,6 +12,9 @@ const ALLOWED: Record<QuestionType, string[]> = {
   SHORT_ANSWER: [...COMMON, "reference_answer"],
   NUMERIC: [...COMMON, "correct_value", "absolute_tolerance", "relative_tolerance", "unit"],
   MATCH: [...COMMON, "pairs"],
+  TABLE: [...COMMON, "table"],
+  CIRCUIT: [...COMMON, "circuit"],
+  WAVEFORM: [...COMMON, "waveform"],
 };
 
 const filled = (type: QuestionType, changes: Partial<EditorDraft> = {}): EditorDraft => ({ ...emptyDraft(type), stem: "Pitanje?", ...changes });

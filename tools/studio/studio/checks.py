@@ -22,7 +22,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from studio.config import StudioConfig, StudioError, TypeCounts
+from studio.appschema import interactive_module, stored_spec
+from studio.config import INTERACTIVE_TYPES, StudioConfig, StudioError, TypeCounts
 from studio.course import CourseFile
 from studio.generate import (
     OPTION_TYPES,
@@ -33,6 +34,7 @@ from studio.generate import (
     unit_counts,
 )
 from studio.ingest import PdfPages
+from studio.interactive import key_flags
 from studio.sources import fold, references
 from studio.store import unit_dir, write_json
 from studio.verify import Verdict, fresh_verify, key_letters
@@ -196,6 +198,9 @@ def key_text(content: dict[str, Any]) -> str:
         return "true" if content["correct_answer"] else "false"
     if kind == "NUMERIC":
         return str(content["correct_value"])
+    if kind in INTERACTIVE_TYPES:
+        spec = stored_spec(content)
+        return " ".join(interactive_module().blank_key(kind, spec)) if spec else "no valid spec"
     return "the reference answer"
 
 
@@ -207,6 +212,8 @@ def answer_text(question: StoredQuestion, verdict: Verdict) -> str:
         return "nothing" if verdict.truth is None else str(verdict.truth).lower()
     if kind == "NUMERIC":
         return verdict.value or "nothing"
+    if kind in INTERACTIVE_TYPES:
+        return " ".join(verdict.values or []) or "nothing"
     return "not supported" if verdict.reference_supported is False else "nothing"
 
 
@@ -335,6 +342,8 @@ def check_course(
                 flags += verifier_flags(question, verdicts[question.id])
             if question.schema_error:
                 flags.append(flag("invalid_schema", "error", question.schema_error))
+            else:
+                flags += [flag(*finding) for finding in key_flags(question.content)]
             flags += (
                 exam_grounding(question, docs) if question.origin else grounding(question, docs)
             )

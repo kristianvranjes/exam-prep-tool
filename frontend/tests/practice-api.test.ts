@@ -52,7 +52,7 @@ it("sends the feedback mode with a start and checks one answer with optional con
 });
 
 it("starts a guided five-question quick quiz, fewer when fewer are available", async () => {
-  const types = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"];
+  const types = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"];
   const counted = `/courses/course/practice-availability?selection_mode=ADAPTIVE&${types.map(type => `question_types=${type}`).join("&")}`;
   mock.mockResolvedValueOnce({ total: 40 }).mockResolvedValueOnce({ id: "quick" });
   await expect(practiceApi.quickQuiz("course")).resolves.toEqual({ id: "quick" });
@@ -80,10 +80,10 @@ it("adds and removes a favorite with idempotent POST and DELETE", async () => {
 });
 
 it("starts a one-click due review sized by the server's due count", async () => {
-  const types = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"];
+  const types = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"];
   mock.mockResolvedValueOnce({ due_total: 27 }).mockResolvedValueOnce({ id: "review" });
   await expect(practiceApi.reviewDue("course")).resolves.toEqual({ id: "review" });
-  expect(mock).toHaveBeenNthCalledWith(1, "/courses/course/practice-availability?selection_mode=STANDARD&question_types=MULTIPLE_CHOICE&question_types=TRUE_FALSE&question_types=SHORT_ANSWER&question_types=NUMERIC&question_types=MULTIPLE_SELECT&question_types=MATCH");
+  expect(mock).toHaveBeenNthCalledWith(1, "/courses/course/practice-availability?selection_mode=STANDARD&question_types=MULTIPLE_CHOICE&question_types=TRUE_FALSE&question_types=SHORT_ANSWER&question_types=NUMERIC&question_types=MULTIPLE_SELECT&question_types=MATCH&question_types=TABLE&question_types=CIRCUIT&question_types=WAVEFORM");
   expect(mock).toHaveBeenLastCalledWith("/courses/course/attempts", {
     method: "POST", body: JSON.stringify({ count: 20, question_types: types, selection_mode: "DUE", feedback_mode: "IMMEDIATE" }),
   });

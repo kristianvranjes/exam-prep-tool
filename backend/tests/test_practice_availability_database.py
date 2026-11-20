@@ -49,6 +49,9 @@ def test_availability_matches_session_start(clients):
     assert whole["course_total"] == 4 and whole["total"] == 4
     assert by_type(whole) == {
         "MATCH": 0,
+        "TABLE": 0,
+        "CIRCUIT": 0,
+        "WAVEFORM": 0,
         "MULTIPLE_CHOICE": 0,
         "TRUE_FALSE": 4,
         "SHORT_ANSWER": 0,

@@ -1,4 +1,6 @@
+import { blanks, isInteractive } from "../lib/interactive";
 import type { ActiveQuestion, PracticeAnswer, QuestionFeedback } from "../lib/practice-api";
+import { InteractiveAnswer } from "./interactive-question";
 import { numberProblem } from "../lib/question-types";
 import { cn } from "../lib/utils";
 import { optionShortcuts, toggleOption } from "./practice-shortcuts";
@@ -77,6 +79,12 @@ export function QuizAnswerEditor({ question, answer, change, disabled, feedback,
           </div>;
         })}
       </div>}
+      {isInteractive(question.type) && (question.spec
+        ? <InteractiveAnswer id={question.id} type={question.type} spec={question.spec}
+          values={answer && "values" in answer && answer.values.length ? answer.values : blanks(question.type, question.spec).map(() => null)}
+          change={values => change(values.some(value => value !== null) ? { type: question.type as "TABLE" | "CIRCUIT" | "WAVEFORM", values } : null)}
+          disabled={disabled || Boolean(feedback)} correct={feedback?.correct_values ?? null} />
+        : <p className="text-sm text-muted">Ovo pitanje nema ispravan opis tablice, sklopa ili dijagrama.</p>)}
       {question.type === "NUMERIC" && <div>
         <label className="block">Vaš odgovor
           <span className="mt-2 flex items-center gap-2">

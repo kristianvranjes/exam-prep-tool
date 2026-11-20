@@ -18,16 +18,23 @@ import random
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from studio.appschema import content_error
-from studio.config import QUESTION_TYPES, Questions, QuestionType, StudioError, TypeCounts
+from studio.config import (
+    INTERACTIVE_TYPES,
+    QUESTION_TYPES,
+    Questions,
+    QuestionType,
+    StudioError,
+    TypeCounts,
+)
 from studio.course import Unit
 from studio.ingest import PdfPages
 from studio.llm import ChatClient, LLMError
-from studio.prompts import QUESTIONS_SYSTEM, QUESTIONS_VERSION, questions_user
+from studio.prompts import QUESTIONS_SYSTEM, QUESTIONS_VERSION, questions_system, questions_user
 from studio.rewrite import rewrite
 from studio.store import unit_dir, write_json
 
@@ -66,6 +73,22 @@ class GenQuestion(Strict):
 
 class GenBatch(Strict):
     questions: list[GenQuestion]
+
+
+class GenInteractiveQuestion(GenQuestion):
+    """Asked for only by windows that request TABLE, CIRCUIT or WAVEFORM questions."""
+
+    # The type's spec as a JSON object written as a string: strict structured output
+    # cannot describe the three shapes, so the application schema checks it afterwards.
+    spec: str | None
+    expr: str | None
+
+
+class GenInteractiveBatch(Strict):
+    questions: list[GenInteractiveQuestion]
+
+
+SPEC_FIELD = {"TABLE": "table", "CIRCUIT": "circuit", "WAVEFORM": "waveform"}
 
 
 class PageText(Strict):
@@ -243,8 +266,19 @@ def input_hash(windows: list[Window], counts: TypeCounts, model: str) -> str:
         "counts": counts,
         "windows": [[w.counts, [[p.pdf, p.page, p.text] for p in w.pages]] for w in windows],
     }
+    if INTERACTIVE_TYPES & set(counts):
+        # Only then is the prompt longer; other courses keep their earlier hash.
+        payload["interactive"] = hashlib.sha256(questions_system(counts).encode()).hexdigest()
     encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def spec_value(text: str | None) -> Any:
+    """The spec object, or the text as it came when it is not JSON (the schema then fails)."""
+    try:
+        return json.loads(text or "")
+    except ValueError:
+        return text
 
 
 def to_content(question: GenQuestion) -> dict[str, Any]:
@@ -263,6 +297,10 @@ def to_content(question: GenQuestion) -> dict[str, Any]:
         content["correct_answer"] = question.correct_answer
     elif question.type == "SHORT_ANSWER":
         content["reference_answer"] = question.reference_answer
+    elif question.type in INTERACTIVE_TYPES:
+        content[SPEC_FIELD[question.type]] = spec_value(getattr(question, "spec", None))
+        if expr := (getattr(question, "expr", None) or "").strip():
+            content["expr"] = expr
     else:
         content["correct_value"] = question.correct_value
         for name in ("absolute_tolerance", "relative_tolerance", "unit"):
@@ -297,7 +335,9 @@ def shuffle_options(content: dict[str, Any], seed: str) -> None:
         rng.shuffle(content["options"])
 
 
-def stored(unit: Unit, window: Window, batch: GenBatch) -> list[StoredQuestion]:
+def stored(
+    unit: Unit, window: Window, batch: GenBatch | GenInteractiveBatch
+) -> list[StoredQuestion]:
     pages = dict(window.labelled)
     result = []
     for k, question in enumerate(batch.questions, start=1):
@@ -368,17 +408,21 @@ def generate_unit(
         elif window.counts:
             calls += 1
             try:
-                batch = client.complete_json(
-                    system=QUESTIONS_SYSTEM,
-                    user=questions_user(
-                        course_name,
-                        unit.title,
-                        window.counts,
-                        [(label, page.text) for label, page in window.labelled],
+                interactive = bool(INTERACTIVE_TYPES & set(window.counts))
+                batch = cast(
+                    GenBatch | GenInteractiveBatch,
+                    client.complete_json(
+                        system=questions_system(window.counts),
+                        user=questions_user(
+                            course_name,
+                            unit.title,
+                            window.counts,
+                            [(label, page.text) for label, page in window.labelled],
+                        ),
+                        response_model=GenInteractiveBatch if interactive else GenBatch,
+                        prompt_version=QUESTIONS_VERSION,
+                        subject=f"unit {unit.id} window {window.index}",
                     ),
-                    response_model=GenBatch,
-                    prompt_version=QUESTIONS_VERSION,
-                    subject=f"unit {unit.id} window {window.index}",
                 )
             except LLMError as exc:
                 record.error = exc.code

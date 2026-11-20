@@ -19,15 +19,16 @@ import random
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from studio.appschema import numeric_match
+from studio.appschema import blanks_match, interactive_module, numeric_match, stored_spec
+from studio.config import INTERACTIVE_TYPES
 from studio.generate import OPTION_TYPES, StoredQuestion, UnitQuestions, questions_path
 from studio.ingest import PdfPages
 from studio.llm import ChatClient, LLMError
-from studio.prompts import VERIFY_SYSTEM, VERIFY_VERSION, verify_user
+from studio.prompts import VERIFY_INTERACTIVE, VERIFY_SYSTEM, VERIFY_VERSION, verify_user
 from studio.store import unit_dir, write_json
 
 VERIFY_FILE = "verify.json"
@@ -55,6 +56,16 @@ class VerifyBatch(Strict):
     answers: list[VerifyAnswer]
 
 
+class VerifyInteractiveAnswer(VerifyAnswer):
+    """Asked for only by batches with TABLE, CIRCUIT or WAVEFORM questions."""
+
+    values: list[str] | None
+
+
+class VerifyInteractiveBatch(Strict):
+    answers: list[VerifyInteractiveAnswer]
+
+
 class Verdict(Strict):
     id: str
     answerable: bool
@@ -62,6 +73,8 @@ class Verdict(Strict):
     truth: bool | None
     value: str | None
     reference_supported: bool | None
+    # TABLE, CIRCUIT, WAVEFORM: one value per blank; absent from earlier files.
+    values: list[str] | None = None
     # None when the verifier could not answer.
     agrees: bool | None
     confidence: Confidence
@@ -158,6 +171,10 @@ def blind(question: StoredQuestion, local_id: str, page_label: str) -> dict[str,
         shown["reference_answer"] = content["reference_answer"]
     if content["type"] == "NUMERIC" and content.get("unit"):
         shown["unit"] = content["unit"]
+    if content["type"] in INTERACTIVE_TYPES:
+        shown["layout"] = interactive_module().public_spec(content["type"], stored_spec(content))
+        if content.get("expr"):
+            shown["expr"] = content["expr"]
     return shown
 
 
@@ -177,6 +194,9 @@ def agreement(question: StoredQuestion, answer: VerifyAnswer) -> bool | None:
         return None if answer.truth is None else answer.truth == content["correct_answer"]
     if kind == "NUMERIC":
         return None if answer.value is None else numeric_match(answer.value, content)
+    if kind in INTERACTIVE_TYPES:
+        values = getattr(answer, "values", None)
+        return None if not values else blanks_match(list(values), content)
     return answer.reference_supported
 
 
@@ -193,6 +213,7 @@ def verdict(question: StoredQuestion, answer: VerifyAnswer) -> Verdict:
         truth=answer.truth,
         value=answer.value,
         reference_supported=answer.reference_supported,
+        values=getattr(answer, "values", None),
         agrees=agreement(question, answer),
         confidence=answer.confidence,
         problem=(answer.problem or "").strip() or None,
@@ -215,12 +236,16 @@ def verify_batch(
             pages.append((labels[where], page_text(docs, *where)))
         local[f"q{n}"] = question
         shown.append(blind(question, f"q{n}", labels[where]))
-    reply = client.complete_json(
-        system=VERIFY_SYSTEM,
-        user=verify_user(pages, shown),
-        response_model=VerifyBatch,
-        prompt_version=VERIFY_VERSION,
-        subject=subject,
+    interactive = any(q.content["type"] in INTERACTIVE_TYPES for q in batch)
+    reply = cast(
+        VerifyBatch | VerifyInteractiveBatch,
+        client.complete_json(
+            system=VERIFY_SYSTEM + VERIFY_INTERACTIVE if interactive else VERIFY_SYSTEM,
+            user=verify_user(pages, shown),
+            response_model=VerifyInteractiveBatch if interactive else VerifyBatch,
+            prompt_version=VERIFY_VERSION,
+            subject=subject,
+        ),
     )
     verdicts: dict[str, Verdict] = {}
     for answer in reply.answers:

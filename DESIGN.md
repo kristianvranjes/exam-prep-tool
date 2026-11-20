@@ -526,6 +526,16 @@ Implemented:
 
 - Exit dialog 22d (`quiz-exit-dialog.tsx`, #172): the session bar's "Izađi iz vježbe" opens a modal `dialog` instead of leaving at once. Practice and an untimed paper: "Izaći iz vježbe?", "Odgovorili ste na k od N pitanja", that answers are saved (or are saved on the way out) and the session waits on Danas, then **Spremi i izađi** (primary, focused), **Predaj sada i vidi rezultat** (the existing finish; disabled with a reason until one answer exists) and **Nastavi rješavati**. A timed exam ("Izađi iz ispita") has no saving: "Izaći iz ispita?", "izlazak znači predaju", **Predaj ispit i vidi rezultat** or **Nastavi rješavati**. An edited answer that cannot be saved still gets the "Zadržati nespremljen odgovor?" decision first. Escape and Nastavi rješavati return focus to the exit button.
 
+- Interactive question types 10a-10d (`interactive-question.tsx`, #161, #164), in solving, checked feedback and results 2e:
+  **Tablica za popunjavanje** (10b truth table; 10a's Karnaugh map as a grid with row headers and a corner) is a ruled table whose
+  blank cells are buttons that step through the allowed values on click, take them from the keyboard and move with the arrows;
+  each cell's name says its row and column ("A = 0, B = 1, stupac Y: prazno"). **Sklop** (10c) draws the circuit as SVG from its
+  netlist (inputs left, gates by depth, empty slots dashed with "?", signal values written on every wire), with the input
+  toggles (`aria-pressed`, "A = 1"), one radio group of gates per slot and "Opis sklopa riječima" as its text equivalent.
+  **Vremenski dijagram** (10d) draws given signals as step lines and the drawn one in accent over a row of segment buttons that
+  state their level in words. After checking every blank says točno or netočno with the key, plus "Točno popunjeno 6 od 8
+  polja"; a partly right table counts as Djelomično točno. Not built: 10a's grouping mode with the minimal expression and the
+  hint in steps with a point cost (the existing hint stays), and images (11a, 11b).
 - Topic picker 22a (`topic-picker.tsx`, #172): "Što vježbate?" is the first screen of practice in a course ("Vježbaj" on Učenje opens it with the two weakest topics; the address `/practice` too). Topics are checkbox rows (name, state in words or "Najslabija / Druga najslabija · n %" in accent, a bar, "Predloženo"); before any result the first topic not started is suggested. A "Pitanja koja ste pogriješili" row (checked, "Predloženo") appears when the course has mistakes: they come first, from all topics (`include_mistakes`). A side panel holds the duration (10 / 20 / 30 min = 7 / 14 / 20 questions; a generated session holds at most 20), the count as a hero number with its make-up ("6 pogriješenih · 8 iz 2 teme"), a note when the choice holds fewer questions, **Započni · N pitanja** (a guided session) and "Vježba po mjeri →", the full setup, which keeps a "← Odabir tema" link back. A course without topics goes straight to the full setup. Other ways in (mock exam, Pogreške, Favoriti, the estimate's topic practice) still open the full setup.
 
 - Single-question editor 6d (`question-editor.tsx`, inside the question bank, no route of its own): the list of the current bank page on the left, the form in the middle, and a side panel with

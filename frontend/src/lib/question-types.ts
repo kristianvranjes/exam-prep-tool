@@ -1,9 +1,10 @@
 import type { OwnerQuestion, QuestionStatus, QuestionType, ReportReason } from "./api";
 
 type QuestionSource = OwnerQuestion["source"];
+import { blankKey, blanksText, isInteractive, type InteractiveSpec } from "./interactive";
 import type { PracticeAnswer } from "./practice-api";
 
-export const QUESTION_TYPES: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"];
+export const QUESTION_TYPES: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"];
 /** AI generation and quiz-import-v1 support only these. */
 export const CLASSIC_TYPES: QuestionType[] = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"];
 
@@ -14,6 +15,9 @@ export const typeLabels: Record<QuestionType, string> = {
   NUMERIC: "Brojčani odgovor",
   SHORT_ANSWER: "Kratki odgovor",
   MATCH: "Povezivanje parova",
+  TABLE: "Tablica za popunjavanje",
+  CIRCUIT: "Sklop",
+  WAVEFORM: "Vremenski dijagram",
 };
 
 export const statusLabels: Record<QuestionStatus, string> = {
@@ -76,7 +80,7 @@ export function numericKey(value: string | number | null | undefined, absolute?:
 type ChoiceOption = { position: number; text: string; is_correct?: boolean; match_text?: string | null };
 
 /** A saved answer as students read it back; undefined when nothing was saved. */
-export function answerText(answer: PracticeAnswer | null | undefined, options: ChoiceOption[], unit?: string | null, choices?: { position: number; text: string }[] | null) {
+export function answerText(answer: PracticeAnswer | null | undefined, options: ChoiceOption[], unit?: string | null, choices?: { position: number; text: string }[] | null, spec?: InteractiveSpec | null) {
   if (!answer) return undefined;
   switch (answer.type) {
     case "SHORT_ANSWER": return answer.text;
@@ -88,16 +92,23 @@ export function answerText(answer: PracticeAnswer | null | undefined, options: C
       const slot = answer.matches[index];
       return `${option.text} → ${slot == null ? "—" : choices?.find(choice => choice.position === slot)?.text ?? "—"}`;
     }).join("; ");
+    case "TABLE": case "CIRCUIT": case "WAVEFORM": return blanksText(answer.type, spec, answer.values);
   }
 }
 
 type Keyed = {
   type: QuestionType; options: ChoiceOption[]; correct_boolean: boolean | null; reference_answer: string | null;
   correct_value?: string | null; absolute_tolerance?: string | null; relative_tolerance?: string | null; unit?: string | null;
+  /** An author's spec carries the key; a student's results carry it in `correct_values`. */
+  spec?: InteractiveSpec | null; correct_values?: string[] | null;
 };
 
 /** The correct answer in words: options, true/false, the numeric value with its tolerance, or the reference answer. */
 export function keyText(question: Keyed) {
+  if (isInteractive(question.type)) {
+    const key = question.correct_values ?? (question.spec ? blankKey(question.type, question.spec) : null);
+    return key ? blanksText(question.type, question.spec, key) : null;
+  }
   switch (question.type) {
     case "SHORT_ANSWER": return question.reference_answer;
     case "TRUE_FALSE": return question.correct_boolean === null ? null : question.correct_boolean ? "Točno" : "Netočno";

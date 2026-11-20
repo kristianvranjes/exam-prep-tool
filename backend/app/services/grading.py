@@ -2,12 +2,13 @@
 
 import unicodedata
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_FLOOR, Decimal
 from typing import Literal
 
 from app.schemas.question import OwnerQuestion
 from app.schemas.quiz import (
     AnswerPayload,
+    BlanksAnswer,
     BooleanAnswer,
     Grade,
     MatchAnswer,
@@ -15,6 +16,7 @@ from app.schemas.quiz import (
     MultipleSelectAnswer,
     NumericAnswer,
 )
+from app.services.interactive import blank_key, computes_key, fits
 from app.services.numbers import parse_number, within_tolerance
 
 ALGORITHM_VERSION = "deterministic-v1"
@@ -25,6 +27,11 @@ EXACT_SET_VERSION = "exact-set-v1"
 PARTIAL_SET_VERSION = "partial-set-v1"
 HALF = Decimal("0.5")
 MATCH_VERSION = "match-v1"
+# Tables and timing diagrams: the share of blanks right, rounded down to whole percent.
+BLANKS_VERSION = "blanks-v1"
+# Circuits: right when the chosen gates compute the key's outputs for every input.
+CIRCUIT_VERSION = "circuit-equivalence-v1"
+CENT = Decimal("0.01")
 GradingMethod = Literal["DETERMINISTIC", "PENDING_SEMANTIC"]
 
 
@@ -70,6 +77,33 @@ def grade_match(snapshot: OwnerQuestion, answer: MatchAnswer) -> GradingResult:
     )
 
 
+def grade_blanks(snapshot: OwnerQuestion, answer: BlanksAnswer) -> GradingResult:
+    """A circuit is right or wrong as a whole; a table or timing diagram earns the share of its
+    blanks filled in right, and is correct only when all are."""
+    spec = snapshot.spec
+    if spec is None or not fits(snapshot.type, spec, answer.values):
+        raise ValueError("Answer does not fit the blanks in the snapshot")
+    if snapshot.type == "CIRCUIT":
+        if any(value is None for value in answer.values):
+            return GradingResult("INCORRECT", "DETERMINISTIC", CIRCUIT_VERSION, Decimal(0))
+        right_circuit = computes_key(spec, [value for value in answer.values if value])
+        return GradingResult(
+            "CORRECT" if right_circuit else "INCORRECT",
+            "DETERMINISTIC",
+            CIRCUIT_VERSION,
+            Decimal(1) if right_circuit else Decimal(0),
+        )
+    key = blank_key(snapshot.type, spec)
+    right = sum(
+        value is not None and normalize(value) == normalize(expected)
+        for value, expected in zip(answer.values, key, strict=True)
+    )
+    if right == len(key):
+        return GradingResult("CORRECT", "DETERMINISTIC", BLANKS_VERSION, Decimal(1))
+    share = (Decimal(right) / Decimal(len(key))).quantize(CENT, rounding=ROUND_FLOOR)
+    return GradingResult("INCORRECT", "DETERMINISTIC", BLANKS_VERSION, share)
+
+
 def grade(snapshot: OwnerQuestion, answer: AnswerPayload) -> GradingResult:
     """Return a decision for the submission transaction to persist and freeze.
 
@@ -111,6 +145,8 @@ def grade(snapshot: OwnerQuestion, answer: AnswerPayload) -> GradingResult:
         )
     elif isinstance(answer, MatchAnswer):
         return grade_match(snapshot, answer)
+    elif isinstance(answer, BlanksAnswer):
+        return grade_blanks(snapshot, answer)
     else:
         return GradingResult("PENDING", "PENDING_SEMANTIC")
     return GradingResult("CORRECT" if correct else "INCORRECT", "DETERMINISTIC")
