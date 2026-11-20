@@ -18,7 +18,7 @@ const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").rep
 
 export const SESSION_EXPIRED_MESSAGE = "Sesija je istekla. Prijavite se ponovno; spremljeni odgovori su sačuvani.";
 /** Login and registration answer 401/422 about the credentials, not about a session. */
-const SIGN_IN_PATHS = ["/auth/login", "/auth/register"];
+const SIGN_IN_PATHS = ["/auth/login", "/auth/register", "/auth/google"];
 
 /** A failed API call; `message` is ready to show, `status` lets callers branch on it. */
 export class ApiError extends Error {
@@ -62,6 +62,11 @@ export function errorMessage(path: string, status: number, payload: { detail?: u
 // the rest as they arrive.
 const BACKEND_MESSAGES: Readonly<Record<string, string>> = {
   "Invalid email or password": "Neispravna e-pošta ili lozinka",
+  "Google sign-in failed": "Prijava Googleom nije uspjela. Pokušajte ponovno.",
+  "Google is not reachable; try again": "Google trenutno nije dostupan. Pokušajte ponovno.",
+  "This e-mail is linked to another Google account": "Ova adresa e-pošte već je povezana s drugim Google računom.",
+  "Password sign-in is turned off; use Google": "Prijava lozinkom je isključena. Prijavite se Googleom.",
+  "This account is disabled": "Ovaj račun je onemogućen.",
   "An account with that email already exists": "Račun s tom e-poštom već postoji",
   "Authentication required": "Potrebna je prijava",
   "Course not found": "Kolegij nije pronađen",
@@ -229,6 +234,10 @@ export const api = {
   me: () => request<User>("/auth/me"),
   register: (body: { email: string; password: string; display_name: string }) => request<User>("/auth/register", { method: "POST", body: JSON.stringify(body) }),
   login: (body: { email: string; password: string }) => request<User>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
+  /** Which sign-in methods the app offers: a Google client ID when Google sign-in is on, and whether passwords work. */
+  authConfig: () => request<{ google_client_id: string | null; password_login: boolean }>("/auth/config"),
+  /** Signs in with the ID token Google Identity Services hands the page. */
+  googleLogin: (credential: string) => request<User>("/auth/google", { method: "POST", body: JSON.stringify({ credential }) }),
   logout: () => request<void>("/auth/logout", { method: "POST" }),
   courses: () => request<MemberCourse[]>("/courses"),
   setMembershipStatus: (courseId: string, status: MembershipStatus) => request<CourseMembership>(`/courses/${courseId}/membership`, { method: "PATCH", body: JSON.stringify({ status }) }),

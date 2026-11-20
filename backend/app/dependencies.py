@@ -44,6 +44,11 @@ def get_current_user(request: Request, response: Response, db: Session = Depends
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
         )
+    # Linking the account to Google ends every session signed before it.
+    if user.sessions_valid_after is not None and issued_at < user.sessions_valid_after:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
+        )
     # FastAPI copies these headers onto the endpoint's response, so an active student's
     # session slides forward. Endpoints that fail or return their own Response object
     # (204 deletes) skip it; the next ordinary authenticated request renews instead.

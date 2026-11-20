@@ -23,3 +23,13 @@ class UserResponse(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
+
+
+class GoogleLoginRequest(BaseModel):
+    # A Google ID token (a signed JWT) is about 1-1.5 KB; anything far larger is refused unread.
+    credential: str = Field(min_length=1, max_length=4096)
+
+
+class AuthConfig(BaseModel):
+    google_client_id: str | None
+    password_login: bool

@@ -19,7 +19,7 @@ class AuthRequestLimit:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if self.enabled and scope["type"] == "http" and scope["method"] == "POST":
             path = scope["path"].removesuffix("/")
-            if path in ("/auth/login", "/auth/register"):
+            if self.limiter.limits(path):
                 # Use the server-resolved peer; never trust raw forwarding headers.
                 client = scope.get("client")
                 retry_after = self.limiter.check(path, client[0] if client else "unknown")

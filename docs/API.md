@@ -32,6 +32,15 @@ kept." (answers already saved stay on the server).
   `409`.
 - `POST /auth/login` accepts `{email, password}`, sets the cookie and returns the
   public user. Invalid credentials return the same `401` response.
+- `GET /auth/config` (public): `{google_client_id: string | null, password_login: bool}`. Password sign-in is on when
+  `PASSWORD_LOGIN_ENABLED` is true, or when it is unset and either no `GOOGLE_CLIENT_ID` is set or `APP_ENV` is
+  development or test. When off, `/auth/register` and `/auth/login` answer `403`.
+- `POST /auth/google` `{credential}`: a Google ID token from Google Identity Services. Verified against Google's keys
+  (signature, issuer, audience = `GOOGLE_CLIENT_ID`, expiry, `email_verified`); the account is found by `google_sub`,
+  else linked by normalized e-mail, else created (display name from Google, no usable password). Sets the session
+  cookie like login. `404` when Google is not configured, `401` for a bad token, `403` for a disabled account, `409`
+  when the e-mail is linked to another Google account, `503` when Google's keys cannot be fetched. Rate limited
+  together with login. Linking an account sets `sessions_valid_after`, which ends every session signed before it.
 - `POST /auth/logout` clears the cookie and returns `204`.
 - `GET /auth/me` returns the current user or `401`.
 

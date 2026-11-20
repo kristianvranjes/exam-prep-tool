@@ -167,6 +167,16 @@ export function AppShell() {
     } catch (e) { setError(e instanceof Error ? e.message : "Prijava nije uspjela"); } finally { setBusy(false); }
   }
 
+  async function googleAuth(credential: string) {
+    setBusy(true); setError("");
+    try {
+      const nextUser = await api.googleLogin(credential);
+      setLoadingCourses(true);
+      setCheckingFaculties(true);
+      setUser(nextUser);
+    } catch (e) { setError(e instanceof Error ? e.message : "Prijava Googleom nije uspjela"); } finally { setBusy(false); }
+  }
+
   async function createCourse(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
     const form = event.currentTarget;
@@ -238,7 +248,7 @@ export function AppShell() {
   // into <head>. Root metadata leaves the title out so there is only one title element (see DESIGN.md).
   const tabTitle = <title>{checkingSession || !user ? "ExamPrep" : documentTitle(route, view === "course" && selectedId === routeCourseId ? selected?.name : null)}</title>;
   if (checkingSession) return <>{tabTitle}<main className="mx-auto max-w-6xl px-6 py-8"><Brand /><LoadingState>Učitavam vaš prostor za učenje…</LoadingState></main></>;
-  if (!user) return <>{tabTitle}<AuthScreen mode={mode} busy={busy} error={error} submit={submitAuth} changeMode={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }} /></>;
+  if (!user) return <>{tabTitle}<AuthScreen mode={mode} busy={busy} error={error} submit={submitAuth} onGoogle={credential => void googleAuth(credential)} changeMode={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }} /></>;
 
   const isOwner = !!selected && selectedRole?.courseId === selected.id && selectedRole.role === "OWNER";
   const nav: NavItem[] = [
