@@ -35,14 +35,15 @@ or use this repository file. It contains all five supported types. The earlier
 ## Format versions 1 and 2
 
 Top level: `{"version":"quiz-import-v2","questions":[...]}`. Version 2 adds
-`NUMERIC`, `MULTIPLE_SELECT` (R4) and `MATCH`; `quiz-import-v1` documents stay valid exactly as
+`NUMERIC`, `MULTIPLE_SELECT` (R4), `MATCH`, and the interactive `TABLE`, `CIRCUIT` and `WAVEFORM`
+(see [below](#interactive-questions-table-circuit-waveform)); `quiz-import-v1` documents stay valid exactly as
 before, and a v1 document containing a new type is rejected with a hint to use v2.
 Unknown fields and versions are rejected, including status, creator IDs, course IDs and
 approval claims. The existing strict question-content schemas validate each item:
 
 | Field | Rule |
 | --- | --- |
-| `type` | `MULTIPLE_CHOICE`, `SHORT_ANSWER` or `TRUE_FALSE`; v2 also `NUMERIC`, `MULTIPLE_SELECT` and `MATCH` |
+| `type` | `MULTIPLE_CHOICE`, `SHORT_ANSWER` or `TRUE_FALSE`; v2 also `NUMERIC`, `MULTIPLE_SELECT`, `MATCH`, `TABLE`, `CIRCUIT` and `WAVEFORM` |
 | `stem` | Required nonblank text, up to 400 characters |
 | `explanation` | Optional null or nonblank text, up to 2000 characters |
 | `difficulty` | Optional null or integer 1–5, never a boolean/string |
@@ -57,6 +58,7 @@ approval claims. The existing strict question-content schemas validate each item
 | Numeric `absolute_tolerance` | Optional number ≥ 0 in the answer's unit |
 | Numeric `relative_tolerance` | Optional share of the key's magnitude, 0–1 (`"0.01"` allows 1 %) |
 | Numeric `unit` | Optional display unit, 1–20 characters; never converted |
+| Table `table`, circuit `circuit`, waveform `waveform` | The layout and key of an interactive question; see below |
 
 `quiz-import-v2` also accepts an optional `course_unit`: the title of an existing unit of the course
 (a quiz), at the top level for the whole file and/or on a question, which wins. (It is not `unit`:
@@ -77,6 +79,72 @@ in explanation, but are not verified provenance. Imports use the existing `USER`
 source (user-supplied content, even if externally AI-assisted), no AI job, and empty
 concept/source associations. A CREATED history snapshot records the importing user.
 Internally generated `AI` questions retain mandatory concept/source validation.
+
+## Interactive questions: TABLE, CIRCUIT, WAVEFORM
+
+Three types carry their layout and key in one object, named after the type. The cells, slots or
+segments the student fills are its **blanks**; an answer lists one value per blank in reading order.
+
+**`TABLE`** (`table`): a grid to fill in, such as a truth table, a Karnaugh map, a state table or a
+page-replacement table. Graded per cell: the share of cells right (rounded down to whole percent)
+is the item's partial credit, and only a fully right table is `CORRECT`.
+
+```json
+{"type": "TABLE", "stem": "Popunite stupac Y za zadanu funkciju.", "expr": "Y = A ⊕ B",
+ "table": {"columns": ["A", "B", "Y"], "values": ["0", "1"],
+           "rows": [["0", "0", {"answer": "0"}], ["0", "1", {"answer": "1"}],
+                    ["1", "0", {"answer": "1"}], ["1", "1", {"answer": "0"}]]}}
+```
+
+- `columns`: 1–8 headers (1–20 characters). `rows`: 1–16 rows, each with one cell per column. A
+  given cell is a string (1–40 characters); a cell to fill is `{"answer": "..."}`. 1–64 such cells.
+- `values`: optional, 2–6 distinct values the student picks from (every answer must be one of
+  them, compared without case). Without it the student types each cell, compared ignoring case and
+  extra spaces.
+- `row_labels` (one per row) and `corner` (needs row labels) turn the grid into a Karnaugh map:
+  `"corner": "AB\\CD"` in JSON (the label `AB\CD`), `"row_labels": ["00", "01", "11", "10"]` and
+  Gray-code column headers. Use `"X"` in `values` for don't-care cells.
+
+**`CIRCUIT`** (`circuit`): a small logic circuit with 1–4 empty gate slots. Any choice of gates that
+gives the same outputs as the key for every input combination is `CORRECT`; otherwise 0. No partial
+credit.
+
+```json
+{"type": "CIRCUIT", "stem": "Dovršite sklop tako da vrijedi Y = AB + C'.",
+ "circuit": {"inputs": ["A", "B", "C"],
+             "gates": [{"id": "G1", "type": "AND", "inputs": ["A", "B"]},
+                       {"id": "G2", "type": "NOT", "inputs": ["C"]},
+                       {"id": "G3", "inputs": ["G1", "G2"],
+                        "choices": ["AND", "OR", "XOR", "NAND", "NOR"], "answer": "OR"}],
+             "outputs": [{"name": "Y", "source": "G3"}]}}
+```
+
+- `inputs`: 1–6 names; `gates`: 1–12; `outputs`: 1–3. Names are a letter followed by up to seven
+  letters, digits or `_`, and are distinct across inputs, gates and outputs.
+- A gate reads `inputs` (1–4 names of inputs or gates listed **before** it) and is either fixed,
+  with `type`, or a slot, with `choices` (2–8 distinct types) and `answer` (one of them).
+- Types: `AND`, `OR`, `NOT`, `NAND`, `NOR`, `XOR`, `XNOR`, `BUF`. `NOT` and `BUF` take exactly one
+  input, the others two or more (`XOR` of several inputs is their parity).
+- Students see the circuit drawn, toggle the inputs and read every signal live; a text description
+  of the circuit is always available.
+
+**`WAVEFORM`** (`waveform`): a timing diagram. Given signals and 1–3 signals the student draws,
+graded per segment like a table.
+
+```json
+{"type": "WAVEFORM", "stem": "D bistabil okida se na rastući brid takta. Početno je Q = 0. Docrtajte izlaz Q.",
+ "waveform": {"segments": 8,
+              "signals": [{"name": "CLK", "values": "01010101"},
+                          {"name": "D", "values": "11001100"},
+                          {"name": "Q", "answer": "01100110"}]}}
+```
+
+- `segments`: 2–32. Each signal has a `name` (1–8 characters, distinct) and either `values` (given)
+  or `answer` (drawn), one character `0` or `1` per segment.
+
+Stems must be unique within a course; for these three types the stem **and** `expr` together are
+compared, so several truth tables may share "Popunite stupac Y za zadanu funkciju." as long as
+their `expr` differs.
 
 ## API and limits
 

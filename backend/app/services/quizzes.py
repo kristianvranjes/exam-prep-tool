@@ -22,6 +22,7 @@ from app.schemas.quiz import (
     AnswerPayload,
     AttemptResponse,
     AttemptSummary,
+    BlanksAnswer,
     CheckAnswer,
     Confidence,
     FeedbackMode,
@@ -53,6 +54,7 @@ from app.services.exam_papers import load_paper
 from app.services.exam_scopes import resolve_focus
 from app.services.favorites import favorited
 from app.services.grading import correct_slots, grade
+from app.services.interactive import blank_key, fits, public_spec
 from app.services.paper_scoring import SCORING_VERSION, ItemResult, item_points, score
 from app.services.progress import apply_reviews
 from app.services.questions.service import owner_view
@@ -160,6 +162,7 @@ def feedback(content: OwnerQuestion, answer: Answer | None) -> QuestionFeedback:
         relative_tolerance=content.relative_tolerance,
         grading_status=cast(Grade, answer.grading_status) if answer else "PENDING",
         correct_matches=correct_slots(content) if content.type == "MATCH" else None,
+        correct_values=blank_key(content.type, content.spec) if content.spec else None,
         score_fraction=None
         if answer is None or answer.score_fraction is None
         else float(answer.score_fraction),
@@ -198,6 +201,7 @@ def representation(db: Session, attempt: QuizAttempt, course_id: UUID) -> Attemp
             choices=shown_choices(content),
             hint=content.hint,
             expr=content.expr,
+            spec=public_spec(content.type, content.spec),
             answer=answer_adapter.validate_python(answer.payload) if answer else None,
             units=units.get(row.source_question_id, []),
             favorite=row.source_question_id in favorites,
@@ -603,6 +607,10 @@ def save_answer(
             and not set(data.option_positions) <= {o.position for o in content.options}
         )
         or (isinstance(data, MatchAnswer) and len(data.matches) != len(content.options))
+        or (
+            isinstance(data, BlanksAnswer)
+            and (content.spec is None or not fits(content.type, content.spec, data.values))
+        )
     ):
         raise HTTPException(422, "Answer must match the question type and available options")
     try:

@@ -29,6 +29,7 @@ from app.schemas.question import (
     MCQ,
     BulkQuestionTransition,
     BulkQuestionTransitionResult,
+    CircuitQuestion,
     Match,
     MultipleSelect,
     Numeric,
@@ -44,9 +45,12 @@ from app.schemas.question import (
     QuestionType,
     ShortAnswer,
     SourceReference,
+    TableQuestion,
     TrueFalse,
+    WaveformQuestion,
     content_adapter,
     normalize,
+    stem_key,
 )
 from app.services.course_units import (
     is_course_owner,
@@ -55,6 +59,7 @@ from app.services.course_units import (
     validate_unit_links,
 )
 from app.services.courses import get_member_course
+from app.services.interactive import SPEC_FIELD, public_spec
 from app.services.moderation import course_moderator
 
 
@@ -145,6 +150,7 @@ def representation(db: Session, question: Question, owner: bool) -> QuestionResp
         ],
         hint=question.hint,
         expr=question.expr,
+        spec=public_spec(question.type, question.spec),
         unit_ids=question_unit_ids(db, question.id),
         unit=question.unit,
     )
@@ -244,7 +250,9 @@ def current_content(db: Session, question: Question) -> dict[str, object]:
         "hint": question.hint,
         "expr": question.expr,
     }
-    if question.type == "MATCH":
+    if question.type in SPEC_FIELD:
+        result[SPEC_FIELD[question.type]] = question.spec
+    elif question.type == "MATCH":
         result["pairs"] = [
             {"left": o.text, "right": o.match_text or ""} for o in options(db, question)
         ]
@@ -266,7 +274,7 @@ def current_content(db: Session, question: Question) -> dict[str, object]:
 
 def save_content(db: Session, question: Question, content: QuestionContent) -> None:
     question.stem = content.stem
-    question.normalized_stem = normalize(content.stem)
+    question.normalized_stem = stem_key(content)
     question.explanation = content.explanation
     question.difficulty = content.difficulty
     question.hint = content.hint
@@ -280,6 +288,14 @@ def save_content(db: Session, question: Question, content: QuestionContent) -> N
     question.absolute_tolerance = numeric.absolute_tolerance if numeric else None
     question.relative_tolerance = numeric.relative_tolerance if numeric else None
     question.unit = numeric.unit if numeric else None
+    if isinstance(content, TableQuestion):
+        question.spec = content.table.model_dump(mode="json", exclude_none=True)
+    elif isinstance(content, CircuitQuestion):
+        question.spec = content.circuit.model_dump(mode="json", exclude_none=True)
+    elif isinstance(content, WaveformQuestion):
+        question.spec = content.waveform.model_dump(mode="json", exclude_none=True)
+    else:
+        question.spec = None
     db.flush([question])
     db.execute(delete(QuestionOption).where(QuestionOption.question_id == question.id))
     if isinstance(content, MCQ | MultipleSelect):

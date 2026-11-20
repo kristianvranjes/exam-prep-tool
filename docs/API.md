@@ -482,6 +482,21 @@ checking or submission the question carries `correct_matches` (the right `positi
 and `score_fraction`: 1, 0.5 (some pairs right, none wrong, the rest open) or 0. Imports of `MATCH`
 need `quiz-import-v2`. See [grading](PRACTICE.md).
 
+### Interactive questions: tables, circuits, timing diagrams
+
+`type: "TABLE"`, `"CIRCUIT"` and `"WAVEFORM"` questions are created with a `table`, `circuit` or
+`waveform` object (format in [QUIZ_IMPORT](QUIZ_IMPORT.md#interactive-questions-table-circuit-waveform));
+`PATCH /questions/{id}` replaces the whole object. Owners and moderators read it, key included, as
+`spec`. Members reading the bank, and every session question, get `spec` without the key: blank table
+cells are `null`, slots keep `choices` but no `answer`, and a signal to draw has `values: null`.
+
+The answer is `{"type": "TABLE", "values": ["1", null, "0", ...]}` (likewise `CIRCUIT`, `WAVEFORM`):
+one entry per blank in reading order (table cells row by row, slots in gate order, segments of each
+drawn signal in turn), `null` where nothing is filled in yet, at least one set. A wrong count, or a
+value the blank does not accept (not in `values`, not a slot choice, not `0`/`1`), is 422. After
+checking or submission the question carries `correct_values` (the key, one per blank; for a circuit one
+right answer of possibly several) and `score_fraction`. See [grading](PRACTICE.md).
+
 ### Practice availability (R2)
 
 GET `/courses/{course_id}/practice-availability` — members. Query parameters match

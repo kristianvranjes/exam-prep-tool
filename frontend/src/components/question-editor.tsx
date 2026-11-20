@@ -4,7 +4,8 @@ import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import type { Concept, CourseUnit, OwnerQuestion, Question, QuestionCreate, QuestionType } from "../lib/api";
 import type { ActiveQuestion, PracticeAnswer } from "../lib/practice-api";
-import { draftFromQuestion, draftToBody, emptyDraft, type EditorDraft, MAX_OPTIONS, MAX_PAIRS, withType } from "../lib/question-draft";
+import { draftFromQuestion, draftToBody, emptyDraft, type EditorDraft, MAX_OPTIONS, MAX_PAIRS, parseSpec, withType } from "../lib/question-draft";
+import { isInteractive, publicSpec, type CircuitSpec, type InteractiveSpec, type InteractiveType, type TableSpec, type WaveformSpec } from "../lib/interactive";
 import { importJsonText } from "../lib/question-json";
 import { QUESTION_TYPES, statusLabels, typeLabels } from "../lib/question-types";
 import { cn } from "../lib/utils";
@@ -75,6 +76,7 @@ export function QuestionEditor({ question, rows, offset, canEdit, concepts, unit
   const chosen = conceptIds.filter((id) => approvedIds.has(id));
   const unitTitle = unitIds.length === 1 ? units.find((unit) => unit.id === unitIds[0])?.title ?? null : null;
   const json = useMemo(() => importJsonText(draft, unitTitle), [draft, unitTitle]);
+  const specProblem = isInteractive(type) ? (() => { const spec = parseSpec(draft.spec); return typeof spec === "string" ? spec : null; })() : null;
 
   const confirmLeave = () => !dirty || window.confirm(DISCARD);
 
@@ -217,6 +219,14 @@ export function QuestionEditor({ question, rows, offset, canEdit, concepts, unit
             <p className="text-sm text-muted">Studentima se desni stupac prikazuje u nasumičnom redoslijedu za svaku sesiju. Pola bodova nosi odgovor u kojem su neki parovi točni, a ostali ostavljeni prazni.</p>
           </fieldset>}
 
+          {isInteractive(type) && <fieldset className="space-y-2">
+            <legend className="font-medium">{type === "TABLE" ? "Tablica" : type === "CIRCUIT" ? "Sklop" : "Vremenski dijagram"} (JSON)</legend>
+            <textarea aria-label="Specifikacija u JSON-u" aria-describedby={`${formattingHelp}-spec`} spellCheck={false} name="spec"
+              className={cn(textareaClass, "min-h-72 font-mono text-sm")} value={draft.spec} onChange={(e) => patch({ spec: e.target.value })} />
+            {specProblem && <p className="text-sm font-semibold text-danger">{specProblem}</p>}
+            <p id={`${formattingHelp}-spec`} className="text-sm text-muted">{specHelp[type]} Oblik je opisan u docs/QUIZ_IMPORT.md; poslužitelj provjerava sve ostalo pri spremanju.</p>
+          </fieldset>}
+
           <label className="block font-medium">Objašnjenje
             <textarea className={cn(textareaClass, "mt-1")} name="explanation" value={draft.explanation} maxLength={2000} onChange={(e) => patch({ explanation: e.target.value })} />
           </label>
@@ -269,6 +279,26 @@ export function QuestionEditor({ question, rows, offset, canEdit, concepts, unit
   </div>;
 }
 
+const specHelp: Record<InteractiveType, string> = {
+  TABLE: "Stupci (columns), retci (rows) i dopuštene vrijednosti (values). Ćelija koju student popunjava piše se kao {\"answer\": \"1\"}. Za K-tablicu dodajte row_labels i corner.",
+  CIRCUIT: "Ulazi (inputs), vrata redom (gates) i izlazi (outputs). Prazno mjesto nema type, nego choices i answer. Točan je svaki izbor s istim izlazima.",
+  WAVEFORM: "Broj odsječaka (segments) i signali: zadani imaju values, a onaj koji student docrtava answer, po jedan znak 0 ili 1 za svaki odsječak.",
+};
+
+/** The student's view of the spec typed so far; null while it is not a readable object. */
+function previewSpec(type: InteractiveType, text: string): InteractiveSpec | null {
+  const spec = parseSpec(text);
+  if (typeof spec === "string") return null;
+  try {
+    const shown = publicSpec(type, spec as InteractiveSpec);
+    // Drawable only when the parts the preview reads are there.
+    if (type === "TABLE" && !Array.isArray((shown as TableSpec).rows)) return null;
+    if (type === "CIRCUIT" && !Array.isArray((shown as CircuitSpec).gates)) return null;
+    if (type === "WAVEFORM" && !Array.isArray((shown as WaveformSpec).signals)) return null;
+    return shown;
+  } catch { return null; }
+}
+
 /** Right-hand items in a fixed order that differs from the authored one, so the preview does not give away the pairs. */
 function mixed<T extends { text: string }>(items: T[]): T[] {
   const sorted = [...items].sort((a, b) => a.text.localeCompare(b.text, "hr"));
@@ -288,6 +318,7 @@ function Preview({ draft }: { draft: EditorDraft }) {
         : draft.type === "MATCH" ? draft.pairs.map((pair, position) => ({ position, text: pair.left || "…" })) : [],
       choices: draft.type === "MATCH" ? mixed(sides.map((side) => ({ ...side, text: side.text || "…" }))) : null,
       hint: draft.hint.trim() || null, expr: draft.expr.trim() || null, unit: draft.type === "NUMERIC" ? draft.unit.trim() || null : null,
+      spec: isInteractive(draft.type) ? previewSpec(draft.type, draft.spec) : null,
     };
   }, [draft]);
   return <QuizAnswerEditor question={question} answer={answer} change={setAnswer} disabled={false} />;

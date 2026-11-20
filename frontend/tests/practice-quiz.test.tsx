@@ -54,7 +54,7 @@ it("starts, saves all types, resumes after remount, and reviews a final result",
   fireEvent.change(screen.getByLabelText("Vlastiti broj pitanja"), { target: { value: "3" } });
   fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 3, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "STANDARD", undefined, "IMMEDIATE");
+  expect(mock.start).toHaveBeenCalledWith("course", 3, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"], "STANDARD", undefined, "IMMEDIATE");
   expect(screen.queryByText(/Correct answer:|Reference answer:|Self-review required/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("One"));
   fireEvent.click(screen.getByRole("button", { name: "Spremi i dalje" }));
@@ -117,7 +117,7 @@ it("keeps failed saves unsaved and allows reloading an already submitted attempt
 it("supports type filters and refuses an empty selection", async () => {
   render(<PracticeQuiz courseId="course" />);
   await open();
-  for (const label of ["Jedan točan odgovor", "Točno / netočno", "Kratki odgovor", "Brojčani odgovor", "Više točnih odgovora", "Povezivanje parova"]) fireEvent.click(screen.getByLabelText(label));
+  for (const label of ["Jedan točan odgovor", "Točno / netočno", "Kratki odgovor", "Brojčani odgovor", "Više točnih odgovora", "Povezivanje parova", "Tablica za popunjavanje", "Sklop", "Vremenski dijagram"]) fireEvent.click(screen.getByLabelText(label));
   expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeDisabled();
   expect(screen.getByText("Odaberite barem jednu vrstu pitanja pod Više mogućnosti.")).toBeVisible();
   expect(mock.start).not.toHaveBeenCalled();
@@ -290,7 +290,7 @@ it("launches adaptive review with the existing count and type controls", async (
   mock.start.mockRejectedValue(new Error("Only 1 eligible approved questions available"));
   fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Only 1 eligible");
-  expect(mock.start).toHaveBeenCalledWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "ADAPTIVE", undefined, "IMMEDIATE");
+  expect(mock.start).toHaveBeenCalledWith("course", 2, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 async function start(experience: "Vođena vježba" | "Ispitna vježba" = "Vođena vježba") {
@@ -321,7 +321,7 @@ it("keeps Study/Exam separate from the selection strategy and saves before navig
   fireEvent.click(screen.getByLabelText("Preporučena vježba"));
   fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 5, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "ADAPTIVE", undefined, "END");
+  expect(mock.start).toHaveBeenCalledWith("course", 5, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"], "ADAPTIVE", undefined, "END");
   expect(screen.getByRole("navigation", { name: "Popis pitanja" })).toBeInTheDocument();
   expect(screen.queryByText("The sky is green")).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("Two"));
@@ -578,7 +578,7 @@ it.each([5, 10, 20])("uses the %i question preset with the unchanged ADAPTIVE tr
   expect(screen.getByRole("radio", { name: `${count} pitanja` })).toBeChecked();
   fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", count, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "ADAPTIVE", undefined, "IMMEDIATE");
+  expect(mock.start).toHaveBeenCalledExactlyOnceWith("course", count, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 it.each(["0", "21", "1.5", ""])("explains invalid Custom length %s and does not start", async value => {
@@ -621,7 +621,7 @@ it("waits for eligibility, then replaces setup with an intentional empty state a
   expect(start).toBeDisabled();
   expect(screen.queryByText("Ovaj kolegij još nema pitanja za vježbu.")).not.toBeInTheDocument();
   expect(screen.getByText("Provjeravam pitanja za vježbu…")).toBeVisible();
-  await act(async () => resolve(reply({}, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], 0)));
+  await act(async () => resolve(reply({}, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"], 0)));
   expect(await screen.findByText("Ovaj kolegij još nema pitanja za vježbu.")).toBeVisible();
   expect(screen.queryByRole("button", { name: "Započni vježbu" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Otvori materijale" })); expect(materials).toHaveBeenCalledOnce();
@@ -659,18 +659,18 @@ it("prevents a predictably oversized request and allows a valid Custom count", a
   expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "Započni vježbu" }));
   await screen.findByText("Choose a number");
-  expect(mock.start).toHaveBeenCalledWith("course", 1, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "ADAPTIVE", undefined, "IMMEDIATE");
+  expect(mock.start).toHaveBeenCalledWith("course", 1, ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"], "ADAPTIVE", undefined, "IMMEDIATE");
 });
 
 it("asks the server again for the chosen mode and types and counts banks beyond one page", async () => {
   serve({ MULTIPLE_CHOICE: 40, TRUE_FALSE: 25 }, 65);
   render(<PracticeQuiz courseId="course" />);
   await open();
-  expect(mock.availability).toHaveBeenLastCalledWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "ADAPTIVE", undefined);
+  expect(mock.availability).toHaveBeenLastCalledWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"], "ADAPTIVE", undefined);
   fireEvent.click(screen.getByLabelText("Pitanja kolegija"));
-  await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "STANDARD", undefined));
+  await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"], "STANDARD", undefined));
   fireEvent.click(screen.getByLabelText("Jedan točan odgovor"));
-  await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", ["TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"], "STANDARD", undefined));
+  await waitFor(() => expect(mock.availability).toHaveBeenLastCalledWith("course", ["TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"], "STANDARD", undefined));
   fireEvent.click(screen.getByRole("radio", { name: "20 pitanja" }));
   await waitFor(() => expect(screen.getByRole("button", { name: "Započni vježbu" })).toBeEnabled());
   fireEvent.click(screen.getByLabelText("Točno / netočno"));
@@ -680,8 +680,7 @@ it("asks the server again for the chosen mode and types and counts banks beyond 
   fireEvent.click(screen.getByLabelText("Brojčani odgovor"));
   await screen.findByText(/Nema pitanja odabranih vrsta/);
   const calls = mock.availability.mock.calls.length;
-  fireEvent.click(screen.getByLabelText("Povezivanje parova"));
-  fireEvent.click(screen.getByLabelText("Više točnih odgovora"));
+  for (const label of ["Povezivanje parova", "Više točnih odgovora", "Tablica za popunjavanje", "Sklop", "Vremenski dijagram"]) fireEvent.click(screen.getByLabelText(label));
   expect(await screen.findByText("Odaberite barem jednu vrstu pitanja pod Više mogućnosti.")).toBeVisible();
   expect(mock.availability).toHaveBeenCalledTimes(calls);
   expect(mock.start).not.toHaveBeenCalled();
@@ -841,7 +840,7 @@ it('returns directly to marked questions from Guided review without changing exp
 
 const focusUnits = ["Unit 1", "Unit 2", "Unit 3"].map((title, position) => ({ id: `u${position + 1}`, course_id: "course", position, title, description: null, is_archived: false, approved_question_count: 10, created_at: "2026-10-01", updated_at: "2026-10-01" }));
 const midterm = { id: "mi", course_id: "course", academic_year: "2025/26", kind: "MIDTERM" as const, name: "MI", unit_ids: ["u1", "u2"], starts_on: null, ends_on: null, approved_question_count: 20, created_at: "2026-10-01", updated_at: "2026-10-01" };
-const allTypes = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"];
+const allTypes = ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH", "TABLE", "CIRCUIT", "WAVEFORM"];
 
 function withUnits() {
   mock.units.mockResolvedValue(focusUnits);

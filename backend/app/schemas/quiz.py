@@ -1,10 +1,10 @@
 from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self, get_args
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
 from app.schemas.course_unit import MAX_COURSE_UNITS, UnitId
 from app.schemas.question import OwnerOption, PublicOption, QuestionType, StrictModel, unique_ids
@@ -12,7 +12,7 @@ from app.services.numbers import MAX_ANSWER_LENGTH, parse_number
 
 
 def default_types() -> list[QuestionType]:
-    return ["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER", "NUMERIC", "MULTIPLE_SELECT", "MATCH"]
+    return list(get_args(QuestionType))
 
 
 # MISTAKES and DUE narrow selection to the student's review progress, FAVORITES to their
@@ -28,7 +28,7 @@ class FocusFilters(StrictModel):
     question_types: list[QuestionType] = Field(
         default_factory=default_types,
         min_length=1,
-        max_length=6,
+        max_length=len(get_args(QuestionType)),
     )
     # Optional focus: selected units, or an exam scope that expands to its units.
     unit_ids: list[UnitId] = Field(default_factory=list, max_length=MAX_COURSE_UNITS)
@@ -102,7 +102,7 @@ class StartMock(StrictModel):
     count: int = Field(default=20, ge=1, le=MAX_MOCK_QUESTIONS)
     duration_minutes: int | None = Field(default=None, ge=1, le=MAX_MOCK_MINUTES)
     question_types: list[QuestionType] = Field(
-        default_factory=default_types, min_length=1, max_length=6
+        default_factory=default_types, min_length=1, max_length=len(get_args(QuestionType))
     )
     feedback_mode: FeedbackMode = "END"
 
@@ -207,8 +207,45 @@ class MatchAnswer(StrictModel):
         return self
 
 
+BlankValue = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
+
+
+class BlanksAnswer(StrictModel):
+    """One value per blank of a TABLE, CIRCUIT or WAVEFORM question in reading order (table
+    cells row by row, slots in gate order, segments signal by signal); null where nothing is
+    filled in yet."""
+
+    values: list[BlankValue | None] = Field(min_length=1, max_length=96)
+
+    @model_validator(mode="after")
+    def something_filled(self) -> Self:
+        if all(value is None for value in self.values):
+            raise ValueError("Fill in at least one blank")
+        return self
+
+
+class TableAnswer(BlanksAnswer):
+    type: Literal["TABLE"]
+
+
+class CircuitAnswer(BlanksAnswer):
+    type: Literal["CIRCUIT"]
+
+
+class WaveformAnswer(BlanksAnswer):
+    type: Literal["WAVEFORM"]
+
+
 AnswerPayload = Annotated[
-    MCQAnswer | BooleanAnswer | TextAnswer | NumericAnswer | MultipleSelectAnswer | MatchAnswer,
+    MCQAnswer
+    | BooleanAnswer
+    | TextAnswer
+    | NumericAnswer
+    | MultipleSelectAnswer
+    | MatchAnswer
+    | TableAnswer
+    | CircuitAnswer
+    | WaveformAnswer,
     Field(discriminator="type"),
 ]
 Grade = Literal["PENDING", "CORRECT", "INCORRECT"]
@@ -308,9 +345,12 @@ class QuestionFeedback(BaseModel):
     grading_status: Grade
     # MATCH: for each left item, the shown right-hand item that is its partner.
     correct_matches: list[int] | None = None
-    # Multiple select and matching: the share of the item's points earned (1, 0.5 or 0); null
-    # for other types
-    # and for answers graded before partial credit, which are all or nothing.
+    # TABLE, CIRCUIT, WAVEFORM: the key, one value per blank. A circuit accepts any gates that
+    # compute the same outputs, so its key is one right answer of possibly several.
+    correct_values: list[str] | None = None
+    # Multiple select and matching: the share of the item's points earned (1, 0.5 or 0); tables
+    # and timing diagrams: the share of blanks right. Null for other types and for answers graded
+    # before partial credit, which are all or nothing.
     score_fraction: float | None = None
     confidence: Confidence | None = None
     # SHORT_ANSWER only: the student's self-assessment, separate from grading_status.
@@ -335,6 +375,8 @@ class ActiveQuestion(BaseModel):
     choices: list[PublicOption] | None = None
     hint: str | None = None
     expr: str | None = None
+    # TABLE, CIRCUIT, WAVEFORM: the layout without the key.
+    spec: dict[str, Any] | None = None
     answer: AnswerPayload | None
     # Live organization, not part of the snapshot: current active units in course order.
     units: list[QuestionUnitLabel] = []
@@ -359,6 +401,7 @@ class ResultQuestion(ActiveQuestion):
     reference_answer: str | None
     grading_status: ResultGrade
     correct_matches: list[int] | None = None
+    correct_values: list[str] | None = None
     score_fraction: float | None = None
     confidence: Confidence | None = None
     self_review: SelfReview | None = None

@@ -14,8 +14,17 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 CONFIG_NAME = "studio.toml"
 StageName = Literal["generate", "verify"]
+# TABLE, CIRCUIT and WAVEFORM are opt-in: a course lists them under [questions] types
+# only when its slides teach truth tables, Karnaugh maps, gates or timing diagrams.
 QuestionType = Literal[
-    "MULTIPLE_CHOICE", "TRUE_FALSE", "MULTIPLE_SELECT", "SHORT_ANSWER", "NUMERIC"
+    "MULTIPLE_CHOICE",
+    "TRUE_FALSE",
+    "MULTIPLE_SELECT",
+    "SHORT_ANSWER",
+    "NUMERIC",
+    "TABLE",
+    "CIRCUIT",
+    "WAVEFORM",
 ]
 QUESTION_TYPES: tuple[QuestionType, ...] = (
     "MULTIPLE_CHOICE",
@@ -23,7 +32,11 @@ QUESTION_TYPES: tuple[QuestionType, ...] = (
     "MULTIPLE_SELECT",
     "SHORT_ANSWER",
     "NUMERIC",
+    "TABLE",
+    "CIRCUIT",
+    "WAVEFORM",
 )
+INTERACTIVE_TYPES: frozenset[str] = frozenset({"TABLE", "CIRCUIT", "WAVEFORM"})
 TypeCounts = dict[QuestionType, int]
 DEFAULT_TYPES: TypeCounts = {
     "MULTIPLE_CHOICE": 12,

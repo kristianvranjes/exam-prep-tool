@@ -31,6 +31,13 @@ function inspectQuestion(raw: unknown, index: number, seen: Set<string>): Import
     const filled = (value: unknown) => typeof value === "string" && value.trim().length > 0;
     if (pairs.some((pair) => !filled(pair?.left) || !filled(pair?.right))) return row("ERROR", "Svaki par mora imati lijevu i desnu stavku.");
   }
+  const spec = { TABLE: "table", CIRCUIT: "circuit", WAVEFORM: "waveform" }[type];
+  if (spec) {
+    const value = question[spec];
+    if (!value || typeof value !== "object" || Array.isArray(value)) return row("ERROR", `Nedostaje opis u polju ${spec}.`);
+    const parts = { TABLE: "rows", CIRCUIT: "gates", WAVEFORM: "signals" }[type] as string;
+    if (!Array.isArray((value as Record<string, unknown>)[parts])) return row("ERROR", `U polju ${spec} nedostaje ${parts}.`);
+  }
   if (type === "TRUE_FALSE" && typeof question.correct_answer !== "boolean") return row("ERROR", "Nedostaje točan odgovor (true ili false).");
   if (type === "SHORT_ANSWER" && !(typeof question.reference_answer === "string" && question.reference_answer.trim())) return row("ERROR", "Nedostaje referentni odgovor.");
   if (type === "NUMERIC" && (question.correct_value === undefined || question.correct_value === null || question.correct_value === "")) return row("ERROR", "Nedostaje točna vrijednost.");

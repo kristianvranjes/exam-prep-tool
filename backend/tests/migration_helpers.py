@@ -6,6 +6,8 @@ from sqlalchemy import Connection, text
 NUMERIC_QUESTION_COLUMNS = ("correct_value", "absolute_tolerance", "relative_tolerance", "unit")
 # Added by 0033 and tested with the matching questions, not by older roundtrips.
 HINT_QUESTION_COLUMNS = ("hint", "expr")
+# Added by 0038 and tested with the interactive questions, not by older roundtrips.
+SPEC_QUESTION_COLUMNS = ("spec",)
 MATCH_OPTION_COLUMNS = ("match_text",)
 # Added by 0026 and tested by its own roundtrip: older downgrades drop the recorded mode.
 RECORDED_QUIZ_COLUMNS = ("selection_mode",)
@@ -29,7 +31,9 @@ def legacy_columns(conn: Connection, table: str, newer: tuple[str, ...]) -> str:
 
 
 def legacy_question_columns(conn: Connection) -> str:
-    return legacy_columns(conn, "questions", NUMERIC_QUESTION_COLUMNS + HINT_QUESTION_COLUMNS)
+    return legacy_columns(
+        conn, "questions", NUMERIC_QUESTION_COLUMNS + HINT_QUESTION_COLUMNS + SPEC_QUESTION_COLUMNS
+    )
 
 
 def legacy_option_columns(conn: Connection) -> str:

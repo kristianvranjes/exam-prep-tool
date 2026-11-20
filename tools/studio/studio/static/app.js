@@ -11,7 +11,35 @@ const TYPES = {
   TRUE_FALSE: "Točno/netočno",
   SHORT_ANSWER: "Kratki odgovor",
   NUMERIC: "Brojčani odgovor",
+  TABLE: "Tablica za popunjavanje",
+  CIRCUIT: "Sklop",
+  WAVEFORM: "Vremenski dijagram",
 };
+const SPEC_FIELD = { TABLE: "table", CIRCUIT: "circuit", WAVEFORM: "waveform" };
+
+// TABLE: the grid with every cell to fill marked with its key; the other two as their JSON.
+function specBlock(content) {
+  const spec = content[SPEC_FIELD[content.type]];
+  const expr = content.expr && el("p", { class: "key" }, `Funkcija: ${content.expr}`);
+  if (content.type === "TABLE" && spec && Array.isArray(spec.rows)) {
+    const head = [spec.row_labels ? el("th", null, spec.corner || "") : null, (spec.columns || []).map((c) => el("th", null, c))];
+    const rows = spec.rows.map((row, r) =>
+      el(
+        "tr",
+        null,
+        spec.row_labels ? el("th", null, spec.row_labels[r]) : null,
+        row.map((cell) =>
+          cell && typeof cell === "object"
+            ? el("td", { class: "correct" }, el("span", { class: "mark" }, `✓ ${cell.answer}`))
+            : el("td", null, String(cell)),
+        ),
+      ),
+    );
+    return [expr, el("table", { class: "spec-table" }, el("thead", null, el("tr", null, head)), el("tbody", null, rows)),
+      spec.values ? el("p", { class: "key" }, `Dopuštene vrijednosti: ${spec.values.join(", ")}`) : el("p", { class: "key" }, "Student upisuje vrijednosti.")];
+  }
+  return [expr, el("pre", { class: "spec-json" }, JSON.stringify(spec, null, 2))];
+}
 const SEVERITY = { error: "Greška", warn: "Provjeriti", info: "Napomena" };
 const DECISION = { accept: "Prihvaćeno", edit: "Prihvaćeno s izmjenama", reject: "Odbijeno" };
 const FLAGS = {
@@ -212,6 +240,7 @@ function keyBlock(content) {
       ),
     );
   }
+  if (SPEC_FIELD[kind]) return specBlock(content);
   if (kind === "TRUE_FALSE") return el("p", { class: "key" }, `Ključ: ${content.correct_answer ? "točno" : "netočno"}`);
   if (kind === "SHORT_ANSWER") return el("p", { class: "key" }, `Referentni odgovor: ${content.reference_answer}`);
   const tolerance = [
@@ -229,6 +258,7 @@ function verifierAnswer(item) {
   if (kind === "MULTIPLE_CHOICE" || kind === "MULTIPLE_SELECT") return v.choice.join(", ") || "bez odgovora";
   if (kind === "TRUE_FALSE") return v.truth === null ? "bez odgovora" : v.truth ? "točno" : "netočno";
   if (kind === "NUMERIC") return v.value || "bez odgovora";
+  if (SPEC_FIELD[kind]) return (v.values || []).join(" ") || "bez odgovora";
   return v.reference_supported ? "referentni odgovor je poduprt" : "referentni odgovor nije poduprt";
 }
 
@@ -428,6 +458,19 @@ function editor(item) {
     );
     parts.push(field("Ključ", answer));
     collect = () => ({ correct_answer: answer.value === "true" });
+  } else if (SPEC_FIELD[kind]) {
+    const spec = el("textarea", { class: "spec-json", rows: "14", spellcheck: "false" }, JSON.stringify(c[SPEC_FIELD[kind]], null, 2));
+    const expr = el("input", { type: "text", value: c.expr || "" });
+    parts.push(field("Specifikacija (JSON)", spec), field("Funkcija (expr, neobavezno)", expr));
+    collect = () => {
+      let parsed;
+      try {
+        parsed = JSON.parse(spec.value);
+      } catch (e) {
+        throw new Error(`Specifikacija nije ispravan JSON: ${e.message}`);
+      }
+      return { [SPEC_FIELD[kind]]: parsed, ...(expr.value.trim() ? { expr: expr.value.trim() } : {}) };
+    };
   } else if (kind === "SHORT_ANSWER") {
     const reference = el("textarea", null, c.reference_answer || "");
     parts.push(field("Referentni odgovor", reference));
@@ -450,14 +493,14 @@ function editor(item) {
   parts.push(field("Objašnjenje", explanation), field("Težina", difficulty), error);
 
   async function save() {
-    const content = {
-      type: kind,
-      stem: stem.value,
-      explanation: explanation.value.trim() || null,
-      difficulty: difficulty.value ? Number(difficulty.value) : null,
-      ...collect(),
-    };
     try {
+      const content = {
+        type: kind,
+        stem: stem.value,
+        explanation: explanation.value.trim() || null,
+        difficulty: difficulty.value ? Number(difficulty.value) : null,
+        ...collect(),
+      };
       await decide("edit", content);
     } catch (e) {
       error.textContent = e.message;

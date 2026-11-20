@@ -20,6 +20,7 @@ from app.schemas.question import (
     QuizImport,
     import_content_adapter,
     normalize,
+    stem_key,
 )
 from app.schemas.question_import import (
     DuplicatePolicy,
@@ -187,7 +188,7 @@ def parse_document(body: bytes, max_count: int) -> Parsed:
             item.content.type not in CLASSIC_TYPES or item.content.course_unit is not None
         ):
             item.add("NEEDS_V2", "ERROR", "Use quiz-import-v2 for this type or for naming a unit")
-        stem = normalize(item.content.stem)
+        stem = stem_key(item.content)
         if stem in first:
             item.add("DUPLICATE_IN_FILE", "ERROR", f"Same text as question {first[stem]}")
         else:
@@ -210,7 +211,7 @@ def check_import(db: Session, user: User, course_id: UUID, body: bytes) -> Impor
     except Unreadable as exc:
         return ImportReport(readable=False, message=str(exc))
     contents = [item.content for item in parsed.items if item.content]
-    stems = {normalize(content.stem) for content in contents}
+    stems = {stem_key(content) for content in contents}
     units = units_by_title(db, course_id)
     own: set[str] = set()
     approved: set[str] = set()
@@ -239,7 +240,7 @@ def check_import(db: Session, user: User, course_id: UUID, body: bytes) -> Impor
                     item.add("UNKNOWN_UNIT", "ERROR", f"The course has no unit called “{title}”")
                 elif unit.is_archived:
                     item.add("ARCHIVED_UNIT", "ERROR", f"The unit “{title}” is archived")
-            stem = normalize(content.stem)
+            stem = stem_key(content)
             if stem in own:
                 item.add("DUPLICATE_OWN", "WARNING", "You already have a question with this text")
             elif stem in approved:
@@ -302,7 +303,7 @@ def import_questions(
         by_title = units_by_title(db, course_id) if titles else {}
         existing: dict[str, Question] = {}
         if duplicates != "REJECT":
-            stems = {normalize(c.stem) for c in document.questions}
+            stems = {stem_key(c) for c in document.questions}
             existing = {
                 question.normalized_stem: question
                 for question in db.scalars(
@@ -327,7 +328,7 @@ def import_questions(
                         continue
                     raise HTTPException(422, f"Unknown or archived unit: {title}")
                 units = [unit.id]
-            old = existing.get(normalize(content.stem))
+            old = existing.get(stem_key(content))
             if old is not None:
                 if duplicates == "SKIP" or old.status not in ("DRAFT", "REJECTED"):
                     continue

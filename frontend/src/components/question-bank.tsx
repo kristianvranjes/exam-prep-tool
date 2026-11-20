@@ -1,5 +1,6 @@
 "use client";
 
+import { isInteractive } from "../lib/interactive";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { api, Concept, type CourseUnit, OwnerQuestion, Question, QuestionAction, QuestionCreate, QuestionStatus, QuestionType, QuestionVersion } from "../lib/api";
 
@@ -423,7 +424,7 @@ function OwnerReview({ question: q, creator, moderator, owner, concepts, busy, m
   return <div className="min-w-0 space-y-5 text-sm">
     <div className="space-y-2 break-words [overflow-wrap:anywhere]">
       {q.type === "TRUE_FALSE" && <p>Točan odgovor: {q.correct_boolean ? "Točno" : "Netočno"}</p>}
-      {(q.type === "NUMERIC" || q.type === "MULTIPLE_SELECT" || q.type === "MATCH") && <p>Točan odgovor: <RichText text={keyText(q) ?? ""} /></p>}
+      {(q.type === "NUMERIC" || q.type === "MULTIPLE_SELECT" || q.type === "MATCH" || isInteractive(q.type)) && <p>Točan odgovor: <RichText text={keyText(q) ?? ""} /></p>}
       {q.reference_answer && <p>Referentni odgovor: <RichText text={q.reference_answer} /></p>}
       {q.explanation && <p>Objašnjenje: <RichText text={q.explanation} /></p>}
       {q.rejection_reason && <p className="rounded-control border border-danger/30 bg-danger-surface p-3 text-danger">Razlog odbijanja: {q.rejection_reason}</p>}
