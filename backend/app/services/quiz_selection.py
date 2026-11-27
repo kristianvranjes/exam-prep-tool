@@ -141,6 +141,11 @@ def _ranked(
     )
 
 
+#: Modes whose session covers several focused units evenly. Mistakes, due and favorites
+#: stay one global ranking, because their order says what is most urgent.
+SPREAD_MODES: frozenset[SelectionMode] = frozenset({"STANDARD", "ADAPTIVE"})
+
+
 def spread[T: Hashable](ranked_by_unit: Sequence[Sequence[T]], count: int) -> list[T]:
     """Pick up to `count` items round-robin across units, keeping the units' order.
 
@@ -182,13 +187,28 @@ def select_questions(
     # Shared source locks prevent edits/archive/delete until snapshots are committed.
     # Readers with different rankings cannot deadlock on one another.
     if mode == "MOCK":
-        return _mock(db, query, user_id, unit_ids, data.count, selection_time)
+        return _spread_units(db, query, user_id, mode, unit_ids, data.count, selection_time)
     if data.include_mistakes:
         return _mistakes_first(db, user_id, course_id, data, unit_ids, selection_time)
+    return _pick(db, query, user_id, mode, unit_ids, data.count, selection_time)
+
+
+def _pick(
+    db: Session,
+    query: Select[Any],
+    user_id: UUID,
+    mode: SelectionMode,
+    unit_ids: list[UUID],
+    count: int,
+    selection_time: datetime,
+) -> list[Question]:
+    """The first `count` questions by the mode's ranking, spread over several focused units."""
+    if mode in SPREAD_MODES and len(unit_ids) > 1:
+        return _spread_units(db, query, user_id, mode, unit_ids, count, selection_time)
     return list(
         db.scalars(
             _ranked(query, user_id, mode, selection_time)
-            .limit(data.count)
+            .limit(count)
             .with_for_update(read=True, of=Question)
         )
     )
@@ -228,23 +248,32 @@ def _mistakes_first(
     filters = selection_filters(user_id, course_id, data, unit_ids, selection_time)
     if first:
         filters.append(Question.id.not_in([question.id for question in first]))
-    rest = db.scalars(
-        _ranked(select(Question).where(*filters), user_id, "ADAPTIVE", selection_time)
-        .limit(remaining)
-        .with_for_update(read=True, of=Question)
+    rest = _pick(
+        db,
+        select(Question).where(*filters),
+        user_id,
+        "ADAPTIVE",
+        unit_ids,
+        remaining,
+        selection_time,
     )
     return [*first, *rest]
 
 
-def _mock(
+def _spread_units(
     db: Session,
     query: Select[Any],
     user_id: UUID,
+    mode: SelectionMode,
     unit_ids: list[UUID],
     count: int,
     selection_time: datetime,
 ) -> list[Question]:
-    """Rank each scope unit's candidates adaptively, then spread `count` across units."""
+    """Rank each focused unit's candidates by the mode, then spread `count` across units.
+
+    Without this a ranking shared by all units fills the session from whichever unit
+    ranks first, for example the one imported first when everything is unseen.
+    """
     rows = db.execute(
         _ranked(
             query.add_columns(QuestionUnit.unit_id).join(
@@ -252,7 +281,7 @@ def _mock(
                 and_(QuestionUnit.question_id == Question.id, QuestionUnit.unit_id.in_(unit_ids)),
             ),
             user_id,
-            "MOCK",
+            mode,
             selection_time,
         ).with_for_update(read=True, of=Question)
     ).tuples()

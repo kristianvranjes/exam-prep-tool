@@ -16,7 +16,8 @@ def default_types() -> list[QuestionType]:
 
 
 # MISTAKES and DUE narrow selection to the student's review progress, FAVORITES to their
-# favorites; MOCK spreads a session evenly across an exam scope's units. See docs/PRACTICE.md.
+# favorites; MOCK, and STANDARD and ADAPTIVE with several focused units, spread a session
+# evenly across those units. See docs/PRACTICE.md.
 SelectionMode = Literal["STANDARD", "ADAPTIVE", "MISTAKES", "DUE", "FAVORITES", "MOCK"]
 FeedbackMode = Literal["END", "IMMEDIATE"]
 Confidence = Literal["SURE", "UNSURE", "GUESS"]
