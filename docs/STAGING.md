@@ -131,6 +131,7 @@ database migration or credentials:
 | AUTH_REGISTER_MAX_ATTEMPTS | `5` admitted registration requests per client per window |
 | AUTH_REGISTER_MAX_TOTAL_ATTEMPTS | `20` admitted registration requests across all clients per worker per window |
 | AUTH_REGISTER_WINDOW_SECONDS | `600` |
+| PLATFORM_OWNER_USER_IDS | optional, comma-separated user IDs (from `GET /auth/me`) of the accounts that run the platform and may manage every course; empty by default. Use IDs, not e-mail addresses: addresses are not verified |
 
 Each endpoint has a fixed window starting with its first request. All admitted
 attempts count regardless of outcome. Excess attempts receive `429`, a readable

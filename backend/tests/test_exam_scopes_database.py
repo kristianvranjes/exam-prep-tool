@@ -4,10 +4,12 @@ from uuid import uuid4
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from community_helpers import create_course, review_question
+from community_helpers import create_course, provision, review_question
+from fastapi.testclient import TestClient
 from test_materials import clients as clients
 
 from app.database import Base, engine
+from app.main import app
 
 pytestmark = pytest.mark.skipif(os.getenv("RUN_DB_TESTS") != "1", reason="Requires PostgreSQL")
 
@@ -206,6 +208,66 @@ def test_practice_focuses_on_units_or_an_exam_scope(clients):
     assert member.get(f"/courses/{course}/attempts/{scoped['id']}").json()["focus_label"] == (
         "MI 2025/26"
     )
+
+
+def test_enrolled_faculty_moderator_manages_scopes(clients):
+    owner, member, _, course = clients
+    first = unit(owner, course, "Logika")
+    faculty = owner.get(f"/courses/{course}").json()["faculty_id"]
+    path = f"/courses/{course}/exam-scopes"
+    body = {"academic_year": "2025/26", "kind": "MIDTERM", "name": "Međuispit", "unit_ids": [first]}
+    with TestClient(app) as outsider:
+        outsider.post(
+            "/auth/register",
+            json={
+                "email": "scope-moderator@example.com",
+                "password": "correct horse",
+                "display_name": "Moderator",
+            },
+        )
+        provision(outsider, faculty)
+        # A moderator who has not joined the course cannot see it, as before.
+        assert outsider.post(path, json=body).status_code == 404
+    # An enrolled member who is not a moderator is refused until made one.
+    assert member.post(path, json=body).status_code == 403
+    provision(member, faculty)
+
+    created = scope(member, course, **body)
+    scope_path = f"/exam-scopes/{created['id']}"
+    dated = {"name": "MI", "starts_on": "2025-11-24"}
+    assert member.patch(scope_path, json=dated).status_code == 200
+    copied = member.post(path + "/copy", json={"from_year": "2025/26", "to_year": "2026/27"})
+    assert copied.status_code == 201, copied.text
+    assert owner.get(path).json()[0]["name"] == "MI"
+    assert member.delete(scope_path).status_code == 204
+
+
+def test_platform_owner_manages_every_course(clients, monkeypatch):
+    owner, _, stranger, course = clients
+    first = unit(owner, course, "Logika")
+    path = f"/courses/{course}/exam-scopes"
+    body = {"academic_year": "2025/26", "kind": "MIDTERM", "name": "Međuispit", "unit_ids": [first]}
+    assert stranger.get(path).status_code == 404
+    assert stranger.post(path, json=body).status_code == 404
+
+    stranger_id = stranger.get("/auth/me").json()["id"]
+    monkeypatch.setenv("PLATFORM_OWNER_USER_IDS", stranger_id)
+    created = scope(stranger, course, **body)
+    scope_path = f"/exam-scopes/{created['id']}"
+    assert stranger.get(path).status_code == 200
+    assert stranger.patch(scope_path, json={"name": "MI"}).status_code == 200
+    copy = {"from_year": "2025/26", "to_year": "2026/27"}
+    assert stranger.post(path + "/copy", json=copy).status_code == 201
+    assert stranger.delete(scope_path).status_code == 204
+    # Beyond exam scopes: units, past papers and the course itself.
+    assert stranger.post(f"/courses/{course}/units", json={"title": "Skupovi"}).status_code == 201
+    assert stranger.get(f"/courses/{course}/exam-papers").json()["can_manage"] is True
+    assert stranger.get(f"/courses/{course}").status_code == 200
+    assert stranger.post(f"/courses/{course}/archive").status_code == 200
+    assert stranger.post(f"/courses/{course}/restore").status_code == 200
+
+    monkeypatch.delenv("PLATFORM_OWNER_USER_IDS")
+    assert stranger.get(path).status_code == 404
 
 
 def test_model_migration_parity():

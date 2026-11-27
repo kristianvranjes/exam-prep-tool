@@ -20,6 +20,7 @@ from app.schemas.course_unit import (
 )
 from app.schemas.question import normalize
 from app.services.courses import get_member_course, get_owner_course
+from app.services.platform_owner import is_platform_owner
 
 
 def is_course_owner(db: Session, user: User, course_id: UUID) -> bool:
@@ -28,7 +29,7 @@ def is_course_owner(db: Session, user: User, course_id: UUID) -> bool:
             CourseMembership.course_id == course_id, CourseMembership.user_id == user.id
         )
     )
-    return role == MembershipRole.OWNER.value
+    return role == MembershipRole.OWNER.value or is_platform_owner(user)
 
 
 def lock_course(db: Session, course_id: UUID) -> None:
