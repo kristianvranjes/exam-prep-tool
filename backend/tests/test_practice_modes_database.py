@@ -252,3 +252,46 @@ def test_mistakes_first_puts_the_course_mistakes_before_the_chosen_topics(client
     # Both mistakes come first, also the one from another topic; then the topic's own questions.
     assert sorted(mixed[:2]) == ["A1?", "B1?"]
     assert mixed[2] in {"B2?", "B3?"}
+
+
+def test_standard_and_adaptive_cover_every_focused_unit(clients):
+    owner, member, _, course = clients
+    first = unit(owner, course, "Unit 1")
+    second = unit(owner, course, "Unit 2")
+    third = unit(owner, course, "Unit 3")
+    # Everything is unseen and unit 1 holds the oldest questions, so one ranking over all
+    # focused units would fill a short session from unit 1 alone.
+    for stem, units in [
+        ("A1?", [first]),
+        ("A2?", [first]),
+        ("A3?", [first]),
+        ("B1?", [second]),
+        ("B2?", [second]),
+        ("C1?", [third]),
+    ]:
+        draft(member, course, stem, units)
+    all_units = {"unit_ids": [first, second, third]}
+
+    # Adaptive: one question from each unit, listed by unit.
+    assert stems(started(member, course, 3, "ADAPTIVE", **all_units)) == ["A1?", "B1?", "C1?"]
+    # Those are now waiting in a session; unit 3 is exhausted and the others fill up.
+    assert stems(started(member, course, 3, "ADAPTIVE", **all_units)) == ["A2?", "A3?", "B2?"]
+
+    # Standard keeps creation order inside each unit and does not skip active questions.
+    pair = {"unit_ids": [first, second]}
+    assert stems(started(member, course, 2, "STANDARD", **pair)) == ["A1?", "B1?"]
+    assert stems(started(member, course, 3, "STANDARD", **pair)) == ["A1?", "A2?", "B1?"]
+    # One unit, or the whole course, is still the oldest questions first.
+    assert stems(started(member, course, 2, "STANDARD", unit_ids=[first])) == ["A1?", "A2?"]
+    assert stems(started(member, course, 2, "STANDARD")) == ["A1?", "A2?"]
+
+
+def test_mistakes_first_spreads_its_adaptive_part_over_the_chosen_units(clients):
+    owner, member, _, course = clients
+    first = unit(owner, course, "Unit 1")
+    second = unit(owner, course, "Unit 2")
+    for stem, units in [("A1?", [first]), ("A2?", [first]), ("A3?", [first]), ("B1?", [second])]:
+        draft(member, course, stem, units)
+    # No mistakes yet, so the whole session is the adaptive part over both units.
+    chosen = {"include_mistakes": True, "unit_ids": [first, second]}
+    assert stems(started(member, course, 2, "ADAPTIVE", **chosen)) == ["A1?", "B1?"]

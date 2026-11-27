@@ -395,6 +395,15 @@ The existing start endpoint accepts `selection_mode`: `STANDARD` (default when
 omitted) or `ADAPTIVE`. Standard practice keeps oldest-eligible creation/id order,
 including questions already in active attempts. Count and type filters are unchanged.
 
+When the focus resolves to two or more units (chosen units, or an exam scope covering
+several), `STANDARD` and `ADAPTIVE` rank the candidates inside each unit by their own
+order and then take `count` round-robin across the units, so a short session is not
+filled from the unit whose questions rank first (for example the one imported first).
+The result is listed by unit, then by round; a question in several focused units counts
+once, and an exhausted unit drops out while the others keep filling. One unit, or no
+focus (the whole course), keeps the single ranking. `MISTAKES`, `DUE` and `FAVORITES`
+also keep one global ranking, because their order says what is most urgent.
+
 Adaptive review uses one UTC selection timestamp captured after acquiring the
 user lock, and ranks eligible questions in the requested course/types: shared APPROVED plus the
 caller's own DRAFT/PENDING_REVIEW. REJECTED/ARCHIVED and another creator's
