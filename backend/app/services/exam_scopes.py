@@ -22,8 +22,9 @@ from app.schemas.exam_scope import (
     check_dates,
 )
 from app.schemas.question import normalize
-from app.services.course_units import lock_course, validate_unit_links
-from app.services.courses import get_member_course, get_owner_course
+from app.services.course_units import is_course_owner, lock_course, validate_unit_links
+from app.services.courses import get_member_course
+from app.services.moderation import course_moderator
 
 KIND_ORDER = case(
     (ExamScope.kind == "MIDTERM", 0),
@@ -125,10 +126,20 @@ def scope_count(db: Session, course_id: UUID) -> int:
     )
 
 
+def require_manager(db: Session, user: User, course_id: UUID) -> None:
+    """Allow the course owner or a faculty moderator, who must be enrolled in the course.
+
+    Not enrolled: 404, as for every member-scoped read. Enrolled but neither: 403.
+    """
+    get_member_course(db, user, course_id)
+    if not (is_course_owner(db, user, course_id) or course_moderator(db, user, course_id)):
+        raise HTTPException(403, "Course owner or faculty moderator access required")
+
+
 def create_scope(
     db: Session, user: User, course_id: UUID, data: ExamScopeCreate
 ) -> ExamScopeResponse:
-    get_owner_course(db, user, course_id)
+    require_manager(db, user, course_id)
     lock_course(db, course_id)
     try:
         if scope_count(db, course_id) >= MAX_EXAM_SCOPES:
@@ -157,11 +168,12 @@ def create_scope(
     return commit_scopes(db, [scope])[0]
 
 
-def load_owned_scope(db: Session, user: User, scope_id: UUID) -> ExamScope:
+def load_managed_scope(db: Session, user: User, scope_id: UUID) -> ExamScope:
+    """Lock a scope for a course owner or faculty moderator; 403 for everyone else."""
     course_id = db.scalar(select(ExamScope.course_id).where(ExamScope.id == scope_id))
     if course_id is None:
         raise HTTPException(404, "Exam scope not found")
-    get_owner_course(db, user, course_id)
+    require_manager(db, user, course_id)
     lock_course(db, course_id)
     scope = db.scalar(
         select(ExamScope)
@@ -177,7 +189,7 @@ def load_owned_scope(db: Session, user: User, scope_id: UUID) -> ExamScope:
 def update_scope(
     db: Session, user: User, scope_id: UUID, data: ExamScopeUpdate
 ) -> ExamScopeResponse:
-    scope = load_owned_scope(db, user, scope_id)
+    scope = load_managed_scope(db, user, scope_id)
     try:
         if data.unit_ids is not None:
             current = scope_unit_ids(db, [scope.id])[scope.id]
@@ -207,7 +219,7 @@ def update_scope(
 
 
 def delete_scope(db: Session, user: User, scope_id: UUID) -> None:
-    scope = load_owned_scope(db, user, scope_id)
+    scope = load_managed_scope(db, user, scope_id)
     # Past practice keeps its frozen focus label; its scope reference becomes null.
     db.delete(scope)
     try:
@@ -220,7 +232,7 @@ def delete_scope(db: Session, user: User, scope_id: UUID) -> None:
 def copy_scopes(
     db: Session, user: User, course_id: UUID, data: ExamScopeCopy
 ) -> list[ExamScopeResponse]:
-    get_owner_course(db, user, course_id)
+    require_manager(db, user, course_id)
     lock_course(db, course_id)
     sources = list(
         db.scalars(

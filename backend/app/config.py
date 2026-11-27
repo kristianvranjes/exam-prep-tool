@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -66,6 +67,21 @@ class Settings(BaseSettings):
     ai_max_input_chars: int = Field(default=12000, ge=2000, le=100000)
     ai_concept_chunks_per_request: int = Field(default=3, ge=1, le=32)
     ai_max_batches: int = Field(default=32, ge=1, le=128)
+    # Comma-separated IDs of the accounts that run the platform; they may manage every course.
+    # By ID, not e-mail: addresses are not verified, so an address cannot prove who owns it.
+    platform_owner_user_ids: str = ""
+
+    @field_validator("platform_owner_user_ids")
+    @classmethod
+    def user_id_list(cls, value: str) -> str:
+        parts = [part.strip() for part in value.split(",") if part.strip()]
+        for part in parts:
+            UUID(part)  # a malformed ID fails startup instead of silently granting nothing
+        return ",".join(parts)
+
+    @property
+    def platform_owner_ids(self) -> frozenset[UUID]:
+        return frozenset(UUID(part) for part in self.platform_owner_user_ids.split(",") if part)
 
     @field_validator("database_url")
     @classmethod

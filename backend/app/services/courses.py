@@ -17,6 +17,7 @@ from app.services.faculties import active_faculty
 from app.services.materials.cleanup import cleanup_sources, queue_sources
 from app.services.materials.storage import MaterialStorage
 from app.services.moderation import is_moderator, require_moderator
+from app.services.platform_owner import is_platform_owner
 
 
 def create_course(db: Session, user: User, data: CourseCreate) -> Course:
@@ -45,6 +46,8 @@ def get_member_course(db: Session, user: User, course_id: UUID) -> Course:
         .where(Course.id == course_id, CourseMembership.user_id == user.id)
     )
     course = db.scalar(query)
+    if course is None and is_platform_owner(user):
+        course = db.get(Course, course_id)
     if course is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     return course
@@ -73,7 +76,9 @@ def get_owner_course(db: Session, user: User, course_id: UUID) -> Course:
             CourseMembership.course_id == course_id, CourseMembership.user_id == user.id
         )
     )
-    if membership is None or membership.role != MembershipRole.OWNER.value:
+    if (
+        membership is None or membership.role != MembershipRole.OWNER.value
+    ) and not is_platform_owner(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner access required")
     return course
 
@@ -116,7 +121,11 @@ def lock_managed_course(db: Session, user: User, course_id: UUID) -> Course:
             CourseMembership.course_id == course_id, CourseMembership.user_id == user.id
         )
     )
-    if role == MembershipRole.OWNER.value or is_moderator(db, user.id, course.faculty_id):
+    if (
+        role == MembershipRole.OWNER.value
+        or is_moderator(db, user.id, course.faculty_id)
+        or is_platform_owner(user)
+    ):
         return course
     if role is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found")
